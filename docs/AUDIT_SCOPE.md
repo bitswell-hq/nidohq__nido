@@ -55,15 +55,18 @@ hashes (`just perch-infra`), not a local build of the Perch source.
 ## Responsibility matrix
 
 Four review streams. If one engagement covers Nido and Perch, it runs all
-four; otherwise Nido's engagement runs the first and the fourth and Perch's
-runs the second and third (Perch's two audit units).
+four. Otherwise Nido's engagement runs Nido integration and the dependency
+items only Nido consumes (`admin-sep`, the npm tarballs against their
+source), and Perch's runs Perch core, Perch OZ materialization, and the
+dependency items Perch's manifest assigns to itself (the OZ fork deltas, the
+ZK verifier delta, the Perch JavaScript source, Perch's artifact selection).
 
 | Stream | What it covers |
 | --- | --- |
 | **Nido integration and browser review** | Nido's factory and name registry, wallet, SDK, infrastructure, the Perch JavaScript the wallet runs, the scripts that select which Perch artifacts Nido builds and tests against, and whether Nido uses Perch as Perch's specification intends. |
-| **Perch core** (Perch unit 1) | The backend-independent stack: controller, statement, ZK primitives, pool, adapter, circuit, compiler and CANON, interpreter, the account's recovery and capability paths, the WebAuthn verifier, and the ZK verifier delta. |
-| **Perch OZ materialization** (Perch unit 2) | Perch's rule reconciler and install paths, the document caps, `perch-spending-limit`, and the three OZ fork deltas. |
-| **Explicit dependency review** | Third-party code on an authority path that neither project wrote, read in full or checked against its audited release. |
+| **Perch core** (Perch unit 1) | The backend-independent stack: controller, statement, ZK primitives, pool, adapter, circuit, compiler and CANON, interpreter, the account's recovery and capability paths, and the WebAuthn verifier. |
+| **Perch OZ materialization** (Perch unit 2) | Perch's rule reconciler and install paths, the document caps, `perch-spending-limit`, and how they use the pinned OZ fork. |
+| **Explicit dependency review** | Code on an authority path that neither project owns line by line: `admin-sep`, the three OZ fork deltas, the ZK verifier delta, and the Perch JavaScript the wallet consumes, each read in full or checked against its source or audited release. Perch's manifest assigns its share of these the same way. |
 
 Perch's two units are a boundary for Perch's audit; a later Perch backend
 still needs its own integration review in Nido. Perch's map of its paths to
@@ -81,19 +84,19 @@ the two units is its audit manifest,
 | Wallets Kit module | `packages/stellar-wallets-kit-module/`: dApp signing handoff | Nido integration |
 | Infrastructure | `infra/relayer/` (fee sponsorship and submission, the channels plugin, key custody), `infra/nido-resolver/` (name resolution), `frontend/worker-proxy-nido/` (subdomain proxy, security headers) | Nido integration |
 | Integration harness | `crates/integration-tests/`: that it runs under enforcing authorization with real proofs and that its fixtures cannot drift silently (`src/zk.rs`) | Nido integration |
-| `@stellar-registry/perch` 0.3.2 (perch-js) | Statement and document encodings, `applyDocument`, rule selection, signing digests, as the wallet uses them. Perch excludes its JS from both units. | Nido integration; tarball against source: explicit dependency review |
+| `@stellar-registry/perch` 0.3.2 (perch-js) | Statement and document encodings, `applyDocument`, rule selection, signing digests. | Source and tarball against source: explicit dependency review; the wallet's use of it: Nido integration |
 | `@stellar-registry/perch-interpreter` 0.1.0 | Interpreter install parameters and bindings the SDK uses (`src/policyDoc/params.ts`) | Nido integration; tarball against source: explicit dependency review |
-| `perch-zk` | [`packages/perch-zk`](https://github.com/stellar-registry/perch/tree/bb746f9d03c593f0d5a2518c6900e00c938f95ec/packages/perch-zk) (`vendor/perch/packages/perch-zk`): in-page proving and the circuit artifact it ships | Nido integration |
+| `perch-zk` | [`packages/perch-zk`](https://github.com/stellar-registry/perch/tree/bb746f9d03c593f0d5a2518c6900e00c938f95ec/packages/perch-zk) (`vendor/perch/packages/perch-zk`): in-page proving and the circuit artifact it ships | Source: explicit dependency review; the wallet's use of it: Nido integration |
 | Generated Perch clients | `packages/contract-bindings/perch-*`, generated from the deployed wasm (`just bindings-perch`) | Nido integration (provenance) |
-| Artifact selection | `just perch-infra` (runs Perch's [`scripts/fetch-infra-wasm.sh`](https://github.com/stellar-registry/perch/blob/bb746f9d03c593f0d5a2518c6900e00c938f95ec/scripts/fetch-infra-wasm.sh) (`vendor/perch/scripts/fetch-infra-wasm.sh`) `--stack`), `scripts/check-perch-drift.sh`, `scripts/deploy-factory.sh`, `packages/passkey-sdk/src/perch/deployment.ts` (`perch.TESTNET`) and its test. Perch reviews its release machinery with its release, outside both units. | Nido integration |
+| Artifact selection | `just perch-infra` (runs Perch's [`scripts/fetch-infra-wasm.sh`](https://github.com/stellar-registry/perch/blob/bb746f9d03c593f0d5a2518c6900e00c938f95ec/scripts/fetch-infra-wasm.sh) (`vendor/perch/scripts/fetch-infra-wasm.sh`) `--stack`), `scripts/check-perch-drift.sh`, `scripts/deploy-factory.sh`, `packages/passkey-sdk/src/perch/deployment.ts` (`perch.TESTNET`) and its test. Perch's own artifact selection (`fetch-infra-wasm.sh`, `build-stack.sh`, `verify-deployment.sh`) is in Perch's explicit dependency review. | Nido integration |
 | Perch contracts | `perch-account`, `perch-smart-account` (recovery and capability paths), `perch-recovery`, `perch-zk-pool`, `perch-zk-adapter`, `perch-doc-compiler`, `perch-interpreter`, `perch-webauthn-verifier`, in Perch's [`crates/`](https://github.com/stellar-registry/perch/tree/bb746f9d03c593f0d5a2518c6900e00c938f95ec/crates) (`vendor/perch/crates/`) | Perch core |
 | Circuit | Perch's [`circuits/`](https://github.com/stellar-registry/perch/tree/bb746f9d03c593f0d5a2518c6900e00c938f95ec/circuits) (`vendor/perch/circuits/`), specialist review: soundness, domain separation, nullifier binding | Perch core |
-| ZK verifier delta | Perch's `UltraKeccakZKFlavor` delta on NethermindEth's UltraHonk verifier, in Perch's `vendor/ultrahonk-soroban-verifier/`: `src/zk.rs` (new), `src/lib.rs` (+3 lines: the module and its re-exports), and visibility-only changes to `src/transcript.rs`, `src/sumcheck.rs`, `src/utils.rs`, and `src/verifier.rs`, as listed in its [`NOTICE`](https://github.com/stellar-registry/perch/blob/bb746f9d03c593f0d5a2518c6900e00c938f95ec/vendor/ultrahonk-soroban-verifier/NOTICE) (`vendor/perch/vendor/ultrahonk-soroban-verifier/NOTICE`). Not audited. | Perch core |
+| ZK verifier delta | Perch's `UltraKeccakZKFlavor` delta on NethermindEth's UltraHonk verifier, in Perch's `vendor/ultrahonk-soroban-verifier/`: `src/zk.rs` (new), `src/lib.rs` (+3 lines: the module and its re-exports), and visibility-only changes to `src/transcript.rs`, `src/sumcheck.rs`, `src/utils.rs`, and `src/verifier.rs`, as listed in its [`NOTICE`](https://github.com/stellar-registry/perch/blob/bb746f9d03c593f0d5a2518c6900e00c938f95ec/vendor/ultrahonk-soroban-verifier/NOTICE) (`vendor/perch/vendor/ultrahonk-soroban-verifier/NOTICE`). Not audited. | Explicit dependency review (cryptographic specialist) |
 | Upstream UltraHonk verifier | The rest of Perch's [`vendor/ultrahonk-soroban-verifier/`](https://github.com/stellar-registry/perch/tree/bb746f9d03c593f0d5a2518c6900e00c938f95ec/vendor/ultrahonk-soroban-verifier) (`vendor/perch/vendor/ultrahonk-soroban-verifier/`): NethermindEth's verifier at the upstream commit its `NOTICE` names, audited by OpenZeppelin for the non-ZK flavor only. Confirm the vendored bytes are upstream's (`UPSTREAM.sha256`, `CHECKSUMS.sha256`, Perch's `crates/perch-zk-adapter/tests/vendor.rs`). | Explicit dependency review: provenance only |
 | Rule reconciler, install paths, caps, spending limit | `perch-smart-account/src/rules.rs`, the install half of `apply`, the caps in `perch-doc-compiler`, `perch-spending-limit` (all in Perch's `crates/`) | Perch OZ materialization |
-| OZ fork #3: CAP-0071 delegated auth | [theahaco/stellar-contracts-OZ#3](https://github.com/theahaco/stellar-contracts-OZ/pull/3), in the rev above | Perch OZ materialization |
-| OZ fork #4: `_no_events` mutations | [theahaco/stellar-contracts-OZ#4](https://github.com/theahaco/stellar-contracts-OZ/pull/4), in the rev above | Perch OZ materialization |
-| OZ fork #5: `reconcile_signers` | [theahaco/stellar-contracts-OZ#5](https://github.com/theahaco/stellar-contracts-OZ/pull/5), in the rev above | Perch OZ materialization |
+| OZ fork #3: CAP-0071 delegated auth | [theahaco/stellar-contracts-OZ#3](https://github.com/theahaco/stellar-contracts-OZ/pull/3), in the rev above | Explicit dependency review |
+| OZ fork #4: `_no_events` mutations | [theahaco/stellar-contracts-OZ#4](https://github.com/theahaco/stellar-contracts-OZ/pull/4), in the rev above | Explicit dependency review |
+| OZ fork #5: `reconcile_signers` | [theahaco/stellar-contracts-OZ#5](https://github.com/theahaco/stellar-contracts-OZ/pull/5), in the rev above | Explicit dependency review |
 
 Named exclusions:
 
