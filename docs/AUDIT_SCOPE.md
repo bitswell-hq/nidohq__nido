@@ -170,8 +170,10 @@ specification intends:
    (THREAT_MODEL 13). Is it sound?
 3. **Guardian checks.** Is what the guardian page verifies (W2, W3) enough for
    a guardian who follows its instructions?
-4. **Setup secret.** Is the window between creating a salt and deploying
-   acceptable (THREAT_MODEL 5)?
+4. **Setup secret.** Whoever submits a salt first owns its address, and the
+   relayer sees every salt (THREAT_MODEL 5, 10, L5). Is the window between
+   creating a salt and deploying acceptable, and does the mitigation
+   MAINNET_READINESS A6 requires close it?
 5. **Deployment.** `perch.TESTNET` is checked against Perch's manifest in a
    test, and the manifest against the chain by Perch's `verify-deployment.sh`.
    Is that enough, and should a `PUBLIC_PERCH_DEPLOYMENT` override be checked

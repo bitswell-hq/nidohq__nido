@@ -80,6 +80,24 @@ Every box here is checked before mainnet.
 - [ ] **A3. Relayer keys in KMS/HSM.** Sponsor and channel keys are held in
   KMS/HSM, not on disk, and the testnet keys are rotated out.
 
+### Account setup
+
+- [ ] **A6. An account being set up cannot be claimed by someone else.**
+  `create_account(salt, key)` is permissionless and the address derives from
+  the salt alone, so whoever submits the salt first owns the address
+  (THREAT_MODEL 10, L5; pinned by the factory test
+  `whoever_submits_the_salt_first_owns_the_address`). Before the wallet
+  activates a newly created account or moves any funds into it, it checks on
+  chain that the account runs the manifest's `perch-account` wasm and that
+  its only rule is the admin rule, scoped to the account, whose single
+  signer is the user's new passkey under the pinned Perch WebAuthn
+  verifier; on any mismatch it stops with an explicit failure that tells the
+  user the address was taken, and never funds it. A reviewed mechanism that
+  prevents the race (for example, a factory commitment to the key before
+  the salt is revealed) meets A6 instead. Evidence: an adversarial setup
+  test in which a front-runner creates the account first, and a test of the
+  wallet's failure path. Tracked in nidohq/nido#245.
+
 ### Reproducible builds
 
 - [ ] **C1. `stellar-cli` and `stellar-scaffold-cli` pinned** and the
