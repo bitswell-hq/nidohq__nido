@@ -114,8 +114,10 @@ Named exclusions:
 1. This file: the manifest and who reviews what.
 2. [ARCHITECTURE.md](../ARCHITECTURE.md): components, flows, diagrams.
 3. [THREAT_MODEL.md](./THREAT_MODEL.md): assets, adversaries, what is
-   trusted; [STRIDE_THREAT_MODEL.md](./STRIDE_THREAT_MODEL.md) groups the same
-   threats by STRIDE category.
+   trusted, and the limits within the audited behaviour;
+   [STRIDE_THREAT_MODEL.md](./STRIDE_THREAT_MODEL.md) is the risk register
+   that indexes each threat's STRIDE category, invariants, release gate, and
+   status.
 4. Perch's recovery specification,
    [`docs/recovery/spec.md`](https://github.com/stellar-registry/perch/blob/bb746f9d03c593f0d5a2518c6900e00c938f95ec/docs/recovery/spec.md)
    (`vendor/perch/docs/recovery/spec.md`): the single source of truth for
