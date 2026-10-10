@@ -123,6 +123,7 @@ and infrastructure bring.
     moving the testnet funding into it. It is a known risk, tracked with the
     candidate mitigations in nidohq/nido#245 (a wallet check of the admin
     key, or a factory commitment to the key before the salt is revealed).
+    Launch gate MAINNET_READINESS A6 requires one of them.
     RUNBOOKS §5 gives the response to a host compromise.
 
     An unavailable relayer blocks onboarding, which only it sponsors, and a
@@ -192,8 +193,8 @@ post-audit work, its entry in [DEFERRED.md](./DEFERRED.md).
   with a salt first owns the address, and the wallet does not check the
   created account's admin key before using or funding it (adversaries 5 and
   10, nidohq/nido#245). Invariants: F2 (no takeover after the first deploy),
-  W5 (the salt stays out of query strings). Gate: MAINNET_READINESS has none
-  for the race at this revision; A2 covers only query-string exposure.
+  W5 (the salt stays out of query strings). Gate: MAINNET_READINESS A6
+  (open); A2 covers only query-string exposure.
 - **L6. The wallet lacks the archived-state restoration and renewal
   workflow.** On chain, archived recovery state is restored, never reset
   (T1), and renewal is permissionless (T2). The wallet neither restores an
