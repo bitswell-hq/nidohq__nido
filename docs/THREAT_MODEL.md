@@ -90,9 +90,12 @@ and infrastructure bring.
    different account code, or repoint the verifier pin to a verifier that
    accepts anything. This affects only accounts created afterwards; an
    existing account's code changes only through its own seven-day upgrade
-   path (U1), and its signers' verifier only through its own `apply_doc`. The
-   admin must be a multisig with an upgrade delay users can see
-   (MAINNET_READINESS B1).
+   path (U1), and its signers' verifier only through its own `apply_doc`.
+   Pinning the verifier does not limit this admin: the pin is
+   admin-settable (`set_registry_pins`), and `upgrade` replaces the factory
+   wasm, embedded account code included. Only governance over the upgrade
+   authority mitigates it: a multisig with an upgrade delay users can see,
+   or no upgrade authority at all (MAINNET_READINESS B1).
 9. **Wrong deployment.** A wallet built with a hostile deployment would send
    users to an attacker's factory or controller. The account trusts whatever
    controller its own document names, so this is a wallet-supply-chain risk.

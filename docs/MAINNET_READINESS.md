@@ -72,9 +72,13 @@ Every box here is checked before mainnet.
 
 ### Governance and keys
 
-- [ ] **B1. Factory admin behind a multisig with a visible upgrade delay**
-  (THREAT_MODEL 8), or the factory pins its verifier at build time. The
-  passkey verifier itself is now Perch's, with no admin (THREAT_MODEL 7).
+- [ ] **B1. Factory upgrade authority governed.** The factory admin is a
+  multisig with an upgrade delay users can see, or the factory has no upgrade
+  authority at all (THREAT_MODEL 8). Pinning the verifier, at build time or
+  with `set_registry_pins`, does not meet B1: the admin's `upgrade` replaces
+  the whole factory wasm, including the account code it embeds and the pin,
+  and the admin can call `set_registry_pins` again. The passkey verifier
+  itself is Perch's, with no admin (THREAT_MODEL 7).
 - [ ] **B2. Name-registry, policy, and registry-owner keys behind the
   multisig**, with alerts on any registry address change.
 - [ ] **A3. Relayer keys in KMS/HSM.** Sponsor and channel keys are held in

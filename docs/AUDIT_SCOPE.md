@@ -161,10 +161,12 @@ specification intends:
 
 ## Questions we want answered
 
-1. **Factory admin.** The factory admin can change the account code and the
-   verifier new accounts get (THREAT_MODEL 8). Is a multisig plus a visible
-   upgrade delay enough, or should the factory pin its verifier at build time
-   as Perch's does?
+1. **Factory admin.** The factory admin can replace the whole factory wasm,
+   and with it the account code and verifier new accounts get
+   (THREAT_MODEL 8); pinning the verifier does not constrain an upgrade.
+   MAINNET_READINESS B1 requires a multisig with a visible upgrade delay, or
+   no upgrade authority. Is that enough for accounts created while an
+   upgrade is pending?
 2. **The ZK verifier delta.** Proofs are zero-knowledge, verified by Perch's
    unaudited `UltraKeccakZKFlavor` delta on the audited verifier
    (THREAT_MODEL 13). Is it sound?
