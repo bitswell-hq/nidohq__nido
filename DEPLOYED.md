@@ -22,7 +22,7 @@ chain by hash and address.
 The wallet's deployment, `perch.TESTNET`
 (`packages/passkey-sdk/src/perch/deployment.ts`), is that manifest plus Nido's
 factory; `packages/passkey-sdk/src/perch/deployment.test.ts` checks it field by
-field (SECURITY_INVARIANTS W6). Wasm hashes and versions are in the manifest.
+field, taking Nido's factory address from this record (SECURITY_INVARIANTS W6). Wasm hashes and versions are in the manifest.
 
 | Manifest field (`PerchDeployment`) | Contract | Address or value |
 | --- | --- | --- |

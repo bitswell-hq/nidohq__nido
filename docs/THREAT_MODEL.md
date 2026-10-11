@@ -130,8 +130,9 @@ and infrastructure bring.
     entry is archived, never silently reset (T1), but a recovery transaction
     that must restore everything at once exceeds the write limit (T2), so
     restoration runs in separate transactions first. Anyone can renew the
-    state; nobody is paid to, and the wallet neither renews nor restores it
-    (L6).
+    state; nobody is paid to, and the wallet does not renew it or run the
+    explicit restoration workflow, though automatic restoration can still
+    succeed (L6, D1).
 12. **Supply-chain attacker.** Swaps a dependency, the Perch submodule, or the
     proving toolchain. See [SUPPLY_CHAIN.md](./SUPPLY_CHAIN.md).
 13. **The ZK verifier.** Proofs are Barretenberg's zero-knowledge flavor
@@ -193,10 +194,14 @@ post-audit work, its entry in [DEFERRED.md](./DEFERRED.md).
   for the race at this revision; A2 covers only query-string exposure.
 - **L6. The wallet lacks the archived-state restoration and renewal
   workflow.** On chain, archived recovery state is restored, never reset
-  (T1), and renewal is permissionless (T2). The wallet neither restores an
-  archived account's recovery state before a recovery transaction nor renews
-  it on a schedule; RUNBOOKS §6 gives the manual procedure. Until then, a
-  user whose recovery state expired cannot recover through the wallet alone.
+  (T1), and renewal is permissionless (T2). The wallet does not implement the
+  explicit restoration workflow (reading a `restorePreamble`, submitting a
+  `RestoreFootprint`) or scheduled renewal; automatic restoration can still
+  succeed when a recovery transaction's simulation marks its entries for it and
+  the result fits the write limit (MAINNET_READINESS D1). RUNBOOKS §6 gives the
+  manual procedure for the explicit case. Until then, a user whose recovery
+  state expired in a way that needs an explicit restore cannot recover through
+  the wallet alone.
   Adversary 11. Invariants: T1, T2. Gates: D1, D3.
 
 ## Trusted
