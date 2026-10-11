@@ -38,8 +38,9 @@ Perch packages in the wallet:
 | `@stellar-registry/perch-zk` | npm workspace link to `vendor/perch/packages/perch-zk` | 0.1.0 | None: its identity is the Perch source commit. |
 
 Perch publishes the two npm packages from release tags, not from the Perch
-source commit, and the pinned Perch source is ahead of both published
-versions. `packages/perch-js` declares `0.3.1` with an unreleased section —
+source commit, and the pinned Perch source corresponds to neither published
+version. `packages/perch-js` declares `0.3.1` with an unreleased section (ahead
+of the `0.3.1` release) —
 Perch's manifest,
 [`docs/audit-scope.md`](https://github.com/stellar-registry/perch/blob/3e870206ad46781fc7da4cb7d5c6ef8e086a571d/docs/audit-scope.md)
 (`vendor/perch/docs/audit-scope.md`), records that "no release it records
