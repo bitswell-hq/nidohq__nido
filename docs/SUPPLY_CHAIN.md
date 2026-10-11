@@ -37,7 +37,7 @@ Plans to move pins to published packages are in
 | --- | --- | --- |
 | `nargo` | `1.0.0-beta.9` | Perch's [`scripts/zk-toolchain.sh`](https://github.com/stellar-registry/perch/blob/3e870206ad46781fc7da4cb7d5c6ef8e086a571d/scripts/zk-toolchain.sh) (`vendor/perch/scripts/zk-toolchain.sh`) downloads the GitHub release and checks a pinned SHA-256, then checks the binary's version. |
 | `bb` (native) | `0.87.0` | Same script and checks. |
-| `@aztec/bb.js` | `0.87.0` | perch-zk's `package.json`, resolved in Nido's root `package-lock.json`. Proofs from any other version fail at the pairing check. |
+| `@aztec/bb.js` | `0.87.0` | perch-zk's `package.json`, resolved in Nido's root `package-lock.json`. Only `0.87.0` is supported and tested; a proof whose format or key does not match the adapter's embedded verification key fails verification. |
 | `@noir-lang/noir_js` | `1.0.0-beta.9` | Same. |
 | Reference string | Downloaded by bb.js from `crs.aztec.network` at proving time | Not pinned. A substituted file makes proofs fail; self-hosting it with a checked hash is open (MAINNET_READINESS E4). |
 

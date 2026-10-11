@@ -125,7 +125,7 @@ Named exclusions:
 | `contracts/status-message/` | Demo contract for the example dApp; excluded from mainnet (MAINNET_READINESS E3). |
 | `contracts/*-policy` (multisig, spending limit, pre-auth sweep) | Pre-Perch OZ policies a Perch document cannot attach; in scope only if a product decision keeps them (MAINNET_READINESS D6). |
 | `soroban-sdk`, `soroban-sdk-tools`, the Stellar Registry contract | Pinned third-party dependencies or external contracts ([SUPPLY_CHAIN.md](./SUPPLY_CHAIN.md)). |
-| Noir, Barretenberg, `@aztec/bb.js`, `@noir-lang/noir_js` | Pinned third-party proving toolchain; a proof from any other version fails verification. |
+| Noir, Barretenberg, `@aztec/bb.js`, `@noir-lang/noir_js` | Pinned third-party proving toolchain: only these versions are supported and tested. The deployed adapter verifies a proof against the one embedded verification key for the pinned circuit, so a proof whose format or key does not match it fails verification; the verifier reads no version number. |
 | Perch's `packages/perch-relay` and `packages/perch-contracts` | Not used by Nido. |
 | `perch-zk-prover` | The native prover Nido's tests use to write the proof fixtures (`just gen-zk-fixtures`). A wrong proof fails verification in the deployed adapter, which the tests run from its deployed wasm. |
 | The Stellar protocol, consensus, and RPC | Trusted ([THREAT_MODEL.md](./THREAT_MODEL.md#trusted)). |
