@@ -298,10 +298,13 @@ Wallet pages:
 
 ## 7. Where the rules are tested
 
-`crates/integration-tests/` runs every contract on the authorization and
-verification path from its wasm under enforcing authorization — the one
-exception is `Target`, a native test-harness contract standing in for a
-capability's callee — with P-256 passkeys signing what a browser signs and real
-UltraHonk proofs of Perch's release circuit. See
+`crates/integration-tests/tests/it/` runs the production account, factory,
+recovery, pool, adapter, and verifier from wasm under enforcing authorization,
+with P-256 passkeys signing what a browser signs and real UltraHonk proofs of
+Perch's release circuit. Two native-contract exceptions: `Target`, a
+test-harness contract standing in for a capability's callee, and a failing-pool
+stub (O2). The retained pre-Perch policy suites (`multisig_recovery.rs`,
+`spending_limit_policy.rs`, `preauth_sweep_policy.rs`, `scoped_session_key.rs`)
+are Mocked (`mock_all_auths`), testing pre-Perch mechanics only, not enforcing. See
 [docs/SECURITY_INVARIANTS.md](docs/SECURITY_INVARIANTS.md) for the map from
 property to implementation and evidence.

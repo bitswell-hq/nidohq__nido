@@ -130,8 +130,12 @@ and infrastructure bring.
     passing health check does not show that onboarding works: the hosted
     relayer has refused account setups while passing it, for a cause still
     open (RUNBOOKS §5, MAINNET_READINESS D7).
-11. **Storage expiry.** Recovery state lives in persistent storage. An expired
-    entry is archived, never silently reset (T1), but a recovery transaction
+11. **Storage expiry.** Durable recovery state (configuration, counters,
+    enrollment/revocation/nullifier records, persistent attempt records) lives
+    in persistent storage: an expired entry is archived, never silently reset
+    (T1). Collecting attempts in temporary storage are the exception — they
+    carry a TTL of at least their evidence window and simply expire (spec §3.6,
+    §6.2). A recovery transaction
     that must restore everything at once exceeds the write limit (T2), so
     restoration runs in separate transactions first. Anyone can renew the
     state; nobody is paid to, and the wallet does not renew it or run the

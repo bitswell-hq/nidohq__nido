@@ -136,9 +136,11 @@ check on `apply_doc`.
   baseline signers a fresh window. No wallet page tells the user that an
   edit resets a window.
 - **Why it is safe to defer:** a reset needs an `apply_doc` under the
-  account's admin authority, or a recovery completion; an app-grant key
-  cannot apply a document (SECURITY_INVARIANTS A2), so it cannot reset its
-  own window. The residual risk: after a reset, including the one a
+  account's admin authority, or a recovery completion; an app-grant key whose
+  scope excludes account management cannot apply a document (SECURITY_INVARIANTS
+  A2), so it cannot reset its own window. A grant scoped to the account itself
+  (self-targeted) would instead carry document-management authority, so this
+  holds only for ordinary dApp grants that do not target the account. The residual risk: after a reset, including the one a
   compromise restore causes, a capped signer can spend a full window's limit
   again at once.
 - **Exit criterion:** a persistent budget is designed as new schema, policy,
