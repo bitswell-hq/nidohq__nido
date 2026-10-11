@@ -298,8 +298,10 @@ Wallet pages:
 
 ## 7. Where the rules are tested
 
-`crates/integration-tests/` runs every contract from its wasm under enforcing
-authorization, with P-256 passkeys signing what a browser signs and real
+`crates/integration-tests/` runs every contract on the authorization and
+verification path from its wasm under enforcing authorization — the one
+exception is `Target`, a native test-harness contract standing in for a
+capability's callee — with P-256 passkeys signing what a browser signs and real
 UltraHonk proofs of Perch's release circuit. See
 [docs/SECURITY_INVARIANTS.md](docs/SECURITY_INVARIANTS.md) for the map from
 property to implementation and evidence.
