@@ -4,6 +4,26 @@ What to audit in Nido, at which revisions, who reviews each part, and in what
 order. Perch, which supplies Nido's account, verifier, and recovery stack, has
 its own audit manifest; this file assigns every Perch input Nido consumes.
 
+## Snapshot caveats
+
+Read these before the manifest.
+
+- **Single-commit snapshot.** The handed-over tree is one commit with no git
+  history or tags, so the git-based provenance checks below
+  (`git -C vendor/perch diff` against release tags, `scripts/check-perch-drift.sh`,
+  `git rev-parse HEAD`) cannot run as written. Identity is fixed by the recorded
+  SHAs and integrity hashes; source-equality by the comparison results attached
+  to the handoff.
+- **`vendor/perch` is fork-pinned for the audit.** `.gitmodules` points
+  `vendor/perch` at the audit fork's `audit/findings` branch so the audited Nido
+  head pulls the audited Perch head; it is reverted to upstream `main` before
+  mainnet. [SUPPLY_CHAIN.md](./SUPPLY_CHAIN.md) describes the upstream pin.
+- **perch-js.** The pinned source's `packages/perch-js` is `0.3.1` (unreleased
+  section); the wallet runs the published `0.3.2` tarball, built from a later
+  Perch commit. Tarball-vs-source equality is a post-audit release gate
+  ([DEFERRED.md](./DEFERRED.md#npm-publishing-of-perch-zk-and-the-contract-clients)).
+- **What is deferred until after the audit** is in [DEFERRED.md](./DEFERRED.md).
+
 ## Audit manifest
 
 The audit covers fixed revisions. No branch is part of the audit identity.

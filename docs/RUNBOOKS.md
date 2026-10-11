@@ -222,6 +222,14 @@ network maximum, no authorization needed (T2):
 Nothing calls these on a schedule, and the wallet never calls them
 (MAINNET_READINESS D3).
 
+These calls renew the controller, pool, and account recovery records. They do
+**not** extend the account's OZ context-rule, signer, and policy entries or the
+installed-rule records (spec §3.6): OZ bumps such an entry's TTL only when it
+reads it (to 30 days when fewer than 29 remain), so an idle account's rule
+entries can still archive. Restoring those is part of the restoration procedure
+below, not these `renew` calls — so permissionless renewal alone does not keep
+an account recoverable (SECURITY_INVARIANTS T2, THREAT_MODEL 11/L6).
+
 ### Recovering an account whose state was archived
 
 An archived entry is unavailable until restored, never reset (T1). A
