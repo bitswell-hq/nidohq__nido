@@ -11,7 +11,7 @@ by STRIDE category with its release gate and status; this file holds the
 analysis.
 
 Recovery's own threat model, by profile, is Perch's:
-[Perch recovery spec §2](https://github.com/stellar-registry/perch/blob/a7f48a408e5b27732abc5385a14de881f105d85b/docs/recovery/spec.md#2-roles-and-trust)
+[Perch recovery spec §2](https://github.com/stellar-registry/perch/blob/6d545599dec46fc6dc4e61b114b5843d6e8f3ab6/docs/recovery/spec.md#2-roles-and-trust)
 (`vendor/perch/docs/recovery/spec.md`). "§" and "D" numbers below are that
 spec's sections and decisions. This file adds what Nido's contracts, wallet,
 and infrastructure bring.
@@ -145,7 +145,7 @@ and infrastructure bring.
     UltraHonk verifier plus Perch's delta for that flavor (one new file and
     visibility-only changes). **The delta is not audited**; Perch lists its
     audit as a release criterion
-    ([Perch ZK README](https://github.com/stellar-registry/perch/blob/a7f48a408e5b27732abc5385a14de881f105d85b/docs/zk/README.md)
+    ([Perch ZK README](https://github.com/stellar-registry/perch/blob/6d545599dec46fc6dc4e61b114b5843d6e8f3ab6/docs/zk/README.md)
     (`vendor/perch/docs/zk/README.md`); MAINNET_READINESS D5). Until then,
     recovery's ZK factor rests on that unaudited code.
 
@@ -214,7 +214,7 @@ post-audit work, its entry in [DEFERRED.md](./DEFERRED.md).
   BN254, and Poseidon2 functions.
 - The host's CAP-0071 delegated-auth and invoker-auth behaviour, as pinned by
   Perch's tests
-  ([Perch CAP-0071 notes](https://github.com/stellar-registry/perch/blob/a7f48a408e5b27732abc5385a14de881f105d85b/docs/recovery/cap-0071.md)
+  ([Perch CAP-0071 notes](https://github.com/stellar-registry/perch/blob/6d545599dec46fc6dc4e61b114b5843d6e8f3ab6/docs/recovery/cap-0071.md)
   (`vendor/perch/docs/recovery/cap-0071.md`)).
 - The OZ `stellar-accounts` fork at the pinned revision: `do_check_auth`,
   context rules, nonces.
