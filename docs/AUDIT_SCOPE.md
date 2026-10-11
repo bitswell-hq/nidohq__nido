@@ -8,6 +8,15 @@ its own audit manifest; this file assigns every Perch input Nido consumes.
 
 The audit covers fixed revisions. No branch is part of the audit identity.
 
+Identity is fixed by the SHAs and integrity hashes recorded below, which an
+auditor checks against the handed-over tree directly. The source-equality
+comparisons this manifest prescribes — the `git -C vendor/perch diff` commands,
+`scripts/check-perch-drift.sh`, `git rev-parse HEAD`, and the published-tarball
+comparisons — additionally need git history or tags. A single-commit snapshot
+carries neither, so when the handoff is a plain tree those comparisons run from
+the recorded hashes plus the comparison results attached to the handoff, not
+from `git` against the tree.
+
 ### Reviewed source
 
 | Item | Identity | How to record or check it |
@@ -28,14 +37,25 @@ Perch packages in the wallet:
 | `@stellar-registry/perch-interpreter` (Perch's `packages/perch-interpreter-js`) | npm | 0.1.0 | `sha512-ZUW1+/ojzTw0tjlfOxjHtWB7b+I6kWEMz5oQIH6wZrpk2H2vsPfdsc5wnQCU8NNWrLqWJlRKG+yxsbHB/p7Vtw==` |
 | `@stellar-registry/perch-zk` | npm workspace link to `vendor/perch/packages/perch-zk` | 0.1.0 | None: its identity is the Perch source commit. |
 
-Perch publishes the two npm packages from release tags (`perch-js-v0.3.2`,
-`perch-interpreter-js-v0.1.0`), not from the Perch source commit. Their
-sources must equal the Perch source commit's; check with
-`git -C vendor/perch diff --stat HEAD perch-js-v0.3.2 -- packages/perch-js/src`
-and `git -C vendor/perch diff --stat HEAD perch-interpreter-js-v0.1.0 -- packages/perch-interpreter-js/src`
-(empty output). Nothing in Nido's CI checks that the published `dist` is a
-build of that source; that comparison is part of the explicit dependency
-review below.
+Perch publishes the two npm packages from release tags, not from the Perch
+source commit, and the pinned Perch source is ahead of both published
+versions. `packages/perch-js` declares `0.3.1` with an unreleased section —
+Perch's manifest,
+[`docs/audit-scope.md`](https://github.com/stellar-registry/perch/blob/3e870206ad46781fc7da4cb7d5c6ef8e086a571d/docs/audit-scope.md)
+(`vendor/perch/docs/audit-scope.md`), records that "no release it records
+contains this source" — while the wallet runs the published `0.3.2` tarball,
+built from a Perch commit later than the pinned one. `packages/perch-interpreter-js`
+declares `0.1.0`, the published version. So no `perch-js-v0.3.2` tag exists in
+this tree, and the published `perch-js` tarball cannot be diffed against the
+pinned source by any tag in a single-commit snapshot. This audit reviews the
+perch-js and perch-interpreter-js encoders as the source at the pinned commit
+(`vendor/perch/packages/perch-js`, `vendor/perch/packages/perch-interpreter-js`).
+Establishing that a published `dist` is a reproducible build of an audited
+source is a post-audit release gate
+([DEFERRED.md](./DEFERRED.md#npm-publishing-of-perch-zk-and-the-contract-clients)),
+not a check runnable against this snapshot; the alternative, having the wallet
+consume perch-js from the workspace as it already does perch-zk, is a Nido code
+change outside this audit.
 
 ### Deployed artifacts (provenance, not review targets)
 
@@ -84,7 +104,7 @@ the two units is its audit manifest,
 | Wallets Kit module | `packages/stellar-wallets-kit-module/`: dApp signing handoff | Nido integration |
 | Infrastructure | `infra/relayer/` (fee sponsorship and submission, the channels plugin, key custody), `infra/nido-resolver/` (name resolution), `frontend/worker-proxy-nido/` (subdomain proxy, security headers) | Nido integration |
 | Integration harness | `crates/integration-tests/`: that it runs under enforcing authorization with real proofs and that its fixtures cannot drift silently (`src/zk.rs`) | Nido integration |
-| `@stellar-registry/perch` 0.3.2 (perch-js) | Statement and document encodings, `applyDocument`, rule selection, signing digests. | Source and tarball against source: explicit dependency review; the wallet's use of it: Nido integration |
+| `@stellar-registry/perch` (perch-js; npm `0.3.2`, pinned source `0.3.1`, see manifest note) | Statement and document encodings, `applyDocument`, rule selection, signing digests. | Source at the pinned commit: explicit dependency review. The published tarball vs an audited source: post-audit release gate ([DEFERRED.md](./DEFERRED.md#npm-publishing-of-perch-zk-and-the-contract-clients)). The wallet's use of it: Nido integration |
 | `@stellar-registry/perch-interpreter` 0.1.0 | Interpreter install parameters and bindings the SDK uses (`src/policyDoc/params.ts`) | Nido integration; tarball against source: explicit dependency review |
 | `perch-zk` | [`packages/perch-zk`](https://github.com/stellar-registry/perch/tree/649dcf8f2705dabe0fa5504138e26015dc9fcb4c/packages/perch-zk) (`vendor/perch/packages/perch-zk`): in-page proving and the circuit artifact it ships | Source: explicit dependency review; the wallet's use of it: Nido integration |
 | Generated Perch clients | `packages/contract-bindings/perch-*`, generated from the deployed wasm (`just bindings-perch`) | Nido integration (provenance) |
@@ -105,7 +125,7 @@ Named exclusions:
 | `contracts/status-message/` | Demo contract for the example dApp; excluded from mainnet (MAINNET_READINESS E3). |
 | `contracts/*-policy` (multisig, spending limit, pre-auth sweep) | Pre-Perch OZ policies a Perch document cannot attach; in scope only if a product decision keeps them (MAINNET_READINESS D6). |
 | `soroban-sdk`, `soroban-sdk-tools`, the Stellar Registry contract | Pinned third-party dependencies or external contracts ([SUPPLY_CHAIN.md](./SUPPLY_CHAIN.md)). |
-| Noir, Barretenberg, `@aztec/bb.js`, `@noir-lang/noir_js` | Pinned third-party proving toolchain; a proof from any other version fails verification. |
+| Noir, Barretenberg, `@aztec/bb.js`, `@noir-lang/noir_js` | Pinned third-party proving toolchain: only these versions are supported and tested. The deployed adapter verifies a proof against the one embedded verification key for the pinned circuit, so a proof whose format or key does not match it fails verification; the verifier reads no version number. |
 | Perch's `packages/perch-relay` and `packages/perch-contracts` | Not used by Nido. |
 | `perch-zk-prover` | The native prover Nido's tests use to write the proof fixtures (`just gen-zk-fixtures`). A wrong proof fails verification in the deployed adapter, which the tests run from its deployed wasm. |
 | The Stellar protocol, consensus, and RPC | Trusted ([THREAT_MODEL.md](./THREAT_MODEL.md#trusted)). |

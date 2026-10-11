@@ -113,14 +113,17 @@ Every box here is checked before mainnet.
 
 ### Recovery operations
 
-- [ ] **D1. The wallet restores archived recovery state** before a recovery
-  transaction, handling both responses RUNBOOKS §6 describes: entries a
-  transaction restores automatically, and an explicit restoration
-  (`restorePreamble`, `RestoreFootprint`). The wallet implements neither: its
-  submit paths (`recoverySubmit.ts`, `primaryPasskeySigner.ts`,
-  `signing/submit.ts`) check only for a simulation error, so recovery works
-  only while the state is live (THREAT_MODEL L6). No live archival drill has
-  been run.
+- [ ] **D1. The wallet handles archived recovery state** before a recovery
+  transaction, for both responses RUNBOOKS §6 describes. Automatic restoration
+  can already succeed: the submit paths (`recoverySubmit.ts`,
+  `primaryPasskeySigner.ts`, `signing/submit.ts`) submit the `transactionData`
+  the simulation returns, so a transaction the simulation marks for automatic
+  restoration restores those entries when it fits the write limit. What is
+  missing is the explicit path — the wallet checks only for a simulation error,
+  never reads a `restorePreamble`, and never submits a `RestoreFootprint` or a
+  bounded pre-restoration — so a recovery whose simulation asks for an explicit
+  restore goes out without it (THREAT_MODEL L6). No live archival drill has been
+  run.
 - [ ] **D2. Protected requires a baseline**, or the wallet makes the risk
   explicit (nidohq/nido#220; THREAT_MODEL L1).
 - [ ] **D3. Recovery state renewal runs on a schedule** (the permissionless
@@ -141,6 +144,20 @@ Every box here is checked before mainnet.
   [Perch's budgets.md §1](https://github.com/stellar-registry/perch/blob/649dcf8f2705dabe0fa5504138e26015dc9fcb4c/docs/recovery/budgets.md#1-proving-client)
   (`vendor/perch/docs/recovery/budgets.md`) on its mid-range phone and
   laptop. Only desktop numbers exist.
+
+### Network and submission
+
+- [ ] **N1. One manifest-bound network configuration.** Every client, signer,
+  asset lookup, and RPC reads the network, passphrase, and endpoints from a
+  single mainnet manifest. Today `packages/frontend/src/lib/network.ts` and
+  `packages/frontend/src/lib/recovery/deployment.ts` hard-code testnet. Wiring
+  mainnet is a code change outside the audited snapshot's assurance; it needs a
+  delta review before launch.
+- [ ] **N2. A funded mainnet submission path for permissionless recovery.**
+  Recovery completion and the permissionless `renew` calls rely on testnet
+  Friendbot for a fee source. Mainnet needs a funded fee-payer (or relayer
+  sponsorship) for these calls, reviewed with N1, plus a recovery smoke test
+  from a fresh browser on mainnet.
 
 ### Hardening
 
@@ -221,6 +238,7 @@ boundary it changes.
    account wasm, pin the manifest's verifier (`set_registry_pins`), hand the
    factory to the multisig (B1), and register it (RUNBOOKS §2.2).
 5. Relayer on KMS (A3), alerts live, incident drill run.
-6. Front end built with the mainnet manifest; smoke-test onboarding and one
-   full recovery.
+6. Front end built with the single mainnet manifest (N1), with a funded
+   recovery submission path (N2); smoke-test onboarding and one full recovery
+   from a fresh browser.
 7. Record everything in DEPLOYED.md.

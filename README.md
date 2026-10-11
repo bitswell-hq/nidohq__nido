@@ -155,8 +155,12 @@ for local network, testnet, and GitHub Pages deployment details.
 - **No custody:** The wallet does not hold a server-side signing key.
 - **On-chain passkey verification:** WebAuthn assertions are checked by the
   verifier contract during Soroban authorization.
-- **Per-account origin binding:** Account subdomains scope WebAuthn RP IDs so a
-  passkey for one account cannot approve another account.
+- **Per-account credential isolation (browser):** Account subdomains scope
+  WebAuthn RP IDs, so a browser offers an account's passkey only on that
+  account's origin. This is a WebAuthn-client property, not an on-chain one:
+  the verifier does not enforce account-specific RP IDs or origins. Soroban
+  authorization binds an assertion to the exact challenge and key, so a
+  credential enrolled on more than one account can authorize each.
 - **Ephemeral testnet funding:** On testnet, a throwaway G-address funded by
   Friendbot moves its balance into the new account, then is discarded.
 - **Policy enforcement:** The account compiles its policy document into
