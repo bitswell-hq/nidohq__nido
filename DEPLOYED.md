@@ -10,12 +10,12 @@ deployment is in this file's git history (`git log -p -- DEPLOYED.md`).
 
 Perch deploys its stack; Nido deploys none of it. The record is Perch's
 manifest,
-[`deployments/testnet.json`](https://github.com/stellar-registry/perch/blob/649dcf8f2705dabe0fa5504138e26015dc9fcb4c/deployments/testnet.json)
+[`deployments/testnet.json`](https://github.com/stellar-registry/perch/blob/a7f48a408e5b27732abc5385a14de881f105d85b/deployments/testnet.json)
 (`vendor/perch/deployments/testnet.json`), at the Perch commit Nido pins: for
 every contract its version, wasm sha256, and content address under the
 manifest's registry, plus the Perch commit and toolchain that built them and
 the ledger they were deployed at. Perch's
-[`scripts/verify-deployment.sh`](https://github.com/stellar-registry/perch/blob/649dcf8f2705dabe0fa5504138e26015dc9fcb4c/scripts/verify-deployment.sh)
+[`scripts/verify-deployment.sh`](https://github.com/stellar-registry/perch/blob/a7f48a408e5b27732abc5385a14de881f105d85b/scripts/verify-deployment.sh)
 (`vendor/perch/scripts/verify-deployment.sh`) checks the manifest against the
 chain by hash and address.
 
