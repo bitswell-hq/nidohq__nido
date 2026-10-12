@@ -276,8 +276,11 @@ This section is the one home for Nido's package-migration plans.
   pinned, so the registry is off the account-creation path; a repointed or
   failing registry can neither reroute nor block creation
   (SECURITY_INVARIANTS F5). `scripts/deploy-factory.sh` never hands over an
-  unpinned factory, and it and `scripts/check-perch-drift.sh` check the
-  embedded account against the manifest's hash. The residual risk is a
+  unpinned factory, and checks the account the *deployed* factory produces
+  against the manifest's hash on a runtime readback (`refresh_account_wasm_hash`);
+  `scripts/check-perch-drift.sh` checks the fetched and staged `perch-account`
+  build inputs, not the built `nido_factory.wasm` artifact (the embed is a
+  compile-time `include_bytes!`). The residual risk is a
   factory used before its pin, which trusts whatever the registry returns
   for `"verifier"`, and a mainnet build, which needs `REGISTRY` changed and
   the factory rebuilt (MAINNET_READINESS A4).
