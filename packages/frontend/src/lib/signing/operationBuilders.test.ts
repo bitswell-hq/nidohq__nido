@@ -56,7 +56,7 @@ describe("buildOperation", () => {
         { type: "transfer", token: TOKEN, to: TO, amountRaw },
         C1,
       );
-      const summary = describeOperation(op);
+      const summary = describeOperation(op, C1);
       expect(summary).toMatchObject({
         kind: "transfer",
         token: TOKEN,
@@ -71,7 +71,7 @@ describe("buildOperation", () => {
         { type: "transfer", token: TOKEN, to: TO, amountRaw: "99999999999" },
         C1,
       );
-      const summary = describeOperation(op);
+      const summary = describeOperation(op, C1);
       expect(summary).toMatchObject({ kind: "transfer", amount: 99999999999n });
     });
   });

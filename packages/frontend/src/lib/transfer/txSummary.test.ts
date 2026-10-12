@@ -19,21 +19,75 @@ const TOKEN = StrKey.encodeContract(Buffer.alloc(32, 0xee));
 const REGISTRY = StrKey.encodeContract(Buffer.alloc(32, 0x12));
 const G = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 0x11));
 
+/** Build `contract.execute(token, "transfer", [from, to, amount])` — the smart-
+ *  account transfer-wrapper shape, but with the invoked contract and inner
+ *  `from` parameterised so masquerade variants can be constructed. */
+function executeTransferOp(
+  contract: string,
+  token: string,
+  from: string,
+  to: string,
+  amount: bigint,
+): xdr.Operation {
+  return Operation.invokeContractFunction({
+    contract,
+    function: "execute",
+    args: [
+      Address.fromString(token).toScVal(),
+      nativeToScVal("transfer", { type: "string" }),
+      xdr.ScVal.scvVec([
+        Address.fromString(from).toScVal(),
+        Address.fromString(to).toScVal(),
+        nativeToScVal(amount, { type: "i128" }),
+      ]),
+    ],
+  });
+}
+
 describe("describeOperation", () => {
-  it("decodes a smart-account execute->transfer into a transfer summary", () => {
+  it("decodes a smart-account execute->transfer into a transfer summary when bound to the account", () => {
     const op = buildSendOperation({
       smartAccount: SMART,
       tokenContractId: TOKEN,
       destination: DEST,
       amount: 7_000_000n,
     });
-    expect(describeOperation(op)).toEqual({
+    expect(describeOperation(op, SMART)).toEqual({
       kind: "transfer",
       token: TOKEN,
       from: SMART,
       to: DEST,
       amount: 7_000_000n,
     });
+  });
+
+  it("does NOT decode execute->transfer when the invoked contract is not the account (masquerade guard)", () => {
+    // A foreign/malicious contract (EVIL) exposes execute(token,"transfer",…)
+    // with the selected account as `from`. Bound to the account, this must NOT
+    // render as a verified transfer — the user would otherwise approve a
+    // "verified XLM transfer" while authorizing EVIL.execute().
+    const EVIL = StrKey.encodeContract(Buffer.alloc(32, 0xcc));
+    const op = executeTransferOp(EVIL, TOKEN, SMART, DEST, 7_000_000n);
+    const s = describeOperation(op, SMART);
+    expect(s.kind).toBe("invoke");
+    expect(s).toMatchObject({ kind: "invoke", contract: EVIL, fn: "execute" });
+  });
+
+  it("does NOT decode execute->transfer when `from` is not the account", () => {
+    const EVICTIM = StrKey.encodeContract(Buffer.alloc(32, 0xdd));
+    const op = executeTransferOp(SMART, TOKEN, EVICTIM, DEST, 7_000_000n);
+    expect(describeOperation(op, SMART).kind).toBe("invoke");
+  });
+
+  it("does NOT decode execute->transfer without a bound account", () => {
+    const op = buildSendOperation({
+      smartAccount: SMART,
+      tokenContractId: TOKEN,
+      destination: DEST,
+      amount: 7_000_000n,
+    });
+    // No account to bind to → cannot vouch for the wrapper → generic invoke.
+    expect(describeOperation(op).kind).toBe("invoke");
   });
 
   it("decodes a bare token transfer(from, to, amount)", () => {
@@ -150,7 +204,7 @@ describe("describeTransaction", () => {
       .setTimeout(0)
       .build();
 
-    const summary = describeTransaction(tx.toXDR(), Networks.TESTNET);
+    const summary = describeTransaction(tx.toXDR(), Networks.TESTNET, SMART);
     expect(summary.ops).toEqual([
       { kind: "transfer", token: TOKEN, from: SMART, to: DEST, amount: 9n },
     ]);
