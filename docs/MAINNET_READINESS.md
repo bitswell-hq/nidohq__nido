@@ -148,9 +148,15 @@ Every box here is checked before mainnet.
 
 - [ ] **E1. CSP enforced.** Promote the report-only CSP in
   `frontend/worker-proxy-nido/index.js` and `packages/frontend/public/_headers`
-  after a clean report stream. `connect-src` must allow the RPC, the relayer,
-  and the proving reference string's host; the report-only policy does not
-  list `crs.aztec.network`.
+  to enforcing. `connect-src` must allow the RPC, the relayer, and the proving
+  reference string's host; the report-only policy does not list
+  `crs.aztec.network`. Both copies are `Content-Security-Policy-Report-Only`
+  with no `report-uri`/`report-to`, so there is no report stream to judge
+  "clean" — violations surface only in each user's console. Gate promotion on
+  an end-to-end run of the full onboarding, signing and in-page ZK-proving
+  flows under the **enforced** policy with zero violations (and, if an ongoing
+  report stream is wanted, add a `report-to`/`report-uri` endpoint to both
+  copies first).
 - [ ] **E2. Stored credential material encrypted and expiring.**
 - [ ] **E3. `status-message` excluded from mainnet.**
 - [ ] **E4. The proving reference string self-hosted** with a checked hash
