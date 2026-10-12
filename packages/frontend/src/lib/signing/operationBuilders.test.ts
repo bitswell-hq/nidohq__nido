@@ -115,8 +115,8 @@ describe("buildOperation", () => {
       ).rejects.toThrow();
     });
 
-    // Audit R-sdk-F4: a request without `expectedRevision` is refused offline,
-    // never rebound to the revision read at signing time.
+    // A request without `expectedRevision` is refused offline, never rebound
+    // to the revision read at signing time.
     it("refuses a request missing expected_revision offline", async () => {
       const missingRevision = { type: "apply-policy-doc", docJson: "{}" } as unknown as Parameters<
         typeof buildOperation

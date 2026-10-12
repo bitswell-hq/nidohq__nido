@@ -31,8 +31,8 @@ export type OperationDescriptor =
       prevDocJson?: string;
       /** The configuration revision (decimal) `docJson` was composed from.
        *  The apply names it as `expected_revision`, so it lands only if the
-       *  account hasn't changed since. REQUIRED (audit R-sdk-F4): a request
-       *  that omits it is refused, never silently rebound to the revision read
+       *  account hasn't changed since. REQUIRED: a request that omits it is
+       *  refused, never silently rebound to the revision read
        *  at signing time — that rebinding would let an older stashed document
        *  overwrite intervening rule changes while still passing the on-chain
        *  stale-revision check. */
@@ -91,9 +91,9 @@ export function loadSignRequest(id: string, store: Storage = sessionStorage): Si
   try {
     const parsed = JSON.parse(raw) as SignRequest;
     if (!parsed || parsed.v !== 1) return null;
-    // Audit R-sdk-F4: an apply-policy-doc request must name the revision it was
-    // composed from. Refuse one that omits it rather than letting the builder
-    // rebind it to the revision read at signing time (which would defeat the
+    // An apply-policy-doc request must name the revision it was composed
+    // from. Refuse one that omits it rather than letting the builder rebind
+    // it to the revision read at signing time (which would defeat the
     // stale-document protection).
     const op = parsed.operation;
     if (
