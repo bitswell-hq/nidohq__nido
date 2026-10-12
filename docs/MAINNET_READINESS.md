@@ -79,6 +79,13 @@ Every box here is checked before mainnet.
   the whole factory wasm, including the account code it embeds and the pin,
   and the admin can call `set_registry_pins` again. The passkey verifier
   itself is Perch's, with no admin (THREAT_MODEL 7).
+  Note: the factory's `upgrade`/`set_registry_pins` are immediate on-chain
+  (no timelock), so the delay is an off-chain multisig property only — an
+  account created during a pending upgrade gets whatever code and pin are live,
+  and the wallet does not currently verify the deployed account's wasm hash or
+  rule-0 verifier against the manifest (AUDIT_SCOPE Q1). Meeting this gate
+  means an on-chain schedule/execute delay in the factory **or** a
+  post-`create_account` wallet check of the deployed output.
 - [ ] **B2. Name-registry, policy, and registry-owner keys behind the
   multisig**, with alerts on any registry address change.
 - [ ] **A3. Relayer keys in KMS/HSM.** Sponsor and channel keys are held in

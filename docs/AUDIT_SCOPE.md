@@ -208,6 +208,18 @@ specification intends:
    MAINNET_READINESS B1 requires a multisig with a visible upgrade delay, or
    no upgrade authority. Is that enough for accounts created while an
    upgrade is pending?
+
+   _As built:_ the factory's `upgrade` and `set_registry_pins` take effect in
+   the same transaction (`admin.require_auth`, then
+   `update_current_contract_wasm` / the pin write) — there is no on-chain
+   timelock, so any "visible upgrade delay" is a property of the admin
+   multisig's off-chain process, not an on-chain guarantee. An account created
+   while an upgrade is pending gets whatever factory code and pin are live at
+   its ledger, and nothing on-chain or in the wallet compares the new account's
+   wasm hash or admin-rule verifier against `perch.TESTNET` / the manifest. A
+   multisig delay alone therefore does not protect accounts created during or
+   after a malicious upgrade unless the wallet verifies the deployed result
+   (see B1).
 2. **The ZK verifier delta.** Proofs are zero-knowledge, verified by Perch's
    unaudited `UltraKeccakZKFlavor` delta on the audited verifier
    (THREAT_MODEL 13). Is it sound?
