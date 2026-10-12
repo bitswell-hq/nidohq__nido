@@ -86,7 +86,13 @@ instead (`latestLedgerSequence`). The example dApp calls
 `@nidohq/perch-*` clients and the workspace-only perch-zk
 ([DEFERRED.md](./DEFERRED.md#npm-publishing-of-perch-zk-and-the-contract-clients)).
 `npm-publish.yml` publishes it on any published GitHub release and does not
-check this, so no release may be published until it is publishable.
+check this, so no release may be published until it is publishable. The
+workflow also has a `workflow_dispatch` trigger, so a manual run publishes the
+SDK by the same path; neither trigger checks the private-dependency condition.
+The "no release may be published" rule is therefore procedural and incomplete —
+a manual dispatch would publish a broken package. Making it a real gate means a
+workflow step that fails while the SDK is unpublishable (an edit to
+`.github/workflows/npm-publish.yml`, which needs a `workflow`-scoped token).
 
 ## Gaps
 
