@@ -74,7 +74,7 @@ export async function lookupExistingAccount(
   }
 }
 
-// NOTE: a `deploySmartAccount` helper was removed here (audit R-sdk-F12). It
+// NOTE: a `deploySmartAccount` helper was removed here. It
 // invoked a non-existent factory function (`deploy`; the factory exposes only
 // `create_account`/`get_c_address`), derived the salt from the credential id
 // after the passkey existed (contradicting the salt-first model), polled
