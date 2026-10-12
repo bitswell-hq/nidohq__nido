@@ -8,7 +8,7 @@ stable and cited from the other audit documents; `[x]` is met, `[~]` partly
 met, `[ ]` open.
 
 Perch's specification puts mainnet rollout outside its own scope
-([Perch recovery spec §1](https://github.com/stellar-registry/perch/blob/0bc3b2db977b34c6fc6431811d6b54668dc5258e/docs/recovery/spec.md#1-scope-and-vocabulary)
+([Perch recovery spec §1](https://github.com/stellar-registry/perch/blob/dd728c8d1a2953160745ef039b93e53307bc7db9/docs/recovery/spec.md#1-scope-and-vocabulary)
 (`vendor/perch/docs/recovery/spec.md`)), so a mainnet Perch deployment is a
 prerequisite on top of everything here (A1).
 
@@ -141,7 +141,7 @@ Every box here is checked before mainnet.
   (upgrading the relayer and its Channels plugin).
 - [ ] **D9. Proving measured on reference devices.** In-page proving fits
   the client budgets in
-  [Perch's budgets.md §1](https://github.com/stellar-registry/perch/blob/0bc3b2db977b34c6fc6431811d6b54668dc5258e/docs/recovery/budgets.md#1-proving-client)
+  [Perch's budgets.md §1](https://github.com/stellar-registry/perch/blob/dd728c8d1a2953160745ef039b93e53307bc7db9/docs/recovery/budgets.md#1-proving-client)
   (`vendor/perch/docs/recovery/budgets.md`) on its mid-range phone and
   laptop. Only desktop numbers exist.
 
