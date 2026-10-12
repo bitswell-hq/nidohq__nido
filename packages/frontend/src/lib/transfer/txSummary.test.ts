@@ -132,7 +132,7 @@ describe("describeOperation", () => {
         nativeToScVal("alice", { type: "string" }),
       ],
     });
-    expect(describeOperation(op)).toEqual({
+    expect(describeOperation(op, SMART, REGISTRY)).toEqual({
       kind: "name-register",
       contract: REGISTRY,
       account: SMART,
@@ -149,7 +149,7 @@ describe("describeOperation", () => {
         nativeToScVal(42n, { type: "i128" }), // not a name string
       ],
     });
-    expect(describeOperation(op)).toEqual({
+    expect(describeOperation(op, SMART, REGISTRY)).toEqual({
       kind: "invoke",
       contract: REGISTRY,
       fn: "register",
@@ -168,6 +168,100 @@ describe("describeOperation", () => {
   });
 });
 
+// A semantic preview ("Registers the name …", "Grants a session key …") asserts
+// something about the on-chain effect, so it is only honest for the specific
+// contract whose effect we know: the configured name registry, or the selected
+// account's own policy entry points. A same-named method on any other contract
+// must read as an unverified generic call — otherwise an attacker-controlled
+// contract could expose register()/add_context_rule()/remove_context_rule() and
+// be reviewed as a benign action while the authorization the user signs does
+// something else entirely.
+describe("describeOperation — semantic previews require provenance (anti-masquerade)", () => {
+  const FOREIGN = StrKey.encodeContract(Buffer.alloc(32, 0x99));
+
+  function removeRuleOp(contract: string): xdr.Operation {
+    return Operation.invokeContractFunction({
+      contract,
+      function: "remove_context_rule",
+      args: [nativeToScVal(7, { type: "u32" })],
+    });
+  }
+
+  function addRuleOp(contract: string): xdr.Operation {
+    return Operation.invokeContractFunction({
+      contract,
+      function: "add_context_rule",
+      args: [
+        nativeToScVal({
+          context_type: { tag: "CallContract", values: [DEST] },
+          name: "session",
+          valid_until: 1234,
+          signers: [],
+          policies: [],
+        }),
+      ],
+    });
+  }
+
+  function registerOp(contract: string): xdr.Operation {
+    return Operation.invokeContractFunction({
+      contract,
+      function: "register",
+      args: [Address.fromString(SMART).toScVal(), nativeToScVal("alice", { type: "string" })],
+    });
+  }
+
+  it("does NOT render register() on a foreign contract as a name registration", () => {
+    const s = describeOperation(registerOp(FOREIGN), SMART, REGISTRY);
+    expect(s).toMatchObject({ kind: "invoke", contract: FOREIGN, fn: "register" });
+  });
+
+  it("does NOT render register() as a name registration when no registry is known", () => {
+    // Without a trusted registry id to compare against, a register call cannot
+    // be vouched for — it must read as a generic call, not a name registration.
+    const s = describeOperation(registerOp(REGISTRY), SMART);
+    expect(s).toMatchObject({ kind: "invoke", fn: "register" });
+  });
+
+  it("does NOT render remove_context_rule on a foreign contract as a session revoke", () => {
+    const s = describeOperation(removeRuleOp(FOREIGN), SMART, REGISTRY);
+    expect(s).toMatchObject({ kind: "invoke", contract: FOREIGN, fn: "remove_context_rule" });
+  });
+
+  it("does NOT render add_context_rule on a foreign contract as a session grant", () => {
+    const s = describeOperation(addRuleOp(FOREIGN), SMART, REGISTRY);
+    expect(s).toMatchObject({ kind: "invoke", contract: FOREIGN, fn: "add_context_rule" });
+  });
+
+  it("renders the account's OWN remove_context_rule as a session revoke", () => {
+    expect(describeOperation(removeRuleOp(SMART), SMART, REGISTRY)).toMatchObject({
+      kind: "session-revoke",
+      contract: SMART,
+      ruleId: 7,
+    });
+  });
+
+  it("renders the account's OWN add_context_rule as a session grant", () => {
+    expect(describeOperation(addRuleOp(SMART), SMART, REGISTRY)).toMatchObject({
+      kind: "session-grant",
+      contract: SMART,
+    });
+  });
+
+  it("decodes a foreign register inside a full dApp transaction as a generic call", () => {
+    const source = new Account(G, "0");
+    const tx = new TransactionBuilder(source, {
+      fee: "100",
+      networkPassphrase: Networks.TESTNET,
+    })
+      .addOperation(registerOp(FOREIGN))
+      .setTimeout(0)
+      .build();
+    const summary = describeTransaction(tx.toXDR(), Networks.TESTNET, SMART, REGISTRY);
+    expect(summary.ops[0]).toMatchObject({ kind: "invoke", contract: FOREIGN, fn: "register" });
+  });
+});
+
 const CONTRACT = "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4";
 
 function invoke(fn: string, args: xdr.ScVal[]): xdr.HostFunction {
@@ -181,9 +275,15 @@ function invoke(fn: string, args: xdr.ScVal[]): xdr.HostFunction {
 }
 
 describe("describeHostFunction — context rules", () => {
-  it("summarizes remove_context_rule(id)", () => {
+  it("summarizes the account's own remove_context_rule(id)", () => {
     const fn = invoke("remove_context_rule", [nativeToScVal(7, { type: "u32" })]);
-    expect(describeHostFunction(fn)).toEqual({ kind: "session-revoke", contract: CONTRACT, ruleId: 7 });
+    // CONTRACT is the selected account here, so its own rule-removal is a
+    // recognized session revoke.
+    expect(describeHostFunction(fn, CONTRACT)).toEqual({
+      kind: "session-revoke",
+      contract: CONTRACT,
+      ruleId: 7,
+    });
   });
 });
 

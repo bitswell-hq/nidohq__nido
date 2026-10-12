@@ -648,7 +648,16 @@ import PasskeySheet from '../../components/PasskeySheet.astro';
       const { Buffer: B } = await import('buffer');
       if (typeof globalThis.Buffer === 'undefined') (globalThis as { Buffer?: unknown }).Buffer = B;
       const builtOp = await buildOperation(op, acct);
-      const summary: OpSummary = describeOperation(builtOp, acct);
+      // This is an own-action op the wallet just built, but decode it with the
+      // same provenance gates the dApp path uses so an own-action `register`
+      // still renders as a name registration (its contract is the registry).
+      let nameRegistry: string | undefined;
+      try {
+        nameRegistry = await fetchRegistryAddress('name-registry');
+      } catch {
+        nameRegistry = undefined;
+      }
+      const summary: OpSummary = describeOperation(builtOp, acct, nameRegistry);
       return renderTechDetails({
         summary: { fee: '', ops: [summary] },
         txXdr: builtOp.toXDR('base64'),
@@ -666,10 +675,20 @@ import PasskeySheet from '../../components/PasskeySheet.astro';
       const { Buffer: B } = await import('buffer');
       if (typeof globalThis.Buffer === 'undefined') (globalThis as { Buffer?: unknown }).Buffer = B;
 
-      // Bind the execute-transfer-wrapper decode to the account this ceremony
-      // is for, so a foreign contract's execute(token,"transfer",…) can't be
-      // rendered as a verified XLM transfer (masquerade guard).
-      const summary = describeTransaction(txXdr, passphrase, acct);
+      // Bind the semantic decodes to known provenance so a foreign contract
+      // can't borrow a verified-looking preview (masquerade guard): the account
+      // this ceremony is for gates the execute-transfer-wrapper and
+      // context-rule decodes, and the configured name registry gates the
+      // register decode. Resolving the registry is best-effort — if it fails, a
+      // register call simply reads as a generic contract call rather than a
+      // name registration, which is the safe degradation.
+      let nameRegistry: string | undefined;
+      try {
+        nameRegistry = await fetchRegistryAddress('name-registry');
+      } catch {
+        nameRegistry = undefined;
+      }
+      const summary = describeTransaction(txXdr, passphrase, acct, nameRegistry);
       if (summary.ops.length === 0) return;
 
       // decimals/symbol for non-native tokens, filled in by an async probe.
@@ -1033,7 +1052,7 @@ import PasskeySheet from '../../components/PasskeySheet.astro';
             : '';
           $err.innerHTML = e?.code === 'WAIT_TIMEOUT'
             ? `Still waiting for the network — this transaction may yet go through. Check the result before trying again.${explorerLink}`
-            : `The relayer reported a failure, but that isn't confirmed on-chain. Check whether it went through before trying again — retrying could pay twice.${explorerLink}`;
+            : `We couldn't confirm what happened to this transaction on-chain. Check whether it went through before trying again — retrying could pay twice.${explorerLink}`;
           $err.style.display = 'block';
           $status.textContent = '';
           // approve stays disabled intentionally; footer/review stay hidden.
