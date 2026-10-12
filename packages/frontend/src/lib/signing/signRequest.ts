@@ -189,6 +189,34 @@ export function httpOrigin(url: string | null | undefined): string | null {
   }
 }
 
+/** Why a dApp origin / return pair was rejected, for the page's error copy. */
+export type DappReturnError = 'missing-dapp' | 'malformed-dapp' | 'bad-return';
+
+/**
+ * Validate a `dapp` origin and optional same-origin `return` URL for the
+ * connect/sign/delegate ceremonies, using the hardened {@link httpOrigin}
+ * scheme check at the ENTRY point (the matching sink guard lives in the kit
+ * module's `resolveReturnRedirect`).
+ *
+ * Rejects `javascript:`/`data:`/`blob:`/opaque-origin values — a bare
+ * `new URL(dapp).origin` returns the string `"null"` for those, which is
+ * truthy and compares equal to a second opaque origin, so the historical
+ * inline validators let a `javascript:` callback through. Returns the
+ * normalised origin on success.
+ */
+export function validateDappReturn(
+  dappOrigin: string | null | undefined,
+  returnUrl: string | null | undefined,
+): { origin: string } | { error: DappReturnError } {
+  if (!dappOrigin) return { error: 'missing-dapp' };
+  const origin = httpOrigin(dappOrigin);
+  if (!origin) return { error: 'malformed-dapp' };
+  if (returnUrl) {
+    if (httpOrigin(returnUrl) !== origin) return { error: 'bad-return' };
+  }
+  return { origin };
+}
+
 export function signRequestFromParams(params: URLSearchParams, account: string | null): SignRequest | null {
   if (!account) return null;
   const kind = params.get("kind") ?? "tx";

@@ -17,6 +17,8 @@ import {
   parseRecoveryKit,
   passkeyCheckCode,
   recoveryChangeRows,
+  quickRecoveryTimingAllowed,
+  PUBLIC_NETWORK_PASSPHRASE,
   replacementsFromWire,
   replacementsToWire,
   summarizeRecovery,
@@ -347,5 +349,15 @@ describe('recovery kits', () => {
     expect(parseRecoveryKit(JSON.stringify(kit))).toEqual(kit);
     expect(() => parseRecoveryKit(JSON.stringify({ ...kit, secret: 'short' }))).toThrow();
     expect(() => parseRecoveryKit(JSON.stringify({ ...kit, version: 2 }))).toThrow();
+  });
+});
+
+describe('quickRecoveryTimingAllowed', () => {
+  it('forbids the Quick (no-veto) preset on mainnet', () => {
+    expect(quickRecoveryTimingAllowed(PUBLIC_NETWORK_PASSPHRASE)).toBe(false);
+  });
+  it('allows it on testnet and other non-public networks', () => {
+    expect(quickRecoveryTimingAllowed('Test SDF Network ; September 2015')).toBe(true);
+    expect(quickRecoveryTimingAllowed('Standalone Network ; February 2017')).toBe(true);
   });
 });

@@ -5,6 +5,7 @@ import {
   clearSignRequest,
   safeRouteUrl,
   signRequestFromParams,
+  validateDappReturn,
   type SignRequest,
 } from "./signRequest";
 
@@ -187,5 +188,38 @@ describe("signRequestFromParams (legacy dApp entry)", () => {
     });
     const req = signRequestFromParams(p, C1);
     expect((req?.returnTarget as { origin: string }).origin).toBe("https://app.example");
+  });
+});
+
+describe("validateDappReturn (entry-point origin/return guard)", () => {
+  it("accepts an https dapp origin with a same-origin https return", () => {
+    const r = validateDappReturn("https://dapp.example", "https://dapp.example/cb?x=1");
+    expect(r).toEqual({ origin: "https://dapp.example" });
+  });
+
+  it("rejects a javascript: dapp origin", () => {
+    expect(validateDappReturn("javascript:alert(1)", undefined)).toEqual({ error: "malformed-dapp" });
+  });
+
+  it("rejects a javascript: return URL even when the dapp origin is valid", () => {
+    expect(validateDappReturn("https://dapp.example", "javascript:alert(document.cookie)")).toEqual({
+      error: "bad-return",
+    });
+  });
+
+  it("rejects the opaque-origin trick where both dapp and return are opaque", () => {
+    // Both `new URL(...).origin` would be the string "null" and compare equal;
+    // httpOrigin rejects them instead.
+    expect(validateDappReturn("data:text/html,x", "data:text/html,y")).toEqual({ error: "malformed-dapp" });
+  });
+
+  it("rejects a cross-origin return URL", () => {
+    expect(validateDappReturn("https://dapp.example", "https://evil.example/cb")).toEqual({
+      error: "bad-return",
+    });
+  });
+
+  it("reports a missing dapp origin", () => {
+    expect(validateDappReturn("", "https://x")).toEqual({ error: "missing-dapp" });
   });
 });

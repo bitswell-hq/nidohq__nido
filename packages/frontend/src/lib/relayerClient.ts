@@ -52,3 +52,26 @@ export const waitForConfirmation = (
     onPoll?: (info: { status: RelayerStatus | null; attempt: number; maxAttempts: number }) => void;
   },
 ) => sdkWait(id, baseUrl, opts);
+
+/**
+ * Whether a RelayerError with code `code` leaves a payment's outcome UNCERTAIN,
+ * so a fresh-payment retry must be blocked.
+ *
+ * SECURITY (GHSA relayer status not final chain evidence): the relayer is
+ * untrusted. `WAIT_TIMEOUT` (we stopped polling while the tx could still land)
+ * has always been treated as uncertain. `ONCHAIN_FAILED` is the relayer merely
+ * REPORTING "failed"/"expired" — that is not proof the transaction did not
+ * land, so authorizing a fresh payment on its word can double-spend if the
+ * relayer lied or erred. Treat it as uncertain too, EXCEPT where the caller has
+ * its own trusted on-chain reconciliation for the outcome (`hasTrustedReconcile`
+ * — e.g. a name claim re-checked against the registry), which can safely
+ * distinguish a real failure from a false one.
+ */
+export function relayerOutcomeBlocksRetry(
+  code: string | undefined,
+  hasTrustedReconcile = false,
+): boolean {
+  if (code === "WAIT_TIMEOUT") return true;
+  if (code === "ONCHAIN_FAILED") return !hasTrustedReconcile;
+  return false;
+}
