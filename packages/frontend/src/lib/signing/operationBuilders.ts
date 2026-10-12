@@ -90,14 +90,14 @@ export async function buildOperation(
       // object) and applied through the account's `apply_doc` surface —
       // the ONLY policy write path (doc-only ruling; the per-rule
       // add_context_rule lowering for docs is gone).
-      // Audit R-sdk-F4: the request MUST name the revision it was composed
-      // from. Refuse offline (before any parse or network read) a request that
-      // omits it, rather than rebinding it to the revision read at signing
-      // time — that rebinding would let an older stashed document overwrite
-      // intervening rule changes while still passing the stale-revision check.
+      // The request MUST name the revision it was composed from. Refuse
+      // offline (before any parse or network read) a request that omits it,
+      // rather than rebinding it to the revision read at signing time — that
+      // rebinding would let an older stashed document overwrite intervening
+      // rule changes while still passing the stale-revision check.
       if (typeof d.expectedRevision !== "string" || d.expectedRevision.length === 0) {
         throw new Error(
-          "apply-policy-doc request is missing expected_revision; rebuild it from the current configuration (audit R-sdk-F4)",
+          "apply-policy-doc request is missing expected_revision; rebuild it from the current configuration",
         );
       }
       const doc = parsePolicyDocJson(d.docJson);

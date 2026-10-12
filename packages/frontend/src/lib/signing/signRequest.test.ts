@@ -68,10 +68,10 @@ describe("stash/load SignRequest", () => {
     expect(loadSignRequest(id, store)).toEqual(req);
   });
 
-  // Audit R-sdk-F4: a stashed/older apply-policy-doc request without the
-  // revision it was composed from must not load — otherwise the builder would
-  // rebind it to the sign-time revision and defeat the stale-document check.
-  it("rejects an apply-policy-doc request missing expectedRevision (R-sdk-F4)", () => {
+  // A stashed/older apply-policy-doc request without the revision it was
+  // composed from must not load — otherwise the builder would rebind it to the
+  // sign-time revision and defeat the stale-document check.
+  it("rejects an apply-policy-doc request missing expectedRevision", () => {
     store.setItem("nido:signreq:z", JSON.stringify({
       v: 1, kind: "session-grant", account: C1,
       operation: { type: "apply-policy-doc", docJson: "{}" },
