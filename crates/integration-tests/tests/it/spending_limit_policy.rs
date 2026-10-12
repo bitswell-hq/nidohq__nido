@@ -322,7 +322,8 @@ fn raised_limit_mid_window_keeps_spent_total() {
 /// context (approve, burn, deploy, ...) with `NotAllowed` (#3223). So a session
 /// key bound by such a rule cannot authorize `approve` on the scoped asset
 /// contract — there is no unmetered "approve-then-pull" path around the cap.
-/// Pins the behavior a round-1 reader worried might be missing.
+/// Pins this behavior explicitly: the absence of an unmetered
+/// approve-then-pull path around the cap is easy to overlook.
 #[test]
 fn non_transfer_context_is_refused() {
     let env = Env::default();
