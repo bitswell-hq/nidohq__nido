@@ -95,10 +95,17 @@ check this, so no release may be published until it is publishable.
 - [x] Fetch Perch's wasm by the manifest's hashes and content addresses
       (`just perch-infra`), not by name.
 - [x] Fail CI when vendor/perch drifts: the submodule off its recorded
-      commit or declared branch, a consumed wasm, the pin cache, or the
-      factory's embedded account unlike the manifest, or npm resolving
-      perch-zk elsewhere (`just check-vendor-drift`,
-      `scripts/check-perch-drift.sh`).
+      commit or declared branch, a consumed wasm, the pin cache, or the staged
+      `perch-account` the factory build embeds unlike the manifest, or npm
+      resolving perch-zk elsewhere (`just check-vendor-drift`,
+      `scripts/check-perch-drift.sh`). This validates the factory's build
+      *inputs* — the fetched and staged account bytes — not a built
+      `nido_factory.wasm` artifact: the embed is a compile-time
+      `include_bytes!`, so a stale factory artifact built from different inputs
+      is not caught here. `scripts/deploy-factory.sh` is the artifact/on-chain
+      check: at deploy time it invokes the factory's `refresh_account_wasm_hash`
+      and compares the account the deployed factory actually produces against
+      the manifest.
 - [ ] Check in CI that the published `@stellar-registry/perch` and
       `@stellar-registry/perch-interpreter` builds equal builds of their
       sources at the pinned Perch commit.
