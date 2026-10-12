@@ -20,7 +20,7 @@ export interface TxSummary {
   ops: OpSummary[];
 }
 
-function describeInvokeContract(ic: xdr.InvokeContractArgs): OpSummary {
+function describeInvokeContract(ic: xdr.InvokeContractArgs, account?: string): OpSummary {
   const contract = Address.fromScAddress(ic.contractAddress()).toString();
   const fn = ic.functionName().toString();
   const args = ic.args();
@@ -30,10 +30,24 @@ function describeInvokeContract(ic: xdr.InvokeContractArgs): OpSummary {
   // the whole transaction decode — the /sign/ page feeds this untrusted dApp
   // XDR, and one weird op shouldn't blank out the detail for the rest.
   try {
-    // smart-account execute(token, "transfer", [from, to, amount])
-    if (fn === "execute" && args.length === 3 && scValToNative(args[1]) === "transfer") {
+    // Smart-account transfer wrapper: `account.execute(token, "transfer",
+    // [account, to, amount])`. SECURITY: decode this as a (trusted-chrome)
+    // transfer ONLY when the invoked contract is the SELECTED account and the
+    // inner `from` is that same account. Otherwise any contract could expose an
+    // `execute(token, "transfer", …)` entry point and be rendered as a verified
+    // XLM transfer while its actual on-chain behaviour — and the authorization
+    // the user signs — is something else entirely. Without a known account to
+    // bind to (account === undefined) we cannot make that guarantee, so we fall
+    // through to the generic invoke summary.
+    if (
+      fn === "execute" &&
+      args.length === 3 &&
+      account !== undefined &&
+      contract === account &&
+      scValToNative(args[1]) === "transfer"
+    ) {
       const inner = scValToNative(args[2]) as unknown;
-      if (Array.isArray(inner) && inner.length === 3) {
+      if (Array.isArray(inner) && inner.length === 3 && (inner[0] as string) === account) {
         return {
           kind: "transfer",
           token: scValToNative(args[0]) as string,
@@ -99,34 +113,41 @@ function describeInvokeContract(ic: xdr.InvokeContractArgs): OpSummary {
   return { kind: "invoke", contract, fn, argsCount: args.length };
 }
 
-/** Summarize a Soroban host function (the payload of an InvokeHostFunction op). */
-export function describeHostFunction(fn: xdr.HostFunction): OpSummary {
+/** Summarize a Soroban host function (the payload of an InvokeHostFunction op).
+ *  `account` binds the `execute`-transfer-wrapper decode to the selected
+ *  account (see `describeInvokeContract`). */
+export function describeHostFunction(fn: xdr.HostFunction, account?: string): OpSummary {
   if (fn.switch() !== xdr.HostFunctionType.hostFunctionTypeInvokeContract()) {
     return { kind: "other", type: fn.switch().name };
   }
-  return describeInvokeContract(fn.invokeContract());
+  return describeInvokeContract(fn.invokeContract(), account);
 }
 
-/** Summarize a single classic/Soroban operation. */
-export function describeOperation(op: xdr.Operation): OpSummary {
+/** Summarize a single classic/Soroban operation. `account` binds the
+ *  `execute`-transfer-wrapper decode to the selected account. */
+export function describeOperation(op: xdr.Operation, account?: string): OpSummary {
   const body = op.body();
   if (body.switch() !== xdr.OperationType.invokeHostFunction()) {
     return { kind: "other", type: body.switch().name };
   }
-  return describeHostFunction(body.invokeHostFunctionOp().hostFunction());
+  return describeHostFunction(body.invokeHostFunctionOp().hostFunction(), account);
 }
 
 /**
  * Parse a base64 transaction XDR and summarize each of its operations. Used by
  * the external-dApp signing page (`/sign/`) to render human-readable details
  * instead of the raw XDR blob.
+ *
+ * `account` is the selected smart account this ceremony is bound to; it gates
+ * the `execute`-transfer-wrapper decode so a foreign contract's
+ * `execute(token,"transfer",…)` is never rendered as a verified transfer.
  */
-export function describeTransaction(txXdr: string, networkPassphrase: string): TxSummary {
+export function describeTransaction(txXdr: string, networkPassphrase: string, account?: string): TxSummary {
   const tx = TransactionBuilder.fromXDR(txXdr, networkPassphrase);
   const inner = "innerTransaction" in tx ? tx.innerTransaction : tx;
   const ops: OpSummary[] = inner.operations.map((op) =>
     op.type === "invokeHostFunction"
-      ? describeHostFunction(op.func)
+      ? describeHostFunction(op.func, account)
       : { kind: "other", type: op.type },
   );
   return { fee: tx.fee, ops };
