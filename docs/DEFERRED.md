@@ -46,6 +46,24 @@ check on `apply_doc`.
 - **Tracking:** [Perch entry](https://github.com/stellar-registry/perch/blob/3e870206ad46781fc7da4cb7d5c6ef8e086a571d/docs/DEFERRED.md#canon-v2-structured-document-identity)
   (`vendor/perch/docs/DEFERRED.md`).
 
+## Canonical value spellings
+
+- **Deferred:** enforcing one canonical spelling per value in CANON v1, so two
+  logically equal documents always share a `doc_hash`. CANON v1 accepts a cap
+  `limit` with a leading `+` or leading zeros, signer-key hex in either case,
+  and (in perch-js) number forms perch-ir refuses or spells differently.
+- **Why it is safe to defer:** Nido's wallet builds documents only through
+  perch-js and the SDK, which emit the canonical spelling, so documents it
+  produces already agree; the residual is a hand-written or third-party
+  document whose non-canonical spelling hashes differently, which still
+  authorizes exactly what it says.
+- **Exit criterion:** Perch defines the one valid spelling per field, enforces
+  it in `perch-ir` and perch-js with parity vectors, and bumps `CANON_VERSION`
+  with CANON v2.
+- **Owner:** Perch, with Nido for the perch-js/SDK builders.
+- **Tracking:** [Perch entry](https://github.com/stellar-registry/perch/blob/3e870206ad46781fc7da4cb7d5c6ef8e086a571d/docs/DEFERRED.md#canonical-value-spellings)
+  (`vendor/perch/docs/DEFERRED.md`).
+
 ## Versioned policy backend and larger limits
 
 - **Deferred:** a policy backend other than materialization onto OZ context
