@@ -11,7 +11,7 @@ by STRIDE category with its release gate and status; this file holds the
 analysis.
 
 Recovery's own threat model, by profile, is Perch's:
-[Perch recovery spec §2](https://github.com/stellar-registry/perch/blob/0bc3b2db977b34c6fc6431811d6b54668dc5258e/docs/recovery/spec.md#2-roles-and-trust)
+[Perch recovery spec §2](https://github.com/stellar-registry/perch/blob/391477ff22edd64a2da326eb9a92a92813b8e65d/docs/recovery/spec.md#2-roles-and-trust)
 (`vendor/perch/docs/recovery/spec.md`). "§" and "D" numbers below are that
 spec's sections and decisions. This file adds what Nido's contracts, wallet,
 and infrastructure bring.
@@ -90,9 +90,12 @@ and infrastructure bring.
    different account code, or repoint the verifier pin to a verifier that
    accepts anything. This affects only accounts created afterwards; an
    existing account's code changes only through its own seven-day upgrade
-   path (U1), and its signers' verifier only through its own `apply_doc`. The
-   admin must be a multisig with an upgrade delay users can see
-   (MAINNET_READINESS B1).
+   path (U1), and its signers' verifier only through its own `apply_doc`.
+   Pinning the verifier does not limit this admin: the pin is
+   admin-settable (`set_registry_pins`), and `upgrade` replaces the factory
+   wasm, embedded account code included. Only governance over the upgrade
+   authority mitigates it: a multisig with an upgrade delay users can see,
+   or no upgrade authority at all (MAINNET_READINESS B1).
 9. **Wrong deployment.** A wallet built with a hostile deployment would send
    users to an attacker's factory or controller. The account trusts whatever
    controller its own document names, so this is a wallet-supply-chain risk.
@@ -120,6 +123,7 @@ and infrastructure bring.
     moving the testnet funding into it. It is a known risk, tracked with the
     candidate mitigations in nidohq/nido#245 (a wallet check of the admin
     key, or a factory commitment to the key before the salt is revealed).
+    Launch gate MAINNET_READINESS A6 requires one of them.
     RUNBOOKS §5 gives the response to a host compromise.
 
     An unavailable relayer blocks onboarding, which only it sponsors, and a
@@ -145,7 +149,7 @@ and infrastructure bring.
     UltraHonk verifier plus Perch's delta for that flavor (one new file and
     visibility-only changes). **The delta is not audited**; Perch lists its
     audit as a release criterion
-    ([Perch ZK README](https://github.com/stellar-registry/perch/blob/0bc3b2db977b34c6fc6431811d6b54668dc5258e/docs/zk/README.md)
+    ([Perch ZK README](https://github.com/stellar-registry/perch/blob/391477ff22edd64a2da326eb9a92a92813b8e65d/docs/zk/README.md)
     (`vendor/perch/docs/zk/README.md`); MAINNET_READINESS D5). Until then,
     recovery's ZK factor rests on that unaudited code.
 
@@ -194,8 +198,8 @@ post-audit work, its entry in [DEFERRED.md](./DEFERRED.md).
   with a salt first owns the address, and the wallet does not check the
   created account's admin key before using or funding it (adversaries 5 and
   10, nidohq/nido#245). Invariants: F2 (no takeover after the first deploy),
-  W5 (the salt stays out of query strings). Gate: MAINNET_READINESS has none
-  for the race at this revision; A2 covers only query-string exposure.
+  W5 (the salt stays out of query strings). Gate: MAINNET_READINESS A6
+  (open); A2 covers only query-string exposure.
 - **L6. The wallet lacks the archived-state restoration and renewal
   workflow.** On chain, archived recovery state is restored, never reset
   (T1), and renewal is permissionless (T2). The wallet does not implement the
@@ -214,7 +218,7 @@ post-audit work, its entry in [DEFERRED.md](./DEFERRED.md).
   BN254, and Poseidon2 functions.
 - The host's CAP-0071 delegated-auth and invoker-auth behaviour, as pinned by
   Perch's tests
-  ([Perch CAP-0071 notes](https://github.com/stellar-registry/perch/blob/0bc3b2db977b34c6fc6431811d6b54668dc5258e/docs/recovery/cap-0071.md)
+  ([Perch CAP-0071 notes](https://github.com/stellar-registry/perch/blob/391477ff22edd64a2da326eb9a92a92813b8e65d/docs/recovery/cap-0071.md)
   (`vendor/perch/docs/recovery/cap-0071.md`)).
 - The OZ `stellar-accounts` fork at the pinned revision: `do_check_auth`,
   context rules, nonces.

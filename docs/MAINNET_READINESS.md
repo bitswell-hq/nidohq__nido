@@ -8,7 +8,7 @@ stable and cited from the other audit documents; `[x]` is met, `[~]` partly
 met, `[ ]` open.
 
 Perch's specification puts mainnet rollout outside its own scope
-([Perch recovery spec §1](https://github.com/stellar-registry/perch/blob/0bc3b2db977b34c6fc6431811d6b54668dc5258e/docs/recovery/spec.md#1-scope-and-vocabulary)
+([Perch recovery spec §1](https://github.com/stellar-registry/perch/blob/391477ff22edd64a2da326eb9a92a92813b8e65d/docs/recovery/spec.md#1-scope-and-vocabulary)
 (`vendor/perch/docs/recovery/spec.md`)), so a mainnet Perch deployment is a
 prerequisite on top of everything here (A1).
 
@@ -72,9 +72,13 @@ Every box here is checked before mainnet.
 
 ### Governance and keys
 
-- [ ] **B1. Factory admin behind a multisig with a visible upgrade delay**
-  (THREAT_MODEL 8), or the factory pins its verifier at build time. The
-  passkey verifier itself is now Perch's, with no admin (THREAT_MODEL 7).
+- [ ] **B1. Factory upgrade authority governed.** The factory admin is a
+  multisig with an upgrade delay users can see, or the factory has no upgrade
+  authority at all (THREAT_MODEL 8). Pinning the verifier, at build time or
+  with `set_registry_pins`, does not meet B1: the admin's `upgrade` replaces
+  the whole factory wasm, including the account code it embeds and the pin,
+  and the admin can call `set_registry_pins` again. The passkey verifier
+  itself is Perch's, with no admin (THREAT_MODEL 7).
   Note: the factory's `upgrade`/`set_registry_pins` are immediate on-chain
   (no timelock), so the delay is an off-chain multisig property only — an
   account created during a pending upgrade gets whatever code and pin are live,
@@ -86,6 +90,24 @@ Every box here is checked before mainnet.
   multisig**, with alerts on any registry address change.
 - [ ] **A3. Relayer keys in KMS/HSM.** Sponsor and channel keys are held in
   KMS/HSM, not on disk, and the testnet keys are rotated out.
+
+### Account setup
+
+- [ ] **A6. An account being set up cannot be claimed by someone else.**
+  `create_account(salt, key)` is permissionless and the address derives from
+  the salt alone, so whoever submits the salt first owns the address
+  (THREAT_MODEL 10, L5; pinned by the factory test
+  `whoever_submits_the_salt_first_owns_the_address`). Before the wallet
+  activates a newly created account or moves any funds into it, it checks on
+  chain that the account runs the manifest's `perch-account` wasm and that
+  its only rule is the admin rule, scoped to the account, whose single
+  signer is the user's new passkey under the pinned Perch WebAuthn
+  verifier; on any mismatch it stops with an explicit failure that tells the
+  user the address was taken, and never funds it. A reviewed mechanism that
+  prevents the race (for example, a factory commitment to the key before
+  the salt is revealed) meets A6 instead. Evidence: an adversarial setup
+  test in which a front-runner creates the account first, and a test of the
+  wallet's failure path. Tracked in nidohq/nido#245.
 
 ### Reproducible builds
 
@@ -126,7 +148,7 @@ Every box here is checked before mainnet.
   (upgrading the relayer and its Channels plugin).
 - [ ] **D9. Proving measured on reference devices.** In-page proving fits
   the client budgets in
-  [Perch's budgets.md §1](https://github.com/stellar-registry/perch/blob/0bc3b2db977b34c6fc6431811d6b54668dc5258e/docs/recovery/budgets.md#1-proving-client)
+  [Perch's budgets.md §1](https://github.com/stellar-registry/perch/blob/391477ff22edd64a2da326eb9a92a92813b8e65d/docs/recovery/budgets.md#1-proving-client)
   (`vendor/perch/docs/recovery/budgets.md`) on its mid-range phone and
   laptop. Only desktop numbers exist.
 
