@@ -23,6 +23,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { buildOperation } from "./operationBuilders";
 import { describeOperation } from "../transfer/txSummary";
+import { fetchRegistryAddress } from "../policyChainFetch";
 import { xdr } from "@stellar/stellar-sdk";
 
 const C1 = "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4";
@@ -41,7 +42,11 @@ describe("buildOperation", () => {
       const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
       try {
         const op = await buildOperation({ type: "register", name: "alice" }, C1);
-        const summary = describeOperation(op);
+        // The register decode is only trusted for the configured name registry,
+        // which is the very contract buildOperation targets — pass it so the op
+        // reads as the name registration it is.
+        const nameRegistry = await fetchRegistryAddress("name-registry");
+        const summary = describeOperation(op, C1, nameRegistry);
         expect(summary).toMatchObject({ kind: "name-register", account: C1, name: "alice" });
       } finally {
         warnSpy.mockRestore();
