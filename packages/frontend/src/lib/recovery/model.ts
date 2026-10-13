@@ -17,6 +17,7 @@
 import type { PolicyDoc } from '@stellar-registry/perch';
 import { perch } from '@nidohq/passkey-sdk';
 import { sha256 } from '@noble/hashes/sha2.js';
+import { adminRules } from '../policy/docDraft.js';
 
 export type RecoveryProfile = perch.RecoveryProfile;
 export type RecoveryMode = perch.RecoveryMode;
@@ -150,7 +151,7 @@ export const PUBLIC_NETWORK_PASSPHRASE = 'Public Global Stellar Network ; Septem
  * Whether the "Quick (testing)" recovery-timing preset may be offered on the
  * given network.
  *
- * SECURITY (GHSA Quick-profile veto removal): the recovery delay is the owner's
+ * SECURITY: the recovery delay is the owner's
  * VETO window — the time to cancel a malicious recovery attempt before it
  * completes. The Quick preset's ~24-ledger (~2-minute) delay effectively
  * removes that window; it exists only for testnet walkthroughs. Offering it on
@@ -223,11 +224,38 @@ export function changeNeeds(
   };
 }
 
-/** The signer ids a recovery may replace: every signer the admin rule names
- *  (the passkeys that run the account). */
+/** The signer ids a recovery may replace: every signer named by ANY admin rule
+ *  (the passkeys that run the account), deduplicated in first-seen order.
+ *
+ *  Each admin passkey lives in its own self-admin rule — `all` principals are
+ *  N-of-N, so a backup key cannot share the founder's rule — so this MUST scan
+ *  every admin rule, not just the first. A replaceable set built from one rule
+ *  would leave backup admins outside recovery: a stolen backup would keep full
+ *  authority after a compromise recovery completes, and lost-key recovery could
+ *  not restore it. `adminRules` is the one authoritative admin-rule predicate,
+ *  shared with the add/remove-admin guards so "admin rule" means one thing. */
 export function adminSignerIds(doc: PolicyDoc): string[] {
-  const admin = doc.rules.find((r) => r.scope.type === 'self-admin' && r.principals.type === 'all');
-  return admin && admin.principals.type === 'all' ? [...admin.principals.signers] : [];
+  const ids = new Set<string>();
+  for (const rule of adminRules(doc)) {
+    if (rule.principals.type === 'all') for (const id of rule.principals.signers) ids.add(id);
+  }
+  return [...ids];
+}
+
+/** The admin signer ids in `doc` that the account's ENROLLED recovery cannot
+ *  replace — admin credentials outside the recovery `replaceable` set. Empty
+ *  when recovery is off (nothing to cover yet) or every admin is covered.
+ *
+ *  Enrollment records the admins present at that moment (`adminSignerIds`), so
+ *  an admin key ADDED afterwards is not in the enrolled set: if it is lost or
+ *  stolen, recovery cannot restore or revoke it until recovery is reconfigured
+ *  to cover it. The admin UI surfaces this as a non-blocking warning so the
+ *  owner is not left believing a new backup is already protected. */
+export function adminsOutsideRecovery(doc: PolicyDoc | undefined): string[] {
+  const summary = summarizeRecovery(doc);
+  if (summary === undefined || doc === undefined) return [];
+  const covered = new Set(summary.replaceable);
+  return adminSignerIds(doc).filter((id) => !covered.has(id));
 }
 
 /** What a guardian is asked to approve. Travels in the URL fragment of a

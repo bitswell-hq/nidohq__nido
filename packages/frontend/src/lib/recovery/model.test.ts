@@ -3,6 +3,7 @@ import { StrKey } from '@stellar/stellar-sdk';
 import { buildPolicyDoc, perch, type PolicyDoc } from '@nidohq/passkey-sdk';
 import {
   adminSignerIds,
+  adminsOutsideRecovery,
   attemptLinkProblem,
   changeNeeds,
   changeSubject,
@@ -28,10 +29,12 @@ import {
   type RecoveryProfile,
   type WireReplacements,
 } from './model';
+import { addAdminKey } from '../policy/docDraft';
 
 const contract = (n: number) => StrKey.encodeContract(Buffer.alloc(32, n));
 const NETWORK = 'Test SDF Network ; September 2015';
 const KEY = '04' + 'ab'.repeat(64);
+const BACKUP_KEY = '04' + 'cd'.repeat(64);
 
 const deployment: perch.PerchDeployment = {
   network: NETWORK,
@@ -104,6 +107,60 @@ describe('summarizeRecovery', () => {
       });
     }
   }
+});
+
+describe('adminSignerIds', () => {
+  it('names the sole admin of a fresh account', () => {
+    expect(adminSignerIds(baseDoc())).toEqual(['admin']);
+  });
+
+  it('names EVERY admin credential, including an added backup passkey', () => {
+    // Each admin passkey lives in its own self-admin rule (all-principals rules
+    // are N-of-N, so they cannot share one). A recovery must be able to replace
+    // any of them — if the replaceable set covered only the first rule, a
+    // stolen backup would survive a compromise recovery and keep full account
+    // authority.
+    const { doc, signerId } = addAdminKey(
+      baseDoc(),
+      { name: 'backup', signer: { kind: 'passkey', verifier: deployment.webauthnVerifier, publicKeyHex: BACKUP_KEY } },
+      NETWORK,
+    );
+    const ids = adminSignerIds(doc);
+    expect(ids).toContain('admin');
+    expect(ids).toContain(signerId);
+    expect(ids.length).toBe(2);
+  });
+
+  it('flags an admin added after recovery was enrolled as outside its coverage', () => {
+    // Enroll recovery while there is one admin: its replaceable set covers only
+    // that admin. A backup added afterwards is NOT covered until recovery is
+    // reconfigured, so the UI must be able to warn about it.
+    const enrolled = withChoice('protected', 'guardian-only');
+    expect(adminsOutsideRecovery(enrolled)).toEqual([]);
+    const { doc, signerId } = addAdminKey(
+      enrolled,
+      { name: 'backup', signer: { kind: 'passkey', verifier: deployment.webauthnVerifier, publicKeyHex: BACKUP_KEY } },
+      NETWORK,
+    );
+    expect(adminsOutsideRecovery(doc)).toEqual([signerId]);
+  });
+
+  it('reports no coverage gap when recovery is off', () => {
+    const { doc } = addAdminKey(
+      baseDoc(),
+      { name: 'backup', signer: { kind: 'passkey', verifier: deployment.webauthnVerifier, publicKeyHex: BACKUP_KEY } },
+      NETWORK,
+    );
+    expect(adminsOutsideRecovery(doc)).toEqual([]);
+  });
+
+  it('deduplicates a signer that several admin rules share', () => {
+    // Defensive: a signer id must appear once even if two admin rules name it.
+    const base = baseDoc();
+    const dupRule = { name: 'admin-dup', scope: { type: 'self-admin' as const }, principals: { type: 'all' as const, signers: ['admin'] } };
+    const doc = { ...base, rules: [...base.rules, dupRule] } as PolicyDoc;
+    expect(adminSignerIds(doc)).toEqual(['admin']);
+  });
 });
 
 describe('changeNeeds', () => {
