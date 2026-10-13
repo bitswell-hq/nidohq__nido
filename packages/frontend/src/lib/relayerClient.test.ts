@@ -48,4 +48,15 @@ describe("relayerOutcomeBlocksRetry (duplicate-payment guard)", () => {
     expect(relayerOutcomeBlocksRetry(undefined)).toBe(false);
     expect(relayerOutcomeBlocksRetry("SOME_OTHER")).toBe(false);
   });
+
+  it("blocks a fresh-payment retry when submission began but its outcome is unknown", () => {
+    // Any failure after the signed authorization was sent (connection loss,
+    // non-JSON, acceptance without a handle, a relayer-reported failure) is
+    // uncertain: the relayer may already hold a usable authorization.
+    expect(relayerOutcomeBlocksRetry("SUBMIT_UNKNOWN")).toBe(true);
+  });
+
+  it("lets a trusted-reconcile caller proceed past an unknown submission outcome", () => {
+    expect(relayerOutcomeBlocksRetry("SUBMIT_UNKNOWN", true)).toBe(false);
+  });
 });
