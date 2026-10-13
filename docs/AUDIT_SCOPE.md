@@ -15,7 +15,7 @@ Read these before the manifest.
   SHAs and integrity hashes; source-equality by the comparison results attached
   to the handoff.
 - **`vendor/perch` is fork-pinned for the audit.** `.gitmodules` points
-  `vendor/perch` at the audit fork's `audit/findings` branch so the audited Nido
+  `vendor/perch` at the audit fork's `audit/integration` branch so the audited Nido
   head pulls the audited Perch head; it is reverted to upstream `main` before
   mainnet. [SUPPLY_CHAIN.md](./SUPPLY_CHAIN.md) describes the upstream pin.
 - **perch-js.** The pinned source's `packages/perch-js` is `0.3.1` (unreleased
@@ -179,9 +179,8 @@ Named exclusions:
     (`vendor/perch/docs/audit-scope.md`), for the Perch streams.
 
 Not in the reading order, because they are historical records rather than
-descriptions of current behaviour: `docs/superpowers/` (design notes),
-`docs/APPLICATION.md` (the funding application) and `docs/REQUIREMENTS.md`
-(the request it answered).
+descriptions of current behaviour: `docs/APPLICATION.md` (the funding
+application) and `docs/REQUIREMENTS.md` (the request it answered).
 
 ## Integration with Perch
 
