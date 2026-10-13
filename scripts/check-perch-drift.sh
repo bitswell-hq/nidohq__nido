@@ -116,7 +116,7 @@ done
 #    tests against (scripts/pin-perch-links.sh rewrites them after a bump).
 while IFS= read -r hit; do
     problem "documentation links Perch at another commit (scripts/pin-perch-links.sh): $hit"
-done < <(git grep -n -E 'github\.com/stellar-registry/perch/(blob|tree)/([0-9a-f]{40}|PERCH_SHA)' -- '*.md' ':!vendor' ':!docs/superpowers' ':!docs/reviews' | grep -v "/$pinned/" || true)
+done < <(git grep -n -E 'github\.com/stellar-registry/perch/(blob|tree)/([0-9a-f]{40}|PERCH_SHA)' -- '*.md' ':!vendor' ':!docs/reviews' | grep -v "/$pinned/" || true)
 
 if [ ${#problems[@]} -gt 0 ]; then
     echo "Perch drift (vendor/perch at ${pinned:0:7}, $manifest):" >&2
