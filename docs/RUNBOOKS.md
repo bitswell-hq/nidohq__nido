@@ -73,7 +73,7 @@ manifest (`deployments/<network>.json` in Perch). Nido doesn't deploy them.
 Before using a manifest:
 
 1. Run Perch's
-   [`scripts/verify-deployment.sh`](https://github.com/stellar-registry/perch/blob/dd728c8d1a2953160745ef039b93e53307bc7db9/scripts/verify-deployment.sh)
+   [`scripts/verify-deployment.sh`](https://github.com/stellar-registry/perch/blob/391477ff22edd64a2da326eb9a92a92813b8e65d/scripts/verify-deployment.sh)
    (`vendor/perch/scripts/verify-deployment.sh`) against it: by hash and
    address only, it checks each contract at its content address, its code
    hash, the registry's records, the account installed, and what consumers
@@ -200,11 +200,28 @@ runbook.
 **Host compromise.** Treat every account set up through the relayer during
 the window as possibly claimed. Stop onboarding first (pause the relayer, or
 ship a wallet build without `PUBLIC_RELAYER_URL`, which refuses setup). Then
-check each account created in the window on chain: its admin key must be the
-passkey its user registered, with the deployment's verifier. Before its first
-document that key is in the constructor's rule (`get_context_rule(0)`); after,
-it is the admin signer in `applied_doc()`. Tell the owner of any account that
-fails the check to send nothing to it and to set up a new Nido.
+check each account created in the window on chain.
+
+The admin key matching the passkey its user registered (with the deployment's
+verifier) is **necessary but not sufficient** to clear an account. A
+front-runner who created the address with its own key can authorize a document
+that names the user's key as admin while keeping an attacker-controlled
+ordinary rule or recovery configuration: `apply_doc` authenticates with the
+account's *current* configuration and never requires the newly-named admin's
+signature (the setup race, THREAT_MODEL 5, 10). Such an account passes an
+admin-key-only check while still carrying retained attacker authority. Before
+its first document the admin key is in the constructor's rule
+(`get_context_rule(0)`); after, it is the admin signer in `applied_doc()` — but
+read the **complete** rule set and controller state, not only the admin entry.
+
+To clear an account, verify its full provenance against the user's intended
+state: the creation transaction, the authorized-document history, the actual
+account code (wasm hash), every current rule and signer, the recovery
+configuration, and any pending upgrades. If that provenance cannot be
+established, classify the address as affected rather than clearing it on the
+admin-key check alone. Tell the owner of any account that fails the check — or
+whose provenance cannot be established — to send nothing to it and to set up a
+new Nido.
 
 ## 6. Recovery operations
 

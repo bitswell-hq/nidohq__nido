@@ -8,7 +8,7 @@ stable and cited from the other audit documents; `[x]` is met, `[~]` partly
 met, `[ ]` open.
 
 Perch's specification puts mainnet rollout outside its own scope
-([Perch recovery spec §1](https://github.com/stellar-registry/perch/blob/dd728c8d1a2953160745ef039b93e53307bc7db9/docs/recovery/spec.md#1-scope-and-vocabulary)
+([Perch recovery spec §1](https://github.com/stellar-registry/perch/blob/391477ff22edd64a2da326eb9a92a92813b8e65d/docs/recovery/spec.md#1-scope-and-vocabulary)
 (`vendor/perch/docs/recovery/spec.md`)), so a mainnet Perch deployment is a
 prerequisite on top of everything here (A1).
 
@@ -79,6 +79,13 @@ Every box here is checked before mainnet.
   the whole factory wasm, including the account code it embeds and the pin,
   and the admin can call `set_registry_pins` again. The passkey verifier
   itself is Perch's, with no admin (THREAT_MODEL 7).
+  Note: the factory's `upgrade`/`set_registry_pins` are immediate on-chain
+  (no timelock), so the delay is an off-chain multisig property only — an
+  account created during a pending upgrade gets whatever code and pin are live,
+  and the wallet does not currently verify the deployed account's wasm hash or
+  rule-0 verifier against the manifest (AUDIT_SCOPE Q1). Meeting this gate
+  means an on-chain schedule/execute delay in the factory **or** a
+  post-`create_account` wallet check of the deployed output.
 - [ ] **B2. Name-registry, policy, and registry-owner keys behind the
   multisig**, with alerts on any registry address change.
 - [ ] **A3. Relayer keys in KMS/HSM.** Sponsor and channel keys are held in
@@ -141,7 +148,7 @@ Every box here is checked before mainnet.
   (upgrading the relayer and its Channels plugin).
 - [ ] **D9. Proving measured on reference devices.** In-page proving fits
   the client budgets in
-  [Perch's budgets.md §1](https://github.com/stellar-registry/perch/blob/dd728c8d1a2953160745ef039b93e53307bc7db9/docs/recovery/budgets.md#1-proving-client)
+  [Perch's budgets.md §1](https://github.com/stellar-registry/perch/blob/391477ff22edd64a2da326eb9a92a92813b8e65d/docs/recovery/budgets.md#1-proving-client)
   (`vendor/perch/docs/recovery/budgets.md`) on its mid-range phone and
   laptop. Only desktop numbers exist.
 
@@ -163,9 +170,15 @@ Every box here is checked before mainnet.
 
 - [ ] **E1. CSP enforced.** Promote the report-only CSP in
   `frontend/worker-proxy-nido/index.js` and `packages/frontend/public/_headers`
-  after a clean report stream. `connect-src` must allow the RPC, the relayer,
-  and the proving reference string's host; the report-only policy does not
-  list `crs.aztec.network`.
+  to enforcing. `connect-src` must allow the RPC, the relayer, and the proving
+  reference string's host; the report-only policy does not list
+  `crs.aztec.network`. Both copies are `Content-Security-Policy-Report-Only`
+  with no `report-uri`/`report-to`, so there is no report stream to judge
+  "clean" — violations surface only in each user's console. Gate promotion on
+  an end-to-end run of the full onboarding, signing and in-page ZK-proving
+  flows under the **enforced** policy with zero violations (and, if an ongoing
+  report stream is wanted, add a `report-to`/`report-uri` endpoint to both
+  copies first).
 - [ ] **E2. Stored credential material encrypted and expiring.**
 - [ ] **E3. `status-message` excluded from mainnet.**
 - [ ] **E4. The proving reference string self-hosted** with a checked hash

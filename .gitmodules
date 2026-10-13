@@ -1,4 +1,4 @@
 [submodule "vendor/perch"]
 	path = vendor/perch
 	url = https://github.com/bitswell/stellar-registry__perch.git
-	branch = audit/findings
+	branch = audit/integration
