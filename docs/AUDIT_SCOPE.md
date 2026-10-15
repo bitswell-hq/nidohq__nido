@@ -214,20 +214,23 @@ specification intends:
    timelock, so any "visible upgrade delay" is a property of the admin
    multisig's off-chain process, not an on-chain guarantee. An account created
    while an upgrade is pending gets whatever factory code and pin are live at
-   its ledger, and nothing on-chain or in the wallet compares the new account's
-   wasm hash or admin-rule verifier against `perch.TESTNET` / the manifest. A
-   multisig delay alone therefore does not protect accounts created during or
-   after a malicious upgrade unless the wallet verifies the deployed result
-   (see B1).
+   its ledger. Nothing on-chain compares the new account's wasm hash or
+   admin-rule verifier against `perch.TESTNET` / the manifest; the wallet
+   does, before it activates an account it set up (SECURITY_INVARIANTS W11),
+   so it refuses such an account, but accounts other clients create through
+   the factory are not covered. A multisig delay alone therefore does not
+   protect accounts created during or after a malicious upgrade unless the
+   wallet verifies the deployed result (see B1).
 2. **The ZK verifier delta.** Proofs are zero-knowledge, verified by Perch's
    unaudited `UltraKeccakZKFlavor` delta on the audited verifier
    (THREAT_MODEL 13). Is it sound?
 3. **Guardian checks.** Is what the guardian page verifies (W2, W3) enough for
    a guardian who follows its instructions?
 4. **Setup secret.** Whoever submits a salt first owns its address, and the
-   relayer sees every salt (THREAT_MODEL 5, 10, L5). Is the window between
-   creating a salt and deploying acceptable, and does the mitigation
-   MAINNET_READINESS A6 requires close it?
+   relayer sees every salt (THREAT_MODEL 5, 10, L5). The wallet refuses a
+   claimed address before using it (MAINNET_READINESS A6, SECURITY_INVARIANTS
+   W11). Is that check complete, and is detection enough, or does launch need
+   the claim prevented (A7)?
 5. **Deployment.** `perch.TESTNET` is checked against Perch's manifest in a
    test, and the manifest against the chain by Perch's `verify-deployment.sh`.
    Is that enough, and should a `PUBLIC_PERCH_DEPLOYMENT` override be checked

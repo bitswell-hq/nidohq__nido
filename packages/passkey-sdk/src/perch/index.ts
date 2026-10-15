@@ -10,6 +10,7 @@ export * from './statement.js';
 export * from './doc.js';
 export * from './recovery.js';
 export * from './account.js';
+export * from './newAccount.js';
 export type { ZkEvidence, ZkCredential } from './zk.js';
 
 // perch-js's consumer interface (stellar-registry/perch#108): revision-

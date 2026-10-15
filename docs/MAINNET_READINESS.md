@@ -81,11 +81,13 @@ Every box here is checked before mainnet.
   itself is Perch's, with no admin (THREAT_MODEL 7).
   Note: the factory's `upgrade`/`set_registry_pins` are immediate on-chain
   (no timelock), so the delay is an off-chain multisig property only — an
-  account created during a pending upgrade gets whatever code and pin are live,
-  and the wallet does not currently verify the deployed account's wasm hash or
-  rule-0 verifier against the manifest (AUDIT_SCOPE Q1). Meeting this gate
-  means an on-chain schedule/execute delay in the factory **or** a
-  post-`create_account` wallet check of the deployed output.
+  account created during a pending upgrade gets whatever code and pin are live
+  (AUDIT_SCOPE Q1). The wallet compares each account it sets up with its
+  deployment's account wasm hash and verifier before activating it
+  (SECURITY_INVARIANTS W11), so it refuses such an account instead of using
+  it; accounts created through the factory by any other client are not
+  covered. Meeting this gate means an on-chain schedule/execute delay in the
+  factory **or** a post-`create_account` wallet check of the deployed output.
 - [ ] **B2. Name-registry, policy, and registry-owner keys behind the
   multisig**, with alerts on any registry address change.
 - [ ] **A3. Relayer keys in KMS/HSM.** Sponsor and channel keys are held in
@@ -108,6 +110,23 @@ Every box here is checked before mainnet.
   the salt is revealed) meets A6 instead. Evidence: an adversarial setup
   test in which a front-runner creates the account first, and a test of the
   wallet's failure path. Tracked in nidohq/nido#245.
+  _Status:_ the wallet check is built (`perch/newAccount.ts` in the SDK, run by
+  the onboarding page and the account switcher; SECURITY_INVARIANTS W11).
+  `new_account_reads.rs` records accounts a front-runner created first, and
+  `newAccount.test.ts` requires the wallet to refuse them; a browser test
+  drives a resumed setup at a claimed address to its refusal, and the refusal
+  after a submission is reviewed. The check names the deployment's
+  account wasm and verifier, so it refuses every account a factory built
+  around other ones creates: on testnet, until Nido's factory is redeployed on
+  the manifest's account (DEPLOYED.md).
+- [ ] **A7. Account setup can't be denied by claiming its address.** A6
+  detects a claimed address; nothing prevents the claim. The relayer, or
+  anyone who learns a salt before its deploy, can take every address it sees,
+  and each user loses that address and the passkey made for it (THREAT_MODEL
+  10, L5). Meeting A7 needs a mechanism that binds the key before the salt is
+  public, for example a factory commitment to the key that `create_account`
+  checks, or a recorded decision to launch with the denial, with a runbook
+  for answering it (RUNBOOKS §5). Tracked in nidohq/nido#245.
 
 ### Reproducible builds
 

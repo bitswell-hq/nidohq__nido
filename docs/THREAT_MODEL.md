@@ -24,9 +24,9 @@ and infrastructure bring.
 | Passkey private key | The user's authenticator; never leaves it | Full control under `Loss`; ordinary activity under `Protected`. |
 | Recovery kit (ZK secret) | A JSON file the user downloads | The ZK factor: alone under `ZkOnly`, half of `Combined`. |
 | Guardian accounts | Each guardian's own Nido or G wallet | One guardian's share of the quorum. |
-| Setup key (salt) | URL fragment, a `nido_setup_<account>` cookie on the parent domain (30 minutes), and the browser's `nido:pending` storage until the account exists; the relayer sees it in the setup transaction | Whoever uses it first owns the address it derives. |
+| Setup key (salt) | URL fragment, a `nido_setup_<account>` cookie on the parent domain (30 minutes), and the browser's `nido:pending` storage until the account exists; the relayer sees it in the setup transaction | Whoever uses it first owns the address it derives. The wallet then refuses that address rather than activate or fund it (W11), so the owner loses the address, not funds. |
 | Factory admin key | Nido operators | The account code and the verifier new accounts get (adversary 8). |
-| Relayer keys | Fly.io host | Sponsor budget; censorship; claiming accounts that are being set up (adversary 10). |
+| Relayer keys | Fly.io host | Sponsor budget; censorship; claiming, and so denying, accounts that are being set up (adversary 10). |
 | The wallet's deployment (`perch.TESTNET`, or a `PUBLIC_PERCH_DEPLOYMENT` override) | Baked into the wallet at build time | Which factory, controller, pool, adapter, and verifier the wallet tells users to trust (adversary 9). |
 
 ## Adversaries
@@ -67,7 +67,9 @@ and infrastructure bring.
    cookies) and in `nido:pending`, shared with the apex through the storage
    bridge. A second `create_account` with the same salt fails (F2), so
    the risk is a race before the first deploy, not a takeover after. The
-   relayer sees every salt (adversary 10). See L5.
+   wallet detects a won race before it activates or funds the address
+   (W11); the race itself remains, as a denial of setup. The relayer sees
+   every salt (adversary 10). See L5.
 6. **Script in the wallet origin (XSS, malicious extension, compromised CDN).**
    Can't read the passkey, but can ask the authenticator to sign whatever the
    page builds, read the setup keys in `nido:pending`, and swap the recovery
@@ -118,12 +120,24 @@ and infrastructure bring.
     before it lands. A compromised relayer can submit
     `create_account(salt, its_own_key)` first and own the address the user's
     passkey was made for; the user's own call then fails as a reused salt
-    (F2). Nothing in the code prevents or detects this at this revision: the
-    wallet doesn't check the new account's admin key before trusting it or
-    moving the testnet funding into it. It is a known risk, tracked with the
-    candidate mitigations in nidohq/nido#245 (a wallet check of the admin
-    key, or a factory commitment to the key before the salt is revealed).
-    Launch gate MAINNET_READINESS A6 requires one of them.
+    (F2). The wallet detects this. It does not take the relayer's
+    confirmation as proof of what landed: after setup, and whenever it
+    resumes a setup whose address already holds a contract, it reads the
+    account from RPC (not through the relayer) and accepts it only as the
+    account the user's own `create_account` creates: the deployment's
+    account wasm, untouched since construction, with the user's passkey under
+    the deployment's verifier as its only rule (W11). Anything else stops
+    setup before the account is activated, shown as ready, or funded, and
+    tells the user to start again with a new address. A key check alone would
+    not be enough: a claimant can apply a document naming the user's key as
+    admin while keeping its own authority elsewhere (RUNBOOKS §5), which the
+    untouched-account requirement refuses.
+
+    Nothing prevents the claim, so a compromised relayer can still deny setup
+    to every user it serves, each losing the address and the passkey made for
+    it (L5). A factory commitment to the key before the salt is revealed
+    would prevent it (nidohq/nido#245); launch gate MAINNET_READINESS A7
+    requires that or a deliberate decision to launch without it.
     RUNBOOKS §5 gives the response to a host compromise.
 
     An unavailable relayer blocks onboarding, which only it sponsors, and a
@@ -194,12 +208,15 @@ post-audit work, its entry in [DEFERRED.md](./DEFERRED.md).
   submit it after the owner changes that rule. Invariants: A8, W10. Gate:
   none; this is the audited semantics. Deferred:
   [revision-bound ordinary signatures](./DEFERRED.md#revision-bound-ordinary-signatures).
-- **L5. The setup-salt race is unresolved.** Whoever submits `create_account`
-  with a salt first owns the address, and the wallet does not check the
-  created account's admin key before using or funding it (adversaries 5 and
-  10, nidohq/nido#245). Invariants: F2 (no takeover after the first deploy),
-  W5 (the salt stays out of query strings). Gate: MAINNET_READINESS A6
-  (open); A2 covers only query-string exposure.
+- **L5. The setup-salt race is detected, not prevented.** Whoever submits
+  `create_account` with a salt first owns the address. The wallet refuses
+  such an address before activating or funding it (W11), so a claim costs
+  the user the address and the passkey made for it, not funds: a denial of
+  setup, which a compromised relayer can apply to every setup it sees
+  (adversaries 5 and 10, nidohq/nido#245). The check trusts the RPC endpoint
+  it reads. Invariants: F2 (no takeover after the first deploy), W5 (the salt
+  stays out of query strings), W11 (the check). Gates: MAINNET_READINESS A6
+  (detection), A7 (the denial); A2 covers only query-string exposure.
 - **L6. The wallet lacks the archived-state restoration and renewal
   workflow.** On chain, archived recovery state is restored, never reset
   (T1), and renewal is permissionless (T2). The wallet does not implement the

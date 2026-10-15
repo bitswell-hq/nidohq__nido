@@ -20,7 +20,9 @@
 #   6. the SDK's validate-differential corpus is regenerated from the new
 #      perch_ir::validate (its generator is seeded, so an unchanged validator
 #      leaves it byte-identical); a changed verdict is for the SDK's
-#      validate.ts to match, which its vitest suite checks;
+#      validate.ts to match, which its vitest suite checks; the new-account
+#      reads the SDK's newAccount test replays are regenerated from the new
+#      account wasm too;
 #   7. `cargo test --workspace` runs every Rust suite against the new stack,
 #      which also refreshes Cargo.lock and the Soroban test snapshots.
 #
@@ -107,6 +109,8 @@ NIDO_WRITE_VALIDATE_CORPUS=1 cargo test -p nido-integration-tests --test it vali
     echo "warning: could not regenerate $corpus" >&2
 corpus_changed=false
 git diff --quiet -- "$corpus" || corpus_changed=true
+NIDO_WRITE_NEW_ACCOUNT_READS=1 cargo test -p nido-integration-tests --test it new_account_reads ||
+    echo "warning: could not regenerate packages/passkey-sdk/src/perch/testdata/new-account-reads.json" >&2
 
 # 7. The Rust suites against the new stack.
 tests=passed

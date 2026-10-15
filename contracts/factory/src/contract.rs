@@ -363,8 +363,9 @@ mod test {
     /// derives from the salt alone and `create_account` is permissionless, so
     /// whoever submits a salt first owns its address, with their own key as
     /// the admin, and the owner's later call fails as a reused salt. This pins
-    /// today's behaviour; launch gate MAINNET_READINESS A6 requires the wallet
-    /// to detect it (or the factory to prevent it) before mainnet.
+    /// today's behaviour. The wallet detects it and refuses the address
+    /// (passkey-sdk `perch/newAccount.ts`); preventing it is launch gate
+    /// MAINNET_READINESS A7.
     #[test]
     fn whoever_submits_the_salt_first_owns_the_address() {
         let env = Env::default();

@@ -6,6 +6,7 @@ mod costs;
 mod multisig_recovery;
 mod name_registry;
 mod name_registry_passkey_auth;
+mod new_account_reads;
 mod onboarding;
 mod preauth_sweep_policy;
 mod recovery_lifecycle;

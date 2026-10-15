@@ -8,10 +8,11 @@ import {
   loadAccountName,
   saveAccountName,
   activateAccount,
+  loadCredential,
+  hex2buf,
   lookupName,
   fetchRegistryAddress,
 } from "@nidohq/passkey-sdk";
-import { rpc, xdr } from "@stellar/stellar-sdk";
 import { buildMyNidoModel, type MyNidoRow } from "./myNidoModel";
 import { nidoRowHref, accountShareUrl } from "./accountLinks";
 import { resolveMissingNames } from "./resolveMyNidoNames";
@@ -21,6 +22,7 @@ import { shortAddr } from "./address";
 import { formatXlm } from "./money";
 import { createNido } from "./createNido";
 import { syncNidoStorageViaBridge } from "./nidoSharedStorage";
+import { verifyNewNidoAccount } from "./newAccount/verifyNewAccount";
 
 const RPC_URL = "https://soroban-testnet.stellar.org";
 export const NAME_NETWORK = "Test SDF Network ; September 2015";
@@ -81,21 +83,26 @@ function refreshOpenSwitchers() {
   for (const inst of instances) inst.refreshIfOpen();
 }
 
-// Promote any pending account that has since deployed.
+// Promote a pending account once it is deployed as this device's own: the
+// account create_account makes for the passkey this origin registered for it.
+// A contract at the address proves nothing by itself (anyone who has the salt
+// can deploy there first), and without the passkey there is nothing to check,
+// so such an account stays pending; resuming it on its own page settles it.
 async function verifyPendingAccounts(): Promise<boolean> {
   const pending = loadPendingAccounts();
   if (pending.length === 0) return false;
   const active = new Set(loadAccounts());
   let changed = false;
-  const server = new rpc.Server(RPC_URL);
   for (const { contractId } of pending) {
     if (active.has(contractId)) continue;
+    const stored = loadCredential(contractId);
+    if (!stored) continue;
     try {
-      await server.getContractData(contractId, xdr.ScVal.scvLedgerKeyContractInstance());
+      await verifyNewNidoAccount(contractId, hex2buf(stored.publicKey));
       activateAccount(contractId);
       changed = true;
     } catch {
-      /* not deployed yet */
+      /* not deployed yet, unreadable, or not this passkey's account */
     }
   }
   return changed;
