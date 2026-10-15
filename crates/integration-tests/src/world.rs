@@ -233,6 +233,11 @@ impl Profile {
 pub struct Recovery {
     pub profile: Profile,
     pub mode: Mode,
+    /// The controller the account adopts; [`World::recovery`] names the
+    /// world's.
+    pub controller: Address,
+    /// The pool a ZK factor names; [`World::recovery`] names the world's.
+    pub pool: Address,
     pub guardians: std::vec::Vec<Address>,
     pub quorum: u32,
     pub enrollment: Option<ZkEnrollment>,
@@ -314,7 +319,7 @@ impl Recovery {
                 r#""adapter":"{}","circuit-id":"{}","pool":"{}","enrollment-id":"{}","commitment":"{}""#,
                 strkey(&w.adapter),
                 hex::encode(w.circuit_id().to_array()),
-                strkey(&w.pool),
+                strkey(&self.pool),
                 hex::encode(z.id.to_array()),
                 hex::encode(z.commitment.to_array())
             )
@@ -342,7 +347,7 @@ impl Recovery {
         format!(
             r#"{{"profile":"{}","mode":{mode},"controller":"{}"{baseline},"replaceable":[{}],"delay-ledgers":{},"expiry-ledgers":{},"max-cancels":{}}}"#,
             self.profile.as_str(),
-            strkey(&w.controller),
+            strkey(&self.controller),
             replaceable.join(","),
             self.delay,
             self.expiry,
@@ -563,6 +568,8 @@ impl World {
         Recovery {
             profile,
             mode,
+            controller: self.controller.clone(),
+            pool: self.pool.clone(),
             guardians: guardians.iter().map(|g| g.address.clone()).collect(),
             quorum,
             enrollment,
@@ -1043,6 +1050,15 @@ impl World {
         self.ctl().statement(&account.address, &attempt, &domain)
     }
 
+    /// The recovery controller wasm registered again at `label`'s address:
+    /// what a Perch redeploy does (a new address, no state).
+    #[must_use]
+    pub fn redeployed_controller(&self, label: &str) -> Address {
+        let controller = contract_at(&self.env, label);
+        self.env.register_at(&controller, PERCH_RECOVERY_WASM, ());
+        controller
+    }
+
     #[must_use]
     pub fn digest(&self, statement: &RecoveryStatement) -> BytesN<32> {
         statement.digest(&self.env).unwrap()
@@ -1057,16 +1073,33 @@ impl World {
         attempt: u64,
         domain: EvidenceDomain,
     ) -> RecoveryResult<()> {
-        let digest = self.digest(&self.statement(account, attempt, domain));
-        let root = self.invocation(
+        self.try_guardian_at(
             &self.controller,
-            "submit_guardian",
-            std::vec![self.sc(digest)],
-        );
-        let entry = self.signed(guardian, "owner", "guardian", root);
+            "guardian",
+            account,
+            guardian,
+            attempt,
+            domain,
+        )
+    }
+
+    /// `guardian`'s approval at `controller`, signed through its rule named
+    /// `rule`.
+    pub fn try_guardian_at(
+        &self,
+        controller: &Address,
+        rule: &str,
+        account: &Account,
+        guardian: &Account,
+        attempt: u64,
+        domain: EvidenceDomain,
+    ) -> RecoveryResult<()> {
+        let ctl = PerchRecoveryClient::new(&self.env, controller);
+        let digest = self.digest(&ctl.statement(&account.address, &attempt, &domain));
+        let root = self.invocation(controller, "submit_guardian", std::vec![self.sc(digest)]);
+        let entry = self.signed(guardian, "owner", rule, root);
         self.with_auths(&[entry], || {
-            self.ctl()
-                .try_submit_guardian(&account.address, &attempt, &domain, &guardian.address)
+            ctl.try_submit_guardian(&account.address, &attempt, &domain, &guardian.address)
                 .map(|r| r.unwrap())
         })
     }

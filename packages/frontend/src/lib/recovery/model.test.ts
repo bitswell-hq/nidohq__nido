@@ -13,7 +13,9 @@ import {
   encodeGuardianRequest,
   findOwnAttempt,
   foreignVerifiers,
+  guardianRuleAt,
   hex,
+  newGuardianRuleName,
   ownAttemptProblem,
   parseRecoveryKit,
   passkeyCheckCode,
@@ -416,5 +418,32 @@ describe('quickRecoveryTimingAllowed', () => {
   it('allows it on testnet and other non-public networks', () => {
     expect(quickRecoveryTimingAllowed('Test SDF Network ; September 2015')).toBe(true);
     expect(quickRecoveryTimingAllowed('Standalone Network ; February 2017')).toBe(true);
+  });
+});
+
+describe('guardian rules, one per controller', () => {
+  const current = StrKey.encodeContract(Buffer.alloc(32, 7));
+  const earlier = StrKey.encodeContract(Buffer.alloc(32, 50));
+  const rule = (name: string, contract: string, recovery = false) => ({ name, contract, recovery });
+
+  it('finds the guardian rule scoped to the controller, never the recovery rule or another rule', () => {
+    const rules = [
+      rule('admin', current),
+      rule('guardian', current),
+      rule('recovery', earlier, true),
+      rule('app', earlier),
+      rule('guardian-x', earlier),
+    ];
+    expect(guardianRuleAt(rules, current)).toBe('guardian');
+    expect(guardianRuleAt(rules, earlier)).toBe('guardian-x');
+    expect(guardianRuleAt(rules.slice(0, 4), earlier)).toBeUndefined();
+  });
+
+  it('names the first `guardian` and each further one after its controller, within 20 bytes', () => {
+    expect(newGuardianRuleName(['admin'], earlier)).toBe('guardian');
+    const second = newGuardianRuleName(['admin', 'guardian'], earlier);
+    expect(second).toBe(`guardian-${earlier.slice(0, 11).toLowerCase()}`);
+    expect(new TextEncoder().encode(second).length).toBe(20);
+    expect(() => newGuardianRuleName(['guardian', second], earlier)).toThrow(/already has a rule/);
   });
 });

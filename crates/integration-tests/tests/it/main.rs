@@ -9,6 +9,7 @@ mod name_registry_passkey_auth;
 mod onboarding;
 mod preauth_sweep_policy;
 mod recovery_lifecycle;
+mod recovery_migration;
 mod recovery_reconfigure;
 mod recovery_rules;
 mod recovery_upgrades;

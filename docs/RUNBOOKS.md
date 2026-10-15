@@ -237,7 +237,10 @@ network maximum, no authorization needed (T2):
 | Account | `renew(fingerprints, enrollment_ids)` |
 
 Nothing calls these on a schedule, and the wallet never calls them
-(MAINNET_READINESS D3).
+(MAINNET_READINESS D3). Each account's records live at its own controller
+(`recovery_controller()`) and the pool its document names. For an account
+enrolled before a Perch redeploy, those are not the current manifest's
+(THREAT_MODEL, "Several Perch generations").
 
 These calls renew the controller, pool, and account recovery records. They do
 **not** extend the account's OZ context-rule, signer, and policy entries or the
@@ -314,7 +317,15 @@ user starts a recovery.
   takes a rule. Remove a device or revoke an app grant to make room.
 - **Guardian approval:** the guardian opens the link on their own Nido. If
   the page refuses the link, the guardian should not approve, and should
-  confirm with their friend by another channel.
+  confirm with their friend by another channel. The first approval for an
+  account on a controller the guardian has no rule for adds one; a guardian
+  keeps one rule per controller.
+- **Recovery set up before a Perch redeploy:** it keeps working at the
+  controller it enrolled with. `/security/recovery/` offers "Move my
+  recovery", which keeps every setting. Under `Protected` the guardians or the
+  recovery kit approve the move first. A ZK mode on an earlier pool needs a
+  new recovery kit, and the old one stops working. While an attempt is
+  authorized, nothing can move.
 
 ## 7. Moving to a new Perch release
 
@@ -323,8 +334,15 @@ user starts a recovery.
    statement does (the circuit, the document canonicalisation, a test's
    setup), and CI fails on any drift.
 2. A new controller, pool, or adapter is a new address (none of them can be
-   upgraded in place). Existing accounts move by reconfiguring recovery to the
-   new controller; under `Protected` that needs the current condition.
+   upgraded in place), with no state. Existing accounts keep theirs, and the
+   wallet keeps serving them there: it reads and writes recovery at each
+   account's adopted controller, never the deployment's. Owners move when
+   they choose, with "Move my recovery" on `/security/recovery/`, which is a
+   reconfiguration to the new controller. Under `Protected` that needs the
+   current condition, recorded at the controller being left, and a ZK factor
+   needs a new kit when its pool or adapter moved. Old generations stay in
+   use until every account on them has moved, so keep renewing their state
+   (§6). See THREAT_MODEL, "Several Perch generations".
 3. A new account wasm reaches existing accounts only through each owner's
    seven-day upgrade; new accounts get it from a new factory deployed as in
    §2.2.
