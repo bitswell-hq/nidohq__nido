@@ -24,7 +24,6 @@ import {
   type PolicyDoc,
 } from '@nidohq/passkey-sdk';
 import { resolveSignerRule } from './policyChainFetch.js';
-import { perchDeployment } from './recovery/deployment.js';
 import {
   relayerEnabled,
   signatureExpirationOffset,
@@ -305,13 +304,12 @@ export async function applyDocWithPasskey(args: {
 }): Promise<{ hash: string; revision: bigint }> {
   const cred = loadCredential(args.account);
   if (!cred) throw new Error('No passkey registered for this account.');
-  const deployment = perchDeployment();
-  if (!deployment) throw new Error('This build has no Perch deployment.');
-  const reader = perch.accountSnapshotReader({
+  // Over the compiler the account pins, which an account minted by an
+  // earlier Perch release keeps.
+  const reader = await perch.openAccountReader({
     account: args.account,
     rpcUrl: RPC_URL,
     networkPassphrase: Networks.TESTNET,
-    docCompiler: deployment.docCompiler,
   });
   const signer = await resolveSignerRule(args.account, cred.publicKey);
   if (!signer) throw new Error(NOT_REGISTERED);
@@ -352,33 +350,14 @@ export async function applyDocWithPasskey(args: {
     },
   };
 
-  // The account's digest dialect, read once for this apply.
-  const scheme = await perch.authDigestScheme({
-    account: args.account,
-    rpcUrl: RPC_URL,
-    networkPassphrase: Networks.TESTNET,
-  });
   const op = perch.applyDocument(
     args.doc,
     backend,
     {
       async sign(request) {
         args.onProgress?.({ phase: "sign" });
-        // perch-js computes `request.digest` from the published perch-js
-        // (<= 0.3.2), which only emits the `oz_rule_ids` layer. Recompute the
-        // digest in the account's actual scheme from the same payload and
-        // selected rule ids so an `apply_doc` (and the recovery enrollment,
-        // session-key install, and dApp delegation built on it) signs what the
-        // account's `__check_auth` verifies — `addr_oz_v1` for a redeployed
-        // account, `oz_rule_ids` for one minted before. (Collapses to
-        // `request.digest` once perch-js emits the account-bound digest.)
-        const digest = computeAuthDigest(
-          request.account,
-          request.signaturePayload,
-          request.selection.ruleIds,
-          scheme,
-        );
-        const parsed = await passkeyAssertion(digest, cred.credentialId);
+        // In the account's own digest dialect, not perch-js's `request.digest`.
+        const parsed = await passkeyAssertion(perch.signRequestDigest(reader, request), cred.credentialId);
         return [
           {
             signer: { kind: 'external', verifier: signer.verifier, key: hex2buf(cred.publicKey) },
