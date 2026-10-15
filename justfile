@@ -26,8 +26,10 @@ perch-infra:
 # pin derives: the stack by manifest hash, Nido's contracts, the Perch
 # bindings, the SDK's Perch pins, the lockfiles, and the Soroban test
 # snapshots; then the drift check and the Rust suites. Nido's factory is not
-# redeployed. The perch-repin workflow runs this when Perch announces a
-# deployment. See scripts/repin-perch.sh.
+# redeployed: a re-pin that moves the account or verifier needs
+# `just deploy-factory` on its branch before it merges. The perch-repin
+# workflow runs this when Perch announces a deployment. See
+# scripts/repin-perch.sh.
 repin-perch commit:
     scripts/repin-perch.sh {{commit}}
 
@@ -102,9 +104,17 @@ dev: build-ts
     (cd packages/frontend; npm run dev)
 
 # Deploy Nido's factory around Perch's deployed account and pin Perch's
-# WebAuthn verifier. Registers no name. See scripts/deploy-factory.sh.
+# WebAuthn verifier, and write its record
+# (packages/passkey-sdk/src/perch/factory.<network>.json). Registers no name.
+# See scripts/deploy-factory.sh.
 deploy-factory identity network="testnet":
     ./scripts/deploy-factory.sh {{identity}} {{network}}
+
+# Check the factory record against the chain: the deployed factory's wasm,
+# the account hash it deploys, its pinned verifier, and its admin. Read-only.
+# See scripts/check-factory.sh.
+check-factory network="testnet":
+    ./scripts/check-factory.sh {{network}}
 
 # Deploy a Nido-owned stellar-registry instance and register factory/verifier
 # into it (plan A3). Fetches the reference registry wasm, redeploys it under our

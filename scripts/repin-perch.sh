@@ -24,8 +24,10 @@
 #   7. `cargo test --workspace` runs every Rust suite against the new stack,
 #      which also refreshes Cargo.lock and the Soroban test snapshots.
 #
-# Nido's factory is not redeployed: `perch.TESTNET.factory` keeps naming the
-# deployed one until `just deploy-factory` follows the merged re-pin.
+# Nido's factory is not redeployed. When the manifest moves `perch-account`
+# or `perch-webauthn-verifier`, the SDK's deployment.test.ts fails until the
+# factory is: run `just deploy-factory` on the re-pin's branch and commit the
+# record it writes, with `perch.TESTNET.factory`, before the re-pin merges.
 #
 # Exit status: 0 when everything passes, 3 when the re-pin is complete but
 # `cargo test` failed (the changes are still written, for a human to adapt),
