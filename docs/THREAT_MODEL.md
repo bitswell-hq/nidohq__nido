@@ -56,8 +56,8 @@ and infrastructure bring.
    refuses (offers no Approve button for) a link without the replacement set,
    one whose set doesn't hash to what the attempt bound, and one whose
    credential is checked by any verifier other than the deployment's (W3). It
-   shows the new key's ending for the guardian to confirm with their friend
-   out of band. The chain cannot tell whose passkey a replacement is; Perch's
+   shows a check code derived from the whole new key, which the friend's
+   recovery page also shows, for the guardian to compare out of band. The chain cannot tell whose passkey a replacement is; Perch's
    spec puts that check on the guardian (§2).
 5. **Setup-key thief.** Reads a salt before the owner deploys and calls
    `create_account(salt, their_key)` first. The salt travels in the URL
