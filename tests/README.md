@@ -13,33 +13,21 @@ Three tiers:
 The shim (`tests/support/auth/`) overrides `navigator.credentials` with a
 deterministic P-256 vault keyed by credentialId.
 
-dapp/SEP-7, multi-actor recovery, and TestingBot are added in later phases.
-
 ## Testnet tier (`@testnet`, quarantined)
 
-`just test-e2e-testnet` — real Stellar testnet: creates + deploys a smart
-account (v0.7) and drives the name-claim signing round-trip using the shim for
-passkey auth (the synthetic P-256 signature is accepted on-chain). Runs under
-the `testnet-chromium` / `testnet-webkit` projects (retries: 2), kept out of
-`@fast` so chain flakiness never blocks routine runs.
+`just test-e2e-testnet` runs every spec in `tests/e2e/testnet/` against real
+Stellar testnet and `perch.TESTNET`, using the shim for passkey signatures
+(the synthetic P-256 signatures verify on chain). It runs under the
+`testnet-chromium` / `testnet-webkit` projects (retries: 2), kept out of
+`@fast` so chain flakiness never blocks routine runs. The recovery and policy
+specs SECURITY_INVARIANTS W8 records, and how to run them without the hosted
+relayer, are in [RUNBOOKS §1](../docs/RUNBOOKS.md#1-build-and-test-from-source).
 
 - Slow (~15s–3min/test) and dependent on testnet + friendbot availability.
 - The recipe sources `tests/.env.testnet` if present. Set
   `NIDO_TEST_BANK_SECRET=<funded testnet G-account secret>` there to pre-seed the
-  name-tx fee-payer (`localStorage['g2c:name-keypair']`) and skip friendbot;
+  name-tx fee-payer (`localStorage['nido:name-keypair']`) and skip friendbot;
   without it the app funds its own submitter via friendbot. That file is
   gitignored — never commit the secret.
 - Names are unique per run (timestamped). On-chain release is not in the UI and
   is deferred — names are not cleaned up.
-
-### Bugs this tier surfaced (see PR description)
-1. **Bug #1 (fixed):** name-claim signed the bare `buildAuthHash` instead of
-   `computeAuthDigest(…, [0])`.
-2. **Bug #2 (fixed on-chain):** the registry's `factory` name pointed at the
-   deprecated pre-v0.7 factory, so the app deployed unsignable accounts;
-   repointed to the v0.7 factory.
-3. **Bug #3 (open, pinned):** v0.7 `__check_auth` rejects the external
-   `registry.register` context under the Default rule with `UnvalidatedContext`
-   (#3002). The lifecycle test **pins** this — flip its final assertion to
-   expect success once the contract auth-model authorizes the context. (No prior
-   test caught it: `register_name_via_smart_account` uses `env.mock_all_auths()`.)

@@ -8,16 +8,13 @@ its own audit manifest; this file assigns every Perch input Nido consumes.
 
 Read these before the manifest.
 
-- **Single-commit snapshot.** The handed-over tree is one commit with no git
-  history or tags, so the git-based provenance checks below
-  (`git -C vendor/perch diff` against release tags, `scripts/check-perch-drift.sh`,
-  `git rev-parse HEAD`) cannot run as written. Identity is fixed by the recorded
-  SHAs and integrity hashes; source-equality by the comparison results attached
-  to the handoff.
-- **`vendor/perch` is fork-pinned for the audit.** `.gitmodules` points
-  `vendor/perch` at the audit fork's `audit/integration` branch so the audited Nido
-  head pulls the audited Perch head; it is reverted to upstream `main` before
-  mainnet. [SUPPLY_CHAIN.md](./SUPPLY_CHAIN.md) describes the upstream pin.
+- **Git history.** The provenance checks below (`git -C vendor/perch diff`,
+  `scripts/check-perch-drift.sh`, `git rev-parse HEAD`) need a clone with
+  history and the submodule. A handoff without them carries the results
+  instead ([Audit manifest](#audit-manifest)).
+- **`vendor/perch` is upstream Perch.** `.gitmodules` names
+  `https://github.com/stellar-registry/perch.git`, branch `main`; the gitlink
+  is the pin ([SUPPLY_CHAIN.md](./SUPPLY_CHAIN.md#perch-vendorperch-submodule)).
 - **perch-js.** The pinned source's `packages/perch-js` is `0.3.1` (unreleased
   section); the wallet runs the published `0.3.2` tarball, built from a later
   Perch commit. Tarball-vs-source equality is a post-audit release gate
@@ -85,13 +82,23 @@ change outside this audit.
 | Perch's testnet stack | Perch's manifest [`deployments/testnet.json`](https://github.com/stellar-registry/perch/blob/603f7d5504f2d4d9338c135771cea18ac70dbe0c/deployments/testnet.json) (`vendor/perch/deployments/testnet.json`) at the Perch source commit: the build commit (`source.commit`, with `dirty`), the build toolchain (`toolchain`), and every contract's version, `sha256`, and address. |
 | Nido's testnet factory | [DEPLOYED.md](../DEPLOYED.md#nidos-factory): wasm hash, build commit, toolchain, verifier pin, admin. |
 
-The deployed Perch wasm was built from `source.commit`, which can be an
-ancestor of the Perch source commit (for example, when the later commit only
-adds the deployment record). The handoff confirms that the contract sources
-are the same in both:
-`git -C vendor/perch diff --stat <source.commit> HEAD -- crates circuits vendor Cargo.toml Cargo.lock ':!**/test_snapshots/**'`
-(empty output). Nido's tests run the deployed bytes, fetched by the manifest's
-hashes (`just perch-infra`), not a local build of the Perch source.
+The manifest records a dirty build tree (`source.dirty: true`) and a
+toolchain of rustc 1.99.0 and `stellar` 28.0.0-aha.0, the
+`theahaco/stellar-cli` fork. Perch's audit manifest describes both, says no
+reproduction of this manifest's hashes is recorded, and says how to relate
+the deployed bytes to the reviewed source
+([Deployment provenance](https://github.com/stellar-registry/perch/blob/603f7d5504f2d4d9338c135771cea18ac70dbe0c/docs/audit-scope.md#deployment-provenance)).
+
+The deployed Perch wasm was built from `source.commit`, an ancestor of the
+Perch source commit. What changed between the two is
+`git -C vendor/perch diff --stat <source.commit> HEAD -- crates circuits vendor Cargo.toml Cargo.lock ':!**/test_snapshots/**'`.
+At this pin the output is not empty. It lists release version bumps in
+`Cargo.lock`, doc comments, and the build-time pins moving from a fetched,
+git-ignored cache to committed `wasm/*.sha256` files
+(`perch-registry-resolve`). The handoff records this diff and whether any of
+it changes deployed code; rerun it after every re-pin. Nido's tests run the
+deployed bytes, fetched by the manifest's hashes (`just perch-infra`), not a
+local build of the Perch source.
 
 ## Responsibility matrix
 
@@ -129,6 +136,7 @@ the two units is its audit manifest,
 | `@stellar-registry/perch-interpreter` 0.1.0 | Interpreter install parameters and bindings the SDK uses (`src/policyDoc/params.ts`) | Nido integration; tarball against source: explicit dependency review |
 | `perch-zk` | [`packages/perch-zk`](https://github.com/stellar-registry/perch/tree/603f7d5504f2d4d9338c135771cea18ac70dbe0c/packages/perch-zk) (`vendor/perch/packages/perch-zk`): in-page proving and the circuit artifact it ships | Source: explicit dependency review; the wallet's use of it: Nido integration |
 | Generated Perch clients | `packages/contract-bindings/perch-*`, generated from the deployed wasm (`just bindings-perch`) | Nido integration (provenance) |
+| Generated Nido clients | `packages/contract-bindings/factory`, `multisig-policy`, `spending-limit-policy`, `status-message`. The factory client was generated from an earlier factory: it declares `create_account_v2`, the recovery-pool methods, and a two-argument `set_registry_pins`, none of which the factory in this tree has. | Nido integration (provenance) |
 | Artifact selection | `just perch-infra` (runs Perch's [`scripts/fetch-infra-wasm.sh`](https://github.com/stellar-registry/perch/blob/603f7d5504f2d4d9338c135771cea18ac70dbe0c/scripts/fetch-infra-wasm.sh) (`vendor/perch/scripts/fetch-infra-wasm.sh`) `--stack`), `scripts/check-perch-drift.sh`, `scripts/deploy-factory.sh`, `packages/passkey-sdk/src/perch/deployment.ts` (`perch.TESTNET`) and its test. Perch's own artifact selection (`fetch-infra-wasm.sh`, `build-stack.sh`, `verify-deployment.sh`) is in Perch's explicit dependency review. | Nido integration |
 | Perch contracts | `perch-account`, `perch-smart-account` (recovery and capability paths), `perch-recovery`, `perch-zk-pool`, `perch-zk-adapter`, `perch-doc-compiler`, `perch-interpreter`, `perch-webauthn-verifier`, in Perch's [`crates/`](https://github.com/stellar-registry/perch/tree/603f7d5504f2d4d9338c135771cea18ac70dbe0c/crates) (`vendor/perch/crates/`) | Perch core |
 | Circuit | Perch's [`circuits/`](https://github.com/stellar-registry/perch/tree/603f7d5504f2d4d9338c135771cea18ac70dbe0c/circuits) (`vendor/perch/circuits/`), specialist review: soundness, domain separation, nullifier binding | Perch core |
