@@ -14,7 +14,11 @@
 #      registry/wasm-hash pins), and package-lock.json follows the submodule's
 #      npm workspaces;
 #   5. `just check-vendor-drift` checks the result against the manifest;
-#   6. `cargo test --workspace` runs every Rust suite against the new stack,
+#   6. the SDK's validate-differential corpus is regenerated from the new
+#      perch_ir::validate (its generator is seeded, so an unchanged validator
+#      leaves it byte-identical); a changed verdict is for the SDK's
+#      validate.ts to match, which its vitest suite checks;
+#   7. `cargo test --workspace` runs every Rust suite against the new stack,
 #      which also refreshes Cargo.lock and the Soroban test snapshots.
 #
 # Nido's factory is not redeployed: `perch.TESTNET.factory` keeps naming the
@@ -41,7 +45,7 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --network) network="$2"; shift 2 ;;
         --summary) summary="$2"; shift 2 ;;
-        -h|--help) sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,37p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         -*) echo "unknown option: $1" >&2; exit 1 ;;
         *) commit="$1"; shift ;;
     esac
@@ -87,7 +91,15 @@ npm install --package-lock-only --ignore-scripts --no-audit --no-fund
 scripts/pin-perch-links.sh
 just check-vendor-drift
 
-# 6. The Rust suites against the new stack.
+# 6. perch_ir's verdicts on the SDK's differential corpus. A suite that no
+# longer builds is step 7's failure to report, not a failed re-pin.
+corpus=packages/passkey-sdk/src/policyDoc/testdata/validate-differential.json
+NIDO_WRITE_VALIDATE_CORPUS=1 cargo test -p nido-integration-tests --test it validate_differential ||
+    echo "warning: could not regenerate $corpus" >&2
+corpus_changed=false
+git diff --quiet -- "$corpus" || corpus_changed=true
+
+# 7. The Rust suites against the new stack.
 tests=passed
 cargo test --workspace --no-fail-fast || tests=failed
 
@@ -112,6 +124,10 @@ if [ -n "$summary" ]; then
             | "| \($k) | `\($before[$k] // "—")` | `\($after[$k] // "—")` |"
         ' "$manifest"
         echo
+        if [ "$corpus_changed" = true ]; then
+            echo "**\`perch_ir::validate\` changed its verdicts:** \`$corpus\` is regenerated. Port the change to \`packages/passkey-sdk/src/policyDoc/validate.ts\` until \`validate.test.ts\` passes."
+            echo
+        fi
         if [ "$tests" = passed ]; then
             echo "\`cargo test --workspace\` passed against the new stack."
         else

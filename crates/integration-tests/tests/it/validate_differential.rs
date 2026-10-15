@@ -6,7 +6,8 @@
 //! plans the chain rejects. This generates a deterministic corpus of random,
 //! schema-valid documents — biased towards every `ValidationError` variant —
 //! and records `perch_ir::validate`'s verdict for each (the sorted variant
-//! names). `validate.test.ts` replays the corpus through the TS port and
+//! names), then a few fixed boundary documents for limits the random draws
+//! never reach. `validate.test.ts` replays the corpus through the TS port and
 //! requires the identical verdict.
 //!
 //! The test fails if the committed corpus differs from a fresh generation
@@ -253,6 +254,45 @@ fn doc(r: &mut Rng) -> Value {
     d
 }
 
+/// Fixed boundary documents appended after the random ones, for limits the
+/// generator's random draws never reach. perch-ir measures a `string-prefix`
+/// in UTF-8 bytes, so the multi-byte cases tell a byte count from a character
+/// count; a long `string-in` value is accepted (a dead candidate, not an
+/// unsatisfiable predicate).
+fn boundary_docs() -> Vec<Value> {
+    let with = |extra: Value| {
+        let mut rule = json!({
+            "name": "edge",
+            "scope": { "type": "contract", "address": C1 },
+            "principals": { "type": "all", "signers": ["a"] },
+        });
+        rule.as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        json!({
+            "version": 1,
+            "signers": [{ "id": "a", "address": G1 }],
+            "rules": [rule],
+        })
+    };
+    let prefix = |p: String| {
+        with(json!({ "args": [{ "index": 0, "pred": { "type": "string-prefix", "prefix": p } }] }))
+    };
+    let max = perch_ir::MAX_STRING_PRED_LEN;
+    vec![
+        prefix("a".repeat(max)),
+        prefix("a".repeat(max + 1)),
+        prefix("é".repeat(max / 2)),
+        prefix("é".repeat(max / 2 + 1)),
+        prefix("é".repeat(max - 50)),
+        with(
+            json!({ "args": [{ "index": 0, "pred": { "type": "string-in", "values": ["x", "a".repeat(max + 1)] } }] }),
+        ),
+        with(json!({ "functions": ["a".repeat(32)] })),
+        with(json!({ "functions": ["trånsfer"] })),
+    ]
+}
+
 fn verdict(doc: &Value) -> Vec<String> {
     let parsed = perch_ir::from_json(&doc.to_string()).expect("generated doc parses");
     let mut kinds: Vec<String> = match perch_ir::validate(&parsed) {
@@ -276,8 +316,9 @@ fn verdict(doc: &Value) -> Vec<String> {
 fn validate_differential_corpus_matches_perch_ir() {
     let mut r = Rng(0x6e69_646f_5f76_616c);
     let cases: Vec<Value> = (0..DOCS)
-        .map(|_| {
-            let d = doc(&mut r);
+        .map(|_| doc(&mut r))
+        .chain(boundary_docs())
+        .map(|d| {
             let errors = verdict(&d);
             json!({ "doc": d, "errors": errors })
         })
