@@ -55,15 +55,34 @@ export default {
     // Attach security headers the Pages origin doesn't set. Cloudflare Response
     // headers are immutable until copied into a fresh Response.
     const response = new Response(upstream.body, upstream);
-    // Block MIME-sniffing and framing (this is a signing surface -- no clickjacking).
+    // Block MIME-sniffing. HSTS covers every subdomain: the storage bridge and
+    // the setup cookie trust *.nido.fyi, so none of it may be served over http.
     response.headers.set("X-Content-Type-Options", "nosniff");
-    response.headers.set("X-Frame-Options", "DENY");
+    response.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
     // The account C-address / name is the HOST subdomain (e.g. `Cabc...def.nido.fyi`),
     // NOT the URL path -- so `strict-origin-when-cross-origin` would still leak the
     // active account to every cross-origin request (fonts, price/RPC APIs) via the
     // Origin it keeps in Referer. `no-referrer` sends no Referer at all; nothing in
     // the app relies on it (cross-origin calls are unauthenticated and addressed by URL).
     response.headers.set("Referrer-Policy", "no-referrer");
+
+    // The storage bridge is the one page meant to be framed: account and name
+    // origins embed it to share the account list. It gets an enforced policy
+    // of its own admitting only *.nido.fyi ancestors over https; its message
+    // handler narrows that to account and name labels. Every other page is a
+    // signing surface and stays unframeable. Keep identical to the
+    // /nido-storage-bridge/ rule in packages/frontend/public/_headers.
+    if (url.pathname === "/nido-storage-bridge/") {
+      response.headers.delete("X-Frame-Options");
+      response.headers.delete("Content-Security-Policy-Report-Only");
+      response.headers.set(
+        "Content-Security-Policy",
+        "default-src 'none'; script-src 'self'; frame-ancestors https://*.nido.fyi; base-uri 'none'; form-action 'none'",
+      );
+      return response;
+    }
+    // Block framing (this is a signing surface -- no clickjacking).
+    response.headers.set("X-Frame-Options", "DENY");
 
     // CSP still shipped in *Report-Only* (never blocks) so the enforced flip can
     // be browser-verified first -- but the policy is now TIGHT, not `connect-src
