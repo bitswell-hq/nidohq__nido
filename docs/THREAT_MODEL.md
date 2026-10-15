@@ -59,6 +59,10 @@ and infrastructure bring.
    shows the new key's ending for the guardian to confirm with their friend
    out of band. The chain cannot tell whose passkey a replacement is; Perch's
    spec puts that check on the guardian (§2).
+   A link asking a guardian to approve a reconfiguration is checked against
+   its config hash, then shown setting by setting next to the current one,
+   with any new controller, proof checker, pool, circuit, friend, or kit
+   called out; Approve signs the hash of exactly those settings (W2).
 5. **Setup-key thief.** Reads a salt before the owner deploys and calls
    `create_account(salt, their_key)` first. The salt travels in the URL
    fragment and is scrubbed from the address bar, but during setup it is also
