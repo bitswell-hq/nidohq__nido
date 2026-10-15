@@ -79,6 +79,14 @@
                       "val": {
                         "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
                       }
+                    },
+                    {
+                      "key": {
+                        "symbol": "Delay"
+                      },
+                      "val": {
+                        "u32": 100
+                      }
                     }
                   ]
                 }

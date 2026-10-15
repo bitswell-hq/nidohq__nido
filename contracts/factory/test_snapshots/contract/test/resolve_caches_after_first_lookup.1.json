@@ -46,6 +46,14 @@
                     },
                     {
                       "key": {
+                        "symbol": "Delay"
+                      },
+                      "val": {
+                        "u32": 100
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "verifier"
                       },
                       "val": {
