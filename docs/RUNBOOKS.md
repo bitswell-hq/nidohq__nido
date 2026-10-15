@@ -146,7 +146,7 @@ Who can change what Nido's users depend on, at this revision:
 | The name service (`contracts/name-registry`) | Name-registry admin | `admin-sep` `set_admin` / `upgrade` | None: its `upgrade` takes effect at once | Its admin and wasm hash (B2) |
 | Nido's pre-Perch policies | Each policy's admin | `admin-sep` `set_admin` / `upgrade` | None | D6 decides whether they stay |
 | Perch's verifier, controller, pool, adapter, compiler, and policies | Nobody: no admin, no upgrade entry point | A new deployment at a new address | n/a | Perch's manifest |
-| Accounts minted by pre-Perch factories | The admin of Nido's former WebAuthn verifier | That verifier's own upgrade | None | THREAT_MODEL 7 |
+| The passkey checks of accounts minted by pre-Perch factories (testnet only) | The admin of Nido's former WebAuthn verifier | That verifier's own upgrade | None | THREAT_MODEL 7 |
 
 The factory admin is an address, so it can be a multisig smart account:
 deploy with `ADMIN=<the multisig's C-address>`, or rotate an existing
@@ -175,8 +175,9 @@ A factory change, before mainnet and after:
    cached account hash, so the next account is the new wasm's embedded
    account.
 5. Verify the factory's wasm hash, `pinned_verifier()`, and the account hash
-   it deploys (`refresh_account_wasm_hash`), then mint one account and check
-   its code and admin rule. Update DEPLOYED.md.
+   it deploys (simulate `refresh_account_wasm_hash`, which needs no
+   signature to simulate), then mint one account and check its code and
+   admin rule. Update DEPLOYED.md.
 
 Watch the factory for `change_scheduled` and `admin_changed` and alert on
 every one; outside a planned change, either means the admin key is in use
