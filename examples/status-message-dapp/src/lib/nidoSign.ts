@@ -33,6 +33,7 @@ import {
 	extractFuncAndAuth,
 	submitSorobanTransaction,
 	waitForConfirmation,
+	perch,
 } from "@nidohq/passkey-sdk"
 import {
 	Address,
@@ -156,8 +157,12 @@ export async function signSessionCallInPage<T extends InjectableTx>(opts: {
 	const verifierAddress = await fetchVerifierAddress(account)
 
 	note("Touch your authenticator to sign…")
-	// OZ v0.7+ accounts verify sha256(signature_payload || context_rule_ids.to_xdr()).
-	const authDigest = computeAuthDigest(new Uint8Array(authHash), contextRuleIds)
+	// OZ v0.7+ Perch accounts verify sha256(bound || context_rule_ids.to_xdr()),
+	// where bound = sha256(AUTH_ADDR_DOMAIN || account_id || signature_payload)
+	// folds in the account's own address (addr_oz_v1) — or, for an account minted
+	// before the redeploy, the unbound oz_rule_ids digest. Sign the account's own.
+	const scheme = await perch.authDigestScheme({ account, rpcUrl, networkPassphrase })
+	const authDigest = computeAuthDigest(account, new Uint8Array(authHash), contextRuleIds, scheme)
 	// Decode what the signature actually authorises straight from the auth entry
 	// (what-you-see-is-what-you-sign) rather than restating app inputs, so the
 	// sheet provably reflects the signed payload. Values render via textContent,
