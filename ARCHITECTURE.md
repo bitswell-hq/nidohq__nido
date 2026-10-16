@@ -49,7 +49,7 @@ graph TB
     end
 
     subgraph "Stellar (Nido-owned)"
-        Factory["nido-factory<br/>admin-upgradeable"]
+        Factory["nido-factory<br/>admin changes after a delay"]
         Names["nido-name-registry"]
     end
 
@@ -83,7 +83,7 @@ graph TB
 
 | Contract | Path | Role |
 | --- | --- | --- |
-| `nido-factory` | `contracts/factory/` | `create_account(salt, key)` deploys a `perch-account` at the address `get_c_address(salt)` predicts, with one constructor rule: the passkey `key` as admin, scoped to the account itself, checked by Perch's WebAuthn verifier. `create_account` needs no authorization, and the address derives from the salt alone: a Nido passkey's RP ID is the account's own subdomain, so the address has to exist before the passkey (Perch's own factory, whose addresses commit to the admin signers, cannot serve this). The factory embeds the release's account wasm and deploys by its hash. It is admin-upgradeable (`admin-sep`): the admin can replace the factory's wasm and pin the verifier (`set_registry_pins`, which takes the registry off the creation path), and has no authority over a deployed account (THREAT_MODEL 8). |
+| `nido-factory` | `contracts/factory/` | `create_account(salt, key)` deploys a `perch-account` at the address `get_c_address(salt)` predicts, with one constructor rule: the passkey `key` as admin, scoped to the account itself, checked by Perch's WebAuthn verifier. `create_account` needs no authorization, and the address derives from the salt alone: a Nido passkey's RP ID is the account's own subdomain, so the address has to exist before the passkey (Perch's own factory, whose addresses commit to the admin signers, cannot serve this). The factory embeds the release's account wasm and deploys by its hash, and is constructed with the verifier pinned, which takes the registry off the creation path. Its admin (`admin-sep`) can replace the factory's wasm or repin the verifier only through `schedule_change` and `execute_change`, at least `change_delay()` ledgers apart, and has no authority over a deployed account (THREAT_MODEL 8). |
 | `nido-name-registry` | `contracts/name-registry/` | Human-readable names for accounts. |
 | `nido-multisig-policy`, `nido-spending-limit-policy`, `nido-preauth-sweep-policy` | `contracts/*-policy/` | OZ policies a Perch document cannot attach (the compiler attaches only Perch's interpreter and spending limit), so no account the factory mints can install them. Whether to retire or port them is an open product question (MAINNET_READINESS D6). |
 | `nido-status-message` | `contracts/status-message/` | Demo contract for the example dApp. Excluded from mainnet (MAINNET_READINESS E3). |

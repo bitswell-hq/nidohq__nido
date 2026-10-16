@@ -18,9 +18,9 @@ Read these before the manifest.
   `vendor/perch` at the audit fork's `audit/integration` branch so the audited Nido
   head pulls the audited Perch head; it is reverted to upstream `main` before
   mainnet. [SUPPLY_CHAIN.md](./SUPPLY_CHAIN.md) describes the upstream pin.
-- **perch-js.** The pinned source's `packages/perch-js` is `0.3.1` (unreleased
-  section); the wallet runs the published `0.3.2` tarball, built from a later
-  Perch commit. Tarball-vs-source equality is a post-audit release gate
+- **perch-js.** The pinned source's `packages/perch-js` is `0.4.0`; the wallet
+  runs the published `0.4.0` tarball, built at Perch's `perch-js-v0.4.0` tag.
+  Tarball-vs-source equality is a post-audit release gate
   ([DEFERRED.md](./DEFERRED.md#npm-publishing-of-perch-zk-and-the-contract-clients)).
 - **What is deferred until after the audit** is in [DEFERRED.md](./DEFERRED.md).
 
@@ -53,22 +53,19 @@ Perch packages in the wallet:
 
 | Package | Source | Version | Integrity (`package-lock.json`) |
 | --- | --- | --- | --- |
-| `@stellar-registry/perch` (Perch's `packages/perch-js`) | npm | 0.3.2 | `sha512-34lGg5GJpfzTsWNEski31WFMgCgXSNp6ShyHuFT3CfWAA1FRLF+SWZ3QoJJ38w/TGAfUxf69cf8+J3SeZnzvYg==` |
+| `@stellar-registry/perch` (Perch's `packages/perch-js`) | npm | 0.4.0 | `sha512-U+jER/hzoVX/AkAYHwE7O9oARAhosf0Ptzr3YbLLTZirJ0kd7KWb7fOjAxKZKVoXNF26mTecmIKhqoGij7JxgQ==` |
 | `@stellar-registry/perch-interpreter` (Perch's `packages/perch-interpreter-js`) | npm | 0.1.0 | `sha512-ZUW1+/ojzTw0tjlfOxjHtWB7b+I6kWEMz5oQIH6wZrpk2H2vsPfdsc5wnQCU8NNWrLqWJlRKG+yxsbHB/p7Vtw==` |
 | `@stellar-registry/perch-zk` | npm workspace link to `vendor/perch/packages/perch-zk` | 0.1.0 | None: its identity is the Perch source commit. |
 
 Perch publishes the two npm packages from release tags, not from the Perch
-source commit, and the pinned Perch source corresponds to neither published
-version. `packages/perch-js` declares `0.3.1` with an unreleased section (ahead
-of the `0.3.1` release) —
-Perch's manifest,
+source commit. The wallet runs the published perch-js `0.4.0` tarball, built at
+tag `perch-js-v0.4.0`; `packages/perch-js` at the pinned commit declares
+`0.4.0`, and Perch's manifest,
 [`docs/audit-scope.md`](https://github.com/stellar-registry/perch/blob/603f7d5504f2d4d9338c135771cea18ac70dbe0c/docs/audit-scope.md)
-(`vendor/perch/docs/audit-scope.md`), records that "no release it records
-contains this source" — while the wallet runs the published `0.3.2` tarball,
-built from a Perch commit later than the pinned one. `packages/perch-interpreter-js`
-declares `0.1.0`, the published version. So no `perch-js-v0.3.2` tag exists in
-this tree, and the published `perch-js` tarball cannot be diffed against the
-pinned source by any tag in a single-commit snapshot. This audit reviews the
+(`vendor/perch/docs/audit-scope.md`), records that `src/` at that tag equals
+the pinned source. `packages/perch-interpreter-js` declares `0.1.0`, the
+published version. A single-commit snapshot carries no tags, so the published
+tarballs cannot be diffed against the pinned source by tag within it. This audit reviews the
 perch-js and perch-interpreter-js encoders as the source at the pinned commit
 (`vendor/perch/packages/perch-js`, `vendor/perch/packages/perch-interpreter-js`).
 Establishing that a published `dist` is a reproducible build of an audited
@@ -117,15 +114,15 @@ the two units is its audit manifest,
 
 | Item | Path or identity | Stream |
 | --- | --- | --- |
-| Factory | `contracts/factory/`: deterministic deployment of `perch-account` with the passkey admin rule; the embedded account wasm and its hash cache across upgrades; admin, upgrade, and verifier pin; the registry fallback for an unpinned verifier | Nido integration |
+| Factory | `contracts/factory/`: deterministic deployment of `perch-account` with the passkey admin rule; the embedded account wasm and its hash cache across upgrades; the admin and the delayed changes to the code and the verifier pin (`schedule_change`, `execute_change`, `cancel_change`); the registry fallback for an unpinned verifier | Nido integration |
 | Name registry | `contracts/name-registry/`: name ownership and release | Nido integration |
-| `admin-sep` 0.27.0 | `admin`, `set_admin`, and `upgrade` for the factory (whose `upgrade` override also clears the account-hash cache), the name registry, and the multisig and spending-limit policies. About 50 lines. `admin()` reads the stored admin with `unwrap_unchecked`, and `set_admin` requires no authorization while no admin is stored; the factory's constructor stores one. | Explicit dependency review: read in full |
+| `admin-sep` 0.27.0 | `admin` and `set_admin` for the factory (which overrides `set_admin` to emit `admin_changed`, and does not use `Upgradable`), and `admin`, `set_admin`, and `upgrade` for the name registry and the multisig and spending-limit policies. About 50 lines. `admin()` reads the stored admin with `unwrap_unchecked`, and `set_admin` requires no authorization while no admin is stored; the factory's constructor stores one. | Explicit dependency review: read in full |
 | Passkey SDK | `packages/passkey-sdk/`: `src/perch/` (statement encodings, recovery builders, document helpers, proving), `src/policyDoc/`, WebAuthn parsing, auth-entry signing | Nido integration |
 | Wallet | `packages/frontend/`: recovery pages (`src/lib/recovery/`), onboarding and the setup secret (`src/pages/new-account/`, `src/lib/createNido.ts`), signing flows, the storage bridge, `public/_headers` | Nido integration |
 | Wallets Kit module | `packages/stellar-wallets-kit-module/`: dApp signing handoff | Nido integration |
 | Infrastructure | `infra/relayer/` (fee sponsorship and submission, the channels plugin, key custody), `infra/nido-resolver/` (name resolution), `frontend/worker-proxy-nido/` (subdomain proxy, security headers) | Nido integration |
 | Integration harness | `crates/integration-tests/`: that it runs under enforcing authorization with real proofs and that its fixtures cannot drift silently (`src/zk.rs`) | Nido integration |
-| `@stellar-registry/perch` (perch-js; npm `0.3.2`, pinned source `0.3.1`, see manifest note) | Statement and document encodings, `applyDocument`, rule selection, signing digests. | Source at the pinned commit: explicit dependency review. The published tarball vs an audited source: post-audit release gate ([DEFERRED.md](./DEFERRED.md#npm-publishing-of-perch-zk-and-the-contract-clients)). The wallet's use of it: Nido integration |
+| `@stellar-registry/perch` (perch-js; npm `0.4.0`, pinned source `0.4.0`, see manifest note) | Statement and document encodings, `applyDocument`, rule selection, signing digests. | Source at the pinned commit: explicit dependency review. The published tarball vs an audited source: post-audit release gate ([DEFERRED.md](./DEFERRED.md#npm-publishing-of-perch-zk-and-the-contract-clients)). The wallet's use of it: Nido integration |
 | `@stellar-registry/perch-interpreter` 0.1.0 | Interpreter install parameters and bindings the SDK uses (`src/policyDoc/params.ts`) | Nido integration; tarball against source: explicit dependency review |
 | `perch-zk` | [`packages/perch-zk`](https://github.com/stellar-registry/perch/tree/603f7d5504f2d4d9338c135771cea18ac70dbe0c/packages/perch-zk) (`vendor/perch/packages/perch-zk`): in-page proving and the circuit artifact it ships | Source: explicit dependency review; the wallet's use of it: Nido integration |
 | Generated Perch clients | `packages/contract-bindings/perch-*`, generated from the deployed wasm (`just bindings-perch`) | Nido integration (provenance) |
@@ -202,25 +199,18 @@ specification intends:
 ## Questions we want answered
 
 1. **Factory admin.** The factory admin can replace the whole factory wasm,
-   and with it the account code and verifier new accounts get
-   (THREAT_MODEL 8); pinning the verifier does not constrain an upgrade.
-   MAINNET_READINESS B1 requires a multisig with a visible upgrade delay, or
-   no upgrade authority. Is that enough for accounts created while an
-   upgrade is pending?
-
-   _As built:_ the factory's `upgrade` and `set_registry_pins` take effect in
-   the same transaction (`admin.require_auth`, then
-   `update_current_contract_wasm` / the pin write) — there is no on-chain
-   timelock, so any "visible upgrade delay" is a property of the admin
-   multisig's off-chain process, not an on-chain guarantee. An account created
-   while an upgrade is pending gets whatever factory code and pin are live at
-   its ledger. Nothing on-chain compares the new account's wasm hash or
-   admin-rule verifier against `perch.TESTNET` / the manifest; the wallet
-   does, before it activates an account it set up (SECURITY_INVARIANTS W11),
-   so it refuses such an account, but accounts other clients create through
-   the factory are not covered. A multisig delay alone therefore does not
-   protect accounts created during or after a malicious upgrade unless the
-   wallet verifies the deployed result (see B1).
+   and with it the account code new accounts get, or repin the verifier
+   (THREAT_MODEL 8). Each change waits out `change_delay()` ledgers between
+   `schedule_change` and `execute_change`, and only the admin can execute or
+   cancel it (SECURITY_INVARIANTS F6). MAINNET_READINESS B1 adds a multisig
+   admin and monitoring of the factory's events. Is a delay that only the
+   admin can cancel, plus watchers, enough for accounts created while a
+   change is pending, or does the factory need a separate canceller? An
+   account created during the delay gets the code and pin live at its
+   ledger. The wallet compares a new account's wasm hash and admin-rule
+   verifier with its deployment before activating an account it set up
+   (SECURITY_INVARIANTS W11), so it refuses such an account, but accounts
+   other clients create through the factory are not covered.
 2. **The ZK verifier delta.** Proofs are zero-knowledge, verified by Perch's
    unaudited `UltraKeccakZKFlavor` delta on the audited verifier
    (THREAT_MODEL 13). Is it sound?

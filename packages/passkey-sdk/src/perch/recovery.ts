@@ -326,15 +326,11 @@ export class PerchRecovery {
   }
 
   /** One consistent read of `account` at one configuration revision
-   *  (perch-js `readSnapshot`; see `readAccountSnapshot`). */
+   *  (perch-js `readSnapshot`; see `readAccountSnapshot`), its limits from
+   *  the compiler the account pins. */
   snapshot(account: string, options?: SnapshotOptions): Promise<Snapshot> {
     return readAccountSnapshot(
-      {
-        account,
-        rpcUrl: this.args.rpcUrl,
-        networkPassphrase: this.args.deployment.network,
-        docCompiler: this.args.deployment.docCompiler,
-      },
+      { account, rpcUrl: this.args.rpcUrl, networkPassphrase: this.args.deployment.network },
       options,
     );
   }
@@ -513,8 +509,9 @@ export class PerchRecovery {
     const source =
       action === 'lost-key' ? current : (await this.controller.baseline({ account })).result;
     if (!source) throw new Error('the account has no published baseline');
+    // The compiler the account pins, which its own apply path compiles with.
     const compiler = new CompilerClient({
-      contractId: this.args.deployment.docCompiler,
+      contractId: snap.configuration.infra.docCompiler,
       networkPassphrase: this.args.deployment.network,
       rpcUrl: this.args.rpcUrl,
     });

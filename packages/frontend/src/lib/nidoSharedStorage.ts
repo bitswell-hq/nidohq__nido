@@ -1,5 +1,7 @@
-import { isContractId } from "@nidohq/passkey-sdk";
+import { RESERVED_DAPP_SUBDOMAINS } from "@nidohq/passkey-sdk";
 import type { PendingAccount } from "./myNidoModel";
+import { isContractStrKey } from "./address";
+import { isLoopbackHttpHost } from "./loopbackHost";
 
 const ACCOUNT_KEY = "nido:accounts";
 const PENDING_KEY = "nido:pending";
@@ -28,10 +30,12 @@ export interface NidoStorageResponse {
   snapshot: NidoAccountSnapshot;
 }
 
+// A full StrKey check (version byte and checksum), not a length-and-prefix
+// test: ids from the bridge are rendered by the account switcher.
 function normalizeContractId(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const contractId = value.toUpperCase();
-  return isContractId(contractId) ? contractId : null;
+  return isContractStrKey(contractId) ? contractId : null;
 }
 
 function uniqueContractIds(values: unknown): string[] {
@@ -216,12 +220,119 @@ export function apexHostForHost(host: string): string {
   return PUBLIC_SUFFIXES.has(apex.split(":")[0]) ? host : apex;
 }
 
-export function sameNidoApexOrigin(origin: string, host: string): boolean {
+/**
+ * Who is asking the storage bridge. Only two kinds of page share the apex's
+ * account list: an account origin (`<c-address>.<apex>`), which is entitled to
+ * its own setup entry, and a name origin (`<name>.<apex>`), which is entitled
+ * to nothing secret.
+ */
+export type BridgeRequester = { kind: "account"; contractId: string } | { kind: "name" };
+
+// Single-label hosts under the apex that are not wallet pages: the built-in
+// dApps and the relayer. A name-shaped label is otherwise taken to be a
+// registered name's wallet origin.
+const NON_WALLET_LABELS = new Set(["relay", ...Object.keys(RESERVED_DAPP_SUBDOMAINS)]);
+const ACCOUNT_LABEL_RE = /^c[a-z2-7]{55}$/;
+const PREVIEW_LABEL_RE = /^(.*)--(?:pr-)?\d+$/;
+
+/**
+ * Classify a bridge requester's origin, or refuse it (null). The origin must
+ * be https (plain http only on a loopback dev host), sit one label below the
+ * same apex as the bridge, and have the label shape of an account address or
+ * a registered name. Anything else — another scheme, the apex itself, a
+ * built-in dApp or service host, a deeper subdomain, another site — is refused.
+ */
+export function bridgeRequester(origin: string, bridgeHost: string): BridgeRequester | null {
+  let url: URL;
   try {
-    return apexHostForHost(new URL(origin).host) === apexHostForHost(host);
+    url = new URL(origin);
   } catch {
-    return false;
+    return null;
   }
+  if (url.protocol !== "https:" && !(url.protocol === "http:" && isLoopbackHttpHost(url.hostname))) {
+    return null;
+  }
+  const apex = apexHostForHost(bridgeHost);
+  if (url.host === apex || apexHostForHost(url.host) !== apex) return null;
+  // Exactly one label below the apex host (preview roots are `<N>.<apex>`,
+  // preview accounts `<label>--<N>.<apex>`, so compare against the apex's
+  // own hostname with any `<N>.` stripped).
+  const apexName = apex.split(":")[0];
+  const [first, ...rest] = url.hostname.split(".");
+  const parent = rest.join(".");
+  const previewRootParent = apexName.split(".").slice(1).join(".");
+  if (parent !== apexName && parent !== previewRootParent) return null;
+  const label = (first.match(PREVIEW_LABEL_RE)?.[1] ?? first).toLowerCase();
+
+  if (ACCOUNT_LABEL_RE.test(label)) {
+    const contractId = label.toUpperCase();
+    return isContractStrKey(contractId) ? { kind: "account", contractId } : null;
+  }
+  if (VALID_NAME_RE.test(label) && !NON_WALLET_LABELS.has(label)) return { kind: "name" };
+  return null;
+}
+
+/**
+ * What the bridge sends a requester: the account list and cached names, and
+ * at most one setup entry — the requester's own. Other accounts' setup keys
+ * never leave the apex.
+ */
+export function snapshotForRequester(
+  snapshot: NidoAccountSnapshot,
+  requester: BridgeRequester,
+): NidoAccountSnapshot {
+  return {
+    accounts: snapshot.accounts,
+    pending:
+      requester.kind === "account"
+        ? snapshot.pending.filter((p) => p.contractId === requester.contractId)
+        : [],
+    names: snapshot.names,
+  };
+}
+
+/**
+ * What the bridge accepts from a requester: an account origin may report its
+ * own address (as active or as pending setup) and its own name; a name origin
+ * reports nothing. Entries about any other account are dropped, so one origin
+ * cannot plant accounts or setup keys that every other origin then trusts.
+ */
+export function contributionFromRequester(
+  incoming: Partial<NidoAccountSnapshot> | null | undefined,
+  requester: BridgeRequester,
+): NidoAccountSnapshot {
+  if (requester.kind !== "account") return { accounts: [], pending: [], names: {} };
+  const own = requester.contractId;
+  const next = normalizeSnapshot(incoming);
+  return {
+    accounts: next.accounts.filter((id) => id === own),
+    pending: next.pending.filter((p) => p.contractId === own),
+    names: own in next.names ? { [own]: next.names[own] } : {},
+  };
+}
+
+/**
+ * The bridge's message handler, minus the DOM: answer only a well-formed
+ * request from an approved origin that came from the window embedding the
+ * bridge. Returns the response to post back to `origin`, or null to ignore.
+ */
+export function answerBridgeRequest(
+  message: { origin: string; data: unknown; fromParent: boolean },
+  bridgeHost: string,
+  store: StorageLike | null = storageOrNull(),
+): NidoStorageResponse | null {
+  if (!message.fromParent) return null;
+  const requester = bridgeRequester(message.origin, bridgeHost);
+  if (!requester) return null;
+  const data = message.data as Partial<NidoStorageRequest> | null;
+  if (data?.type !== NIDO_STORAGE_REQUEST || typeof data.id !== "string") return null;
+
+  mergeNidoSnapshot(contributionFromRequester(data.snapshot, requester), store);
+  return {
+    type: NIDO_STORAGE_RESPONSE,
+    id: data.id,
+    snapshot: snapshotForRequester(localNidoSnapshot(store), requester),
+  };
 }
 
 function bridgeTarget(location: Pick<Location, "protocol" | "host">): { origin: string; url: string } | null {
@@ -255,7 +366,7 @@ export function syncNidoStorageViaBridge(timeoutMs = 1000): Promise<boolean> {
     }
 
     function onMessage(event: MessageEvent<NidoStorageResponse>) {
-      if (event.origin !== bridge.origin) return;
+      if (event.origin !== bridge.origin || event.source !== iframe.contentWindow) return;
       const data = event.data;
       if (data?.type !== NIDO_STORAGE_RESPONSE || data.id !== id) return;
       finish(mergeNidoSnapshot(data.snapshot));

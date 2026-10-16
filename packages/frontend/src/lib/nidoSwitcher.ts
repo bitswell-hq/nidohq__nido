@@ -47,7 +47,7 @@ function rowHtml(row: MyNidoRow): string {
       <span class="mn-main"><span class="mn-name">${title}</span><span class="mn-meta">Finishing setup…</span></span>
       <span class="mn-chev">›</span></a>`;
   }
-  return `<a class="mn-row" role="menuitem" href="${href}" data-balance-for="${row.contractId}">${av}
+  return `<a class="mn-row" role="menuitem" href="${href}" data-balance-for="${esc(row.contractId)}">${av}
     <span class="mn-main"><span class="mn-name">${title}</span><span class="mn-meta">${esc(shortAddr(row.contractId, 6, 6))}</span></span>
     <span class="mn-bal"><span class="skeleton">&nbsp;</span></span>
     <span class="mn-chev">›</span></a>`;
@@ -231,7 +231,7 @@ export function mountNidoSwitcher(root: HTMLElement, opts: MountOptions = {}): v
     const resolved = await resolveMissingNames(rows, lookup, saveAccountName);
     resolved.forEach((name, contractId) => {
       const rowEl = panel!.querySelector<HTMLAnchorElement>(
-        `.mn-row[data-balance-for="${contractId}"]`,
+        `.mn-row[data-balance-for="${CSS.escape(contractId)}"]`,
       );
       if (!rowEl) return;
       const nameEl = rowEl.querySelector(".mn-name");

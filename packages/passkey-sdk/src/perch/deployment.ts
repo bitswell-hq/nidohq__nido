@@ -41,8 +41,8 @@ export interface PerchDeployment {
 }
 
 /** Perch's testnet release (`vendor/perch/deployments/testnet.json`, at the
- *  submodule's pin) and Nido's factory built around its account
- *  (`scripts/deploy-factory.sh`). */
+ *  submodule's pin) and Nido's factory, as its record (`factory.testnet.json`,
+ *  written by `scripts/deploy-factory.sh`) names it. */
 export const TESTNET: PerchDeployment = {
   network: 'Test SDF Network ; September 2015',
   factory: 'CBJRCUECFC2FSJBSVOVYHWC73A2SN7LIKSLWJBQUNEOWPE4PXG33M54H',
