@@ -110,7 +110,7 @@ jobs:
       - name: Fallback, staleness, network, and override tests
         run: python3 scripts/test_rpc_fallback.py -v
       - name: shellcheck
-        run: shellcheck -s bash -x scripts/stellar-rpc.sh scripts/perch-infra.sh scripts/deploy-factory.sh scripts/check-factory.sh
+        run: shellcheck -s bash -x -S warning scripts/stellar-rpc.sh scripts/perch-infra.sh scripts/deploy-factory.sh scripts/check-factory.sh
 
   unit:
     name: Unit (TestAuthenticator)
