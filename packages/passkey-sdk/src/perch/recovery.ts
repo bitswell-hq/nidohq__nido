@@ -79,18 +79,22 @@ export interface ChainArgs {
  *  controller. (The compiler the account pins is read by its snapshot
  *  reader, `openAccountReader`.) */
 export interface RecoveryWiring {
-  /** The controller the account adopted (`recovery_controller()`), or,
-   *  with recovery off, the deployment's: the one a new enrollment
-   *  adopts. */
+  /** The controller the account adopted (`configuration()`'s
+   *  `recovery_controller`), or, with recovery off, the deployment's: the
+   *  one a new enrollment adopts. */
   controller: string;
   /** Whether the account has adopted `controller`. */
   adopted: boolean;
-  /** The enrolled ZK factor's contracts (the controller's `config`), when
-   *  the configuration has one. `circuitId` is lowercase hex. */
-  zk?: { pool: string; adapter: string; circuitId: string };
 }
 
-function zkOf(mode: CompiledRecoveryMode): RecoveryWiring['zk'] {
+/** An enrolled ZK factor's contracts; `circuitId` is lowercase hex. */
+export interface EnrolledZk {
+  pool: string;
+  adapter: string;
+  circuitId: string;
+}
+
+function zkOf(mode: CompiledRecoveryMode): EnrolledZk | undefined {
   const z = mode.tag === 'ZkOnly' ? mode.values[0] : mode.tag === 'Combined' ? mode.values[1] : undefined;
   return z && { pool: z.pool, adapter: z.adapter, circuitId: Buffer.from(z.circuit_id).toString('hex') };
 }
@@ -295,9 +299,8 @@ export class PerchRecovery {
     });
   }
 
-  /** Where `account`'s recovery runs: its adopted controller from
-   *  `configuration()`, and its ZK factor's contracts from that controller's
-   *  `config`. A failed read is not kept. */
+  /** Where `account`'s recovery runs: its adopted controller, from one
+   *  `configuration()` read. A failed read is not kept. */
   wiring(account: string): Promise<RecoveryWiring> {
     let wiring = this.wirings.get(account);
     if (!wiring) {
@@ -309,13 +312,17 @@ export class PerchRecovery {
   }
 
   private async readWiring(account: string): Promise<RecoveryWiring> {
-    const adopted = (await this.account(account).recovery_controller()).result ?? undefined;
-    if (adopted === undefined) {
-      return { controller: this.args.deployment.recoveryController, adopted: false };
-    }
-    const enrolled = (await this.recoveryAt(adopted).config({ account })).result ?? undefined;
-    const zk = enrolled && zkOf(enrolled.mode);
-    return { controller: adopted, adopted: true, ...(zk ? { zk } : {}) };
+    const adopted = (await this.account(account).configuration()).result.recovery_controller ?? undefined;
+    return adopted === undefined
+      ? { controller: this.args.deployment.recoveryController, adopted: false }
+      : { controller: adopted, adopted: true };
+  }
+
+  /** The contracts of `account`'s enrolled ZK factor, from its controller's
+   *  `config`, or undefined without one. Read only when proving needs it. */
+  async enrolledZk(account: string): Promise<EnrolledZk | undefined> {
+    const enrolled = (await (await this.controller(account)).config({ account })).result ?? undefined;
+    return enrolled && zkOf(enrolled.mode);
   }
 
   private async controller(account: string): Promise<RecoveryClient> {
@@ -431,7 +438,7 @@ export class PerchRecovery {
 
   /** The pool `account`'s enrolled ZK factor names. */
   private async pool(account: string): Promise<PoolClient> {
-    const zk = (await this.wiring(account)).zk;
+    const zk = await this.enrolledZk(account);
     if (!zk) throw new Error('the account has no enrolled ZK factor');
     return new PoolClient({
       contractId: zk.pool,

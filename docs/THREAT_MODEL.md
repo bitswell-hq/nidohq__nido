@@ -230,7 +230,7 @@ contracts.
 - **The wallet follows the account.** Recovery reads (attempts, the freeze,
   the epoch, statements) and every controller call (`begin_*`, `submit_*`,
   `approve_change`, `publish_baseline`) go to the controller the account
-  adopted (its `recovery_controller()`). A completion's target
+  adopted (`configuration()`'s `recovery_controller`). A completion's target
   is derived by the compiler the account pins, and proofs use the pool its
   enrolled ZK factor names (`perch.PerchRecovery`, `RecoveryWiring`). A
   wallet that used the deployment's controller instead would show a `Loss`

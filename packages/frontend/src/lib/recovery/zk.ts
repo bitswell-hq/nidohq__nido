@@ -62,7 +62,7 @@ export async function proveWithKit(
   const client = recoveryClient();
   // The wallet proves with the deployment's circuit; an enrolled factor
   // checked against another would fail on chain.
-  const zkFactor = (await client.wiring(kit.account)).zk;
+  const zkFactor = await client.enrolledZk(kit.account);
   if (zkFactor && zkFactor.circuitId !== requireDeployment().circuitId) {
     throw new Error('This Nido’s recovery kit uses a proof circuit this wallet cannot prove with.');
   }

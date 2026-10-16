@@ -104,8 +104,8 @@ const statement = {
  *  factor in 845c49a's pool and has an authorized attempt there; `FRESH`
  *  has no recovery. Every other controller knows neither. */
 function answer(c: Call): unknown {
-  if (c.kind === 'account' && c.fn === 'recovery_controller') {
-    return c.contract === ENROLLED ? OLD.controller : undefined;
+  if (c.kind === 'account' && c.fn === 'configuration') {
+    return { recovery_controller: c.contract === ENROLLED ? OLD.controller : undefined };
   }
   const at = (c.args as { account?: string } | undefined)?.account;
   if (c.kind === 'recovery' && (c.contract !== OLD.controller || at !== ENROLLED)) {
@@ -160,11 +160,14 @@ beforeEach(() => {
 describe('an account enrolled under an earlier controller', () => {
   it('is read from its own controller and pool', async () => {
     expect(OLD.controller).not.toBe(TESTNET.recoveryController);
-    await expect(client().wiring(ENROLLED)).resolves.toEqual({
-      controller: OLD.controller,
-      adopted: true,
-      zk: { pool: OLD.pool, adapter: OLD.adapter, circuitId: OLD.circuitId },
+    const c = client();
+    await expect(c.wiring(ENROLLED)).resolves.toEqual({ controller: OLD.controller, adopted: true });
+    await expect(c.enrolledZk(ENROLLED)).resolves.toEqual({
+      pool: OLD.pool,
+      adapter: OLD.adapter,
+      circuitId: OLD.circuitId,
     });
+    expect(chain.calls.find((x) => x.fn === 'config')!.contract).toBe(OLD.controller);
   });
 
   it('shows the attempt its controller holds, which the deployment’s does not', async () => {
@@ -246,12 +249,12 @@ describe('an account enrolled under an earlier controller', () => {
     const c = client();
     await c.epoch(ENROLLED);
     await c.attempt(ENROLLED, 3n);
-    const reads = () => chain.calls.filter((x) => x.fn === 'recovery_controller').length;
+    const reads = () => chain.calls.filter((x) => x.fn === 'configuration').length;
     expect(reads()).toBe(1);
 
     const flaky = client();
     chain.answer = (call) => {
-      if (call.fn === 'recovery_controller') throw new Error('rpc down');
+      if (call.fn === 'configuration') throw new Error('rpc down');
       return answer(call);
     };
     await expect(flaky.epoch(ENROLLED)).rejects.toThrow(/rpc down/);
