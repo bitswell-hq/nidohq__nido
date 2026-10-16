@@ -4,8 +4,8 @@
 # factory.<network>.json, written by scripts/deploy-factory.sh) against the
 # chain. One RPC read of the factory's instance: its executable wasm hash,
 # the account hash it deploys (`Account`, the cache `create_account` reads),
-# its pinned WebAuthn verifier (`PinnedVerifier`), its admin (`ADMIN`), and,
-# when the record has one, its change delay (`Delay`) must equal the
+# its pinned WebAuthn verifier (`PinnedVerifier`), its admin (`ADMIN`), and
+# its manager (`Manager`, none for a record without one) must equal the
 # record's. Read-only: no identity, nothing signed.
 #
 # The record's account and verifier are checked against Perch's manifest by
@@ -51,7 +51,7 @@ stored() { jq -r --arg k "$1" '.storage[]? | select(.key.symbol == $k) | .val | 
 problems=0
 check() {
     if [ "$2" = "$3" ]; then
-        echo "  $1: $2"
+        echo "  $1: ${2:-<none>}"
     else
         echo "error: $1 is ${2:-<none>} on chain, ${3} in the record" >&2
         problems=$((problems + 1))
@@ -63,6 +63,6 @@ check "wasm" "$(jq -r '.executable.wasm' <<<"$instance")" "$(r .wasm_hash)"
 check "account it deploys" "$(stored Account)" "$(r .account_wasm_hash)"
 check "pinned verifier" "$(stored PinnedVerifier)" "$(r .pinned_verifier)"
 check "admin" "$(stored ADMIN)" "$(r .admin)"
-# Factories from before the change delay have none, and neither do their records.
-[ "$(r '.change_delay // empty')" = "" ] || check "change delay" "$(stored Delay)" "$(r .change_delay)"
+# Factories from before the manager have none, and neither do their records.
+check "manager" "$(stored Manager)" "$(r '.manager // empty')"
 [ "$problems" -eq 0 ] || die "$RECORD does not describe the deployed factory ($problems mismatches)"
