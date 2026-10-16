@@ -105,7 +105,7 @@ function at(doc: PolicyDoc, gate: Partial<perch.ActivityGate> = {}) {
     doc,
     revision: 6n,
     summary: summarizeRecovery(doc),
-    wiring: { controller: doc.recovery!.controller, adopted: true, docCompiler: deployment.docCompiler },
+    wiring: { controller: doc.recovery!.controller, adopted: true },
     gate: { authorized_attempt: undefined, frozen: false, ...gate },
     epoch: 2n,
   };

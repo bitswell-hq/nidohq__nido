@@ -317,9 +317,13 @@ user starts a recovery.
   takes a rule. Remove a device or revoke an app grant to make room.
 - **Guardian approval:** the guardian opens the link on their own Nido. If
   the page refuses the link, the guardian should not approve, and should
-  confirm with their friend by another channel. The first approval for an
-  account on a controller the guardian has no rule for adds one; a guardian
-  keeps one rule per controller.
+  confirm with their friend by another channel. A reconfiguration that hands
+  recovery to a new controller, proof checker, pool, circuit, friend, or kit
+  is called out in red above the settings; the guardian should approve only
+  if their friend names each one (a move to a new Perch release, §7, shows
+  the new controller this way). The first approval for an account on a
+  controller the guardian has no rule for adds one; a guardian keeps one
+  rule per controller.
 - **Recovery set up before a Perch redeploy:** it keeps working at the
   controller it enrolled with. `/security/recovery/` offers "Move my
   recovery", which keeps every setting. Under `Protected` the guardians or the

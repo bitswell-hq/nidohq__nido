@@ -76,16 +76,15 @@ export interface ChainArgs {
 }
 
 /** Where an account's recovery runs, read from the account and its
- *  controller. */
+ *  controller. (The compiler the account pins is read by its snapshot
+ *  reader, `openAccountReader`.) */
 export interface RecoveryWiring {
-  /** The controller the account adopted (`configuration()`'s
-   *  `recovery_controller`), or, with recovery off, the deployment's: the
-   *  one a new enrollment adopts. */
+  /** The controller the account adopted (`recovery_controller()`), or,
+   *  with recovery off, the deployment's: the one a new enrollment
+   *  adopts. */
   controller: string;
   /** Whether the account has adopted `controller`. */
   adopted: boolean;
-  /** The compiler the account pins (`configuration()`'s `infra`). */
-  docCompiler: string;
   /** The enrolled ZK factor's contracts (the controller's `config`), when
    *  the configuration has one. `circuitId` is lowercase hex. */
   zk?: { pool: string; adapter: string; circuitId: string };
@@ -296,9 +295,9 @@ export class PerchRecovery {
     });
   }
 
-  /** Where `account`'s recovery runs: its adopted controller and pinned
-   *  compiler from one `configuration()` read, and its ZK factor's contracts
-   *  from that controller's `config`. A failed read is not kept. */
+  /** Where `account`'s recovery runs: its adopted controller from
+   *  `configuration()`, and its ZK factor's contracts from that controller's
+   *  `config`. A failed read is not kept. */
   wiring(account: string): Promise<RecoveryWiring> {
     let wiring = this.wirings.get(account);
     if (!wiring) {
@@ -310,15 +309,13 @@ export class PerchRecovery {
   }
 
   private async readWiring(account: string): Promise<RecoveryWiring> {
-    const config = (await this.account(account).configuration()).result;
-    const docCompiler = config.infra.doc_compiler;
-    const adopted = config.recovery_controller ?? undefined;
+    const adopted = (await this.account(account).recovery_controller()).result ?? undefined;
     if (adopted === undefined) {
-      return { controller: this.args.deployment.recoveryController, adopted: false, docCompiler };
+      return { controller: this.args.deployment.recoveryController, adopted: false };
     }
     const enrolled = (await this.recoveryAt(adopted).config({ account })).result ?? undefined;
     const zk = enrolled && zkOf(enrolled.mode);
-    return { controller: adopted, adopted: true, docCompiler, ...(zk ? { zk } : {}) };
+    return { controller: adopted, adopted: true, ...(zk ? { zk } : {}) };
   }
 
   private async controller(account: string): Promise<RecoveryClient> {
@@ -398,16 +395,11 @@ export class PerchRecovery {
   }
 
   /** One consistent read of `account` at one configuration revision
-   *  (perch-js `readSnapshot`; see `readAccountSnapshot`), with limits from
+   *  (perch-js `readSnapshot`; see `readAccountSnapshot`), its limits from
    *  the compiler the account pins. */
-  async snapshot(account: string, options?: SnapshotOptions): Promise<Snapshot> {
+  snapshot(account: string, options?: SnapshotOptions): Promise<Snapshot> {
     return readAccountSnapshot(
-      {
-        account,
-        rpcUrl: this.args.rpcUrl,
-        networkPassphrase: this.args.deployment.network,
-        docCompiler: (await this.wiring(account)).docCompiler,
-      },
+      { account, rpcUrl: this.args.rpcUrl, networkPassphrase: this.args.deployment.network },
       options,
     );
   }
@@ -589,12 +581,12 @@ export class PerchRecovery {
     const snap = await this.snapshot(account, { document: true });
     const current = snap.document;
     if (!current) throw new Error('the account has no applied document');
-    const wiring = await this.wiring(account);
     const source =
-      action === 'lost-key' ? current : (await this.recoveryAt(wiring.controller).baseline({ account })).result;
+      action === 'lost-key' ? current : (await (await this.controller(account)).baseline({ account })).result;
     if (!source) throw new Error('the account has no published baseline');
+    // The compiler the account pins, which its own apply path compiles with.
     const compiler = new CompilerClient({
-      contractId: wiring.docCompiler,
+      contractId: snap.configuration.infra.docCompiler,
       networkPassphrase: this.args.deployment.network,
       rpcUrl: this.args.rpcUrl,
     });

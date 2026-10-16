@@ -140,6 +140,55 @@ export function recoveryChangeRows(current: unknown, proposed: unknown): Recover
   });
 }
 
+/** The settings naming who or what can recover the account: the contracts
+ *  and circuit that judge evidence, and the friends and kit that give it. */
+const TRUST_SETTINGS = ['controller', 'mode.adapter', 'mode.pool', 'mode.circuit-id', 'mode.guardians', 'mode.enrollment-id', 'mode.commitment'];
+
+/** One move of trust a reconfiguration makes, for the guardian to see before
+ *  the full table. */
+export interface TrustChange {
+  path: string;
+  label: string;
+  /** Values the proposal drops. */
+  removed: string[];
+  /** Values the proposal adds. */
+  added: string[];
+  /** For a contract or circuit: the one this site's deployment uses, when
+   *  the proposal names a different one. A link can name any contract. */
+  expected?: string;
+}
+
+/**
+ * The trust a reconfiguration moves, from its {@link recoveryChangeRows}: a
+ * changed controller, proof checker, pool, circuit, friend, or recovery kit,
+ * and a lower quorum. Each contract or circuit the proposal names is also
+ * compared with `deployment`'s.
+ */
+export function trustChanges(rows: RecoveryChangeRow[], deployment: perch.PerchDeployment): TrustChange[] {
+  const expected: Record<string, string> = {
+    controller: deployment.recoveryController,
+    'mode.adapter': deployment.zkAdapter,
+    'mode.pool': deployment.zkPool,
+    'mode.circuit-id': deployment.circuitId,
+  };
+  const quorumDrops = (r: RecoveryChangeRow) =>
+    r.path === 'mode.quorum' && r.current.length > 0 && r.proposed.length > 0 && Number(r.proposed[0]) < Number(r.current[0]);
+  return rows
+    .filter((r) => r.changed && (TRUST_SETTINGS.includes(r.path) || quorumDrops(r)))
+    .map((r) => {
+      const change: TrustChange = {
+        path: r.path,
+        label: r.label,
+        removed: r.current.filter((v) => !r.proposed.includes(v)),
+        added: r.proposed.filter((v) => !r.current.includes(v)),
+      };
+      const want = expected[r.path];
+      if (want !== undefined && change.added.some((v) => v !== want)) change.expected = want;
+      return change;
+    })
+    .filter((t) => t.removed.length > 0 || t.added.length > 0);
+}
+
 /** About five seconds per ledger: for display only. Every on-chain bound is
  *  in ledgers. */
 export const SECONDS_PER_LEDGER = 5;

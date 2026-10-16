@@ -20,6 +20,7 @@ import {
   parseRecoveryKit,
   passkeyCheckCode,
   recoveryChangeRows,
+  trustChanges,
   quickRecoveryTimingAllowed,
   PUBLIC_NETWORK_PASSPHRASE,
   replacementsFromWire,
@@ -399,6 +400,41 @@ describe('recoveryChangeRows', () => {
   it('lists a setting it has no label for under its raw path', () => {
     const rows = recoveryChangeRows({ profile: 'loss' }, { profile: 'loss', 'new-field': { x: 1 } });
     expect(rows.at(-1)).toMatchObject({ path: 'new-field.x', label: 'new-field.x', proposed: ['1'], changed: true });
+  });
+});
+
+describe('trustChanges', () => {
+  const rows = (current: unknown, proposed: unknown) => recoveryChangeRows(current, proposed);
+
+  it('lists who leaves and who joins, and a contract Nido does not use', () => {
+    const current = withChoice('protected', 'guardian-only').recovery as Record<string, unknown>;
+    const proposed = { ...current, controller: contract(90), mode: { ...(current.mode as object), guardians: [guardians[0], contract(91), guardians[2]] } };
+    expect(trustChanges(rows(current, proposed), deployment)).toEqual([
+      { path: 'mode.guardians', label: 'Friends (guardian addresses)', removed: [guardians[1]], added: [contract(91)] },
+      {
+        path: 'controller',
+        label: 'Recovery controller (contract)',
+        removed: [deployment.recoveryController],
+        added: [contract(90)],
+        expected: deployment.recoveryController,
+      },
+    ]);
+  });
+
+  it('counts a lower quorum but not a higher one, and ignores a reordering', () => {
+    const current = withChoice('protected', 'guardian-only').recovery as Record<string, unknown> & { mode: Record<string, unknown> };
+    const at = (mode: Record<string, unknown>) => ({ ...current, mode: { ...current.mode, ...mode } });
+    expect(trustChanges(rows(current, at({ quorum: 1 })), deployment).map((t) => t.path)).toEqual(['mode.quorum']);
+    expect(trustChanges(rows(current, at({ quorum: 3 })), deployment)).toEqual([]);
+    expect(trustChanges(rows(current, at({ guardians: [...guardians].reverse() })), deployment)).toEqual([]);
+  });
+
+  it('does not flag moving onto the contracts Nido uses', () => {
+    const current = { ...(withChoice('protected', 'guardian-only').recovery as object), controller: contract(92) };
+    const proposed = withChoice('protected', 'guardian-only').recovery;
+    expect(trustChanges(rows(current, proposed), deployment)).toEqual([
+      { path: 'controller', label: 'Recovery controller (contract)', removed: [contract(92)], added: [deployment.recoveryController] },
+    ]);
   });
 });
 

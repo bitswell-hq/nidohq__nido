@@ -64,16 +64,18 @@ vi.mock('@nidohq/perch-recovery', async (orig) => ({
 vi.mock('../assembledTx.js', () => ({
   extractXdrOperations: (tx: { op: unknown }) => [tx.op],
 }));
-const snapshots = vi.hoisted(() => ({ compilers: [] as string[] }));
+// The account's snapshot, with the compiler it pins (`openAccountReader`
+// reads that from the account itself).
 vi.mock('./account.js', () => ({
-  readAccountSnapshot: async (args: { account: string; docCompiler: string }) => {
-    snapshots.compilers.push(args.docCompiler);
-    return {
-      account: args.account,
-      configuration: { revision: 4n, recoveryRule: 9 },
-      document: Buffer.from('{"applied":true}'),
-    };
-  },
+  readAccountSnapshot: async (args: { account: string }) => ({
+    account: args.account,
+    configuration: {
+      revision: 4n,
+      recoveryRule: 9,
+      infra: { docCompiler: 'CCYSZHRHY7GKT2OYXF6JW332GA2BL6ZKPAWIV6RVC5JW2RNPHQPSW5ZI' },
+    },
+    document: Buffer.from('{"applied":true}'),
+  }),
 }));
 
 import { EvidenceDomain, PerchRecovery } from './recovery.js';
@@ -102,10 +104,8 @@ const statement = {
  *  factor in 845c49a's pool and has an authorized attempt there; `FRESH`
  *  has no recovery. Every other controller knows neither. */
 function answer(c: Call): unknown {
-  if (c.kind === 'account' && c.fn === 'configuration') {
-    return c.contract === ENROLLED
-      ? { recovery_controller: OLD.controller, infra: { doc_compiler: OLD.docCompiler } }
-      : { recovery_controller: undefined, infra: { doc_compiler: TESTNET.docCompiler } };
+  if (c.kind === 'account' && c.fn === 'recovery_controller') {
+    return c.contract === ENROLLED ? OLD.controller : undefined;
   }
   const at = (c.args as { account?: string } | undefined)?.account;
   if (c.kind === 'recovery' && (c.contract !== OLD.controller || at !== ENROLLED)) {
@@ -155,16 +155,14 @@ const replacements = {
 beforeEach(() => {
   chain.calls = [];
   chain.answer = answer;
-  snapshots.compilers = [];
 });
 
 describe('an account enrolled under an earlier controller', () => {
-  it('is read from its own controller, compiler, and pool', async () => {
+  it('is read from its own controller and pool', async () => {
     expect(OLD.controller).not.toBe(TESTNET.recoveryController);
     await expect(client().wiring(ENROLLED)).resolves.toEqual({
       controller: OLD.controller,
       adopted: true,
-      docCompiler: OLD.docCompiler,
       zk: { pool: OLD.pool, adapter: OLD.adapter, circuitId: OLD.circuitId },
     });
   });
@@ -225,7 +223,6 @@ describe('an account enrolled under an earlier controller', () => {
     const { target, selection } = await c.prepareCompletion(ENROLLED, 'compromise', replacements);
     expect(target).toBe('{"target":true}');
     expect(selection).toEqual({ account: ENROLLED, revision: 4n, ruleIds: [9] });
-    expect(snapshots.compilers).toEqual([OLD.docCompiler]);
     const baselineRead = chain.calls.find((x) => x.fn === 'baseline')!;
     expect(baselineRead.contract).toBe(OLD.controller);
     const derive = chain.calls.find((x) => x.fn === 'derive_target')!;
@@ -249,12 +246,12 @@ describe('an account enrolled under an earlier controller', () => {
     const c = client();
     await c.epoch(ENROLLED);
     await c.attempt(ENROLLED, 3n);
-    const reads = () => chain.calls.filter((x) => x.fn === 'configuration').length;
+    const reads = () => chain.calls.filter((x) => x.fn === 'recovery_controller').length;
     expect(reads()).toBe(1);
 
     const flaky = client();
     chain.answer = (call) => {
-      if (call.fn === 'configuration') throw new Error('rpc down');
+      if (call.fn === 'recovery_controller') throw new Error('rpc down');
       return answer(call);
     };
     await expect(flaky.epoch(ENROLLED)).rejects.toThrow(/rpc down/);
@@ -269,7 +266,6 @@ describe('an account without recovery', () => {
     await expect(c.wiring(FRESH)).resolves.toEqual({
       controller: TESTNET.recoveryController,
       adopted: false,
-      docCompiler: TESTNET.docCompiler,
     });
     expect(await c.enrolled(FRESH)).toBe(false);
     const publish = await c.publishBaseline(FRESH, '{}');
