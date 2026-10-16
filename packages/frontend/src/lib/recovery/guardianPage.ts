@@ -5,9 +5,12 @@
  * A Nido guardian opens the link on its OWN subdomain: its passkey only
  * signs there, and the approval is the guardian account authorizing the
  * controller's `submit_guardian` / `approve_change` for one statement
- * digest, through a rule its own document scopes to the controller (the
- * page offers to add that rule first). A `G…` guardian opens it on the apex
- * and signs with a connected Stellar wallet.
+ * digest, through a rule its own document scopes to that controller (the
+ * page offers to add that rule first). The controller is the one the
+ * requesting account adopted, read from that account: after a Perch
+ * redeploy it can be an earlier one than the deployment's, and a guardian
+ * holds one rule per controller (`guardianRuleAt`). A `G…` guardian opens it
+ * on the apex and signs with a connected Stellar wallet.
  *
  * What is shown is checked, not trusted: the replacement passkey against the
  * attempt's `replacements_hash` (shown as a check code derived from the whole
@@ -23,14 +26,16 @@ import { contractIdFromHostname, isContractId, parsePolicyDocJson, perch, type P
 import { esc } from '../html.js';
 import { toast } from '../toast.js';
 import { connect as connectWallet, initWalletKit } from '../walletConnect.js';
-import { applyDoc, currentOrFirstDoc, GUARDIAN_RULE, recoveryClient, submitAsGuardian, readRecoveryState } from './chain.js';
+import { applyDoc, currentOrFirstDoc, recoveryClient, submitAsGuardian, readRecoveryState } from './chain.js';
 import { readAccountConfiguration } from '../policyChainFetch.js';
 import { perchDeployment, requireDeployment } from './deployment.js';
 import {
   attemptLinkProblem,
   changeSubject,
   decodeGuardianRequest,
+  guardianRuleAt,
   hex,
+  newGuardianRuleName,
   passkeyCheckCode,
   recoveryChangeRows,
   trustChanges,
@@ -61,7 +66,9 @@ export async function mountGuardian(root: HTMLElement): Promise<void> {
     root.append(card('Request', '<p style="margin:0;">That Nido has no recovery set up.</p>'));
     return;
   }
-  const details = await describe(request, state.doc!);
+  // Where the approval goes: the controller the account adopted.
+  const controller = state.wiring.controller;
+  const details = await describe(request, state.doc!, controller);
   root.append(card(`A request from ${short(request.account)}`, details.html));
   if (!details.ok) return;
 
@@ -90,10 +97,14 @@ export async function mountGuardian(root: HTMLElement): Promise<void> {
     return;
   }
 
-  if (nidoGuardian && !(await hasGuardianRule(nidoGuardian))) {
+  let rule = nidoGuardian ? await guardianRuleOf(nidoGuardian, controller) : undefined;
+  if (nidoGuardian && !rule) {
     body.append(
       el('p', { style: 'margin:0;font-size:13px;' },
-        'To approve recoveries, your Nido needs permission to sign at the recovery service. This adds one rule to your Nido; it cannot move your money.'),
+        'To approve this Nido’s recoveries, your Nido needs permission to sign at its recovery service ' +
+          `<code class="mono" style="word-break:break-all;">${esc(controller)}</code>` +
+          (controller === requireDeployment().recoveryController ? '' : ', an earlier one than Nido sets up today') +
+          '. This adds one rule to your Nido; it cannot move your money.'),
     );
     const allow = el('button', { class: 'btn soft', type: 'button' }, 'Allow my Nido to approve recoveries') as HTMLButtonElement;
     body.append(allow, status);
@@ -101,7 +112,9 @@ export async function mountGuardian(root: HTMLElement): Promise<void> {
       allow.addEventListener('click', () =>
         busy(allow, status, 'Updating your Nido…', async () => {
           const own = await currentOrFirstDoc(nidoGuardian);
-          await applyDoc(nidoGuardian, withGuardianRule(own.doc), { baseRevision: own.revision });
+          const added = withGuardianRule(own.doc, controller);
+          await applyDoc(nidoGuardian, added.doc, { baseRevision: own.revision });
+          rule = added.name;
           allow.remove();
           status.textContent = '';
           resolve();
@@ -125,7 +138,7 @@ export async function mountGuardian(root: HTMLElement): Promise<void> {
               guardian!,
             )
           : await client.approveChange(request.account, details.subject!, request.validUntil, guardian!);
-      await submitAsGuardian(guardian!, op.operations[0]!);
+      await submitAsGuardian(guardian!, op.operations[0]!, rule);
       status.textContent = 'Approved. You can close this page.';
       toast({ msg: 'Approval recorded', icon: 'check' });
     }),
@@ -150,8 +163,9 @@ function full(value: string): string {
   return `<code class="mono" style="word-break:break-all;user-select:all;">${esc(value)}</code>`;
 }
 
-/** Describe `request`, verifying what it carries. */
-async function describe(request: GuardianRequest, doc: PolicyDoc): Promise<Described> {
+/** Describe `request`, verifying what it carries. `controller` is the one
+ *  the account adopted, where an approval is recorded. */
+async function describe(request: GuardianRequest, doc: PolicyDoc, controller: string): Promise<Described> {
   const refuse = (why: string): Described => ({
     html: `<div class="alert danger" role="alert">${esc(why)} Do not approve.</div>`,
     ok: false,
@@ -166,7 +180,7 @@ async function describe(request: GuardianRequest, doc: PolicyDoc): Promise<Descr
     );
     const signs =
       `<p style="margin:0;font-size:13px;">Approving signs ${request.domain === 'cancel' ? 'cancelling' : 'starting'} recovery attempt ` +
-      `${esc(request.attemptId)} of the Nido ${full(request.account)}, at the recovery controller ${full(requireDeployment().recoveryController)}.</p>`;
+      `${esc(request.attemptId)} of the Nido ${full(request.account)}, at the recovery controller ${full(controller)}.</p>`;
     if (request.domain === 'cancel') {
       return {
         html: `<p style="margin:0;">Cancel recovery attempt ${esc(request.attemptId)}. Approve only if your friend says they did not start it.</p>`,
@@ -190,7 +204,7 @@ async function describe(request: GuardianRequest, doc: PolicyDoc): Promise<Descr
   const signsChange = (subject: perch.ChangeSubject, what: string): string =>
     `<p data-approves="${esc(subject.kind === 'reconfigure-set' ? hex(subject.configHash) : subject.kind)}" style="margin:0;font-size:13px;">` +
     `Approving signs ${what} for the Nido ${full(request.account)}, valid until ledger ${request.validUntil}, ` +
-    `recorded at the recovery controller ${full(requireDeployment().recoveryController)}.</p>`;
+    `recorded at the recovery controller ${full(controller)}.</p>`;
   if (c.kind === 'upgrade') {
     const subject = changeSubject(c);
     return {
@@ -287,31 +301,32 @@ function changeTable(rows: RecoveryChangeRow[]): string {
   return `<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;">${body}</table></div>`;
 }
 
-/** Whether `account` has the guardian rule installed: a rule named
- *  `guardian` scoped to the controller, as its `configuration()` reports
- *  (perch-js selection by name and scope). */
-async function hasGuardianRule(account: string): Promise<boolean> {
-  const controller = requireDeployment().recoveryController;
-  return (await readAccountConfiguration(account)).rules.some(
-    (r) => !r.recovery && r.name === GUARDIAN_RULE && r.contract === controller,
-  );
+/** The name of `account`'s guardian rule scoped to `controller`, as its
+ *  `configuration()` reports it (perch-js selection by name and scope). */
+async function guardianRuleOf(account: string, controller: string): Promise<string | undefined> {
+  return guardianRuleAt((await readAccountConfiguration(account)).rules, controller);
 }
 
-/** `doc` with a rule letting its admin signers act at the controller. */
-function withGuardianRule(doc: PolicyDoc): PolicyDoc {
+/** `doc` with a rule letting its admin signers act at `controller`, beside
+ *  any guardian rules it holds for other controllers. */
+function withGuardianRule(doc: PolicyDoc, controller: string): { doc: PolicyDoc; name: string } {
   const admin = doc.rules.find((r) => r.scope.type === 'self-admin' && r.principals.type === 'all');
   if (!admin || admin.principals.type !== 'all') throw new Error('No admin rule to copy signers from.');
-  return parsePolicyDocJson(
-    JSON.stringify({
-      ...doc,
-      rules: [
-        ...doc.rules.filter((r) => r.name !== GUARDIAN_RULE),
-        {
-          name: GUARDIAN_RULE,
-          scope: { type: 'contract', address: requireDeployment().recoveryController },
-          principals: { type: 'all', signers: admin.principals.signers },
-        },
-      ],
-    }),
-  );
+  const name = newGuardianRuleName(doc.rules.map((r) => r.name), controller);
+  return {
+    name,
+    doc: parsePolicyDocJson(
+      JSON.stringify({
+        ...doc,
+        rules: [
+          ...doc.rules,
+          {
+            name,
+            scope: { type: 'contract', address: controller },
+            principals: { type: 'all', signers: admin.principals.signers },
+          },
+        ],
+      }),
+    ),
+  };
 }

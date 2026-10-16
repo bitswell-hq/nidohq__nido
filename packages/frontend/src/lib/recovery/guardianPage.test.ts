@@ -1,5 +1,7 @@
 // What the guardian page shows before it offers Approve: a reconfiguration
-// setting by setting, and a recovery's new passkey as a check code.
+// setting by setting, and a recovery's new passkey as a check code. And
+// where the approval goes: the controller the account adopted, through the
+// guardian's rule scoped to it.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { StrKey } from '@stellar/stellar-sdk';
 import { buildPolicyDoc, parsePolicyDocJson, perch, type PolicyDoc } from '@nidohq/passkey-sdk';
@@ -25,24 +27,47 @@ const deployment: perch.PerchDeployment = {
   accountWasmHash: 'aa'.repeat(32),
 };
 
-const chain = vi.hoisted(() => ({ doc: undefined as unknown, statement: undefined as unknown }));
+const chain = vi.hoisted(() => ({
+  doc: undefined as unknown,
+  statement: undefined as unknown,
+  /** The controller the requesting account adopted. */
+  controller: undefined as unknown as string,
+  guardians: [] as string[],
+  /** The page's own Nido, from its hostname (none: a `G…` guardian). */
+  host: null as string | null,
+  guardianRules: [] as { name: string; contract: string; recovery: boolean }[],
+  guardianDoc: undefined as unknown,
+}));
 
 vi.mock('./chain.js', () => ({
-  readRecoveryState: vi.fn(async () => ({ doc: chain.doc, summary: { guardians: [] } })),
-  recoveryClient: () => ({ statement: vi.fn(async () => chain.statement) }),
+  readRecoveryState: vi.fn(async () => ({
+    doc: chain.doc,
+    summary: { guardians: chain.guardians },
+    wiring: { controller: chain.controller, adopted: true },
+  })),
+  recoveryClient: () => ({
+    statement: vi.fn(async () => chain.statement),
+    submitGuardian: vi.fn(async () => ({ operations: [{ __op: 'submit_guardian' }] })),
+  }),
   applyDoc: vi.fn(),
-  currentOrFirstDoc: vi.fn(),
+  currentOrFirstDoc: vi.fn(async () => ({ doc: chain.guardianDoc, revision: 3n })),
   submitAsGuardian: vi.fn(),
-  GUARDIAN_RULE: 'guardian',
 }));
 vi.mock('./deployment.js', () => ({
   perchDeployment: () => deployment,
   requireDeployment: () => deployment,
 }));
 vi.mock('../walletConnect.js', () => ({ connect: vi.fn(), initWalletKit: vi.fn() }));
-vi.mock('../policyChainFetch.js', () => ({ readAccountConfiguration: vi.fn() }));
+vi.mock('../policyChainFetch.js', () => ({
+  readAccountConfiguration: vi.fn(async () => ({ rules: chain.guardianRules })),
+}));
 vi.mock('../toast.js', () => ({ toast: vi.fn() }));
+vi.mock('@nidohq/passkey-sdk', async (orig) => ({
+  ...(await orig<typeof import('@nidohq/passkey-sdk')>()),
+  contractIdFromHostname: () => chain.host,
+}));
 
+import { applyDoc, submitAsGuardian } from './chain.js';
 import { mountGuardian } from './guardianPage';
 import {
   adminSignerIds,
@@ -89,6 +114,14 @@ async function open(request: GuardianRequest): Promise<HTMLElement> {
 }
 
 const approvable = (root: HTMLElement) => root.textContent!.includes('Your approval');
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  chain.controller = deployment.recoveryController;
+  chain.guardians = [];
+  chain.host = null;
+  chain.guardianRules = [];
+});
 
 describe('guardian page: reconfiguration approval', () => {
   beforeEach(() => {
@@ -271,5 +304,77 @@ describe('guardian page: recovery approval', () => {
     const root = await open(attemptRequest(wire(forged)));
     expect(root.textContent).toMatch(/not in the form Nido creates.*Do not approve/);
     expect(approvable(root)).toBe(false);
+  });
+});
+
+describe('guardian page: an account enrolled at an earlier controller', () => {
+  const EARLIER = contract(50);
+  const GUARDIAN = guardians[0]!;
+  const cancel: GuardianRequest = { kind: 'attempt', account: ACCOUNT, attemptId: '3', domain: 'cancel' };
+  const ruleAt = (name: string, at: string) => ({
+    name,
+    scope: { type: 'contract', address: at },
+    principals: { type: 'all', signers: ['admin'] },
+  });
+
+  beforeEach(() => {
+    chain.doc = docWith();
+    chain.controller = EARLIER;
+    chain.guardians = guardians;
+    chain.host = GUARDIAN;
+    chain.statement = { subject: { action: 'cancel' } };
+    // The guardian's own document: its approval rule for the current
+    // controller, none for the earlier one.
+    chain.guardianDoc = parsePolicyDocJson(
+      JSON.stringify({
+        version: 1,
+        network: NETWORK,
+        signers: [{ id: 'admin', verifier: deployment.webauthnVerifier, key: KEY }],
+        rules: [
+          { name: 'admin', scope: { type: 'self-admin' }, principals: { type: 'all', signers: ['admin'] } },
+          ruleAt('guardian', deployment.recoveryController),
+        ],
+      }),
+    );
+    chain.guardianRules = [{ name: 'guardian', contract: deployment.recoveryController, recovery: false }];
+  });
+
+  async function click(root: HTMLElement, label: RegExp): Promise<void> {
+    await vi.waitFor(() =>
+      expect([...root.querySelectorAll('button')].some((b) => label.test(b.textContent!))).toBe(true),
+    );
+    [...root.querySelectorAll('button')].find((b) => label.test(b.textContent!))!.click();
+  }
+
+  it('adds a rule scoped to that controller beside the current one, and approves through it', async () => {
+    const root = await open(cancel);
+    await vi.waitFor(() => expect(root.textContent).toContain(EARLIER));
+    expect(root.textContent).toMatch(/an earlier one than Nido sets up today/);
+
+    await click(root, /Allow my Nido/);
+    await vi.waitFor(() => expect(applyDoc).toHaveBeenCalledTimes(1));
+    const [who, doc, opts] = vi.mocked(applyDoc).mock.calls[0]!;
+    expect(who).toBe(GUARDIAN);
+    expect(opts).toEqual({ baseRevision: 3n });
+    const name = `guardian-${EARLIER.slice(0, 11).toLowerCase()}`;
+    expect(name.length).toBeLessThanOrEqual(20);
+    expect((doc as PolicyDoc).rules.filter((r) => r.name.startsWith('guardian'))).toEqual([
+      ruleAt('guardian', deployment.recoveryController),
+      ruleAt(name, EARLIER),
+    ]);
+
+    await click(root, /Approve cancelling it/);
+    await vi.waitFor(() => expect(submitAsGuardian).toHaveBeenCalledTimes(1));
+    expect(submitAsGuardian).toHaveBeenCalledWith(GUARDIAN, { __op: 'submit_guardian' }, name);
+  });
+
+  it('approves through the rule it already holds for that controller', async () => {
+    chain.guardianRules.push({ name: 'guardian-older', contract: EARLIER, recovery: false });
+    const root = await open(cancel);
+    await click(root, /Approve cancelling it/);
+    await vi.waitFor(() => expect(submitAsGuardian).toHaveBeenCalledTimes(1));
+    expect(submitAsGuardian).toHaveBeenCalledWith(GUARDIAN, { __op: 'submit_guardian' }, 'guardian-older');
+    expect(applyDoc).not.toHaveBeenCalled();
+    expect(root.textContent).not.toMatch(/Allow my Nido/);
   });
 });

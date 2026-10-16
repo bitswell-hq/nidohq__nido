@@ -113,7 +113,10 @@ and infrastructure bring.
    manifest (`deployment.test.ts`, W6), and Perch's `verify-deployment.sh`
    checks that manifest against the chain by hash and content address. A
    `PUBLIC_PERCH_DEPLOYMENT` override bypasses the first check
-   (MAINNET_READINESS A1).
+   (MAINNET_READINESS A1). The deployment decides where new enrollments go.
+   For an enrolled account the wallet uses the controller the account
+   adopted, not the deployment's (see
+   [Several Perch generations](#several-perch-generations)).
 10. **Compromised relayer.** Can refuse or delay transactions and spend its
     sponsor budget. For an existing account it can't forge authorization:
     every transaction it submits already carries the account's signed auth
@@ -220,6 +223,54 @@ and infrastructure bring.
     name's wallet origin and the registry reserves no labels, so a service
     on one can read the account list and names, though no setup key. HSTS
     protects only after a first https visit; the domain is not preloaded.
+
+## Several Perch generations
+
+Every Perch redeploy puts the recovery controller, pool, and adapter at new
+addresses with empty state, and none of the old ones can be upgraded or
+removed (§16). An existing account keeps the stack it enrolled with, because
+it calls the controller its own document names (§10). So testnet runs
+several generations at once, and mainnet will after any Perch fix to those
+contracts.
+
+- **The wallet follows the account.** Recovery reads (attempts, the freeze,
+  the epoch, statements) and every controller call (`begin_*`, `submit_*`,
+  `approve_change`, `publish_baseline`) go to the controller the account
+  adopted (`configuration()`'s `recovery_controller`). A completion's target
+  is derived by the compiler the account pins, and proofs use the pool its
+  enrolled ZK factor names (`perch.PerchRecovery`, `RecoveryWiring`). A
+  wallet that used the deployment's controller instead would show a `Loss`
+  owner no attempt to veto. It would also send guardians' approvals to a
+  controller that has no record of the account.
+- **Moving is the owner's choice.** `/security/recovery/` offers to move
+  recovery to the deployment's stack, keeping every setting
+  (`perch.movedRecovery`), through the ordinary `apply_doc` flow. The
+  controller being left evaluates the switch as a reconfiguration (§10,
+  "Remove or switch away"). Under `Protected` the switch needs the enrolled
+  condition recorded at that controller, so a passkey thief cannot move
+  recovery alone. Under `Loss` the owner alone moves it, as they could remove
+  it. A ZK factor on an earlier pool moves only with a new credential (§3.4):
+  the move makes a new recovery kit, and the old kit stops working. The page
+  reads the published baseline at the old controller and publishes the same
+  bytes at the new one.
+- **Guardians hold one rule per controller.** A Nido guardian approves
+  through a rule its document scopes to the guarded account's controller:
+  `guardian`, then `guardian-<start of the address>` for each further one.
+  Adding a rule never removes another, so a guardian can approve for
+  accounts on different generations.
+- **A link can name any controller.** The guardian page reads the controller
+  from the account the link names, and anyone can create an account whose
+  document names a contract of their own as its controller. A link for such
+  an account asks the guardian to add a rule scoped to that contract. The
+  rule lets the guardian's signers authorize calls to that one contract,
+  each with a passkey tap. It reaches no other contract, and not the
+  guardian's own account, which only its admin rule governs. The page shows
+  the controller's full address, and says so when it is not the one Nido sets
+  up today. A victim's account always names the controller its owner
+  adopted, so such a link cannot affect the victim's recovery.
+- **Each generation is its own code.** A fix in a later Perch release
+  reaches an account only when its owner moves. Renewing recovery state
+  (RUNBOOKS §6) targets each account's own controller and pool.
 
 ## Limits within the audited behaviour
 
