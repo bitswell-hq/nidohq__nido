@@ -3,7 +3,7 @@
 One row per threat in [THREAT_MODEL.md](./THREAT_MODEL.md), which holds the
 analysis; this register restates none of it. Invariant IDs refer to
 [SECURITY_INVARIANTS.md](./SECURITY_INVARIANTS.md) and gate IDs to
-[MAINNET_READINESS.md](./MAINNET_READINESS.md). Threat numbers 1-13 are
+[MAINNET_READINESS.md](./MAINNET_READINESS.md). Threat numbers 1-15 are
 THREAT_MODEL's [adversaries](./THREAT_MODEL.md#adversaries); L1-L6 are its
 [limits within the audited behaviour](./THREAT_MODEL.md#limits-within-the-audited-behaviour).
 
@@ -31,6 +31,8 @@ evidence's limits; **Accepted**, inherent in the audited design.
 | Storage expiry | D | 11, L6 | T1, T2 | D1, D3 | Partial: the chain restores archived state, never resets it; the wallet has no restoration or renewal workflow. |
 | Supply-chain attacker | T | 12 | Z1, W6 | C1, C2 | Partial: see [SUPPLY_CHAIN.md](./SUPPLY_CHAIN.md). |
 | Unsound ZK verifier delta | E | 13 | Z1, Z4 | D5 | Open: the delta is unaudited; the tests show that valid proofs verify and that a proof does not count for another statement, not that the verifier is sound. |
+| Malicious dApp or link: spoofed requester, hidden sub-calls, admin-rule authorization entries, misdescribed grants | S, T, E | 14 | none | none | Partial: the wallet signs only the reviewed authorization tree, refuses calls on the account itself, other networks and long-lived authorization entries, and describes the granted rule; the requester's origin is unauthenticated and calls on other contracts are approved on the dApp's word. |
+| Sibling origin reads setup keys or poisons the account list through the storage bridge | S, T, I | 15, 5 | none | none | Partial: https-only (HSTS), framing limited to `*.nido.fyi`, account and name labels only, each origin sees only its own setup key; a service on a name-shaped label can read the account list. |
 | Allowances granted before a freeze stay usable | E | L2 | R4 | E7 | Accepted: protocol limit; no account code can revoke them. |
 | Replacing a spending policy resets its window | E | L3 | A5 | E7 | Accepted: audited semantics; persistent budgets are [deferred](./DEFERRED.md#persistent-spending-budgets-across-replacements). |
 | Ordinary transactions are not revision-bound | T | L4 | A8, W10 | none | Accepted: audited semantics; revision-bound signatures are [deferred](./DEFERRED.md#revision-bound-ordinary-signatures). |

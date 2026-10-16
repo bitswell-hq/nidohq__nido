@@ -18,9 +18,9 @@ Read these before the manifest.
   `vendor/perch` at the audit fork's `audit/integration` branch so the audited Nido
   head pulls the audited Perch head; it is reverted to upstream `main` before
   mainnet. [SUPPLY_CHAIN.md](./SUPPLY_CHAIN.md) describes the upstream pin.
-- **perch-js.** The pinned source's `packages/perch-js` is `0.3.1` (unreleased
-  section); the wallet runs the published `0.3.2` tarball, built from a later
-  Perch commit. Tarball-vs-source equality is a post-audit release gate
+- **perch-js.** The pinned source's `packages/perch-js` is `0.4.0`; the wallet
+  runs the published `0.4.0` tarball, built at Perch's `perch-js-v0.4.0` tag.
+  Tarball-vs-source equality is a post-audit release gate
   ([DEFERRED.md](./DEFERRED.md#npm-publishing-of-perch-zk-and-the-contract-clients)).
 - **What is deferred until after the audit** is in [DEFERRED.md](./DEFERRED.md).
 
@@ -53,22 +53,19 @@ Perch packages in the wallet:
 
 | Package | Source | Version | Integrity (`package-lock.json`) |
 | --- | --- | --- | --- |
-| `@stellar-registry/perch` (Perch's `packages/perch-js`) | npm | 0.3.2 | `sha512-34lGg5GJpfzTsWNEski31WFMgCgXSNp6ShyHuFT3CfWAA1FRLF+SWZ3QoJJ38w/TGAfUxf69cf8+J3SeZnzvYg==` |
+| `@stellar-registry/perch` (Perch's `packages/perch-js`) | npm | 0.4.0 | `sha512-U+jER/hzoVX/AkAYHwE7O9oARAhosf0Ptzr3YbLLTZirJ0kd7KWb7fOjAxKZKVoXNF26mTecmIKhqoGij7JxgQ==` |
 | `@stellar-registry/perch-interpreter` (Perch's `packages/perch-interpreter-js`) | npm | 0.1.0 | `sha512-ZUW1+/ojzTw0tjlfOxjHtWB7b+I6kWEMz5oQIH6wZrpk2H2vsPfdsc5wnQCU8NNWrLqWJlRKG+yxsbHB/p7Vtw==` |
 | `@stellar-registry/perch-zk` | npm workspace link to `vendor/perch/packages/perch-zk` | 0.1.0 | None: its identity is the Perch source commit. |
 
 Perch publishes the two npm packages from release tags, not from the Perch
-source commit, and the pinned Perch source corresponds to neither published
-version. `packages/perch-js` declares `0.3.1` with an unreleased section (ahead
-of the `0.3.1` release) —
-Perch's manifest,
+source commit. The wallet runs the published perch-js `0.4.0` tarball, built at
+tag `perch-js-v0.4.0`; `packages/perch-js` at the pinned commit declares
+`0.4.0`, and Perch's manifest,
 [`docs/audit-scope.md`](https://github.com/stellar-registry/perch/blob/603f7d5504f2d4d9338c135771cea18ac70dbe0c/docs/audit-scope.md)
-(`vendor/perch/docs/audit-scope.md`), records that "no release it records
-contains this source" — while the wallet runs the published `0.3.2` tarball,
-built from a Perch commit later than the pinned one. `packages/perch-interpreter-js`
-declares `0.1.0`, the published version. So no `perch-js-v0.3.2` tag exists in
-this tree, and the published `perch-js` tarball cannot be diffed against the
-pinned source by any tag in a single-commit snapshot. This audit reviews the
+(`vendor/perch/docs/audit-scope.md`), records that `src/` at that tag equals
+the pinned source. `packages/perch-interpreter-js` declares `0.1.0`, the
+published version. A single-commit snapshot carries no tags, so the published
+tarballs cannot be diffed against the pinned source by tag within it. This audit reviews the
 perch-js and perch-interpreter-js encoders as the source at the pinned commit
 (`vendor/perch/packages/perch-js`, `vendor/perch/packages/perch-interpreter-js`).
 Establishing that a published `dist` is a reproducible build of an audited
@@ -125,7 +122,7 @@ the two units is its audit manifest,
 | Wallets Kit module | `packages/stellar-wallets-kit-module/`: dApp signing handoff | Nido integration |
 | Infrastructure | `infra/relayer/` (fee sponsorship and submission, the channels plugin, key custody), `infra/nido-resolver/` (name resolution), `frontend/worker-proxy-nido/` (subdomain proxy, security headers) | Nido integration |
 | Integration harness | `crates/integration-tests/`: that it runs under enforcing authorization with real proofs and that its fixtures cannot drift silently (`src/zk.rs`) | Nido integration |
-| `@stellar-registry/perch` (perch-js; npm `0.3.2`, pinned source `0.3.1`, see manifest note) | Statement and document encodings, `applyDocument`, rule selection, signing digests. | Source at the pinned commit: explicit dependency review. The published tarball vs an audited source: post-audit release gate ([DEFERRED.md](./DEFERRED.md#npm-publishing-of-perch-zk-and-the-contract-clients)). The wallet's use of it: Nido integration |
+| `@stellar-registry/perch` (perch-js; npm `0.4.0`, pinned source `0.4.0`, see manifest note) | Statement and document encodings, `applyDocument`, rule selection, signing digests. | Source at the pinned commit: explicit dependency review. The published tarball vs an audited source: post-audit release gate ([DEFERRED.md](./DEFERRED.md#npm-publishing-of-perch-zk-and-the-contract-clients)). The wallet's use of it: Nido integration |
 | `@stellar-registry/perch-interpreter` 0.1.0 | Interpreter install parameters and bindings the SDK uses (`src/policyDoc/params.ts`) | Nido integration; tarball against source: explicit dependency review |
 | `perch-zk` | [`packages/perch-zk`](https://github.com/stellar-registry/perch/tree/603f7d5504f2d4d9338c135771cea18ac70dbe0c/packages/perch-zk) (`vendor/perch/packages/perch-zk`): in-page proving and the circuit artifact it ships | Source: explicit dependency review; the wallet's use of it: Nido integration |
 | Generated Perch clients | `packages/contract-bindings/perch-*`, generated from the deployed wasm (`just bindings-perch`) | Nido integration (provenance) |
