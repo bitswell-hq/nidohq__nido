@@ -515,6 +515,26 @@ mod test {
         )
     }
 
+    /// Give `env` the testnet network id.
+    fn on_testnet(env: &Env) {
+        let testnet = env
+            .crypto()
+            .sha256(&Bytes::from_slice(
+                env,
+                b"Test SDF Network ; September 2015",
+            ))
+            .to_array();
+        env.ledger().with_mut(|l| l.network_id = testnet);
+    }
+
+    fn hex<const N: usize>(s: &str) -> [u8; N] {
+        core::array::from_fn(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16).unwrap())
+    }
+
+    fn factory_at(env: &Env, n: u8) -> Address {
+        AddressPayload::ContractIdHash(BytesN::from_array(env, &[n; 32])).to_address(env)
+    }
+
     /// `address`'s authorization of exactly `invoke`.
     fn by<'a>(address: &'a Address, invoke: &'a MockAuthInvoke<'a>) -> [MockAuth<'a>; 1] {
         [MockAuth { address, invoke }]
@@ -581,14 +601,7 @@ mod test {
     #[test]
     fn the_binding_message_is_pinned() {
         let env = Env::default();
-        let testnet = env
-            .crypto()
-            .sha256(&Bytes::from_slice(
-                &env,
-                b"Test SDF Network ; September 2015",
-            ))
-            .to_array();
-        env.ledger().with_mut(|l| l.network_id = testnet);
+        on_testnet(&env);
         let factory = factory_at(&env, 7);
         env.register_at(
             &factory,
@@ -603,6 +616,40 @@ mod test {
         assert_eq!(
             hex,
             "793c7c4bc48f6158c2edd30df3657752b6dc540fb7457e043cd5727d33c0e12c"
+        );
+    }
+
+    /// The factory accepts the setup signature the wallet makes
+    /// (passkey-sdk `perch/setupKey.ts`, pinned there too): setup secret
+    /// `[1; 32]`, the binding above.
+    #[test]
+    fn the_wallets_setup_signature_creates_the_account() {
+        let env = Env::default();
+        on_testnet(&env);
+        env.deployer().upload_contract_wasm(perch_account::WASM);
+        let verifier = env.register(StubVerifier, ());
+        let factory = factory_at(&env, 7);
+        env.register_at(
+            &factory,
+            Contract,
+            (Address::generate(&env), Some(verifier), None::<Address>),
+        );
+        let pk = BytesN::from_array(
+            &env,
+            &hex("8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"),
+        );
+        let setup_sig = BytesN::from_array(
+            &env,
+            &hex(concat!(
+                "0e52483241d7fa56f55b04231fedc9794b2e014881b066471d112f02789deba3",
+                "f3f6e6c1a042e1ff8d5322c4c36c023e14668b3e22b1f9b9e85102d12cf64001"
+            )),
+        );
+        assert_eq!(pk, setup_pk(&env, &setup_key(1)));
+        let client = ContractClient::new(&env, &factory);
+        assert_eq!(
+            client.create_account(&pk, &key(&env, 4), &setup_sig),
+            client.get_c_address(&pk)
         );
     }
 
@@ -719,10 +766,6 @@ mod test {
             assert!(client.try_create_account(&pk, &key, &sig).is_err());
         }
         client.create_account(&pk, &key, &sign(&env, &setup, &factory, &key));
-    }
-
-    fn factory_at(env: &Env, n: u8) -> Address {
-        AddressPayload::ContractIdHash(BytesN::from_array(env, &[n; 32])).to_address(env)
     }
 
     /// With a manager set, `create_account` needs the manager's
