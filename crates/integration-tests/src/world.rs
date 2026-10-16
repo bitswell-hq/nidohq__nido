@@ -909,7 +909,8 @@ impl World {
     }
 
     /// Complete through the recovery rule: anyone may submit. It names no
-    /// revision, as the wallet's completion does not.
+    /// revision; the wallet's completion names the revision its target was
+    /// derived at.
     pub fn complete(&self, account: &Account, target: &Bytes) -> AccountResult<BytesN<32>> {
         let root = self.invocation(
             &account.address,

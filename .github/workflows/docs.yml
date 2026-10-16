@@ -1,0 +1,27 @@
+name: Docs
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  doc-refs:
+    name: Doc references
+    runs-on: ubuntu-latest
+    steps:
+      # vendor/perch at its gitlink: Perch links, paths, and tests are
+      # checked against that commit.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      # Every link, repository path, heading, cited test, and invariant or
+      # gate ID in the documents resolves (no network, no install).
+      - name: Check the documents' references
+        run: node scripts/check-doc-refs.mjs

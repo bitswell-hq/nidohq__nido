@@ -16,6 +16,7 @@ just build-contracts   # Nido's contracts; the factory embeds the fetched
 just test              # cargo test --workspace: integration tests replay the
                        # committed proofs
 just check-vendor-drift  # vendor/perch at its pin, consumed wasm = the manifest's
+node scripts/check-doc-refs.mjs  # the documents' links, paths, tests, IDs
 npm install            # workspaces; postinstall builds the packages
 ```
 

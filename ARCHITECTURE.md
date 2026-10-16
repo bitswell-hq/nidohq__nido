@@ -112,7 +112,7 @@ bytes, fetched by hash (see [docs/SUPPLY_CHAIN.md](docs/SUPPLY_CHAIN.md)).
 | --- | --- | --- |
 | Wallet | `packages/frontend/` | Static Astro site on Cloudflare Pages. Each account lives at its own subdomain, `<contract-id>.nido.fyi`, served by the worker proxy in `frontend/worker-proxy-nido/`. All chain access is client-side. |
 | Passkey SDK | `packages/passkey-sdk/` | WebAuthn parsing, Soroban auth, policy documents, and the `perch` namespace: statement encodings, recovery as document changes, controller and account clients. `@nidohq/passkey-sdk/perch-zk` proves. |
-| Contract bindings | `packages/contract-bindings/` | Generated clients, including private `perch-*` clients generated from the deployed Perch wasm; Perch does not publish them ([docs/DEFERRED.md](docs/DEFERRED.md#npm-publishing-of-perch-zk-and-the-contract-clients)). |
+| Contract bindings | `packages/contract-bindings/` | Generated clients, including private `perch-*` clients generated from the deployed Perch wasm. Perch's published `@stellar-registry/perch-contracts` 0.1.0 names an earlier deployment, so Nido does not use it ([docs/DEFERRED.md](docs/DEFERRED.md#npm-publishing-of-perch-zk-and-the-contract-clients)). |
 | Relayer | `infra/relayer/` | OpenZeppelin relayer with the channels plugin. Pays fees for any contract call whose authorization is already complete. It cannot authorize anything for an existing account; it does see each setup salt before the account exists (THREAT_MODEL 10). |
 | Name resolver | `infra/nido-resolver/` | Serves `/.well-known/nido.json` from the name registry. Read-only. |
 
@@ -182,8 +182,9 @@ sequenceDiagram
     Host->>Account: __check_auth(payload, signatures, contexts)
     Account->>Account: refuse reserved hook names<br/>(install, uninstall, enforce, rcv_*)
     Account->>Account: Protected freeze mirror set?<br/>refuse all but the completion
-    Account->>OZ: do_check_auth with the selected rules
-    OZ->>WV: verify(sha256(payload ‖ rule ids), key, assertion)
+    Account->>Account: bind the account's address into the payload
+    Account->>OZ: do_check_auth with the bound payload and the selected rules
+    OZ->>WV: verify(sha256(bound payload ‖ rule ids), key, assertion)
     OZ->>Policy: enforce(context)
     OZ-->>Host: ok / error
 ```
@@ -197,6 +198,18 @@ controller (re-entry, D16). OZ's `do_check_auth` runs beneath `__check_auth`
 and does call other contracts: each signer's verifier (`verify`) and each
 policy of the selected rule (`enforce`), which for the recovery rule is the
 controller.
+
+**What a passkey signs.** Before OZ adds the rule ids, the account folds its
+own address into the payload:
+`bound = sha256("perch/account/auth-addr-v1" ‖ account id ‖ payload)`, so a
+signature for one account never verifies on another that shares the key and
+rule ids (`perch-smart-account` `bind_payload`). The account reports this
+scheme as `capabilities().auth_digest = addr_oz_v1`. Accounts minted from a
+Perch account wasm older than this binding report `oz_rule_ids` and verify
+`sha256(payload ‖ rule ids)`. The wallet reads the scheme from each account
+before it signs (`authDigestScheme` in
+`packages/passkey-sdk/src/perch/account.ts`). Each account accepts only its
+own scheme (SECURITY_INVARIANTS A9).
 
 **Who can change the document.** `apply_doc` is the only write path, and it
 has two authorization paths (§15, entry-point table, `apply_doc` row; the

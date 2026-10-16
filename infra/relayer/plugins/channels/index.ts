@@ -15,11 +15,10 @@
  * zone `relay_per_ip`) raises the cost of request flooding. None of these is a security
  * boundary.
  *
- * There is NO on-chain recovery rate limit in the current stack: Perch's recovery
- * controller enforces none. (A former Nido contract, `contracts/zk-recovery`, capped
- * `initiate_recovery` at 5 per rolling 90 days; it is retired, not in this tree, and
- * not deployed to mainnet — AUDIT_SCOPE "Retired Nido contracts".) On-chain auth on
- * each submitted call is the only enforced gate (AGENTS.md "Relayer channels plugin").
+ * Nothing on chain limits how often recovery calls arrive either: Perch's recovery
+ * controller has no rate limit, and opening an attempt is permissionless (it blocks
+ * nothing until its evidence is met, THREAT_MODEL adversary 3). On-chain auth on each
+ * submitted call is the only enforced gate (AGENTS.md "Relayer channels plugin").
  *
  * TODO(rate-limit): if finer per-IP control is wanted inside this plugin rather than at
  * the Caddy layer, add a token bucket keyed on the deployment's trusted client-IP header

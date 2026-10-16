@@ -104,8 +104,9 @@ jobs:
       - name: Unit tests (shim crypto vs SDK parsers)
         run: npx vitest run --config vitest.support.config.ts
       # The SDK's Perch layer against Perch's statement vectors and Nido's
-      # real-proof fixtures (including one bb.js proof compared byte for byte
-      # with the committed CLI proof).
+      # real-proof fixtures (including one bb.js proof of a lifecycle
+      # statement, which bb.js's verifier accepts along with the committed
+      # native proof for the same public inputs).
       - name: SDK Perch parity (statement encodings, ZK proving)
         run: npx vitest run --root packages/passkey-sdk src/perch
 
