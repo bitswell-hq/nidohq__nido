@@ -24,7 +24,7 @@ and infrastructure bring.
 | Passkey private key | The user's authenticator; never leaves it | Full control under `Loss`; ordinary activity under `Protected`. |
 | Recovery kit (ZK secret) | A JSON file the user downloads | The ZK factor: alone under `ZkOnly`, half of `Combined`. |
 | Guardian accounts | Each guardian's own Nido or G wallet | One guardian's share of the quorum. |
-| Setup key (salt) | URL fragment, a `nido_setup_<account>` cookie on the parent domain (30 minutes), and the browser's `nido:pending` storage until the account exists; the relayer sees it in the setup transaction | Whoever uses it first owns the address it derives. The wallet then refuses that address rather than activate or fund it (W11), so the owner loses the address, not funds. |
+| Setup secret (the setup key's seed, carried as `salt`) | URL fragment, a `nido_setup_<account>` cookie on the parent domain (30 minutes), and the browser's `nido:pending` storage until the account exists. The relayer sees only the setup PUBLIC key and the setup key's signature over the user's passkey | Whoever holds it can bind its own passkey to the address first (F6 stops everyone else). The wallet then refuses that address rather than activate or fund it (W11), so the owner loses the address, not funds. |
 | Factory admin key | Nido operators | The account code and the verifier new accounts get, once a scheduled change waits out the factory's delay (adversary 8). |
 | Relayer keys | Fly.io host | Sponsor budget; censorship; claiming, and so denying, accounts that are being set up (adversary 10). |
 | The wallet's deployment (`perch.TESTNET`, or a `PUBLIC_PERCH_DEPLOYMENT` override) | Baked into the wallet at build time | Which factory, controller, pool, adapter, and verifier the wallet tells users to trust (adversary 9). |
@@ -63,17 +63,19 @@ and infrastructure bring.
    its config hash, then shown setting by setting next to the current one,
    with any new controller, proof checker, pool, circuit, friend, or kit
    called out; Approve signs the hash of exactly those settings (W2).
-5. **Setup-key thief.** Reads a salt before the owner deploys and calls
-   `create_account(salt, their_key)` first. The salt travels in the URL
-   fragment and is scrubbed from the address bar, but during setup it is also
-   in a cookie on the parent domain (sent with every request to Nido's
-   subdomains, so it reaches the worker and Pages logs if they record
-   cookies) and in `nido:pending`, which the storage bridge shares with that
-   account's own origin and no other (adversary 15). A second `create_account` with the same salt fails (F2), so
-   the risk is a race before the first deploy, not a takeover after. The
-   wallet detects a won race before it activates or funds the address
-   (W11); the race itself remains, as a denial of setup. The relayer sees
-   every salt (adversary 10). See L5.
+5. **Setup-key thief.** Reads the setup secret before the owner deploys,
+   signs its own passkey with it, and calls `create_account` first. The
+   secret travels in the URL fragment and is scrubbed from the address bar,
+   but during setup it is also in a cookie on the parent domain (sent with
+   every request to Nido's subdomains, so it reaches the worker and Pages
+   logs if they record cookies) and in `nido:pending`, which the storage
+   bridge shares with that account's own origin and no other (adversary 15).
+   A second `create_account` with the same setup key fails (F2), so the risk
+   is a race before the first deploy, not a takeover after. The wallet
+   detects a won race before it activates or funds the address (W11); the
+   race itself remains, as a denial of setup. Seeing the setup public key is
+   not enough: the factory deploys only the passkey the setup key signed
+   (F6), so the relayer (adversary 10) and the manager can't race. See L5.
 6. **Script in the wallet origin (XSS, malicious extension, compromised CDN).**
    Can't read the passkey, but can ask the authenticator to sign whatever the
    page builds, read the setup keys in `nido:pending`, and swap the recovery
@@ -92,22 +94,24 @@ and infrastructure bring.
    admin-upgradeable; for them that admin key stays a trust anchor until they
    move to a new account (DEPLOYED.md, "Compatibility appendix"). None of
    these legacy contracts deploys to mainnet.
-8. **Malicious or compromised factory admin.** Can schedule an upgrade that
-   embeds different account code, or a repin to a verifier that accepts
-   anything. Neither takes effect until `change_delay()` ledgers after
-   `schedule_change` announces it (`change_scheduled`), and only the admin
-   can execute or cancel it (SECURITY_INVARIANTS F6). It affects only
-   accounts created after `execute_change`; an existing account's code
-   changes only through its own seven-day upgrade path (U1), and its
-   signers' verifier only through its own `apply_doc`. The delay gives
-   watchers and wallets time to see the change and stop creating accounts
-   through this factory. It does not let anyone other than the admin stop
-   the change. Pinning the verifier does not limit this admin either: the
-   admin can schedule a repin, or an upgrade that replaces the wasm and the
-   pin together. The mitigations are the delay, a multisig admin, and
-   someone watching the factory's events (MAINNET_READINESS B1, RUNBOOKS
-   §3). The deployed testnet factory predates the delay, its admin is a
-   single key, and nothing watches its events.
+8. **Malicious or compromised factory admin.** Can upgrade the factory to
+   embed different account code, pin a verifier that accepts anything, set
+   a manager that admits no one (or anyone), or hand the factory to another
+   admin. The factory makes each change at once and announces it
+   (`upgraded`, `verifier_pinned`, `manager_changed`, `admin_changed`;
+   SECURITY_INVARIANTS F4). It affects only accounts created afterwards; an
+   existing account's code changes only through its own seven-day upgrade
+   path (U1), and its signers' verifier only through its own `apply_doc`.
+   The admin can't change whose passkey a new account gets (F6). The
+   factory itself enforces no delay: on mainnet the admin is a smart account
+   that enforces a 24-hour delay between announcing a factory change and
+   making it, and lets its own signers cancel (MAINNET_READINESS B1,
+   RUNBOOKS §3), which gives watchers and wallets time to stop creating
+   accounts through this factory. Pinning the verifier does not limit this
+   admin either: it can repin, or upgrade the wasm and the pin together. The
+   mitigations are the admin account's delay and quorum, and someone
+   watching the factory's events. The deployed testnet factory's admin is a
+   single key, it has no delay at all, and nothing watches its events.
 9. **Wrong deployment.** A wallet built with a hostile deployment would send
    users to an attacker's factory or controller. The account trusts whatever
    controller its own document names, so this is a wallet-supply-chain risk.
@@ -126,32 +130,34 @@ and infrastructure bring.
     (`infra/relayer/plugins/channels/index.ts` passes every request to the
     upstream channels handler).
 
-    **An account being set up is the exception.** `create_account(salt, key)`
-    is permissionless, and the address derives from the salt alone, because
-    a Nido passkey's RP ID is that address and it has to exist before the
-    passkey. The relayer receives the setup transaction, salt included,
-    before it lands. A compromised relayer can submit
-    `create_account(salt, its_own_key)` first and own the address the user's
-    passkey was made for; the user's own call then fails as a reused salt
-    (F2). The wallet detects this. It does not take the relayer's
-    confirmation as proof of what landed: after setup, and whenever it
-    resumes a setup whose address already holds a contract, it reads the
-    account from RPC (not through the relayer) and accepts it only as the
-    account the user's own `create_account` creates: the deployment's
-    account wasm, untouched since construction, with the user's passkey under
-    the deployment's verifier as its only rule (W11). Anything else stops
-    setup before the account is activated, shown as ready, or funded, and
-    tells the user to start again with a new address. A key check alone would
-    not be enough: a claimant can apply a document naming the user's key as
-    admin while keeping its own authority elsewhere (RUNBOOKS §5), which the
-    untouched-account requirement refuses.
+    **An account being set up.** `create_account(setup_pk, key, setup_sig)`
+    derives the address from the setup public key alone, because a Nido
+    passkey's RP ID is that address and it has to exist before the passkey.
+    The relayer receives the setup transaction before it lands, but sees
+    only the setup public key and the setup key's signature over the user's
+    passkey, for this factory and network. It can't bind its own key to the
+    address: the factory refuses any passkey the setup key did not sign
+    (F6). It can withhold or delay the setup, which a user answers by
+    trying another relayer or starting again. On a factory with a manager
+    whose signer the relayer holds, it also decides admission: it can admit
+    accounts it shouldn't, and refuse anyone (F7).
 
-    Nothing prevents the claim, so a compromised relayer can still deny setup
-    to every user it serves, each losing the address and the passkey made for
-    it (L5). A factory commitment to the key before the salt is revealed
-    would prevent it (nidohq/nido#245); launch gate MAINNET_READINESS A7
-    requires that or a deliberate decision to launch without it.
-    RUNBOOKS §5 gives the response to a host compromise.
+    A factory that predates the binding (the testnet factory deployed today,
+    DEPLOYED.md) lets anyone who sees the setup value create that account
+    with its own key first. For those, and for a thief holding the setup
+    secret (adversary 5), the wallet detects the claim. It does not take the
+    relayer's confirmation as proof of what landed: after setup, and
+    whenever it resumes a setup whose address already holds a contract, it
+    reads the account from RPC (not through the relayer) and accepts it only
+    as the account the user's own `create_account` creates: the deployment's
+    account wasm, untouched since construction, with the user's passkey
+    under the deployment's verifier as its only rule (W11). Anything else
+    stops setup before the account is activated, shown as ready, or funded,
+    and tells the user to start again with a new address. A key check alone
+    would not be enough: a claimant can apply a document naming the user's
+    key as admin while keeping its own authority elsewhere (RUNBOOKS §5),
+    which the untouched-account requirement refuses. RUNBOOKS §5 gives the
+    response to a host compromise.
 
     An unavailable relayer blocks onboarding, which only it sponsors, and a
     passing health check does not show that onboarding works: the hosted
@@ -327,15 +333,19 @@ post-audit work, its entry in [DEFERRED.md](./DEFERRED.md).
   submit it after the owner changes that rule. Invariants: A8, W10. Gate:
   none; this is the audited semantics. Deferred:
   [revision-bound ordinary signatures](./DEFERRED.md#revision-bound-ordinary-signatures).
-- **L5. The setup-salt race is detected, not prevented.** Whoever submits
-  `create_account` with a salt first owns the address. The wallet refuses
-  such an address before activating or funding it (W11), so a claim costs
-  the user the address and the passkey made for it, not funds: a denial of
-  setup, which a compromised relayer can apply to every setup it sees
-  (adversaries 5 and 10, nidohq/nido#245). The check trusts the RPC endpoint
-  it reads. Invariants: F2 (no takeover after the first deploy), W5 (the salt
-  stays out of query strings), W11 (the check). Gates: MAINNET_READINESS A6
-  (detection), A7 (the denial); A2 covers only query-string exposure.
+- **L5. Only the holder of the setup secret can claim an address being set
+  up.** The factory binds each address to its setup key and deploys only
+  the passkey that key signed (F6), so the relayer, a mempool watcher, or
+  the manager can't claim it (nidohq/nido#245). A thief who reads the
+  secret from the browser before the passkey exists (adversary 5) can, and
+  the wallet then refuses the address before activating or funding it
+  (W11): the user loses the address and the passkey made for it, not funds.
+  The check trusts the RPC endpoint it reads. The deployed testnet factory
+  predates the binding, so there anyone who sees the setup value can claim
+  the address, and only W11 stands. Invariants: F2 (no takeover after the
+  first deploy), F6 (the binding), W5 (the secret stays out of query
+  strings), W11 (the check). Gates: MAINNET_READINESS A6 (detection), A7
+  (prevention); A2 covers only query-string exposure.
 - **L6. The wallet lacks the archived-state restoration and renewal
   workflow.** On chain, archived recovery state is restored, never reset
   (T1), and renewal is permissionless (T2). The wallet does not implement the
@@ -365,9 +375,9 @@ post-audit work, its entry in [DEFERRED.md](./DEFERRED.md).
   address, not in a party.
 - The user's authenticator keeps the private key non-exportable, and the
   browser enforces the RP ID.
-- Nido's operators, through the factory admin key. Every change to the
-  factory waits out its delay, and the admin is a single key until it moves
-  to a multisig (MAINNET_READINESS B1).
+- Nido's operators, through the factory admin. The factory makes each admin
+  change at once; the delay and quorum are the admin smart account's, and
+  on testnet the admin is a single key (MAINNET_READINESS B1).
 
 ## Out of scope
 
