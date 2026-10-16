@@ -3,6 +3,7 @@ mod auth_digest_dialects;
 mod config_hash_vectors;
 mod contract_verifier;
 mod costs;
+mod factory_governance;
 mod multisig_recovery;
 mod name_registry;
 mod name_registry_passkey_auth;

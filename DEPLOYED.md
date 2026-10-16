@@ -54,6 +54,7 @@ before the passkey.
 | Built from | Nido commit `42738a3f47082971bbdc6d5162cc80170f06bf5a`, `just build-contracts`, rustc 1.96.0, `stellar-cli` 27.0.0 (the `stellar-scaffold-cli` version is not recorded) |
 | Embeds | The manifest's `perch-account` (`accountWasmHash` above) |
 | Verifier pin | The manifest's `perch-webauthn-verifier` (`set_registry_pins`) |
+| Change delay | None. This factory predates the change delay: its admin's `upgrade` and `set_registry_pins` take effect at once. The factory in this tree replaces both with `schedule_change` / `execute_change` / `cancel_change` and takes the pin and the delay as constructor arguments; it is not deployed yet. |
 | Admin | `GBPLRG4TQSCCJEVO7IZZXTRXWMQBSUJWWX6SZTSVPGSXVEX3PVOTBHP5`, a single throwaway testnet key |
 | Deployed | 2026-10-09 by `scripts/deploy-factory.sh` (`stellar-cli` 27.0.0), which read back the pin and the account hash the factory deploys |
 | Registry name | None |
