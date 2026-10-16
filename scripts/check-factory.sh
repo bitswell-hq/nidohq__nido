@@ -4,8 +4,9 @@
 # factory.<network>.json, written by scripts/deploy-factory.sh) against the
 # chain. One RPC read of the factory's instance: its executable wasm hash,
 # the account hash it deploys (`Account`, the cache `create_account` reads),
-# its pinned WebAuthn verifier (`PinnedVerifier`), and its admin (`ADMIN`)
-# must equal the record's. Read-only: no identity, nothing signed.
+# its pinned WebAuthn verifier (`PinnedVerifier`), its admin (`ADMIN`), and,
+# when the record has one, its change delay (`Delay`) must equal the
+# record's. Read-only: no identity, nothing signed.
 #
 # The record's account and verifier are checked against Perch's manifest by
 # packages/passkey-sdk/src/perch/deployment.test.ts; together the two say the
@@ -32,7 +33,7 @@ instance="$(stellar ledger entry fetch contract-data --contract "$FACTORY" --ins
     | jq -c '[.. | objects | select(has("contract_instance")) | .contract_instance][0]')"
 [ "$instance" != null ] || die "no contract instance for $FACTORY on $NETWORK"
 
-stored() { jq -r --arg k "$1" '.storage[]? | select(.key.symbol == $k) | .val | (.bytes // .address)' <<<"$instance"; }
+stored() { jq -r --arg k "$1" '.storage[]? | select(.key.symbol == $k) | .val | (.bytes // .address // .u32)' <<<"$instance"; }
 problems=0
 check() {
     if [ "$2" = "$3" ]; then
@@ -48,4 +49,6 @@ check "wasm" "$(jq -r '.executable.wasm' <<<"$instance")" "$(r .wasm_hash)"
 check "account it deploys" "$(stored Account)" "$(r .account_wasm_hash)"
 check "pinned verifier" "$(stored PinnedVerifier)" "$(r .pinned_verifier)"
 check "admin" "$(stored ADMIN)" "$(r .admin)"
+# Factories from before the change delay have none, and neither do their records.
+[ "$(r '.change_delay // empty')" = "" ] || check "change delay" "$(stored Delay)" "$(r .change_delay)"
 [ "$problems" -eq 0 ] || die "$RECORD does not describe the deployed factory ($problems mismatches)"

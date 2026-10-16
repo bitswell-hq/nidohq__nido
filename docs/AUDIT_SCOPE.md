@@ -114,9 +114,9 @@ the two units is its audit manifest,
 
 | Item | Path or identity | Stream |
 | --- | --- | --- |
-| Factory | `contracts/factory/`: deterministic deployment of `perch-account` with the passkey admin rule; the embedded account wasm and its hash cache across upgrades; admin, upgrade, and verifier pin; the registry fallback for an unpinned verifier | Nido integration |
+| Factory | `contracts/factory/`: deterministic deployment of `perch-account` with the passkey admin rule; the embedded account wasm and its hash cache across upgrades; the admin and the delayed changes to the code and the verifier pin (`schedule_change`, `execute_change`, `cancel_change`); the registry fallback for an unpinned verifier | Nido integration |
 | Name registry | `contracts/name-registry/`: name ownership and release | Nido integration |
-| `admin-sep` 0.27.0 | `admin`, `set_admin`, and `upgrade` for the factory (whose `upgrade` override also clears the account-hash cache), the name registry, and the multisig and spending-limit policies. About 50 lines. `admin()` reads the stored admin with `unwrap_unchecked`, and `set_admin` requires no authorization while no admin is stored; the factory's constructor stores one. | Explicit dependency review: read in full |
+| `admin-sep` 0.27.0 | `admin` and `set_admin` for the factory (which overrides `set_admin` to emit `admin_changed`, and does not use `Upgradable`), and `admin`, `set_admin`, and `upgrade` for the name registry and the multisig and spending-limit policies. About 50 lines. `admin()` reads the stored admin with `unwrap_unchecked`, and `set_admin` requires no authorization while no admin is stored; the factory's constructor stores one. | Explicit dependency review: read in full |
 | Passkey SDK | `packages/passkey-sdk/`: `src/perch/` (statement encodings, recovery builders, document helpers, proving), `src/policyDoc/`, WebAuthn parsing, auth-entry signing | Nido integration |
 | Wallet | `packages/frontend/`: recovery pages (`src/lib/recovery/`), onboarding and the setup secret (`src/pages/new-account/`, `src/lib/createNido.ts`), signing flows, the storage bridge, `public/_headers` | Nido integration |
 | Wallets Kit module | `packages/stellar-wallets-kit-module/`: dApp signing handoff | Nido integration |
@@ -199,23 +199,16 @@ specification intends:
 ## Questions we want answered
 
 1. **Factory admin.** The factory admin can replace the whole factory wasm,
-   and with it the account code and verifier new accounts get
-   (THREAT_MODEL 8); pinning the verifier does not constrain an upgrade.
-   MAINNET_READINESS B1 requires a multisig with a visible upgrade delay, or
-   no upgrade authority. Is that enough for accounts created while an
-   upgrade is pending?
-
-   _As built:_ the factory's `upgrade` and `set_registry_pins` take effect in
-   the same transaction (`admin.require_auth`, then
-   `update_current_contract_wasm` / the pin write) — there is no on-chain
-   timelock, so any "visible upgrade delay" is a property of the admin
-   multisig's off-chain process, not an on-chain guarantee. An account created
-   while an upgrade is pending gets whatever factory code and pin are live at
-   its ledger, and nothing on-chain or in the wallet compares the new account's
-   wasm hash or admin-rule verifier against `perch.TESTNET` / the manifest. A
-   multisig delay alone therefore does not protect accounts created during or
-   after a malicious upgrade unless the wallet verifies the deployed result
-   (see B1).
+   and with it the account code new accounts get, or repin the verifier
+   (THREAT_MODEL 8). Each change waits out `change_delay()` ledgers between
+   `schedule_change` and `execute_change`, and only the admin can execute or
+   cancel it (SECURITY_INVARIANTS F6). MAINNET_READINESS B1 adds a multisig
+   admin and monitoring of the factory's events. Is a delay that only the
+   admin can cancel, plus watchers, enough for accounts created while a
+   change is pending, or does the factory need a separate canceller? An
+   account created during the delay gets the code and pin live at its
+   ledger, and nothing in the wallet compares a new account's wasm hash or
+   admin-rule verifier against the manifest yet (MAINNET_READINESS A6).
 2. **The ZK verifier delta.** Proofs are zero-knowledge, verified by Perch's
    unaudited `UltraKeccakZKFlavor` delta on the audited verifier
    (THREAT_MODEL 13). Is it sound?

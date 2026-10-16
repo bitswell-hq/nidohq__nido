@@ -51,7 +51,8 @@ The record is
 [`packages/passkey-sdk/src/perch/factory.testnet.json`](packages/passkey-sdk/src/perch/factory.testnet.json),
 written by `scripts/deploy-factory.sh` from what it read back: the address, its
 wasm sha256, the account wasm hash it deploys, its pinned WebAuthn verifier, its
-admin, and the Nido and Perch commits and toolchain that built it.
+change delay, its admin, and the Nido and Perch commits and toolchain that
+built it.
 `just check-factory` (run in CI) checks the record against the factory's
 instance storage; `deployment.test.ts` checks its account and verifier against
 the manifest's `perch-account` and `perch-webauthn-verifier`.
@@ -62,6 +63,7 @@ the manifest's `perch-account` and `perch-webauthn-verifier`.
 | Wasm sha256 | `c858f314ed96ceca6a5da7b2a4e77b997492e84b285f7abc8c89a50335fc882d` |
 | Deploys | Perch account `d3d4c28a01b37660c23ac03622b712608d2c0f853b634a597f3cd617e7b66df5` (Perch `845c49a`) |
 | Verifier pin | `CAL7IEAJO7S3SJI4EXESMUNPOEYW6QNR3PQTO7AVHD75YGURSZ5CW27Z` (Perch `845c49a`) |
+| Change delay | None. This factory predates the change delay: its admin's `upgrade` and `set_registry_pins` take effect at once. The factory in this tree replaces both with `schedule_change` / `execute_change` / `cancel_change` and takes the pin and the delay as constructor arguments; it is not deployed yet. |
 | Admin | `GA2MQ7MBJQCIHGO3ROH7254A5MUNW34UWFHOT4Y2ZPZIHOLEBF57C22Q`, a single throwaway testnet key |
 | Deployed | 2026-10-12 by `scripts/deploy-factory.sh` |
 | Registry name | None |
