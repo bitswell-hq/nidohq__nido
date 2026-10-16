@@ -62,7 +62,8 @@ NIDO_E2E_DIRECT_DEPLOY=1 npx playwright test --project=testnet-chromium perch-re
 
 ### RPC endpoints
 
-`just perch-infra` and `scripts/deploy-factory.sh` read the chain through the
+`just perch-infra`, `just check-factory`, and `scripts/deploy-factory.sh` read
+the chain through the
 endpoint `scripts/stellar-rpc.sh` chooses. It is the one place the fallback
 list lives, and it has the same variables as Perch's helper of the same name
 (and defers to it once vendor/perch carries it):
@@ -84,10 +85,10 @@ or one nothing can vouch for is refused. A primary that answers wrongly is
 reported, not routed around. Hash, content-address, and contract errors never
 cause a fallback. Each choice and call logs its endpoint on stderr (`rpc: ...`).
 
-`just perch-infra` moves to the next fallback mid-run when a fetch fails at
-the endpoint after the fetch script's own retries. `deploy-factory.sh` chooses
+`just perch-infra` and `just check-factory` move to the next fallback mid-run
+when a read fails at the endpoint after its own retries. `deploy-factory.sh` chooses
 once, before it submits anything, and never moves mid-run. CI's Contracts job
-passes the repository variable `RPC_URL` through, so an outage that also takes
+passes the repository variable `RPC_URL` to both, so an outage that also takes
 the default fallback down can be routed around without a code change.
 
 ## 2. Deploying

@@ -78,6 +78,8 @@ jobs:
       # against the deployed factory's instance storage, read over RPC. The
       # SDK's deployment.test.ts checks the record against the manifest.
       - name: Check the factory record against testnet
+        env:
+          RPC_URL: ${{ vars.RPC_URL }}
         run: just check-factory
 
       # The whole Rust workspace: the factory, the policy contracts, and the
@@ -108,7 +110,7 @@ jobs:
       - name: Fallback, staleness, network, and override tests
         run: python3 scripts/test_rpc_fallback.py -v
       - name: shellcheck
-        run: shellcheck -s bash -x scripts/stellar-rpc.sh scripts/perch-infra.sh scripts/deploy-factory.sh
+        run: shellcheck -s bash -x scripts/stellar-rpc.sh scripts/perch-infra.sh scripts/deploy-factory.sh scripts/check-factory.sh
 
   unit:
     name: Unit (TestAuthenticator)
