@@ -22,7 +22,7 @@
 #      leaves it byte-identical); a changed verdict is for the SDK's
 #      validate.ts to match, which its vitest suite checks;
 #   7. `cargo test --workspace` runs every Rust suite against the new stack,
-#      which also refreshes Cargo.lock and the Soroban test snapshots.
+#      which also refreshes Cargo.lock.
 #
 # Nido's factory is not redeployed: `perch.TESTNET.factory` keeps naming the
 # deployed one until `just deploy-factory` follows the merged re-pin.

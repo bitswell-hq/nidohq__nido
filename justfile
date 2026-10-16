@@ -24,10 +24,10 @@ perch-infra:
 
 # Re-pin vendor/perch to a Perch commit (full 40-hex) and regenerate what the
 # pin derives: the stack by manifest hash, Nido's contracts, the Perch
-# bindings, the SDK's Perch pins, the lockfiles, and the Soroban test
-# snapshots; then the drift check and the Rust suites. Nido's factory is not
-# redeployed. The perch-repin workflow runs this when Perch announces a
-# deployment. See scripts/repin-perch.sh.
+# bindings, the SDK's Perch pins, and the lockfiles; then the drift check
+# and the Rust suites. Nido's factory is not redeployed. The perch-repin
+# workflow runs this when Perch announces a deployment. See
+# scripts/repin-perch.sh.
 repin-perch commit:
     scripts/repin-perch.sh {{commit}}
 
