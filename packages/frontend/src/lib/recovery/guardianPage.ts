@@ -13,9 +13,10 @@
  * attempt's `replacements_hash` (shown as a check code derived from the whole
  * key, for the guardian to compare with the friend), a proposed recovery
  * member against the change's config hash (shown setting by setting next to
- * the current one, since the hash binds all of it). The chain checks the
- * rest (the guardian must be enrolled, the statement fresh, the attempt
- * live).
+ * the current one, since the hash binds all of it, with any move of trust
+ * called out above the table). Approve sends the subject the page checked,
+ * stated in full beside the button. The chain checks the rest (the guardian
+ * must be enrolled, the statement fresh, the attempt live).
  */
 
 import { contractIdFromHostname, isContractId, parsePolicyDocJson, perch, type PolicyDoc } from '@nidohq/passkey-sdk';
@@ -32,8 +33,10 @@ import {
   hex,
   passkeyCheckCode,
   recoveryChangeRows,
+  trustChanges,
   type GuardianRequest,
   type RecoveryChangeRow,
+  type TrustChange,
 } from './model.js';
 import { busy, card, el, errorText, short } from './ui.js';
 
@@ -62,7 +65,7 @@ export async function mountGuardian(root: HTMLElement): Promise<void> {
   root.append(card(`A request from ${short(request.account)}`, details.html));
   if (!details.ok) return;
 
-  const c = card('Your approval', '');
+  const c = card('Your approval', details.signs);
   const body = c.querySelector('.card') as HTMLElement;
   const status = el('div', { class: 'mut', style: 'font-size:12.5px;' });
   root.append(c);
@@ -121,7 +124,7 @@ export async function mountGuardian(root: HTMLElement): Promise<void> {
               request.domain === 'cancel' ? perch.EvidenceDomain.Cancel : perch.EvidenceDomain.Initiate,
               guardian!,
             )
-          : await client.approveChange(request.account, changeSubject(request.change), request.validUntil, guardian!);
+          : await client.approveChange(request.account, details.subject!, request.validUntil, guardian!);
       await submitAsGuardian(guardian!, op.operations[0]!);
       status.textContent = 'Approved. You can close this page.';
       toast({ msg: 'Approval recorded', icon: 'check' });
@@ -129,13 +132,30 @@ export async function mountGuardian(root: HTMLElement): Promise<void> {
   );
 }
 
-/** A human description of the request, with its payload verified. `ok` is
- *  false when the guardian must not approve: the page then offers no
- *  Approve button. */
-async function describe(request: GuardianRequest, doc: PolicyDoc): Promise<{ html: string; ok: boolean }> {
-  const refuse = (why: string) => ({
+/** A request as the page checked it. */
+interface Described {
+  /** A human description, with the request's payload verified. */
+  html: string;
+  /** False when the guardian must not approve: the page then offers no
+   *  Approve button. */
+  ok: boolean;
+  /** What an approval signs, in full, shown beside the Approve button. */
+  signs: string;
+  /** For a change: the subject Approve sends, the one checked here. */
+  subject?: perch.ChangeSubject;
+}
+
+/** `value` in full, selectable in one tap so it can be copied whole. */
+function full(value: string): string {
+  return `<code class="mono" style="word-break:break-all;user-select:all;">${esc(value)}</code>`;
+}
+
+/** Describe `request`, verifying what it carries. */
+async function describe(request: GuardianRequest, doc: PolicyDoc): Promise<Described> {
+  const refuse = (why: string): Described => ({
     html: `<div class="alert danger" role="alert">${esc(why)} Do not approve.</div>`,
     ok: false,
+    signs: '',
   });
   const client = recoveryClient();
   if (request.kind === 'attempt') {
@@ -144,10 +164,14 @@ async function describe(request: GuardianRequest, doc: PolicyDoc): Promise<{ htm
       BigInt(request.attemptId),
       request.domain === 'cancel' ? perch.EvidenceDomain.Cancel : perch.EvidenceDomain.Initiate,
     );
+    const signs =
+      `<p style="margin:0;font-size:13px;">Approving signs ${request.domain === 'cancel' ? 'cancelling' : 'starting'} recovery attempt ` +
+      `${esc(request.attemptId)} of the Nido ${full(request.account)}, at the recovery controller ${full(requireDeployment().recoveryController)}.</p>`;
     if (request.domain === 'cancel') {
       return {
         html: `<p style="margin:0;">Cancel recovery attempt ${esc(request.attemptId)}. Approve only if your friend says they did not start it.</p>`,
         ok: true,
+        signs,
       };
     }
     const sub = statement.subject;
@@ -160,17 +184,30 @@ async function describe(request: GuardianRequest, doc: PolicyDoc): Promise<{ htm
       .map((r) => `<p style="margin:0;">New passkey for <strong>${esc(r.signerId)}</strong> has check code <code class="mono">${esc(passkeyCheckCode(r.key))}</code>. Ask your friend to read you the check code their recovery page shows; approve only if every character matches.</p>`)
       .join('');
     const what = sub.action === 'compromise' ? 'restore their saved setup (they say their passkey was stolen)' : 'replace a lost passkey';
-    return { html: `<p style="margin:0;">Your friend wants to ${what}.</p>${who}`, ok: true };
+    return { html: `<p style="margin:0;">Your friend wants to ${what}.</p>${who}`, ok: true, signs };
   }
   const c = request.change;
+  const signsChange = (subject: perch.ChangeSubject, what: string): string =>
+    `<p data-approves="${esc(subject.kind === 'reconfigure-set' ? hex(subject.configHash) : subject.kind)}" style="margin:0;font-size:13px;">` +
+    `Approving signs ${what} for the Nido ${full(request.account)}, valid until ledger ${request.validUntil}, ` +
+    `recorded at the recovery controller ${full(requireDeployment().recoveryController)}.</p>`;
   if (c.kind === 'upgrade') {
+    const subject = changeSubject(c);
     return {
-      html: `<p style="margin:0;">Upgrade the Nido’s code to Wasm <code class="mono">${esc(c.wasmHash.slice(0, 16))}…</code>. It runs only after a seven-day wait.</p>`,
+      html: `<p style="margin:0;">Upgrade the Nido’s code to Wasm ${full(c.wasmHash)}. It runs only after a seven-day wait.</p>`,
       ok: true,
+      signs: signsChange(subject, `upgrade request ${esc(c.requestId)} to Wasm ${full(c.wasmHash)}`),
+      subject,
     };
   }
   if (c.kind === 'reconfigure-remove') {
-    return { html: '<p style="margin:0;">Turn recovery off. Approve only if your friend asked you to.</p>', ok: true };
+    const subject = changeSubject(c);
+    return {
+      html: '<p style="margin:0;">Turn recovery off. Approve only if your friend asked you to.</p>',
+      ok: true,
+      signs: signsChange(subject, 'turning recovery off'),
+      subject,
+    };
   }
   const proposed = request.recovery;
   if (proposed === undefined) {
@@ -184,14 +221,43 @@ async function describe(request: GuardianRequest, doc: PolicyDoc): Promise<{ htm
   }
   const rows = recoveryChangeRows(doc.recovery, withProposed.recovery);
   const changed = rows.filter((r) => r.changed).length;
+  // The subject is the hash of the settings shown, never the link's string.
+  const subject: perch.ChangeSubject = { kind: 'reconfigure-set', configHash: computed };
   return {
     html:
       `<p style="margin:0;">Your friend wants to change how their Nido recovers. ` +
       `${changed === 1 ? 'One setting changes' : `${changed} settings change`} (highlighted). ` +
       'Approve only if your friend told you about every change.</p>' +
+      trustAlert(trustChanges(rows, requireDeployment())) +
       changeTable(rows),
     ok: true,
+    signs: signsChange(subject, `the recovery settings above (configuration ${full(hex(computed))})`),
+    subject,
   };
+}
+
+/** The moves of trust, above the table: who or what would decide a
+ *  recovery from now on. Empty when nothing moves. */
+function trustAlert(changes: TrustChange[]): string {
+  if (!changes.length) return '';
+  const lines = (vs: string[], mark: string) => vs.map((v) => `<div><strong>${mark} </strong>${full(v)}</div>`).join('');
+  const items = changes
+    .map(
+      (t) =>
+        `<li data-trust="${esc(t.path)}" style="margin:8px 0 0;"><strong>${esc(t.label)}</strong>` +
+        lines(t.removed, '−') +
+        lines(t.added, '+') +
+        (t.expected === undefined ? '' : `<div><strong>Not the one Nido sets up today</strong> (${full(t.expected)}).</div>`) +
+        '</li>',
+    )
+    .join('');
+  // One block child: `.alert` lays its children out in a row.
+  return (
+    '<div class="alert danger" role="note" data-trust-changes><div style="min-width:0;">' +
+    '<strong>This hands recovery to someone or something new.</strong> ' +
+    'Whoever controls these decides a recovery. Approve only if your friend named each one to you.' +
+    `<ul style="margin:0;padding-left:18px;font-weight:400;">${items}</ul></div></div>`
+  );
 }
 
 /** Every setting the reconfiguration binds, the changed ones highlighted
@@ -203,7 +269,7 @@ function changeTable(rows: RecoveryChangeRow[]): string {
   const values = (vs: string[], other: string[], mark = '') =>
     vs.length
       ? vs
-          .map((v) => `<div class="mono" style="word-break:break-all;">${mark && !other.includes(v) ? `<strong>${mark} </strong>` : ''}${esc(v)}</div>`)
+          .map((v) => `<div>${mark && !other.includes(v) ? `<strong>${mark} </strong>` : ''}${full(v)}</div>`)
           .join('')
       : '<span class="mut">none</span>';
   const body = rows

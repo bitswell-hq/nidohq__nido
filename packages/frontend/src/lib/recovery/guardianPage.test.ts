@@ -2,7 +2,7 @@
 // setting by setting, and a recovery's new passkey as a check code.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { StrKey } from '@stellar/stellar-sdk';
-import { buildPolicyDoc, perch, type PolicyDoc } from '@nidohq/passkey-sdk';
+import { buildPolicyDoc, parsePolicyDocJson, perch, type PolicyDoc } from '@nidohq/passkey-sdk';
 
 const contract = (n: number) => StrKey.encodeContract(Buffer.alloc(32, n));
 const NETWORK = 'Test SDF Network ; September 2015';
@@ -143,6 +143,93 @@ describe('guardian page: reconfiguration approval', () => {
     const changed = [...root.querySelectorAll('tr[data-changed]')].map((r) => r.getAttribute('data-setting'));
     expect(changed).toEqual(['mode.quorum']);
     expect(root.textContent).toMatch(/One setting changes/);
+  });
+
+  describe('each setting the config hash binds, changed alone', () => {
+    const base = () =>
+      docWith({ baselineDocHash: 'ba'.repeat(32), delayLedgers: 100, expiryLedgers: 200, maxCancels: 3 });
+    /** `base()` with one member path set to `value`, as a link would carry it. */
+    function changedAt(path: string, value: unknown): PolicyDoc {
+      const recovery = structuredClone(base().recovery) as Record<string, unknown>;
+      const keys = path.split('.');
+      let at = recovery;
+      for (const k of keys.slice(0, -1)) at = at[k] as Record<string, unknown>;
+      at[keys.at(-1)!] = value;
+      return parsePolicyDocJson(JSON.stringify({ ...base(), recovery }));
+    }
+    const replaced = [contract(60), contract(61), contract(62)];
+    const cases: { path: string; value: unknown; trust?: boolean; foreign?: boolean }[] = [
+      { path: 'profile', value: 'loss' },
+      { path: 'mode.guardians', value: replaced, trust: true },
+      { path: 'mode.quorum', value: 1, trust: true },
+      { path: 'mode.adapter', value: contract(50), trust: true, foreign: true },
+      { path: 'mode.pool', value: contract(51), trust: true, foreign: true },
+      { path: 'mode.circuit-id', value: 'c2'.repeat(32), trust: true, foreign: true },
+      { path: 'mode.enrollment-id', value: '0b'.repeat(32), trust: true },
+      { path: 'mode.commitment', value: '0c'.repeat(32), trust: true },
+      { path: 'controller', value: contract(52), trust: true, foreign: true },
+      { path: 'baseline.doc-hash', value: 'bb'.repeat(32) },
+      { path: 'replaceable', value: [] },
+      { path: 'delay-ledgers', value: 101 },
+      { path: 'expiry-ledgers', value: 201 },
+      { path: 'max-cancels', value: 4 },
+    ];
+
+    beforeEach(() => {
+      chain.doc = base();
+    });
+
+    /** What the guardian reads: the request and the approval it signs. */
+    const seen = (root: HTMLElement) => root.textContent!;
+
+    it.each(cases)('$path', async ({ path, value, trust, foreign }) => {
+      const proposed = changedAt(path, value);
+      const root = await open(reconfigure(proposed));
+
+      const changed = [...root.querySelectorAll('tr[data-changed]')].map((r) => r.getAttribute('data-setting'));
+      expect(changed).toEqual([path]);
+      const shown = [value].flat().map(String);
+      const row = root.querySelector(`tr[data-setting="${path}"]`)!.textContent!;
+      for (const v of shown) expect(row).toContain(v);
+      // The approval names the hash of exactly these settings.
+      expect(root.querySelector('[data-approves]')!.getAttribute('data-approves')).toBe(hex(perch.configHash(proposed)!));
+
+      const moved = [...root.querySelectorAll('[data-trust]')];
+      expect(moved.map((t) => t.getAttribute('data-trust'))).toEqual(trust ? [path] : []);
+      if (trust) {
+        for (const v of shown) expect(moved[0]!.textContent).toContain(v);
+        expect(moved[0]!.textContent!.includes('Not the one Nido sets up today')).toBe(!!foreign);
+      }
+      expect(approvable(root)).toBe(true);
+    });
+
+    it('never explains two of them the same way', async () => {
+      const texts = new Set<string>();
+      for (const { path, value } of cases) texts.add(seen(await open(reconfigure(changedAt(path, value)))));
+      texts.add(seen(await open(reconfigure(base()))));
+      expect(texts.size).toBe(cases.length + 1);
+    });
+  });
+
+  it('shows a mode switch and the friends or kit it drops', async () => {
+    const root = await open(reconfigure(docWith({ mode: 'guardian-only' })));
+    const changed = [...root.querySelectorAll('tr[data-changed]')].map((r) => r.getAttribute('data-setting'));
+    expect(changed).toContain('mode.type');
+    const moved = [...root.querySelectorAll('[data-trust]')].map((t) => t.getAttribute('data-trust'));
+    expect(moved).toEqual(expect.arrayContaining(['mode.adapter', 'mode.pool', 'mode.enrollment-id', 'mode.commitment']));
+  });
+
+  it('calls out a controller and every guardian replaced at once', async () => {
+    const recovery = structuredClone(docWith().recovery) as Record<string, unknown> & { mode: Record<string, unknown> };
+    recovery.controller = contract(70);
+    recovery.mode.guardians = [contract(71), contract(72), contract(73)];
+    const proposed = parsePolicyDocJson(JSON.stringify({ ...docWith(), recovery }));
+    const root = await open(reconfigure(proposed));
+    const alert = root.querySelector('[data-trust-changes]')!.textContent!;
+    for (const g of guardians) expect(alert).toContain(g);
+    for (const n of [70, 71, 72, 73]) expect(alert).toContain(contract(n));
+    expect(alert).toContain(deployment.recoveryController);
+    expect(root.textContent).not.toMatch(/2 of 3 friends/);
   });
 
   it('refuses settings that do not hash to the request', async () => {
