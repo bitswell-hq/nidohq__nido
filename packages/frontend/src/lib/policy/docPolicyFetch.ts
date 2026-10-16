@@ -102,13 +102,7 @@ export async function fetchAppliedDocument(account: string): Promise<{ revision:
  * the views don't answer.
  */
 export async function fetchDocLimits(account: string): Promise<perch.FlatDocLimits> {
-  const config = await readAccountConfiguration(account);
-  const reader = perch.accountSnapshotReader({
-    account,
-    rpcUrl: RPC_URL,
-    networkPassphrase: NETWORK_PASSPHRASE,
-    docCompiler: config.infra.docCompiler,
-  });
+  const reader = await perch.openAccountReader({ account, rpcUrl: RPC_URL, networkPassphrase: NETWORK_PASSPHRASE });
   return (await reader.limits()).value;
 }
 
