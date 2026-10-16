@@ -21,7 +21,9 @@ prerequisite on top of everything here (A1).
 - [ ] **G2. Current limits stated and links reachable.** THREAT_MODEL's
   limits (L1-L6), the [STRIDE register](./STRIDE_THREAT_MODEL.md), and
   [DEFERRED.md](./DEFERRED.md) describe this revision, and every link into
-  Perch is commit-pinned.
+  Perch is commit-pinned. CI job "Doc references" runs
+  `scripts/check-doc-refs.mjs`, which fails on a broken link, a missing path
+  or heading, or a cited test or ID that does not exist.
 - [ ] **G3. The evidence index is reproducible.** Every suite
   SECURITY_INVARIANTS cites runs in a required CI job. The wallet's vitest
   suites and the SDK's outside `src/perch/` ("Unit (local)") run in none.
@@ -113,7 +115,8 @@ Every box here is checked before mainnet.
 
 - [ ] **C1. `stellar-cli` and `stellar-scaffold-cli` pinned** and the
   versions behind each deployed wasm recorded (they write themselves into the
-  wasm metadata).
+  wasm metadata). CI pins both; the deploy scripts don't check them
+  ([SUPPLY_CHAIN.md](./SUPPLY_CHAIN.md#build-toolchain)).
 - [ ] **C2. One command rebuilds Nido's deployed wasm** and diffs the hashes
   against DEPLOYED.md. Perch's wasm is checked against the manifest's hashes
   (`just perch-infra`).
@@ -136,16 +139,18 @@ Every box here is checked before mainnet.
 - [ ] **D3. Recovery state renewal runs on a schedule** (the permissionless
   `renew` calls, RUNBOOKS §6), or users are told how to renew.
 - [~] **D4. The testnet suite passes against Perch's testnet release,
-  onboarding included.** Met for recovery and policy: the six profile/mode
-  combinations and the policy page's `apply_doc` pass through the wallet
-  with real proofs and passkey signatures, with accounts created directly
-  rather than through the relayer (SECURITY_INVARIANTS W8). Open: the same
-  run with relayer-sponsored onboarding.
+  onboarding included.** Met once for recovery and policy, against an earlier
+  deployment (Perch `7ae915d`): the six profile/mode combinations and the
+  policy page's `apply_doc` passed through the wallet with real proofs and
+  passkey signatures, with accounts created directly rather than through the
+  relayer (SECURITY_INVARIANTS W8). Open: a run against the current
+  deployment, and one with relayer-sponsored onboarding.
 - [ ] **D7. The hosted relayer's onboarding queue.** It has refused most
   account setups in recorded testnet runs, sometimes after accepting the
   first few, while its health check passed; find out why before relying on
-  it (RUNBOOKS §5). Tracked in #236 (channels held under `skipWait`) and #235
-  (upgrading the relayer and its Channels plugin).
+  it (RUNBOOKS §5). Tracked in nidohq/nido#236 (channels held under
+  `skipWait`) and nidohq/nido#235 (upgrading the relayer and its Channels
+  plugin).
 - [ ] **D9. Proving measured on reference devices.** In-page proving fits
   the client budgets in
   [Perch's budgets.md §1](https://github.com/stellar-registry/perch/blob/603f7d5504f2d4d9338c135771cea18ac70dbe0c/docs/recovery/budgets.md#1-proving-client)

@@ -13,7 +13,7 @@ git submodule update --init   # vendor/perch, the Perch stack
 just perch-infra       # Perch's deployed wasm + pin caches, by the hashes in vendor/perch/deployments/testnet.json
 just build-contracts   # Nido's wasm (the factory embeds the fetched Perch account)
 just test              # cargo test --workspace (embeds the wasm above)
-just check             # cargo fmt --check + cargo clippy -D warnings
+just check             # cargo fmt --check + cargo clippy -D clippy::pedantic
 just gen-zk-fixtures   # re-prove the real-proof fixtures with Perch's pinned nargo/bb
 ```
 

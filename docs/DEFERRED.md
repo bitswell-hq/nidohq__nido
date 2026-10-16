@@ -9,7 +9,9 @@ Perch owns the first eight items and keeps the authoritative entry for each in
 its own register,
 [`docs/DEFERRED.md`](https://github.com/stellar-registry/perch/blob/603f7d5504f2d4d9338c135771cea18ac70dbe0c/docs/DEFERRED.md)
 (`vendor/perch/docs/DEFERRED.md`). The sections below give Nido's side of
-each. The last item is Nido's.
+each. The ninth, moving to Perch's published npm packages, has no entry in
+Perch's register; Perch's "Packaging rule" at the top of that register
+governs it. The last item is Nido's.
 
 These are not deferred, because they are implemented and in scope: Perch's
 consumer views (`revision()`, `configuration()`, `document()`), the
@@ -103,9 +105,10 @@ check on `apply_doc`.
   `packages/frontend/src/lib/primaryPasskeySigner.ts`), and a dApp document
   request carries `expectedRevision`. Ordinary signatures (transfers,
   `execute`, dApp transaction signing, a guardian's approval from their own
-  Nido) sign
-  `sha256(payload ‖ rule ids)` for rules selected from one `configuration()`
-  read. They bind the invocation and the selected rule IDs, not a revision,
+  Nido) sign the digest the account's `capabilities()` names, over the
+  payload and the rule ids selected from one `configuration()` read
+  ([ARCHITECTURE.md](../ARCHITECTURE.md#4-authorization), "What a passkey
+  signs"). They bind the invocation and the selected rule IDs, not a revision,
   and the wallet does not check the revision before an ordinary signature.
 - **Why it is safe to defer:** a removed or replaced rule never gets its ID
   back, so a signature that names it fails. A rule keeps its ID only through
@@ -231,26 +234,35 @@ This section is the one home for Nido's package-migration plans.
     (`@nidohq/perch-*`, `private`; `just bindings-perch`).
   - `@stellar-registry/perch` and `@stellar-registry/perch-interpreter` already
     come from npm ([SUPPLY_CHAIN.md](./SUPPLY_CHAIN.md#perch-vendorperch-submodule)).
-  - Perch's Rust crates are path dependencies on the submodule. Perch
-    publishes no crates (its releases are on-chain wasm publishes and npm
-    packages), so the submodule stays Nido's source for them.
+  - Perch's Rust crates are git dependencies on Perch at the submodule's
+    commit (root `Cargo.toml`). Perch publishes no crates (its releases are
+    on-chain wasm publishes and npm packages).
   - Consequence: `@nidohq/passkey-sdk` is not publishable while it depends on
     the private `@nidohq/perch-*` clients and the workspace-only perch-zk.
+- **What Perch has published:** perch-zk 0.1.0, `@stellar-registry/perch-contracts`
+  0.1.0, and `@stellar-registry/perch-artifacts` 0.1.0, all on 2026-10-15.
+  Perch's audit manifest
+  ([Packages](https://github.com/stellar-registry/perch/blob/603f7d5504f2d4d9338c135771cea18ac70dbe0c/docs/audit-scope.md#packages))
+  records that perch-zk's `src/` at its release tag equals the pinned source,
+  and that perch-contracts and perch-artifacts were tagged before the current
+  deployment, so their bindings and manifest name the previous one. Nido
+  consumes none of the three.
 - **Why it is safe to defer:** the consumed code is fixed by the Perch source
   commit in the audit manifest, the consumed wasm by the manifest's hashes
   (`just perch-infra`), and npm's resolution of perch-zk by the drift check.
   Switching to published packages changes packaging only if each published
   artifact is shown equal to the reviewed source; a version bump is not that
   proof.
-- **Exit criterion:** Perch publishes perch-zk and
-  `@stellar-registry/perch-contracts`; Nido replaces the workspace link and
-  its generated clients with them after showing each published artifact
-  equals the reviewed one (source unchanged at the release tag, and the
-  published build or the clients' wasm hashes compared); `@nidohq/passkey-sdk`
-  then becomes publishable. Until then no Nido release publishes it
-  ([SUPPLY_CHAIN.md](./SUPPLY_CHAIN.md#npm)).
+- **Exit criterion:** Perch publishes a `@stellar-registry/perch-contracts`
+  for the deployment Nido pins; Nido replaces the perch-zk workspace link and
+  its generated clients with the published packages after showing each
+  published artifact equals the reviewed one (source unchanged at the
+  release tag, and the published build or the clients' wasm hashes
+  compared); `@nidohq/passkey-sdk` then becomes publishable. Until then no
+  Nido release publishes it ([SUPPLY_CHAIN.md](./SUPPLY_CHAIN.md#npm)).
 - **Owner:** Perch publishes; Nido migrates.
-- **Tracking:** [Perch entry](https://github.com/stellar-registry/perch/blob/603f7d5504f2d4d9338c135771cea18ac70dbe0c/docs/DEFERRED.md#npm-publishing-of-perch-zk-and-the-contract-clients)
+- **Tracking:** Perch's
+  [packaging rule](https://github.com/stellar-registry/perch/blob/603f7d5504f2d4d9338c135771cea18ac70dbe0c/docs/DEFERRED.md)
   (`vendor/perch/docs/DEFERRED.md`);
   [nidohq/nido#208](https://github.com/nidohq/nido/issues/208) (Perch
   consumability gaps).
