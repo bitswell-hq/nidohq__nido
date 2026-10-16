@@ -21,13 +21,15 @@ chain by hash and address.
 
 The wallet's deployment, `perch.TESTNET`
 (`packages/passkey-sdk/src/perch/deployment.ts`), is that manifest plus Nido's
-factory; `packages/passkey-sdk/src/perch/deployment.test.ts` checks it field by
-field, taking Nido's factory address from this record (SECURITY_INVARIANTS W6). Wasm hashes and versions are in the manifest.
+factory; `packages/passkey-sdk/src/perch/deployment.test.ts` checks every field
+but `factory` against the manifest (SECURITY_INVARIANTS W6). The `factory`
+address is `perch.TESTNET.factory` itself, which nothing checks; this record is
+its provenance. Wasm hashes and versions are in the manifest.
 
 | Manifest field (`PerchDeployment`) | Contract | Address or value |
 | --- | --- | --- |
 | `network` | | `Test SDF Network ; September 2015` |
-| `factory` | `nido-factory` (Nido's, [below](#nidos-factory)) | `CBFDM3GWAYW4BFGRGDS45OKLU6BWPEKMOY6U6T3JD5E35FDDWITS4VOE` |
+| `factory` | `nido-factory` (Nido's, [below](#nidos-factory)) | `CBJRCUECFC2FSJBSVOVYHWC73A2SN7LIKSLWJBQUNEOWPE4PXG33M54H` |
 | `webauthnVerifier` | `perch-webauthn-verifier` | `CDRYDB7O2JFLF7FAIIQUQK4BKQT3N6ACFFGZQ7AHKMX52RIWTHBHJY6K` |
 | `statelessRegistry` | Perch's registry instance | `CDX2DMYMMEYU6FGN3HPJ2GQSSL5EZHIAMEJD4SPF55FZE5LEUBPPPDA7` |
 | `docCompiler` | `perch-doc-compiler` | `CAV47HI46VZ4JMAN5OA7IFECNFNJHINYZMYUGN27EZI6STEHQFLW23RB` |
@@ -52,22 +54,31 @@ before the passkey.
 
 ## Nido's factory
 
+Read from the chain (the contract instance and its wasm metadata) on
+2026-10-15.
+
 | Field | Value |
 | --- | --- |
-| Address | `CBFDM3GWAYW4BFGRGDS45OKLU6BWPEKMOY6U6T3JD5E35FDDWITS4VOE` |
-| Wasm sha256 | `4a16b51b268814d2b92a9801e48684adba112bc8a5225ae32ce7d88a4f95665f` |
-| Built from | Nido commit `42738a3f47082971bbdc6d5162cc80170f06bf5a`, `just build-contracts`, rustc 1.96.0, `stellar-cli` 27.0.0 (the `stellar-scaffold-cli` version is not recorded) |
-| Embeds | The manifest's `perch-account` (`accountWasmHash` above) |
-| Verifier pin | The manifest's `perch-webauthn-verifier` (`set_registry_pins`) |
-| Admin | `GBPLRG4TQSCCJEVO7IZZXTRXWMQBSUJWWX6SZTSVPGSXVEX3PVOTBHP5`, a single throwaway testnet key |
-| Deployed | 2026-10-09 by `scripts/deploy-factory.sh` (`stellar-cli` 27.0.0), which read back the pin and the account hash the factory deploys |
+| Address | `CBJRCUECFC2FSJBSVOVYHWC73A2SN7LIKSLWJBQUNEOWPE4PXG33M54H` |
+| Wasm sha256 | `c858f314ed96ceca6a5da7b2a4e77b997492e84b285f7abc8c89a50335fc882d` |
+| Built from | rustc 1.96.0, soroban-sdk 27.0.5, `stellar-cli` 27.0.0, `stellar-scaffold` 0.0.27 (the wasm's metadata). The Nido commit is not recorded. |
+| Embeds | `perch-account` `d3d4c28a01b37660c23ac03622b712608d2c0f853b634a597f3cd617e7b66df5`, Perch `845c49a`'s ([earlier Perch generations](#earlier-perch-generations)), not the pinned manifest's `accountWasmHash` |
+| Verifier pin | `CAL7IEAJO7S3SJI4EXESMUNPOEYW6QNR3PQTO7AVHD75YGURSZ5CW27Z`, Perch `845c49a`'s `perch-webauthn-verifier` (`set_registry_pins`), not the pinned manifest's |
+| Admin | `GA2MQ7MBJQCIHGO3ROH7254A5MUNW34UWFHOT4Y2ZPZIHOLEBF57C22Q`, a single throwaway testnet deploy key |
+| Deployed | 2026-10-12 (nidohq/nido#255), with the pin and the account hash the factory deploys read back |
 | Registry name | None |
+
+**This factory predates the pinned Perch release.** The re-pin to Perch
+`cb17149` (nidohq/nido#267) did not redeploy it, so every account it creates
+runs Perch `845c49a`'s account code and names that release's verifier, while
+`perch.TESTNET` names the `cb17149` release. Redeploying the factory against
+the pinned manifest (RUNBOOKS §2.2) and recording it here closes the gap.
 
 ## Nido contracts in use
 
 | Name | Address | Notes |
 |---|---|---|
-| Factory | `CBJRCUECFC2FSJBSVOVYHWC73A2SN7LIKSLWJBQUNEOWPE4PXG33M54H` | **Re-pin deploy (2026-10-12)** against the redeployed Perch stack (`vendor/perch` at `845c49a`). Random-salt account factory; `create_account(salt, key)`/`create_account_v2(salt, key, commitment)` deploy doc-only Perch smart accounts. Embeds the Perch account wasm hash `d3d4c28a…` (the manifest's `perch-account`; verified live via `refresh_account_wasm_hash`). Pinned to Perch's WebAuthn verifier `CAL7IEAJ…` via `set_registry_pins` (read back live). Mints accounts whose `__check_auth` binds the account's own address into the external-signer digest (`addr_oz_v1`) and whose doc compiler refuses non-canonical webauthn keys. Admin `GA2MQ7MBJQCIHGO3ROH7254A5MUNW34UWFHOT4Y2ZPZIHOLEBF57C22Q` — a throwaway testnet deploy key, NOT a human-held key (testnet only; mainnet must hand the factory to the multisig). Not registry-registered yet: `perch.TESTNET.factory` in `packages/passkey-sdk/src/perch/deployment.ts` is the source of truth. Previous factory `CCJFOM6UGOH7JSAX22C3FAECG5657HKIUYDBTCMUMILKDA6LOA2J2EGG` (embedded the pre-redeploy Perch account) remains on-chain; accounts it minted sign the earlier `oz_rule_ids` digest and need the upgrade path in the repin PR to reach the redeployed account bytes. |
+| Factory | `CBJRCUECFC2FSJBSVOVYHWC73A2SN7LIKSLWJBQUNEOWPE4PXG33M54H` | `perch.TESTNET.factory`, recorded [above](#nidos-factory). `create_account(salt, key)` deploys a Perch account of the `845c49a` generation, whose `__check_auth` binds the account's own address into the external-signer digest (`addr_oz_v1`). Not registry-registered: `perch.TESTNET.factory` in `packages/passkey-sdk/src/perch/deployment.ts` is the source of truth. The previous Perch-era factory is `CBFDM3…` ([earlier Perch generations](#earlier-perch-generations)); the pre-Perch `CCJFOM6…` is in the compatibility appendix. |
 | WebAuthn verifier | `CAL7IEAJO7S3SJI4EXESMUNPOEYW6QNR3PQTO7AVHD75YGURSZ5CW27Z` | Perch's, from its `845c49a` deployment ([earlier Perch generations](#earlier-perch-generations)), not the pinned manifest's `CDRYDB7O…`. The factory above pins it (`set_registry_pins`, read back live), so the admin rule of every account it mints names it. Constructorless, no admin. Nido's former verifier, `CACVGSAH…`, is in the compatibility appendix. |
 | Multisig policy | `CCSDKJYOFCPTCCGQZPF73RJNHFC7TPO532Q36N3M2VBYZFWQOTDB7J7G` | Registered as `unverified/multisig-policy`. Built against soroban-sdk 26 + OZ stellar-contracts main — accepts v0.7 `ContextRule` (with `signer_ids`/`policy_ids`). |
 | Spending-limit policy | `CCJMCPGADKMVKYOIZXMV7UWH62XYDAIT6GJRNJPQSZ2CHPOF4K2AU2QC` | Registered as `unverified/spending-limit-policy`. Built against soroban-sdk 26 + OZ stellar-contracts rev `637c53a` — wraps `policies::spending_limit` (rolling window, meters SAC `transfer`). |

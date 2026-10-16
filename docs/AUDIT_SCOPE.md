@@ -80,7 +80,7 @@ change outside this audit.
 | Artifact | Record |
 | --- | --- |
 | Perch's testnet stack | Perch's manifest [`deployments/testnet.json`](https://github.com/stellar-registry/perch/blob/603f7d5504f2d4d9338c135771cea18ac70dbe0c/deployments/testnet.json) (`vendor/perch/deployments/testnet.json`) at the Perch source commit: the build commit (`source.commit`, with `dirty`), the build toolchain (`toolchain`), and every contract's version, `sha256`, and address. |
-| Nido's testnet factory | [DEPLOYED.md](../DEPLOYED.md#nidos-factory): wasm hash, build commit, toolchain, verifier pin, admin. |
+| Nido's testnet factory | [DEPLOYED.md](../DEPLOYED.md#nidos-factory): wasm hash, toolchain, embedded account, verifier pin, admin. Its build commit is not recorded, and it embeds the Perch release before the pinned one. |
 
 The manifest records a dirty build tree (`source.dirty: true`) and a
 toolchain of rustc 1.99.0 and `stellar` 28.0.0-aha.0, the
