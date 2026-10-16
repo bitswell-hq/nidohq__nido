@@ -146,6 +146,7 @@ sequenceDiagram
     Sub->>Relayer: create_account(salt, passkey)
     Relayer->>Factory: sponsored invocation
     Factory->>Account: deploy at get_c_address(salt)<br/>rule 0: passkey admin, scoped to self
+    Sub->>Account: read back over RPC: code and configuration<br/>(stop unless it is this passkey's untouched account)
     Sub->>Account: testnet funding moves in
     User->>Sub: /security/recovery/: choose recovery
     Sub->>Account: apply_doc(document with recovery), signed by the passkey
@@ -161,7 +162,12 @@ also kept in the browser's `nido:pending` storage and in a
 `nido_setup_<account>` cookie on the parent domain (30 minutes), which sends
 it with requests to Nido's subdomains until the account exists. The relayer
 sees it in the setup transaction. A second `create_account` with the same salt fails,
-so the exposure is a race before the first deploy (THREAT_MODEL 5, 10).
+so the exposure is a race before the first deploy (THREAT_MODEL 5, 10). The
+wallet does not take the relayer's confirmation as proof of what was
+deployed: before it activates or funds the account, it reads it back over RPC
+and stops unless it is exactly what `create_account` makes for the user's
+passkey (SECURITY_INVARIANTS W11). A lost race therefore costs the user the
+address, not funds.
 
 Until the first `apply_doc`, the account has only its admin rule and no
 recovery. Recovery is enrolled by that `apply_doc`: the account synchronizes

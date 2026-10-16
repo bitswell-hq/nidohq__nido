@@ -1,3 +1,5 @@
+import type { perch } from '@nidohq/passkey-sdk';
+
 /**
  * Setup-link account/salt consistency guard.
  *
@@ -37,4 +39,33 @@ export function setupAddressMismatch(
     );
   }
   return null;
+}
+
+/** Why setup stopped after reading the new account back, for the user, and
+ *  whether trying again can help. Only an account that has not shown up yet
+ *  is worth retrying; any other mismatch means the address is not the user's
+ *  and never will be. */
+export function newAccountRefusal(problem: perch.NewAccountProblem): { message: string; retry: boolean } {
+  switch (problem) {
+    case 'missing':
+      return {
+        message:
+          "We couldn't find your new account on the network, so setup stopped before using it. Please try again.",
+        retry: true,
+      };
+    case 'key':
+      return {
+        message:
+          'This address is controlled by a passkey this setup did not create, so it is not yours to use. ' +
+          'Nothing was moved into it. Please start again from the home page to get a new address.',
+        retry: false,
+      };
+    default:
+      return {
+        message:
+          'The account at this address is not the one this setup creates, so it is not safe to use. ' +
+          'Nothing was moved into it. Please start again from the home page to get a new address.',
+        retry: false,
+      };
+  }
 }

@@ -123,6 +123,23 @@ Every box here is checked before mainnet.
   the salt is revealed) meets A6 instead. Evidence: an adversarial setup
   test in which a front-runner creates the account first, and a test of the
   wallet's failure path. Tracked in nidohq/nido#245.
+  _Status:_ the wallet check is built (`perch/newAccount.ts` in the SDK, run by
+  the onboarding page and the account switcher; SECURITY_INVARIANTS W11).
+  `new_account_reads.rs` records accounts a front-runner created first, and
+  `newAccount.test.ts` requires the wallet to refuse them; a browser test
+  drives a resumed setup at a claimed address to its refusal, and the refusal
+  after a submission is reviewed. The check names the deployment's
+  account wasm and verifier, so it refuses every account a factory built
+  around other ones creates: on testnet, until Nido's factory is redeployed on
+  the manifest's account (DEPLOYED.md).
+- [ ] **A7. Account setup can't be denied by claiming its address.** A6
+  detects a claimed address; nothing prevents the claim. The relayer, or
+  anyone who learns a salt before its deploy, can take every address it sees,
+  and each user loses that address and the passkey made for it (THREAT_MODEL
+  10, L5). Meeting A7 needs a mechanism that binds the key before the salt is
+  public, for example a factory commitment to the key that `create_account`
+  checks, or a recorded decision to launch with the denial, with a runbook
+  for answering it (RUNBOOKS §5). Tracked in nidohq/nido#245.
 
 ### Reproducible builds
 

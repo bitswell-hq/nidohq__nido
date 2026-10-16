@@ -256,7 +256,12 @@ for compromise), confirm recovery, and write a post-mortem outside this
 runbook.
 
 **Host compromise.** Treat every account set up through the relayer during
-the window as possibly claimed. Stop onboarding first (pause the relayer, or
+the window as possibly claimed. A wallet build with the new-account check
+refuses a claimed address before activating or funding it
+(SECURITY_INVARIANTS W11), so its users see setup stop and start again on a
+new address; the check below is still needed for accounts older builds
+activated, and the claims themselves (a denial of setup) continue until the
+relayer is contained. Stop onboarding first (pause the relayer, or
 ship a wallet build without `PUBLIC_RELAYER_URL`, which refuses setup). Then
 check each account created in the window on chain.
 

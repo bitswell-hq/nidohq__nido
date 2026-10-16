@@ -229,12 +229,16 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
     saveCredential as sdkSaveCredential,
     savePendingAccount,
     loadPendingAccounts,
+    removePendingAccount,
+    loadCredential,
     activateAccount,
     accountUrl,
     stripSubdomain,
+    perch,
   } from "@nidohq/passkey-sdk";
   import { fetchFactoryAddress } from "../../lib/policyChainFetch.js";
-  import { setupAddressMismatch } from "../../lib/newAccount/deployGuard";
+  import { newAccountRefusal, setupAddressMismatch } from "../../lib/newAccount/deployGuard";
+  import { accountDeployed, verifyNewNidoAccount } from "../../lib/newAccount/verifyNewAccount";
   import { parseReturnIntent, buildClaimReturnUrl } from "../../lib/claimFlow";
   import { withPasskeySheet } from "../../lib/passkeySheet";
   import { shortAddr } from "../../lib/address";
@@ -640,6 +644,54 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
     return setupConsistencyCheck;
   }
 
+  // The address is not this user's: another key controls it, or it is not the
+  // account this setup creates. Stop for good, and drop this device's copies
+  // of the salt, which can no longer set anything up.
+  function refuseSetup(message: string) {
+    showError(message);
+    $passkeySection.classList.add("hidden");
+    $recoveryEnrollSection.classList.add("hidden");
+    $deploySection.classList.add("hidden");
+    $registerBtn.disabled = true;
+    if (contractId) {
+      clearSetupSaltCookie(contractId);
+      removePendingAccount(contractId);
+    }
+    saltHex = null;
+  }
+
+  // Resuming a setup whose address already holds a contract: either this
+  // device's earlier attempt landed after the page was left, or someone else
+  // got the salt in first. Settle which before offering a new passkey (a new
+  // passkey could never control an account that already exists): with the
+  // passkey this device registered for the address, deploy() checks the
+  // account and finishes it, or refuses it. Resolves true when it took over
+  // the page. An address that can't be read in a few seconds falls through
+  // to the passkey step (the passkey prompt must not wait on a slow RPC);
+  // deploy() reads it again before submitting anything.
+  let existingAccountCheck: Promise<boolean> | null = null;
+  function takeOverIfDeployed(): Promise<boolean> {
+    if (!existingAccountCheck) {
+      existingAccountCheck = (async (): Promise<boolean> => {
+        if (!contractId || !saltHex || isSetupReservation) return false;
+        const unread = sleep(4000).then(() => false);
+        if (!(await Promise.race([accountDeployed(contractId).catch(() => false), unread]))) return false;
+        const stored = loadCredential(contractId);
+        if (!stored) {
+          refuseSetup(newAccountRefusal("key").message);
+          return true;
+        }
+        passkeyPublicKey = hex2buf(stored.publicKey);
+        credentialIdBytes = stored.credentialId;
+        $passkeySection.classList.add("hidden");
+        $accountChip.classList.add("hidden");
+        proceedToDeploy();
+        return true;
+      })();
+    }
+    return existingAccountCheck;
+  }
+
   async function reserveNidoAddress(): Promise<string> {
     if (!RELAYER_URL || !RELAYER_SIM_SOURCE) {
       throw new Error("Relayer is not configured for account setup.");
@@ -756,6 +808,14 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
       showError(mismatch);
       return;
     }
+    if (await takeOverIfDeployed()) return;
+    // A retry after a failed deploy keeps the passkey already registered for
+    // this address: an earlier submission may still land with it, and a new
+    // passkey would then never match the account.
+    if (passkeyPublicKey) {
+      proceedToDeploy();
+      return;
+    }
 
     try {
       $registerBtn.disabled = true;
@@ -787,6 +847,7 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
     // Silently skip the auto-prompt on a mismatched setup link; the manual tap
     // surfaces the error. (Guard before any passkey is created.)
     if (await checkSetupConsistency()) return;
+    if (await takeOverIfDeployed()) return;
     // Run in the background: do NOT disable the button. The user can tap to take
     // over at any time (the click handler aborts this attempt first), so a hung
     // or pending attempt can never strand the button in a disabled state.
@@ -803,6 +864,55 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
   }
 
   // --- Step 2 · Setting up your Nido (deploy account) ---
+
+  // Submit create_account(salt, key) through the relayer and wait for its
+  // confirmation. What the confirmation proves is checked by deploy().
+  async function submitCreateAccount(server: rpc.Server, key: Uint8Array): Promise<void> {
+    if (!RELAYER_URL || !RELAYER_SIM_SOURCE) {
+      throw new Error("Relayer is not configured for account setup.");
+    }
+    const sourceAccount = await waitForSourceAccount(server, RELAYER_SIM_SOURCE);
+
+    // Deploy only: the factory mints a Perch account whose constructor
+    // rule is this passkey. Recovery (and every other rule) arrives with
+    // the account's first apply_doc.
+    const simTxn = new TransactionBuilder(sourceAccount, {
+      fee: "100",
+      networkPassphrase: Networks.TESTNET,
+    })
+      .addOperation(
+        Operation.invokeContractFunction({
+          contract: await fetchFactoryAddress(),
+          function: "create_account",
+          args: [
+            xdr.ScVal.scvBytes(Buffer.from(saltBytes())),
+            xdr.ScVal.scvBytes(Buffer.from(key)),
+          ],
+        })
+      )
+      .setTimeout(0)
+      .build();
+
+    const sim = await server.simulateTransaction(simTxn);
+    if (rpc.Api.isSimulationError(sim) || rpc.Api.isSimulationRestore(sim)) {
+      throw new Error(`Simulation failed: ${"error" in sim ? sim.error : "restore needed"}`);
+    }
+
+    const transaction = rpc.assembleTransaction(simTxn, sim).setTimeout(0).build();
+    const { func, auth } = extractFuncAndAuth(transaction);
+
+    // Prepared — 1 done, 2 · "Submitting to the network" begins.
+    setCheckProgress(2, 2);
+    const submitted = await submitSorobanTransaction({ func, auth });
+    if (!submitted.transactionId) {
+      throw new Error("Relayer accepted account setup but returned no transaction id");
+    }
+
+    // Submitted — 2 done, 3 · "Confirming on-chain" begins (the long wait).
+    setCheckProgress(3, 3);
+    const confirmed = await waitForConfirmation(submitted.transactionId);
+    if (!confirmed.hash) throw new Error("Relayer confirmed account setup without a transaction hash");
+  }
 
   async function deploy() {
     clearError();
@@ -825,60 +935,28 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
       // completeRegistration, concurrent with this whole deploy — it backs the
       // "Finalizing your wallet" step below and is never surfaced to the user.
       setCheckProgress(1, 1);
-
-      if (!RELAYER_URL || !RELAYER_SIM_SOURCE) {
-        throw new Error("Relayer is not configured for account setup.");
-      }
-      const simulationSource = RELAYER_SIM_SOURCE;
       const server = new rpc.Server(RPC_URL);
 
-      const sourceAccount = await waitForSourceAccount(server, simulationSource);
-
-      // Deploy only: the factory mints a Perch account whose constructor
-      // rule is this passkey. Recovery (and every other rule) arrives with
-      // the account's first apply_doc.
-      const simTxn = new TransactionBuilder(sourceAccount, {
-        fee: "100",
-        networkPassphrase: Networks.TESTNET,
-      })
-        .addOperation(
-          Operation.invokeContractFunction({
-            contract: await fetchFactoryAddress(),
-            function: "create_account",
-            args: [
-              xdr.ScVal.scvBytes(Buffer.from(saltBytes())),
-              xdr.ScVal.scvBytes(Buffer.from(passkeyPublicKey)),
-            ],
-          })
-        )
-        .setTimeout(0)
-        .build();
-
-      const sim = await server.simulateTransaction(simTxn);
-      if (rpc.Api.isSimulationError(sim) || rpc.Api.isSimulationRestore(sim)) {
-        throw new Error(`Simulation failed: ${"error" in sim ? sim.error : "restore needed"}`);
+      // An address that already holds a contract has nothing left to submit:
+      // this passkey's earlier attempt landed, or someone else's did. The
+      // check below tells which.
+      if (await accountDeployed(contractId!)) {
+        setCheckProgress(3, 3);
+      } else {
+        await submitCreateAccount(server, passkeyPublicKey);
       }
 
-      const transaction = rpc.assembleTransaction(simTxn, sim).setTimeout(0).build();
-      const { func, auth } = extractFuncAndAuth(transaction);
-
-      // Prepared — 1 done, 2 · "Submitting to the network" begins.
-      setCheckProgress(2, 2);
-      const submitted = await submitSorobanTransaction({ func, auth });
-      if (!submitted.transactionId) {
-        throw new Error("Relayer accepted account setup but returned no transaction id");
-      }
-
-      // Submitted — 2 done, 3 · "Confirming on-chain" begins (the long wait).
-      setCheckProgress(3, 3);
-      const confirmed = await waitForConfirmation(submitted.transactionId);
-      if (!confirmed.hash) throw new Error("Relayer confirmed account setup without a transaction hash");
+      // The relayer's confirmation says some transaction succeeded, not what
+      // it created. Read the account back from RPC and go on only if it is
+      // exactly the account create_account makes for this passkey; activating
+      // it, sending users to it, and funding it all wait on this.
+      await verifyNewNidoAccount(contractId!, passkeyPublicKey, { attempts: 10 });
 
       activateAccount(contractId!);
       clearSetupSaltCookie(contractId!);
       await syncNidoStorageViaBridge();
 
-      // Confirmed — 3 done, 4 · "Finalizing your wallet" begins. Behind this card
+      // Checked — 3 done, 4 · "Finalizing your wallet" begins. Behind this card
       // we drain the friendbot-funded keypair into the account; it must follow
       // deploy since the account contract is the transfer destination. The funding
       // itself already ran in parallel with steps 1–3, so this is usually a quick
@@ -937,6 +1015,14 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
         }
       }, 1500 + 2200);
     } catch (err: any) {
+      if (err instanceof perch.NewAccountRefused) {
+        const refusal = newAccountRefusal(err.problem);
+        if (!refusal.retry) {
+          refuseSetup(refusal.message);
+          return;
+        }
+        err = new Error(refusal.message);
+      }
       // Fall back to the passkey step so the user can retry the deploy.
       showError(`Couldn't finish setting up: ${err.message}`);
       $deploySection.classList.add("hidden");
@@ -946,4 +1032,8 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
       $registerBtn.disabled = false;
     }
   }
+
+  // A resumed setup whose address already holds a contract is settled before
+  // the passkey step is offered (see takeOverIfDeployed).
+  void takeOverIfDeployed();
 </script>
