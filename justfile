@@ -18,9 +18,12 @@ build:
 # deployed account. (The Perch crates build from the pins Perch commits; cargo
 # fetches them at the submodule's commit, see the root Cargo.toml.) Perch's script refuses any
 # file whose sha256 or content address differs from the manifest. Needs the
-# Stellar CLI and jq. Run once after cloning and after bumping vendor/perch.
+# Stellar CLI, curl and jq. Run once after cloning and after bumping
+# vendor/perch. Reads the chain through the manifest's rpc_url, an
+# RPC_URL/STELLAR_RPC_URL override, or a guarded fallback while the manifest's
+# endpoint is down (scripts/perch-infra.sh; docs/RUNBOOKS.md "RPC endpoints").
 perch-infra:
-    cd vendor/perch && bash scripts/fetch-infra-wasm.sh --stack ../../target/wasm32v1-none/contract
+    scripts/perch-infra.sh
 
 # Re-pin vendor/perch to a Perch commit (full 40-hex) and regenerate what the
 # pin derives: the stack by manifest hash, Nido's contracts, the Perch

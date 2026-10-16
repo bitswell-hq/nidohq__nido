@@ -41,6 +41,13 @@
 #   [network]   Default "testnet". The Perch manifest read is
 #               vendor/perch/deployments/<network>.json.
 #
+# The endpoint is chosen once, before anything is submitted, by
+# scripts/stellar-rpc.sh: RPC_URL/STELLAR_RPC_URL if set, else the manifest's
+# rpc_url, else a guarded fallback while that is down (docs/RUNBOOKS.md "RPC
+# endpoints"). Every read and write in the run goes there. It never fails
+# over mid-run: a write whose response was lost may still have landed, so a
+# failure stops the run (see above).
+#
 # Env:
 #   ADMIN          The factory's final admin (default: the identity's address,
 #                  fine only on testnet). On mainnet this must be the multisig.
@@ -71,6 +78,7 @@ RECORD="packages/passkey-sdk/src/perch/factory.$NETWORK.json"
 
 command -v stellar >/dev/null || die "stellar CLI not found"
 command -v jq >/dev/null || die "jq not found"
+command -v curl >/dev/null || die "curl not found"
 [ -f "$MANIFEST" ] || die "no Perch manifest at $MANIFEST (git submodule update --init)"
 
 sha256() { if command -v sha256sum >/dev/null; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi; }
@@ -88,7 +96,11 @@ if [ -z "${DELAY_LEDGERS:-}" ]; then
     DELAY_LEDGERS=720
 fi
 [[ "$DELAY_LEDGERS" =~ ^[0-9]+$ ]] || die "DELAY_LEDGERS '$DELAY_LEDGERS' is not a ledger count"
-NET=(--source-account "$IDENTITY" --network "$NETWORK")
+# shellcheck source=scripts/stellar-rpc.sh
+. scripts/stellar-rpc.sh
+rpc_select "$(m .rpc_url)" "$(m .network_passphrase)" || die "no usable RPC endpoint for $NETWORK"
+RPC="$(rpc_url)"
+NET=(--source-account "$IDENTITY" --rpc-url "$RPC" --network-passphrase "$(m .network_passphrase)")
 
 note "account wasm"
 [ -f "$ACCOUNT_WASM" ] || die "$ACCOUNT_WASM missing: run 'just perch-infra'"

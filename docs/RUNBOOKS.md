@@ -10,7 +10,8 @@ git clone --recurse-submodules https://github.com/nidohq/nido.git && cd nido
 git submodule update --init
 
 just perch-infra       # Perch's deployed wasm and pin cache, by the hashes in
-                       # vendor/perch/deployments/testnet.json (Stellar CLI, jq)
+                       # vendor/perch/deployments/testnet.json (Stellar CLI,
+                       # curl, jq; endpoint choice: "RPC endpoints" below)
 just build-contracts   # Nido's contracts; the factory embeds the fetched
                        # Perch account wasm
 just test              # cargo test --workspace: integration tests replay the
@@ -58,6 +59,37 @@ account's origin); every recovery step still runs through the wallet:
 npx astro build --root ./packages/frontend
 NIDO_E2E_DIRECT_DEPLOY=1 npx playwright test --project=testnet-chromium perch-recovery account-policy-doc-apply
 ```
+
+### RPC endpoints
+
+`just perch-infra`, `just check-factory`, and `scripts/deploy-factory.sh` read
+the chain through the
+endpoint `scripts/stellar-rpc.sh` chooses. It is the one place the fallback
+list lives, and it has the same variables as Perch's helper of the same name
+(and defers to it once vendor/perch carries it):
+
+| Variable | Meaning |
+| --- | --- |
+| `RPC_URL`, else `STELLAR_RPC_URL` | Override. Used as given: never probed, never fallen back from. |
+| `PERCH_RPC_FALLBACKS` | Ordered, space-separated fallbacks. Unset: testnet uses Gateway.fm (`https://soroban-rpc.testnet.stellar.gateway.fm`); mainnet and every other network have none. Empty: none. |
+| `PERCH_RPC_MAX_LAG` | Ledgers a fallback may trail the newest other source (default 10). |
+| `PERCH_HORIZON_URL` | Freshness reference (default horizon-testnet / horizon; empty disables). |
+| `PERCH_RPC_PROBE_ATTEMPTS`, `PERCH_RPC_CALL_ATTEMPTS`, `PERCH_RPC_TIMEOUT` | Probe tries (3), per-call tries before moving (3), curl timeout in seconds (10). |
+
+Without an override, the manifest's `rpc_url` is used while it answers
+`getNetwork` with the manifest's passphrase and `getLatestLedger`. Only while
+it is down (no response, HTTP 5xx) is a fallback considered, and only one on
+the manifest's network whose ledger is within `PERCH_RPC_MAX_LAG` of another
+source (another candidate or Horizon). A stale fallback, a wrong-network one,
+or one nothing can vouch for is refused. A primary that answers wrongly is
+reported, not routed around. Hash, content-address, and contract errors never
+cause a fallback. Each choice and call logs its endpoint on stderr (`rpc: ...`).
+
+`just perch-infra` and `just check-factory` move to the next fallback mid-run
+when a read fails at the endpoint after its own retries. `deploy-factory.sh` chooses
+once, before it submits anything, and never moves mid-run. CI's Contracts job
+passes the repository variable `RPC_URL` to both, so an outage that also takes
+the default fallback down can be routed around without a code change.
 
 ## 2. Deploying
 

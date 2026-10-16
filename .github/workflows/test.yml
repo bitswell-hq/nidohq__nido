@@ -55,7 +55,12 @@ jobs:
       # Perch's testnet deployment, by the hashes in its manifest
       # (vendor/perch/deployments/testnet.json): every deployed contract's
       # wasm, each refused unless its sha256 and content address match.
+      # The RPC comes from scripts/stellar-rpc.sh: the manifest's rpc_url, a
+      # guarded fallback while it is down, or the repository variable RPC_URL
+      # when set (docs/RUNBOOKS.md "RPC endpoints").
       - name: Fetch Perch's deployed stack
+        env:
+          RPC_URL: ${{ vars.RPC_URL }}
         run: just perch-infra
 
       # Nido's own contracts; the factory embeds the fetched Perch account.
@@ -73,6 +78,8 @@ jobs:
       # against the deployed factory's instance storage, read over RPC. The
       # SDK's deployment.test.ts checks the record against the manifest.
       - name: Check the factory record against testnet
+        env:
+          RPC_URL: ${{ vars.RPC_URL }}
         run: just check-factory
 
       # The whole Rust workspace: the factory, the policy contracts, and the
@@ -93,6 +100,17 @@ jobs:
         run: |
           just gen-zk-fixtures
           git diff --exit-code -- 'crates/integration-tests/fixtures/zk/*/fixture.json'
+
+  rpc-scripts:
+    name: RPC endpoint choice (scripts)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Stub RPC/Horizon servers; no network.
+      - name: Fallback, staleness, network, and override tests
+        run: python3 scripts/test_rpc_fallback.py -v
+      - name: shellcheck
+        run: shellcheck -s bash -x -S warning scripts/stellar-rpc.sh scripts/perch-infra.sh scripts/deploy-factory.sh scripts/check-factory.sh
 
   unit:
     name: Unit (TestAuthenticator)
