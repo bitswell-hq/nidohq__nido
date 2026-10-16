@@ -12,6 +12,11 @@
 # packages/passkey-sdk/src/perch/deployment.test.ts; together the two say the
 # deployed factory mints the account the manifest names.
 #
+# The read goes through scripts/stellar-rpc.sh: RPC_URL/STELLAR_RPC_URL if
+# set, else Perch's manifest's rpc_url (vendor/perch/deployments/<network>.json),
+# else a guarded fallback while that is down, also mid-run (docs/RUNBOOKS.md
+# "RPC endpoints").
+#
 # Usage: scripts/check-factory.sh [network]   (default "testnet")
 set -euo pipefail
 
@@ -23,13 +28,22 @@ RECORD="$REPO_ROOT/packages/passkey-sdk/src/perch/factory.$NETWORK.json"
 
 command -v stellar >/dev/null || die "stellar CLI not found"
 command -v jq >/dev/null || die "jq not found"
+command -v curl >/dev/null || die "curl not found"
 [ -f "$RECORD" ] || die "no factory record at $RECORD"
+MANIFEST="$REPO_ROOT/vendor/perch/deployments/$NETWORK.json"
+[ -f "$MANIFEST" ] || die "no Perch manifest at $MANIFEST (git submodule update --init)"
 
 r() { jq -r "$1" "$RECORD"; }
 FACTORY="$(r .factory)"
 [[ "$FACTORY" =~ ^C[A-Z2-7]{55}$ ]] || die "$RECORD has no factory address"
 
-instance="$(stellar ledger entry fetch contract-data --contract "$FACTORY" --instance --network "$NETWORK" --output json \
+PASSPHRASE="$(r .network_passphrase)"
+[ "$PASSPHRASE" = "$(jq -r .network_passphrase "$MANIFEST")" ] || die "$RECORD and $MANIFEST name different networks"
+# shellcheck source=scripts/stellar-rpc.sh
+. "$REPO_ROOT/scripts/stellar-rpc.sh"
+rpc_select "$(jq -r .rpc_url "$MANIFEST")" "$PASSPHRASE" || die "no usable RPC endpoint for $NETWORK"
+
+instance="$(rpc_stellar ledger entry fetch contract-data --contract "$FACTORY" --instance --output json \
     | jq -c '[.. | objects | select(has("contract_instance")) | .contract_instance][0]')"
 [ "$instance" != null ] || die "no contract instance for $FACTORY on $NETWORK"
 
