@@ -3,6 +3,7 @@ import {
   stashSignRequest,
   loadSignRequest,
   clearSignRequest,
+  networkProblem,
   safeRouteUrl,
   signRequestFromParams,
   validateDappReturn,
@@ -281,5 +282,19 @@ describe("validateDappReturn (entry-point origin/return guard)", () => {
     expect(validateDappReturn("http://localhost.evil.example", undefined)).toEqual({
       error: "malformed-dapp",
     });
+  });
+});
+
+describe("networkProblem", () => {
+  const TESTNET = "Test SDF Network ; September 2015";
+  it("accepts no network or the wallet's own", () => {
+    expect(networkProblem(undefined, TESTNET)).toBeUndefined();
+    expect(networkProblem("", TESTNET)).toBeUndefined();
+    expect(networkProblem(TESTNET, TESTNET)).toBeUndefined();
+  });
+  it("refuses a request for another network", () => {
+    expect(networkProblem("Public Global Stellar Network ; September 2015", TESTNET)).toMatch(
+      /different Stellar network/,
+    );
   });
 });

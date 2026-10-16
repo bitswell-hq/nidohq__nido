@@ -22,7 +22,7 @@
 #      leaves it byte-identical); a changed verdict is for the SDK's
 #      validate.ts to match, which its vitest suite checks;
 #   7. `cargo test --workspace` runs every Rust suite against the new stack,
-#      which also refreshes Cargo.lock and the Soroban test snapshots.
+#      which also refreshes Cargo.lock.
 #
 # Nido's factory is not redeployed. When the manifest moves `perch-account`
 # or `perch-webauthn-verifier`, the SDK's deployment.test.ts fails until the

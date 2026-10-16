@@ -59,13 +59,17 @@ and infrastructure bring.
    shows the new key's ending for the guardian to confirm with their friend
    out of band. The chain cannot tell whose passkey a replacement is; Perch's
    spec puts that check on the guardian (§2).
+   A link asking a guardian to approve a reconfiguration is checked against
+   its config hash, then shown setting by setting next to the current one,
+   with any new controller, proof checker, pool, circuit, friend, or kit
+   called out; Approve signs the hash of exactly those settings (W2).
 5. **Setup-key thief.** Reads a salt before the owner deploys and calls
    `create_account(salt, their_key)` first. The salt travels in the URL
    fragment and is scrubbed from the address bar, but during setup it is also
    in a cookie on the parent domain (sent with every request to Nido's
    subdomains, so it reaches the worker and Pages logs if they record
-   cookies) and in `nido:pending`, shared with the apex through the storage
-   bridge. A second `create_account` with the same salt fails (F2), so
+   cookies) and in `nido:pending`, which the storage bridge shares with that
+   account's own origin and no other (adversary 15). A second `create_account` with the same salt fails (F2), so
    the risk is a race before the first deploy, not a takeover after. The
    relayer sees every salt (adversary 10). See L5.
 6. **Script in the wallet origin (XSS, malicious extension, compromised CDN).**
@@ -152,6 +156,64 @@ and infrastructure bring.
     ([Perch ZK README](https://github.com/stellar-registry/perch/blob/603f7d5504f2d4d9338c135771cea18ac70dbe0c/docs/zk/README.md)
     (`vendor/perch/docs/zk/README.md`); MAINNET_READINESS D5). Until then,
     recovery's ZK factor rests on that unaudited code.
+14. **Malicious dApp or link.** Anyone can send the user a link into their
+    own account's wallet pages, or open `/sign/` from a dApp, with whatever
+    parameters they like. The requesting dApp's origin is itself only a URL
+    parameter, so "a trusted dApp asks" can be claimed by any page; the
+    wallet shows it as the requester, never as proof. What the wallet will
+    sign for such a request:
+    - **No own-action framing from a link.** Wallet-built requests ("Claim a
+      name", "Grant an app a session key") are framed as the user's own
+      action. The account page's only link-triggered one is `?claim=<name>`,
+      a name registration validated against the name grammar and rendered as
+      one. Anything else from outside, including the status-message demo,
+      reaches `/sign/` as a dApp request under the requester's origin.
+    - **Transactions: the whole authorization tree.** `/sign/` simulates the
+      dApp's transaction and renders every call the account would authorize,
+      sub-calls included, not just the top-level call. The ceremony signs only
+      the tree that was shown, and refuses when a fresh simulation yields a
+      different one. It refuses any tree that calls the account itself
+      (`apply_doc`, `execute`, `schedule_upgrade`, …: those change who
+      controls the account or move its funds through its own entry points,
+      and only Nido's own pages build them) or deploys a contract in its name
+      (`packages/frontend/src/lib/signing/authReview.ts`).
+    - **Authorization entries (`kind=authEntry`).** The passkey signs these
+      under the admin rule, and the result is a bearer authorization: whoever
+      holds it can use it in any transaction until it expires. The wallet
+      signs only a Soroban authorization preimage for its own network,
+      expiring within 720 ledgers (about an hour), whose tree passes the same
+      rules; the page shows the tree and says what the signature allows and
+      until when.
+    - **Network.** A request naming any other network passphrase is refused.
+    - **Grants.** The grant card describes the one contract-scoped rule the
+      request adds or changes; a request that changes an account-scoped rule
+      after the first apply, removes a rule, or grants several is refused.
+
+    Every signing page is unframeable (`X-Frame-Options: DENY`). What
+    remains is the user's judgement: a tree of calls on other contracts (a
+    token transfer, a swap) is approved on the dApp's word, and the dApp's
+    claimed origin is unauthenticated.
+15. **Script on a sibling origin under the apex.** The apex's storage bridge
+    holds every account's setup key in `nido:pending` and the account list
+    every origin's switcher shows. Pages that share the apex but are not this
+    account's wallet — the built-in status-message dApp, the relayer's host,
+    any future service on `*.nido.fyi`, or a network attacker serving one of
+    them over plain http — must not read those keys or plant entries. Every
+    response carries `Strict-Transport-Security` with `includeSubDomains`.
+    The bridge page alone may be framed, under an enforced
+    `frame-ancestors https://*.nido.fyi`, and its handler answers only a
+    message from the window embedding it, from an https origin one label
+    below the apex whose label is a valid contract address or name-shaped
+    (the built-in dApps and `relay` excluded). It returns the account list,
+    cached names, and at most one setup key, the requester's own; it accepts
+    only the requester's own entries; ids are checked as contract StrKeys and
+    escaped where rendered (`packages/frontend/src/lib/nidoSharedStorage.ts`,
+    `public/_headers`, `frontend/worker-proxy-nido/index.js`;
+    `tests/e2e/ui/storage-bridge.spec.ts` runs it under the production
+    headers). A name-shaped label is indistinguishable from a registered
+    name's wallet origin and the registry reserves no labels, so a service
+    on one can read the account list and names, though no setup key. HSTS
+    protects only after a first https visit; the domain is not preloaded.
 
 ## Limits within the audited behaviour
 

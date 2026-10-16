@@ -112,7 +112,7 @@ jobs:
         run: rustup toolchain install
 
       # The same prebuilt CLIs, at the same versions, as test.yml, so the
-      # regenerated bindings and snapshots match what CI checks.
+      # regenerated bindings match what CI checks.
       - name: Install just + Stellar CLIs (prebuilt release binaries)
         uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
         with:
