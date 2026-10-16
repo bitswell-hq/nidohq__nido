@@ -18,7 +18,7 @@ export interface PerchDeployment {
   /** Nido's account factory. Not Perch's: Perch's factory derives an
    *  address from the admin signers, but a Nido passkey's RP ID is the
    *  account's own subdomain, so the address must exist before the passkey
-   *  does. Nido's derives it from a salt alone. */
+   *  does. Nido's derives it from a one-time setup key alone. */
   factory: string;
   /** Perch's WebAuthn verifier, which passkey signers name and the factory
    *  pins. Constructorless, with no admin. */

@@ -591,15 +591,18 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
     }
   }
 
+  // The setup secret (still carried as `salt`): the seed of the one-time
+  // Ed25519 setup key whose public half fixes the address and whose
+  // signature binds the passkey there (perch/setupKey.ts in the SDK).
   function saltBytes(): Uint8Array {
     if (!saltHex || !/^[0-9a-fA-F]{64}$/.test(saltHex)) {
-      throw new Error("Setup salt is missing or invalid. Please start again from the home page.");
+      throw new Error("Setup key is missing or invalid. Please start again from the home page.");
     }
     return hex2buf(saltHex);
   }
 
   // GHSA setup-link substitution guard. The factory deploys at
-  // get_c_address(salt) — derived from the salt alone — but this page funds,
+  // get_c_address(setup_pk) — derived from the setup key alone — but this page funds,
   // activates and displays the HOSTNAME account (`contractId`). Confirm the two
   // agree before any passkey is created or any funding happens, so a link that
   // pairs one account's hostname with a different account's salt is refused
@@ -626,7 +629,7 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
               Operation.invokeContractFunction({
                 contract: await fetchFactoryAddress(),
                 function: "get_c_address",
-                args: [xdr.ScVal.scvBytes(Buffer.from(saltBytes()))],
+                args: [xdr.ScVal.scvBytes(perch.setupPublicKey(saltBytes()))],
               }),
             )
             .setTimeout(0)
@@ -707,7 +710,7 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
         Operation.invokeContractFunction({
           contract: await fetchFactoryAddress(),
           function: "get_c_address",
-          args: [xdr.ScVal.scvBytes(Buffer.from(saltBytes()))],
+          args: [xdr.ScVal.scvBytes(perch.setupPublicKey(saltBytes()))],
         }),
       )
       .setTimeout(0)
@@ -865,13 +868,20 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
 
   // --- Step 2 · Setting up your Nido (deploy account) ---
 
-  // Submit create_account(salt, key) through the relayer and wait for its
-  // confirmation. What the confirmation proves is checked by deploy().
+  // Submit create_account(setup_pk, key, setup_sig) through the relayer and
+  // wait for its confirmation. What the confirmation proves is checked by
+  // deploy().
   async function submitCreateAccount(server: rpc.Server, key: Uint8Array): Promise<void> {
     if (!RELAYER_URL || !RELAYER_SIM_SOURCE) {
       throw new Error("Relayer is not configured for account setup.");
     }
     const sourceAccount = await waitForSourceAccount(server, RELAYER_SIM_SOURCE);
+    const factory = await fetchFactoryAddress();
+    // The setup key signs this passkey for this factory and network: the
+    // factory deploys at the setup key's address only with that signature,
+    // so the relayer, which sees the public key, can't bind another passkey.
+    const secret = saltBytes();
+    const setupSig = perch.signSetupBinding(secret, Networks.TESTNET, factory, key);
 
     // Deploy only: the factory mints a Perch account whose constructor
     // rule is this passkey. Recovery (and every other rule) arrives with
@@ -882,11 +892,12 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
     })
       .addOperation(
         Operation.invokeContractFunction({
-          contract: await fetchFactoryAddress(),
+          contract: factory,
           function: "create_account",
           args: [
-            xdr.ScVal.scvBytes(Buffer.from(saltBytes())),
+            xdr.ScVal.scvBytes(perch.setupPublicKey(secret)),
             xdr.ScVal.scvBytes(Buffer.from(key)),
+            xdr.ScVal.scvBytes(setupSig),
           ],
         })
       )
@@ -952,8 +963,11 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
       // it, sending users to it, and funding it all wait on this.
       await verifyNewNidoAccount(contractId!, passkeyPublicKey, { attempts: 10 });
 
+      // The account exists with this passkey: the setup secret has nothing
+      // left to do, so drop every copy of it.
       activateAccount(contractId!);
       clearSetupSaltCookie(contractId!);
+      saltHex = null;
       await syncNidoStorageViaBridge();
 
       // Checked — 3 done, 4 · "Finalizing your wallet" begins. Behind this card
