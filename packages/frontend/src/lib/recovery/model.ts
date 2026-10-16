@@ -307,6 +307,36 @@ export function adminsOutsideRecovery(doc: PolicyDoc | undefined): string[] {
   return adminSignerIds(doc).filter((id) => !covered.has(id));
 }
 
+/** OZ's longest context-rule name, in bytes. */
+const MAX_RULE_NAME = 20;
+
+/**
+ * The guardian rule `rules` scope to `controller`, by name, or undefined. A
+ * Nido guardian approves through a rule its own document scopes to the
+ * controller the guarded account adopted. A guardian of Nidos enrolled at
+ * different controllers (one per Perch redeploy) holds one rule for each:
+ * `guardian`, and `guardian-<start of the controller's address>` for each
+ * further controller (`newGuardianRuleName`).
+ */
+export function guardianRuleAt(
+  rules: readonly { name: string; contract: string; recovery?: boolean }[],
+  controller: string,
+): string | undefined {
+  return rules.find(
+    (r) => !r.recovery && r.contract === controller && (r.name === 'guardian' || r.name.startsWith('guardian-')),
+  )?.name;
+}
+
+/** The name for a new guardian rule scoped to `controller`, beside rules
+ *  named `taken`. */
+export function newGuardianRuleName(taken: readonly string[], controller: string): string {
+  const name = taken.includes('guardian')
+    ? `guardian-${controller.slice(0, MAX_RULE_NAME - 'guardian-'.length).toLowerCase()}`
+    : 'guardian';
+  if (taken.includes(name)) throw new Error(`Your Nido already has a rule named ${name}.`);
+  return name;
+}
+
 /** What a guardian is asked to approve. Travels in the URL fragment of a
  *  link to the guardian's own Nido (fragments never reach a server). */
 export type GuardianRequest =
