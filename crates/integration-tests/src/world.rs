@@ -45,8 +45,8 @@ use soroban_sdk::xdr::{
     SorobanAuthorizedInvocation, SorobanCredentials, StringM, ToXdr as _, VecM, WriteXdr,
 };
 use soroban_sdk::{
-    contract, contractclient, contractimpl, symbol_short, vec, Address, Bytes, BytesN, Env,
-    IntoVal, Map, Symbol, TryFromVal, Val, Vec,
+    contract, contractclient, contracterror, contractimpl, contracttype, symbol_short, vec,
+    Address, Bytes, BytesN, Env, IntoVal, Map, Symbol, TryFromVal, Val, Vec,
 };
 use std::cell::Cell;
 use std::format;
@@ -85,13 +85,53 @@ impl Target {
     }
 }
 
-/// The parts of Nido's factory the world drives (the factory crate is
-/// cdylib-only, so it has no Rust client of its own).
+/// The ledgers every change to the world's factory waits.
+pub const FACTORY_DELAY: u32 = 1_000;
+
+/// Nido's factory: what the world and the governance suite drive (the
+/// factory crate is cdylib-only, so it has no Rust client of its own; the
+/// types below mirror its own).
 #[contractclient(name = "FactoryClient")]
 pub trait Factory {
     fn create_account(e: Env, salt: BytesN<32>, key: BytesN<65>) -> Address;
     fn get_c_address(e: Env, salt: BytesN<32>) -> Address;
-    fn set_registry_pins(e: Env, verifier: Address);
+    fn admin(e: Env) -> Address;
+    fn pinned_verifier(e: Env) -> Option<Address>;
+    fn change_delay(e: Env) -> Option<u32>;
+    fn pending_change(e: Env) -> Option<PendingChange>;
+    fn schedule_change(e: Env, change: Change) -> Result<u64, FactoryError>;
+    fn execute_change(e: Env, id: u64) -> Result<(), FactoryError>;
+    fn cancel_change(e: Env, id: u64) -> Result<(), FactoryError>;
+}
+
+/// The factory's `Change`.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Change {
+    Upgrade(BytesN<32>),
+    PinVerifier(Address),
+}
+
+/// The factory's `PendingChange`.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PendingChange {
+    pub id: u64,
+    pub change: Change,
+    pub executable_at: u32,
+}
+
+/// The factory's `FactoryError`.
+#[contracterror]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(u32)]
+pub enum FactoryError {
+    ChangePending = 1,
+    NoPendingChange = 2,
+    WrongChange = 3,
+    ChangeNotReady = 4,
+    NoDelay = 5,
+    DelayOverflow = 6,
 }
 
 /// The ZK adapter's identity views.
@@ -383,7 +423,8 @@ pub struct World {
 }
 
 /// A fresh world at ledger [`START`], with every contract registered at a
-/// fixed address and the factory pinned to the `WebAuthn` verifier.
+/// fixed address and the factory constructed pinned to the `WebAuthn`
+/// verifier.
 #[must_use]
 pub fn world() -> World {
     // No test snapshot: every contract here is registered from wasm, which
@@ -434,10 +475,12 @@ pub fn world() -> World {
     env.register_at(&target, Target, ());
 
     let factory = contract_at(&env, "factory");
-    env.register_at(&factory, FACTORY_WASM, (admin,));
+    env.register_at(
+        &factory,
+        FACTORY_WASM,
+        (admin, Some(verifier.clone()), FACTORY_DELAY),
+    );
     env.deployer().upload_contract_wasm(PERCH_ACCOUNT_WASM);
-    env.mock_all_auths();
-    FactoryClient::new(&env, &factory).set_registry_pins(&verifier);
 
     // Enforcing authorization from here on: only explicit entries pass.
     env.set_auths(&[]);

@@ -264,19 +264,20 @@ This section is the one home for Nido's package-migration plans.
   declares its own `RegistryInterface` client (`fetch_contract_id(name)`)
   against a hardcoded `REGISTRY` constant, the unverified testnet Stellar
   Registry `CDBL7MNO7UI5OAAIC67UIWKQ4P3S6RVQSFCQXUHUW6TOFCXSYRPNHY4S`.
-  `create_account` resolves only `"verifier"`: the admin pin set by
-  `set_registry_pins` if there is one, else an address cached in the
-  factory's instance storage from an earlier lookup, else a registry lookup
-  that it then caches. The Perch account wasm is embedded at build time:
-  `contracts/factory/build.rs` stages the wasm `just perch-infra` fetched and
-  exports its path as `PERCH_ACCOUNT_WASM`; the factory `include_bytes!` it,
-  deploys by `sha256` of those bytes (cached; an upgrade clears the cache),
-  and needs the same bytes already installed on the network.
+  `create_account` resolves only `"verifier"`: the pin set by the
+  constructor or a scheduled `PinVerifier` change if there is one, else an
+  address cached in the factory's instance storage from an earlier lookup,
+  else a registry lookup that it then caches. The Perch account wasm is
+  embedded at build time: `contracts/factory/build.rs` stages the wasm
+  `just perch-infra` fetched and exports its path as `PERCH_ACCOUNT_WASM`;
+  the factory `include_bytes!` it, deploys by `sha256` of those bytes
+  (cached; an executed upgrade clears the cache), and needs the same bytes
+  already installed on the network.
 - **Why it is safe to defer:** the deployed factory has Perch's verifier
   pinned, so the registry is off the account-creation path; a repointed or
   failing registry can neither reroute nor block creation
-  (SECURITY_INVARIANTS F5). `scripts/deploy-factory.sh` never hands over an
-  unpinned factory, and checks the account the *deployed* factory produces
+  (SECURITY_INVARIANTS F5). `scripts/deploy-factory.sh` pins it in the
+  constructor, and checks the account the *deployed* factory produces
   against the manifest's hash on a runtime readback (`refresh_account_wasm_hash`);
   `scripts/check-perch-drift.sh` checks the fetched and staged `perch-account`
   build inputs, not the built `nido_factory.wasm` artifact (the embed is a

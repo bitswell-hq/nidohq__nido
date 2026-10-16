@@ -67,25 +67,40 @@ Every box here is checked before mainnet.
   unchanged, which a version bump is not.
 - [ ] **A4. Mainnet registry and pins.** A Nido-owned registry instance
   (`scripts/deploy-registry.sh`, rehearsed on testnet), the factory's
-  `REGISTRY` constant and client fallbacks pointed at it, and
-  `set_registry_pins(<verifier>)` called.
+  `REGISTRY` constant and client fallbacks pointed at it, and the factory
+  constructed with the manifest's verifier pinned (`scripts/deploy-factory.sh`).
 
 ### Governance and keys
 
-- [ ] **B1. Factory upgrade authority governed.** The factory admin is a
-  multisig with an upgrade delay users can see, or the factory has no upgrade
-  authority at all (THREAT_MODEL 8). Pinning the verifier, at build time or
-  with `set_registry_pins`, does not meet B1: the admin's `upgrade` replaces
-  the whole factory wasm, including the account code it embeds and the pin,
-  and the admin can call `set_registry_pins` again. The passkey verifier
-  itself is Perch's, with no admin (THREAT_MODEL 7).
-  Note: the factory's `upgrade`/`set_registry_pins` are immediate on-chain
-  (no timelock), so the delay is an off-chain multisig property only — an
-  account created during a pending upgrade gets whatever code and pin are live,
-  and the wallet does not currently verify the deployed account's wasm hash or
-  rule-0 verifier against the manifest (AUDIT_SCOPE Q1). Meeting this gate
-  means an on-chain schedule/execute delay in the factory **or** a
-  post-`create_account` wallet check of the deployed output.
+- [ ] **B1. Factory governance.** Both of these hold for the mainnet
+  factory; neither stands in for the other (THREAT_MODEL 8).
+  - **Immutable dependencies, verified.** The factory embeds the manifest's
+    `perch-account` and is constructed with the manifest's
+    `perch-webauthn-verifier` pinned, which is constructorless and has no
+    admin (THREAT_MODEL 7). `scripts/deploy-factory.sh` reads back the pin,
+    the delay, and the account hash the factory deploys. Pinning constrains
+    the registry, not the admin: the admin can still schedule an upgrade
+    (which replaces the embedded account code and the pin together) or a
+    repin.
+  - **Every change to the factory waits out a published delay, under a
+    multisig.** The factory exports no `upgrade` and no
+    `set_registry_pins`. A `Change::Upgrade` or `Change::PinVerifier`
+    takes effect only through `execute_change`, at
+    least `change_delay()` ledgers after `schedule_change` announced it
+    (SECURITY_INVARIANTS F6). `factory_governance.rs` shows this against
+    the factory wasm under enforcing authorization, with a smart account as
+    the admin.
+
+  Still to do before B1 is checked: choose the multisig that holds the
+  factory admin (RUNBOOKS §3 says how to point the admin at a multisig
+  account); choose `DELAY_LEDGERS` and publish it in DEPLOYED.md; alert on
+  the factory's `change_scheduled`, `change_executed`, `change_cancelled`,
+  and `admin_changed` events (RUNBOOKS §3); and rehearse on a deployed
+  testnet factory that a non-admin's schedule, execute, and cancel are
+  refused, that an upgrade executes only after the delay, and that the next
+  account runs the new factory's embedded `perch-account`. A wallet check of
+  each new account's code and verifier (A6) is a separate gate, not a
+  substitute for this one.
 - [ ] **B2. Name-registry, policy, and registry-owner keys behind the
   multisig**, with alerts on any registry address change.
 - [ ] **A3. Relayer keys in KMS/HSM.** Sponsor and channel keys are held in
@@ -247,9 +262,10 @@ boundary it changes.
    deploys no WebAuthn verifier: accounts use Perch's, which is
    constructorless and has no admin, at the address the verified manifest
    gives (step 2).
-4. Build the factory around the published account wasm, deploy it, upload the
-   account wasm, pin the manifest's verifier (`set_registry_pins`), hand the
-   factory to the multisig (B1), and register it (RUNBOOKS §2.2).
+4. Build the factory around the published account wasm, upload the account
+   wasm, deploy the factory with the manifest's verifier pinned and the
+   chosen change delay, hand it to the multisig (B1), and register it
+   (RUNBOOKS §2.2).
 5. Relayer on KMS (A3), alerts live, incident drill run.
 6. Front end built with the single mainnet manifest (N1), with a funded
    recovery submission path (N2); smoke-test onboarding and one full recovery

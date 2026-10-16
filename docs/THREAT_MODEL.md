@@ -25,7 +25,7 @@ and infrastructure bring.
 | Recovery kit (ZK secret) | A JSON file the user downloads | The ZK factor: alone under `ZkOnly`, half of `Combined`. |
 | Guardian accounts | Each guardian's own Nido or G wallet | One guardian's share of the quorum. |
 | Setup key (salt) | URL fragment, a `nido_setup_<account>` cookie on the parent domain (30 minutes), and the browser's `nido:pending` storage until the account exists; the relayer sees it in the setup transaction | Whoever uses it first owns the address it derives. |
-| Factory admin key | Nido operators | The account code and the verifier new accounts get (adversary 8). |
+| Factory admin key | Nido operators | The account code and the verifier new accounts get, once a scheduled change waits out the factory's delay (adversary 8). |
 | Relayer keys | Fly.io host | Sponsor budget; censorship; claiming accounts that are being set up (adversary 10). |
 | The wallet's deployment (`perch.TESTNET`, or a `PUBLIC_PERCH_DEPLOYMENT` override) | Baked into the wallet at build time | Which factory, controller, pool, adapter, and verifier the wallet tells users to trust (adversary 9). |
 
@@ -90,16 +90,22 @@ and infrastructure bring.
    admin-upgradeable; for them that admin key stays a trust anchor until they
    move to a new account (DEPLOYED.md, "Compatibility appendix"). None of
    these legacy contracts deploys to mainnet.
-8. **Malicious or compromised factory admin.** Can upgrade the factory to embed
-   different account code, or repoint the verifier pin to a verifier that
-   accepts anything. This affects only accounts created afterwards; an
-   existing account's code changes only through its own seven-day upgrade
-   path (U1), and its signers' verifier only through its own `apply_doc`.
-   Pinning the verifier does not limit this admin: the pin is
-   admin-settable (`set_registry_pins`), and `upgrade` replaces the factory
-   wasm, embedded account code included. Only governance over the upgrade
-   authority mitigates it: a multisig with an upgrade delay users can see,
-   or no upgrade authority at all (MAINNET_READINESS B1).
+8. **Malicious or compromised factory admin.** Can schedule an upgrade that
+   embeds different account code, or a repin to a verifier that accepts
+   anything. Neither takes effect until `change_delay()` ledgers after
+   `schedule_change` announces it (`change_scheduled`), and only the admin
+   can execute or cancel it (SECURITY_INVARIANTS F6). It affects only
+   accounts created after `execute_change`; an existing account's code
+   changes only through its own seven-day upgrade path (U1), and its
+   signers' verifier only through its own `apply_doc`. The delay gives
+   watchers and wallets time to see the change and stop creating accounts
+   through this factory. It does not let anyone other than the admin stop
+   the change. Pinning the verifier does not limit this admin either: the
+   admin can schedule a repin, or an upgrade that replaces the wasm and the
+   pin together. The mitigations are the delay, a multisig admin, and
+   someone watching the factory's events (MAINNET_READINESS B1, RUNBOOKS
+   §3). The deployed testnet factory predates the delay, its admin is a
+   single key, and nothing watches its events.
 9. **Wrong deployment.** A wallet built with a hostile deployment would send
    users to an attacker's factory or controller. The account trusts whatever
    controller its own document names, so this is a wallet-supply-chain risk.
@@ -291,8 +297,9 @@ post-audit work, its entry in [DEFERRED.md](./DEFERRED.md).
   address, not in a party.
 - The user's authenticator keeps the private key non-exportable, and the
   browser enforces the RP ID.
-- Nido's operators, through the factory admin key, until it sits behind a
-  multisig and delay.
+- Nido's operators, through the factory admin key. Every change to the
+  factory waits out its delay, and the admin is a single key until it moves
+  to a multisig (MAINNET_READINESS B1).
 
 ## Out of scope
 

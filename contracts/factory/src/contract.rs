@@ -1,16 +1,17 @@
-use admin_sep::{Administratable, Upgradable};
+use admin_sep::Administratable;
 use soroban_sdk::{
-    contract, contractimpl, deploy::DeployerWithAddress, Address, Bytes, BytesN, Env, String,
-    Symbol,
+    contract, contracterror, contractevent, contractimpl, contracttype,
+    deploy::DeployerWithAddress, Address, Bytes, BytesN, Env, String, Symbol,
 };
 use soroban_sdk_tools::{contractstorage, InstanceItem};
 use stellar_accounts::smart_account::Signer;
 
-// The factory defines no custom error type. A pinned name is resolved
-// directly from the pin without consulting the registry (`Self::resolve`),
-// so there is no "registry disagrees with the pin" condition to report. The
-// remaining failure modes (an unresolvable registry name for an unpinned
-// name, a reused salt) surface as the registry's or the host's own errors.
+// A pinned name is resolved directly from the pin without consulting the
+// registry (`Self::resolve`), so there is no "registry disagrees with the
+// pin" condition to report. Account creation's failure modes (an
+// unresolvable registry name for an unpinned name, a reused salt) surface as
+// the registry's or the host's own errors; `FactoryError` covers only the
+// scheduled-change entry points.
 
 mod perch_account {
     //! Embeds Perch's smart-account wasm (`perch-account`, the deployed bytes
@@ -49,67 +50,240 @@ mod registry {
     }
 }
 
+/// A change to what the factory gives the accounts it creates from then on.
+/// Each one waits out the factory's delay between `schedule_change` and
+/// `execute_change`; nothing changes the factory's code or verifier pin
+/// immediately.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Change {
+    /// Replace the factory's wasm with the installed wasm of this hash, and
+    /// with it the account code the factory embeds.
+    Upgrade(BytesN<32>),
+    /// Pin this `WebAuthn` verifier for every account created afterwards.
+    PinVerifier(Address),
+}
+
+/// The scheduled change. There is at most one.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PendingChange {
+    /// Assigned in order and never reused.
+    pub id: u64,
+    pub change: Change,
+    /// The first ledger at which `execute_change` accepts it.
+    pub executable_at: u32,
+}
+
+#[contracterror]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(u32)]
+pub enum FactoryError {
+    /// Another change is scheduled; cancel it first.
+    ChangePending = 1,
+    /// No change is scheduled.
+    NoPendingChange = 2,
+    /// The id is not the scheduled change's.
+    WrongChange = 3,
+    /// The scheduled change's delay has not passed.
+    ChangeNotReady = 4,
+    /// No delay is stored: this wasm was installed by an upgrade from
+    /// factory code that predates the delay, so no constructor set one.
+    /// Every change is refused; deploy a fresh factory instead.
+    NoDelay = 5,
+    /// The ledger the change would become executable at overflows.
+    DelayOverflow = 6,
+}
+
+/// A change was scheduled. Watchers have until `executable_at` to react.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ChangeScheduled {
+    #[topic]
+    pub id: u64,
+    pub change: Change,
+    pub executable_at: u32,
+}
+
+/// A scheduled change took effect. For an upgrade, the new wasm runs from
+/// the next invocation.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ChangeExecuted {
+    #[topic]
+    pub id: u64,
+    pub change: Change,
+}
+
+/// A scheduled change was dropped without taking effect.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ChangeCancelled {
+    #[topic]
+    pub id: u64,
+    pub change: Change,
+}
+
+/// The admin was set, at construction or by `set_admin`.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdminChanged {
+    pub admin: Address,
+}
+
 #[contractstorage]
 pub struct Config {
     /// Cached `sha256(perch_account::WASM)`.
     account: InstanceItem<BytesN<32>>,
-    // The upgrade `admin` is not stored here: admin/set_admin/upgrade come
-    // from the shared `admin-sep` crate, which owns its own `ADMIN` key.
-    /// Admin-pinned address for the `"verifier"` registry name. `None`
-    /// (default) = unpinned: resolve from the registry and trust it. Once set
-    /// (via `set_registry_pins`), `resolve("verifier")` returns this address
+    // The `admin` is not stored here: admin/set_admin come from the shared
+    // `admin-sep` crate, which owns its own `ADMIN` key.
+    /// The address for the `"verifier"` registry name. `None` = unpinned:
+    /// resolve from the registry and trust it. Once set (by the constructor
+    /// or a `PinVerifier` change), `resolve("verifier")` returns this address
     /// directly and never consults the registry, so a repointed, broken, or
     /// unreachable registry can neither swap the passkey verifier under new
     /// accounts nor block their creation.
     pinned_verifier: InstanceItem<Address>,
+    /// Ledgers from `schedule_change` to the first ledger the change may
+    /// execute. Set once, by the constructor.
+    delay: InstanceItem<u32>,
+    pending: InstanceItem<PendingChange>,
+    /// The id the next `schedule_change` assigns.
+    next_change_id: InstanceItem<u64>,
 }
 
 #[contract]
 pub struct Contract;
 
-// admin/set_admin/upgrade come from the shared `admin-sep` crate
-// (`Administratable` + `Upgradable`). Only the WebAuthn verifier moved to
-// Perch (its constructorless `perch-webauthn-verifier`, which this factory
-// pins); the factory stays Nido's, because Perch's factory derives an address
-// from the admin signers and a Nido passkey's RP ID is the account's own
-// subdomain, so the address has to exist before the passkey does. The admin
-// gates the verifier pin and factory upgrades, and has no authority over any
-// deployed account.
+// admin/set_admin come from the shared `admin-sep` crate
+// (`Administratable`). Only the WebAuthn verifier moved to Perch (its
+// constructorless `perch-webauthn-verifier`, which this factory pins); the
+// factory stays Nido's, because Perch's factory derives an address from the
+// admin signers and a Nido passkey's RP ID is the account's own subdomain, so
+// the address has to exist before the passkey does. The admin schedules,
+// executes, and cancels changes to the factory's code and verifier pin, each
+// after the delay, and has no authority over any deployed account. The admin
+// is any address, so it can be a multisig smart account.
+//
+// `Upgradable` is deliberately not implemented: its `upgrade` replaces the
+// wasm at once. An upgrade is a `Change::Upgrade` instead.
 #[contractimpl(contracttrait)]
-impl Administratable for Contract {}
-
-#[contractimpl(contracttrait)]
-impl Upgradable for Contract {
-    /// admin-sep's default, plus one load-bearing line: clear the cached
-    /// account-wasm hash. An in-place upgrade swaps the embedded bytes; a
-    /// surviving cache would make every later `create_account` deploy the old
-    /// account wasm.
-    fn upgrade(e: &soroban_sdk::Env, new_wasm_hash: BytesN<32>) {
-        Self::admin(e).require_auth();
-        Config::new(e).account.remove();
-        e.deployer().update_current_contract_wasm(new_wasm_hash);
+impl Administratable for Contract {
+    /// admin-sep's default, plus an `AdminChanged` event so watchers see who
+    /// can schedule changes. Takes effect at once: rotating the admin changes
+    /// who may schedule, not what the factory does, and a change scheduled
+    /// before the rotation still waits out its delay.
+    fn set_admin(e: &Env, new_admin: Address) {
+        let store = e.storage().instance();
+        if let Some(current) = store.get::<_, Address>(admin_sep::STORAGE_KEY) {
+            current.require_auth();
+        }
+        store.set(admin_sep::STORAGE_KEY, &new_admin);
+        AdminChanged { admin: new_admin }.publish(e);
     }
 }
 
 #[contractimpl]
 impl Contract {
+    /// `verifier` pins the `WebAuthn` verifier from the first account on
+    /// (`None` leaves it to the registry). `delay_ledgers` is how long every
+    /// later change waits; it cannot change without an upgrade.
     // `#[contractimpl]` entry point: the SDK's XDR-based ABI takes owned
     // `Address` by value. `set_admin` on first call (no admin yet) skips the
     // auth check.
     #[allow(clippy::needless_pass_by_value)]
-    pub fn __constructor(e: &Env, admin: Address) {
+    pub fn __constructor(e: &Env, admin: Address, verifier: Option<Address>, delay_ledgers: u32) {
         Self::set_admin(e, admin);
+        if let Some(verifier) = verifier {
+            Config::set_pinned_verifier(e, &verifier);
+        }
+        Config::set_delay(e, &delay_ledgers);
     }
 
-    /// Pin the `verifier` address. After this, every `create_account` uses
-    /// exactly this `WebAuthn` verifier without consulting the registry, so a
-    /// later registry repoint can neither reroute nor block new accounts.
-    /// Requires the current admin's auth.
-    // `#[contractimpl]` entry point; SDK ABI requires owned `Address`.
+    /// Schedule `change`, executable `change_delay()` ledgers from now.
+    /// Admin only. One change at a time: refused while another is
+    /// scheduled. Returns its id.
+    // `#[contractimpl]` entry point; SDK ABI requires owned `Change`.
     #[allow(clippy::needless_pass_by_value)]
-    pub fn set_registry_pins(e: &Env, verifier: Address) {
+    pub fn schedule_change(e: &Env, change: Change) -> Result<u64, FactoryError> {
         Self::admin(e).require_auth();
-        Config::set_pinned_verifier(e, &verifier);
+        let config = Config::new(e);
+        if config.pending.has() {
+            return Err(FactoryError::ChangePending);
+        }
+        let delay = config.delay.get().ok_or(FactoryError::NoDelay)?;
+        let executable_at = e
+            .ledger()
+            .sequence()
+            .checked_add(delay)
+            .ok_or(FactoryError::DelayOverflow)?;
+        let id = config.next_change_id.get().unwrap_or(0);
+        config.next_change_id.set(&(id + 1));
+        config.pending.set(&PendingChange {
+            id,
+            change: change.clone(),
+            executable_at,
+        });
+        ChangeScheduled {
+            id,
+            change,
+            executable_at,
+        }
+        .publish(e);
+        Ok(id)
+    }
+
+    /// Apply the scheduled change `id` once its delay has passed. Admin
+    /// only.
+    pub fn execute_change(e: &Env, id: u64) -> Result<(), FactoryError> {
+        Self::admin(e).require_auth();
+        let pending = Self::pending(e, id)?;
+        if e.ledger().sequence() < pending.executable_at {
+            return Err(FactoryError::ChangeNotReady);
+        }
+        let config = Config::new(e);
+        config.pending.remove();
+        ChangeExecuted {
+            id,
+            change: pending.change.clone(),
+        }
+        .publish(e);
+        match pending.change {
+            Change::PinVerifier(verifier) => config.pinned_verifier.set(&verifier),
+            Change::Upgrade(wasm_hash) => {
+                // Load-bearing: the new wasm embeds different account bytes,
+                // and a surviving cache would make every later
+                // `create_account` deploy the old account wasm.
+                config.account.remove();
+                e.deployer().update_current_contract_wasm(wasm_hash);
+            }
+        }
+        Ok(())
+    }
+
+    /// Drop the scheduled change `id` without applying it. Admin only.
+    pub fn cancel_change(e: &Env, id: u64) -> Result<(), FactoryError> {
+        Self::admin(e).require_auth();
+        let pending = Self::pending(e, id)?;
+        Config::new(e).pending.remove();
+        ChangeCancelled {
+            id,
+            change: pending.change,
+        }
+        .publish(e);
+        Ok(())
+    }
+
+    /// The scheduled change, if any.
+    pub fn pending_change(e: &Env) -> Option<PendingChange> {
+        Config::get_pending(e)
+    }
+
+    /// Ledgers every change waits between scheduling and execution. `None`
+    /// only on a factory whose wasm predates the delay (see
+    /// `FactoryError::NoDelay`).
+    pub fn change_delay(e: &Env) -> Option<u32> {
+        Config::get_delay(e)
     }
 
     /// The pinned `verifier` address, or `None` if unpinned.
@@ -135,15 +309,25 @@ impl Contract {
     }
 
     /// Recompute and store the embedded account-wasm hash, returning it.
-    /// Admin-gated companion to the `upgrade` override: after upgrading a
-    /// factory whose old code predates that override, the stale cache
-    /// survives (the upgrade transaction runs the old code); calling this once
-    /// afterwards repairs it.
+    /// Admin-gated repair for the cache `execute_change` clears on an
+    /// upgrade: after upgrading a factory whose old code did not clear it
+    /// (the upgrade transaction runs the old code), the stale cache survives;
+    /// calling this once afterwards repairs it. It can only store the hash of
+    /// the bytes this wasm embeds.
     pub fn refresh_account_wasm_hash(e: &Env) -> BytesN<32> {
         Self::admin(e).require_auth();
         let hash = Self::compute_account_wasm_hash(e);
         Config::set_account(e, &hash);
         hash
+    }
+
+    /// The scheduled change, if its id is `id`.
+    fn pending(e: &Env, id: u64) -> Result<PendingChange, FactoryError> {
+        let pending = Config::get_pending(e).ok_or(FactoryError::NoPendingChange)?;
+        if pending.id != id {
+            return Err(FactoryError::WrongChange);
+        }
+        Ok(pending)
     }
 
     fn deployer(e: &Env, salt: &BytesN<32>) -> DeployerWithAddress {
@@ -164,7 +348,7 @@ impl Contract {
         addr
     }
 
-    /// The admin-pinned address for `name`, or `None` if unpinned. Only
+    /// The pinned address for `name`, or `None` if unpinned. Only
     /// `"verifier"` is pinnable (the only name `resolve` looks up).
     fn pinned_for(env: &Env, name: &str) -> Option<Address> {
         match name {
@@ -199,8 +383,21 @@ mod test {
     #![allow(clippy::used_underscore_binding)]
 
     use super::*;
-    use soroban_sdk::testutils::Address as _;
-    use soroban_sdk::{contract, contractclient, contractimpl, Env, IntoVal, TryFromVal};
+    use soroban_sdk::testutils::{
+        Address as _, Events as _, Ledger as _, MockAuth, MockAuthInvoke,
+    };
+    use soroban_sdk::{
+        contract, contractclient, contractimpl, Env, Event as _, Executable, IntoVal, TryFromVal,
+    };
+
+    /// The delay every test factory is constructed with.
+    const DELAY: u32 = 100;
+
+    /// A Perch account wasm an earlier factory build embedded (the
+    /// integration suite's committed copy): the stale cache the upgrade test
+    /// seeds names it.
+    const PREVIOUS_ACCOUNT_WASM: &[u8] =
+        include_bytes!("../../../crates/integration-tests/fixtures/old-perch-account.wasm");
 
     // Minimal mock: every `fetch_contract_id` call returns a fixed address.
     #[contract]
@@ -267,9 +464,15 @@ mod test {
         fn get_context_rule(e: Env, id: u32) -> stellar_accounts::smart_account::ContextRule;
     }
 
+    /// A factory administered by `admin`, unpinned, with [`DELAY`].
+    fn factory(env: &Env, admin: &Address) -> Address {
+        env.register(Contract, (admin.clone(), None::<Address>, DELAY))
+    }
+
     /// A factory whose registry resolves `"verifier"` to a stub verifier,
-    /// with the embedded account wasm installed.
-    fn setup(env: &Env) -> (Address, Address) {
+    /// with the embedded account wasm installed. Returns the factory, the
+    /// verifier, and the admin.
+    fn setup(env: &Env) -> (Address, Address, Address) {
         env.mock_all_auths();
         let verifier = env.register(StubVerifier, ());
         env.register_at(
@@ -278,8 +481,43 @@ mod test {
             (verifier.clone(),),
         );
         env.deployer().upload_contract_wasm(perch_account::WASM);
-        let factory = env.register(Contract, (Address::generate(env),));
-        (factory, verifier)
+        let admin = Address::generate(env);
+        (factory(env, &admin), verifier, admin)
+    }
+
+    /// The verifier named by the admin rule of an account the factory made.
+    fn verifier_of(env: &Env, account: &Address) -> Address {
+        let rule = AccountClient::new(env, account).get_context_rule(&0);
+        match rule.signers.get(0).unwrap() {
+            Signer::External(verifier, _) => verifier,
+            Signer::Delegated(_) => panic!("not a passkey signer"),
+        }
+    }
+
+    fn salt(env: &Env, n: u8) -> BytesN<32> {
+        BytesN::from_array(env, &[n; 32])
+    }
+
+    fn key(env: &Env, n: u8) -> BytesN<65> {
+        BytesN::from_array(env, &[n; 65])
+    }
+
+    fn advance(env: &Env, ledgers: u32) {
+        env.ledger().with_mut(|l| l.sequence_number += ledgers);
+    }
+
+    /// `factory.fn_name(args)`, for a `MockAuth` that authorizes exactly it.
+    fn call<'a>(
+        factory: &'a Address,
+        fn_name: &'a str,
+        args: soroban_sdk::Vec<soroban_sdk::Val>,
+    ) -> MockAuthInvoke<'a> {
+        MockAuthInvoke {
+            contract: factory,
+            fn_name,
+            args,
+            sub_invokes: &[],
+        }
     }
 
     #[test]
@@ -290,7 +528,7 @@ mod test {
         let expected = Address::generate(&env);
         env.register_at(&registry_addr, MockRegistry, (expected.clone(),));
 
-        let factory_addr = env.register(Contract, (Address::generate(&env),));
+        let factory_addr = factory(&env, &Address::generate(&env));
         let first = env.as_contract(&factory_addr, || Contract::resolve(&env, "verifier"));
         env.register_at(&registry_addr, PanicRegistry, ());
         let second = env.as_contract(&factory_addr, || Contract::resolve(&env, "verifier"));
@@ -302,9 +540,9 @@ mod test {
     fn get_c_address_uses_random_salt() {
         let env = Env::default();
         env.mock_all_auths();
-        let factory_addr = env.register(Contract, (Address::generate(&env),));
-        let salt_a = BytesN::from_array(&env, &[1; 32]);
-        let salt_b = BytesN::from_array(&env, &[2; 32]);
+        let factory_addr = factory(&env, &Address::generate(&env));
+        let salt_a = salt(&env, 1);
+        let salt_b = salt(&env, 2);
 
         let first = env.as_contract(&factory_addr, || Contract::get_c_address(&env, &salt_a));
         let second = env.as_contract(&factory_addr, || Contract::get_c_address(&env, &salt_b));
@@ -321,10 +559,10 @@ mod test {
     #[test]
     fn create_account_deploys_a_perch_account_with_the_passkey_admin_rule() {
         let env = Env::default();
-        let (factory, verifier) = setup(&env);
+        let (factory, verifier, _) = setup(&env);
         let client = ContractClient::new(&env, &factory);
-        let salt = BytesN::from_array(&env, &[9; 32]);
-        let key = BytesN::from_array(&env, &[3; 65]);
+        let salt = salt(&env, 9);
+        let key = key(&env, 3);
 
         let predicted = client.get_c_address(&salt);
         let account = client.create_account(&salt, &key);
@@ -351,10 +589,10 @@ mod test {
     #[test]
     fn create_account_twice_with_the_same_salt_is_rejected() {
         let env = Env::default();
-        let (factory, _) = setup(&env);
+        let (factory, _, _) = setup(&env);
         let client = ContractClient::new(&env, &factory);
-        let salt = BytesN::from_array(&env, &[10; 32]);
-        let key = BytesN::from_array(&env, &[4; 65]);
+        let salt = salt(&env, 10);
+        let key = key(&env, 4);
         client.create_account(&salt, &key);
         assert!(client.try_create_account(&salt, &key).is_err());
     }
@@ -368,11 +606,11 @@ mod test {
     #[test]
     fn whoever_submits_the_salt_first_owns_the_address() {
         let env = Env::default();
-        let (factory, verifier) = setup(&env);
+        let (factory, verifier, _) = setup(&env);
         let client = ContractClient::new(&env, &factory);
-        let salt = BytesN::from_array(&env, &[11; 32]);
-        let owner_key = BytesN::from_array(&env, &[5; 65]);
-        let front_runner_key = BytesN::from_array(&env, &[6; 65]);
+        let salt = salt(&env, 11);
+        let owner_key = key(&env, 5);
+        let front_runner_key = key(&env, 6);
 
         let address = client.create_account(&salt, &front_runner_key);
         assert_eq!(address, client.get_c_address(&salt));
@@ -400,7 +638,7 @@ mod test {
             "embedded account wasm is empty"
         );
         let uploaded = env.deployer().upload_contract_wasm(perch_account::WASM);
-        let factory_addr = env.register(Contract, (Address::generate(&env),));
+        let factory_addr = factory(&env, &Address::generate(&env));
         let derived = env.as_contract(&factory_addr, || Contract::account_wasm_hash(&env));
         assert_eq!(derived, uploaded);
     }
@@ -409,7 +647,7 @@ mod test {
     fn account_wasm_hash_caches_first_computation() {
         let env = Env::default();
         env.mock_all_auths();
-        let factory_addr = env.register(Contract, (Address::generate(&env),));
+        let factory_addr = factory(&env, &Address::generate(&env));
         env.as_contract(&factory_addr, || {
             assert!(Config::get_account(&env).is_none());
             let fresh = Contract::compute_account_wasm_hash(&env);
@@ -420,46 +658,52 @@ mod test {
     }
 
     #[test]
-    fn admin_is_set_at_construct_time() {
+    fn the_constructor_sets_the_admin_the_pin_and_the_delay() {
         let env = Env::default();
-        env.mock_all_auths();
         let admin = Address::generate(&env);
-        let id = env.register(Contract, (admin.clone(),));
-        assert_eq!(ContractClient::new(&env, &id).admin(), admin);
+        let verifier = Address::generate(&env);
+        let id = env.register(Contract, (admin.clone(), Some(verifier.clone()), DELAY));
+        let client = ContractClient::new(&env, &id);
+        assert_eq!(client.admin(), admin);
+        assert_eq!(client.pinned_verifier(), Some(verifier));
+        assert_eq!(client.change_delay(), Some(DELAY));
+        assert_eq!(client.pending_change(), None);
+
+        let unpinned = factory(&env, &admin);
+        assert_eq!(ContractClient::new(&env, &unpinned).pinned_verifier(), None);
     }
 
     #[test]
-    fn set_admin_rotates_admin() {
+    fn set_admin_rotates_admin_and_announces_it() {
         let env = Env::default();
         env.mock_all_auths();
         let new_admin = Address::generate(&env);
-        let id = env.register(Contract, (Address::generate(&env),));
+        let id = factory(&env, &Address::generate(&env));
         let client = ContractClient::new(&env, &id);
         client.set_admin(&new_admin);
+        assert_eq!(
+            env.events().all().filter_by_contract(&id),
+            [AdminChanged {
+                admin: new_admin.clone()
+            }
+            .to_xdr(&env, &id)]
+        );
         assert_eq!(client.admin(), new_admin);
     }
 
     #[test]
     fn set_admin_requires_current_admin_auth() {
-        use soroban_sdk::testutils::{MockAuth, MockAuthInvoke};
-
         let env = Env::default();
-        env.mock_all_auths();
         let admin = Address::generate(&env);
         let imposter = Address::generate(&env);
         let new_admin = Address::generate(&env);
-        let id = env.register(Contract, (admin.clone(),));
+        let id = factory(&env, &admin);
         let client = ContractClient::new(&env, &id);
 
         let res = client
             .mock_auths(&[MockAuth {
                 address: &imposter,
-                invoke: &MockAuthInvoke {
-                    contract: &id,
-                    fn_name: "set_admin",
-                    args: (new_admin.clone(),).into_val(&env),
-                    sub_invokes: &[],
-                },
+                invoke: &call(&id, "set_admin", (new_admin.clone(),).into_val(&env)),
             }])
             .try_set_admin(&new_admin);
         assert!(res.is_err());
@@ -467,24 +711,10 @@ mod test {
     }
 
     #[test]
-    fn upgrade_clears_account_wasm_hash_cache() {
-        let env = Env::default();
-        env.mock_all_auths();
-        let id = env.register(Contract, (Address::generate(&env),));
-        env.as_contract(&id, || {
-            let _ = Contract::account_wasm_hash(&env);
-            assert!(Config::get_account(&env).is_some());
-        });
-        let wasm_hash = env.deployer().upload_contract_wasm(perch_account::WASM);
-        ContractClient::new(&env, &id).upgrade(&wasm_hash);
-        env.as_contract(&id, || assert!(Config::get_account(&env).is_none()));
-    }
-
-    #[test]
     fn refresh_account_wasm_hash_repairs_stale_cache() {
         let env = Env::default();
         env.mock_all_auths();
-        let id = env.register(Contract, (Address::generate(&env),));
+        let id = factory(&env, &Address::generate(&env));
         let client = ContractClient::new(&env, &id);
         env.as_contract(&id, || {
             Config::set_account(&env, &BytesN::from_array(&env, &[7u8; 32]));
@@ -497,35 +727,225 @@ mod test {
         assert!(client.try_refresh_account_wasm_hash().is_err());
     }
 
+    /// Nobody but the admin can schedule, execute, or cancel a change, for
+    /// either kind, and a refused call leaves the schedule as it was.
     #[test]
-    fn upgrade_requires_admin_auth() {
+    fn only_the_admin_can_schedule_execute_or_cancel_a_change() {
         let env = Env::default();
-        env.mock_all_auths();
-        let id = env.register(Contract, (Address::generate(&env),));
+        let admin = Address::generate(&env);
+        let imposter = Address::generate(&env);
+        let id = factory(&env, &admin);
         let client = ContractClient::new(&env, &id);
-        let wasm_hash = env.deployer().upload_contract_wasm(perch_account::WASM);
-        env.set_auths(&[]);
-        assert!(client.try_upgrade(&wasm_hash).is_err());
-        env.mock_all_auths();
-        client.upgrade(&wasm_hash);
+        let wasm = env.deployer().upload_contract_wasm(perch_account::WASM);
+        let changes = [
+            Change::Upgrade(wasm),
+            Change::PinVerifier(Address::generate(&env)),
+        ];
+
+        for change in changes {
+            let schedule = |who: &Address| {
+                client
+                    .mock_auths(&[MockAuth {
+                        address: who,
+                        invoke: &call(&id, "schedule_change", (change.clone(),).into_val(&env)),
+                    }])
+                    .try_schedule_change(&change)
+            };
+            assert!(schedule(&imposter).is_err());
+            env.set_auths(&[]);
+            assert!(
+                client.try_schedule_change(&change).is_err(),
+                "no auth at all"
+            );
+            assert_eq!(client.pending_change(), None);
+
+            let n = schedule(&admin).unwrap().unwrap();
+            let pending = client.pending_change().unwrap();
+            advance(&env, DELAY);
+
+            let execute = call(&id, "execute_change", (n,).into_val(&env));
+            let cancel = call(&id, "cancel_change", (n,).into_val(&env));
+            let by = |address, invoke| [MockAuth { address, invoke }];
+            assert!(client
+                .mock_auths(&by(&imposter, &execute))
+                .try_execute_change(&n)
+                .is_err());
+            assert!(client
+                .mock_auths(&by(&imposter, &cancel))
+                .try_cancel_change(&n)
+                .is_err());
+            assert_eq!(client.pending_change(), Some(pending));
+            client.mock_auths(&by(&admin, &cancel)).cancel_change(&n);
+        }
+        assert_eq!(client.pinned_verifier(), None);
     }
 
+    /// A pin change takes effect only once its delay has passed, and only at
+    /// `execute_change`: accounts created while it is pending get the
+    /// current pin, accounts created after it get the new one.
     #[test]
-    fn set_registry_pins_requires_admin_auth() {
+    fn a_verifier_pin_waits_out_the_delay() {
+        let env = Env::default();
+        let (factory, registry_verifier, _) = setup(&env);
+        let client = ContractClient::new(&env, &factory);
+        let pinned = env.register(StubVerifier, ());
+
+        let start = env.ledger().sequence();
+        let n = client.schedule_change(&Change::PinVerifier(pinned.clone()));
+        let scheduled = PendingChange {
+            id: n,
+            change: Change::PinVerifier(pinned.clone()),
+            executable_at: start + DELAY,
+        };
+        assert_eq!(
+            env.events().all().filter_by_contract(&factory),
+            [ChangeScheduled {
+                id: n,
+                change: scheduled.change.clone(),
+                executable_at: scheduled.executable_at,
+            }
+            .to_xdr(&env, &factory)]
+        );
+        assert_eq!(client.pending_change(), Some(scheduled.clone()));
+
+        advance(&env, DELAY - 1);
+        assert_eq!(
+            client.try_execute_change(&n),
+            Err(Ok(FactoryError::ChangeNotReady))
+        );
+        let during = client.create_account(&salt(&env, 20), &key(&env, 20));
+        assert_eq!(verifier_of(&env, &during), registry_verifier);
+        assert_eq!(client.pinned_verifier(), None);
+
+        advance(&env, 1);
+        client.execute_change(&n);
+        assert_eq!(
+            env.events().all().filter_by_contract(&factory),
+            [ChangeExecuted {
+                id: n,
+                change: scheduled.change,
+            }
+            .to_xdr(&env, &factory)]
+        );
+        assert_eq!(client.pinned_verifier(), Some(pinned.clone()));
+        assert_eq!(client.pending_change(), None);
+        let after = client.create_account(&salt(&env, 21), &key(&env, 21));
+        assert_eq!(verifier_of(&env, &after), pinned);
+        assert_eq!(
+            verifier_of(&env, &during),
+            registry_verifier,
+            "an existing account keeps its verifier"
+        );
+    }
+
+    /// One change at a time; a cancelled change never executes; ids are
+    /// never reused, so an approval for one change cannot act on another.
+    #[test]
+    fn one_change_at_a_time_and_a_cancelled_change_never_executes() {
         let env = Env::default();
         env.mock_all_auths();
-        let id = env.register(Contract, (Address::generate(&env),));
+        let id = factory(&env, &Address::generate(&env));
         let client = ContractClient::new(&env, &id);
+        let first = Change::PinVerifier(Address::generate(&env));
+        let second = Change::PinVerifier(Address::generate(&env));
+
+        let a = client.schedule_change(&first);
+        assert_eq!(
+            client.try_schedule_change(&second),
+            Err(Ok(FactoryError::ChangePending))
+        );
+        assert_eq!(
+            client.try_cancel_change(&(a + 1)),
+            Err(Ok(FactoryError::WrongChange))
+        );
+        client.cancel_change(&a);
+        assert_eq!(
+            env.events().all().filter_by_contract(&id),
+            [ChangeCancelled {
+                id: a,
+                change: first,
+            }
+            .to_xdr(&env, &id)]
+        );
+        advance(&env, DELAY);
+        assert_eq!(
+            client.try_execute_change(&a),
+            Err(Ok(FactoryError::NoPendingChange))
+        );
         assert_eq!(client.pinned_verifier(), None);
 
-        env.set_auths(&[]);
-        let verifier = Address::generate(&env);
-        assert!(client.try_set_registry_pins(&verifier).is_err());
-        assert_eq!(client.pinned_verifier(), None);
+        let b = client.schedule_change(&second);
+        assert_eq!(b, a + 1);
+        advance(&env, DELAY);
+        assert_eq!(
+            client.try_execute_change(&a),
+            Err(Ok(FactoryError::WrongChange))
+        );
+        client.execute_change(&b);
+        assert_eq!(
+            client.try_cancel_change(&b),
+            Err(Ok(FactoryError::NoPendingChange))
+        );
+    }
 
+    /// The account code a factory deploys comes from the cached hash, and an
+    /// executed upgrade clears it, so the code that runs next derives the
+    /// hash of the account wasm it embeds. (The test host runs the new wasm
+    /// after the upgrade, so the account minted after it is checked in the
+    /// integration suite, `factory_governance.rs`, against the factory wasm.)
+    #[test]
+    fn executing_an_upgrade_clears_the_cached_account_hash() {
+        let env = Env::default();
+        let (factory, _, _) = setup(&env);
+        let client = ContractClient::new(&env, &factory);
+        let previous = env.deployer().upload_contract_wasm(PREVIOUS_ACCOUNT_WASM);
+        env.as_contract(&factory, || Config::set_account(&env, &previous));
+        let minted = client.create_account(&salt(&env, 30), &key(&env, 30));
+        assert_eq!(
+            minted.executable(),
+            Some(Executable::Wasm(previous.clone())),
+            "the cached hash is what deploys"
+        );
+
+        let code = factory.executable();
+        let next = env.deployer().upload_contract_wasm(perch_account::WASM);
+        let n = client.schedule_change(&Change::Upgrade(next.clone()));
+        advance(&env, DELAY - 1);
+        assert_eq!(
+            client.try_execute_change(&n),
+            Err(Ok(FactoryError::ChangeNotReady))
+        );
+        assert_eq!(factory.executable(), code);
+        env.as_contract(&factory, || {
+            assert_eq!(Config::get_account(&env), Some(previous.clone()));
+        });
+
+        advance(&env, 1);
+        client.execute_change(&n);
+        assert_eq!(factory.executable(), Some(Executable::Wasm(next)));
+        env.as_contract(&factory, || {
+            assert_eq!(Config::get_account(&env), None);
+            assert_eq!(
+                Contract::account_wasm_hash(&env),
+                Contract::compute_account_wasm_hash(&env)
+            );
+        });
+    }
+
+    /// A factory whose wasm was swapped in by pre-delay code has no stored
+    /// delay, and refuses every change rather than applying one at once.
+    #[test]
+    fn a_factory_without_a_stored_delay_refuses_every_change() {
+        let env = Env::default();
         env.mock_all_auths();
-        client.set_registry_pins(&verifier);
-        assert_eq!(client.pinned_verifier(), Some(verifier));
+        let id = factory(&env, &Address::generate(&env));
+        let client = ContractClient::new(&env, &id);
+        env.as_contract(&id, || Config::new(&env).delay.remove());
+        assert_eq!(client.change_delay(), None);
+        assert_eq!(
+            client.try_schedule_change(&Change::PinVerifier(Address::generate(&env))),
+            Err(Ok(FactoryError::NoDelay))
+        );
     }
 
     /// With the verifier pinned, `create_account` never constructs the
@@ -534,19 +954,16 @@ mod test {
     #[test]
     fn pinned_resolve_never_consults_registry() {
         let env = Env::default();
-        let (factory, _) = setup(&env);
-        let client = ContractClient::new(&env, &factory);
-        let pinned = env.register(StubVerifier, ());
-        client.set_registry_pins(&pinned);
         env.register_at(&Address::from_str(&env, REGISTRY), PanicRegistry, ());
-
-        let salt = BytesN::from_array(&env, &[43; 32]);
-        let key = BytesN::from_array(&env, &[7; 65]);
-        let account = client.create_account(&salt, &key);
-        let rule = AccountClient::new(&env, &account).get_context_rule(&0);
-        assert_eq!(
-            rule.signers,
-            soroban_sdk::vec![&env, Signer::External(pinned, key.to_bytes())]
+        env.deployer().upload_contract_wasm(perch_account::WASM);
+        let pinned = env.register(StubVerifier, ());
+        let factory = env.register(
+            Contract,
+            (Address::generate(&env), Some(pinned.clone()), DELAY),
         );
+
+        let account =
+            ContractClient::new(&env, &factory).create_account(&salt(&env, 43), &key(&env, 7));
+        assert_eq!(verifier_of(&env, &account), pinned);
     }
 }
