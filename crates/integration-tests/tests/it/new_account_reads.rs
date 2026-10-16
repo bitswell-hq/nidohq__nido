@@ -1,18 +1,21 @@
 //! What the wallet reads back after setting up an account, for an account
 //! the user's own `create_account` made and for two it did not.
 //!
-//! The factory derives the address from the salt alone and anyone may call
-//! `create_account`, so whoever submits a salt first owns its address. This
-//! suite creates three accounts through the real factory and Perch account
-//! wasm and records, per account, the two things the wallet reads over RPC
-//! before trusting a new account: the contract-instance ledger entry (its
-//! wasm hash) and the `configuration()` view, as XDR.
+//! The factory derives the address from a one-time setup key and puts there
+//! only the passkey that setup key signed, so a front-runner needs the setup
+//! secret itself, as a thief who reads the browser's storage before the
+//! passkey exists would have it. This suite creates three accounts through
+//! the real factory and Perch account wasm and records, per account, the two
+//! things the wallet reads over RPC before trusting a new account: the
+//! contract-instance ledger entry (its wasm hash) and the `configuration()`
+//! view, as XDR.
 //!
 //! - `created`: the owner's own setup.
-//! - `claimed`: a front-runner submits the owner's salt with its own key; the
-//!   owner's `create_account` then fails, and the address is the claimant's.
-//! - `handedOver`: a front-runner claims the salt, then applies a document
-//!   that names the owner's key as admin while making itself the recovery
+//! - `claimed`: a thief holding the owner's setup secret binds its own key
+//!   first; the owner's `create_account` then fails, and the address is the
+//!   claimant's.
+//! - `handedOver`: a thief claims the address, then applies a document that
+//!   names the owner's key as admin while making itself the recovery
 //!   guardian. The admin key now matches; the account is still not the
 //!   owner's.
 //!
@@ -25,7 +28,7 @@
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use nido_integration_tests::world::{
-    strkey, world, Account, Doc, FactoryClient, Mode, Passkey, Profile, World,
+    strkey, world, Account, Doc, FactoryClient, Mode, Passkey, Profile, SetupKey, World,
 };
 use nido_integration_tests::PERCH_ACCOUNT_WASM;
 use perch_account::PerchAccountClient;
@@ -33,25 +36,28 @@ use perch_smart_account::infra;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use soroban_sdk::xdr::{LedgerKey, Limits, ScAddress, ScVal, WriteXdr};
-use soroban_sdk::{Address, Bytes, BytesN};
+use soroban_sdk::{Address, BytesN};
 
 const READS: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../packages/passkey-sdk/src/perch/testdata/new-account-reads.json"
 );
 
-fn salt(w: &World, label: &str) -> BytesN<32> {
-    w.env
-        .crypto()
-        .sha256(&Bytes::from_slice(
-            &w.env,
-            format!("nido-it/salt/{label}").as_bytes(),
-        ))
-        .to_bytes()
-}
-
 fn factory(w: &World) -> FactoryClient<'_> {
     FactoryClient::new(&w.env, &w.factory)
+}
+
+/// `create_account` for setup key `label`, binding `key`.
+fn create(w: &World, label: &str, key: &BytesN<65>) -> Result<Address, ()> {
+    let setup = SetupKey::labelled(label);
+    factory(w)
+        .try_create_account(
+            &setup.public(&w.env),
+            key,
+            &setup.bind(&w.env, &w.factory, key),
+        )
+        .map(Result::unwrap)
+        .map_err(|_| ())
 }
 
 /// The account's contract-instance ledger entry data, as RPC's
@@ -92,21 +98,20 @@ fn new_account_reads() {
     let claimant_key = BytesN::from_array(&w.env, &claimant.pubkey());
 
     // The owner's own setup.
-    let created = factory(&w).create_account(&salt(&w, "created"), &owner_key);
+    let created = create(&w, "created", &owner_key).unwrap();
 
-    // A front-runner gets the owner's salt in first; the owner's call is
-    // then refused as a reused salt.
-    let claimed_salt = salt(&w, "claimed");
-    let claimed = factory(&w).create_account(&claimed_salt, &claimant_key);
-    assert_eq!(claimed, factory(&w).get_c_address(&claimed_salt));
-    assert!(factory(&w)
-        .try_create_account(&claimed_salt, &owner_key)
-        .is_err());
+    // A thief with the owner's setup secret binds its own key first; the
+    // owner's call is then refused, the setup key being used.
+    let claimed = create(&w, "claimed", &claimant_key).unwrap();
+    assert_eq!(
+        claimed,
+        factory(&w).get_c_address(&SetupKey::labelled("claimed").public(&w.env))
+    );
+    assert!(create(&w, "claimed", &owner_key).is_err());
 
-    // A front-runner that hands the admin rule to the owner's key while
-    // keeping recovery for itself.
-    let handed_salt = salt(&w, "handed-over");
-    let handed = factory(&w).create_account(&handed_salt, &claimant_key);
+    // A thief that hands the admin rule to the owner's key while keeping
+    // recovery for itself.
+    let handed = create(&w, "handed-over", &claimant_key).unwrap();
     let guardian = w.guardian("new-account/claimant-guardian", claimant.clone());
     let as_claimant = Account {
         address: handed.clone(),
