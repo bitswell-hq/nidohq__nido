@@ -262,12 +262,12 @@ jobs:
             echo
             echo "\`scripts/repin-perch.sh\`: the Perch git dependencies in \`Cargo.toml\` moved to the same commit, the stack fetched by the manifest's hashes and content addresses (\`just perch-infra\`), Nido's contracts rebuilt around it, the \`perch-*\` bindings, the SDK's Perch pins (\`perch.TESTNET\` except \`factory\`, the policyDoc registry and wasm-hash pins), \`package-lock.json\`, \`Cargo.lock\`, and the Soroban test snapshots; \`just check-vendor-drift\` passed."
             echo
-            echo "### After merging"
+            echo "### Before merging"
             echo
-            echo "This PR does not redeploy Nido's factory. \`perch.TESTNET.factory\` still names the deployed factory, which embeds the previous Perch account, so until the redeploy new accounts are minted with the previous account wasm. Then:"
+            echo "This PR does not redeploy Nido's factory. If the manifest moved \`perch-account\` or \`perch-webauthn-verifier\`, the SDK's \`deployment.test.ts\` fails until the factory record (\`packages/passkey-sdk/src/perch/factory.$NETWORK.json\`) names them, so new accounts are never minted with the previous account wasm. On this branch:"
             echo
-            echo "1. \`just deploy-factory <identity> $NETWORK\` from the merged main."
-            echo "2. Record the new factory in \`perch.TESTNET.factory\` (\`packages/passkey-sdk/src/perch/deployment.ts\`) and \`DEPLOYED.md\`, in a follow-up PR."
+            echo "1. \`just deploy-factory <identity> $NETWORK\`, which writes the record."
+            echo "2. Set \`perch.TESTNET.factory\` (\`packages/passkey-sdk/src/perch/deployment.ts\`) to the new address, update \`DEPLOYED.md\`, and push the record with them."
           } > "$body"
           title="chore(perch): re-pin to Perch ${PERCH_SHA:0:7} ($NETWORK)"
           url="$(gh pr list --repo "$REPO" --head "$BRANCH" --state open --json url --jq '.[0].url // empty')"

@@ -69,6 +69,12 @@ jobs:
       - name: Check vendor/perch for drift
         run: just check-vendor-drift
 
+      # The factory record (packages/passkey-sdk/src/perch/factory.testnet.json)
+      # against the deployed factory's instance storage, read over RPC. The
+      # SDK's deployment.test.ts checks the record against the manifest.
+      - name: Check the factory record against testnet
+        run: just check-factory
+
       # The whole Rust workspace: the factory, the policy contracts, and the
       # integration suites that drive the deployed Perch account, verifier,
       # controller, pool, and adapter wasm under enforcing authorization, replaying the committed

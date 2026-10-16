@@ -86,7 +86,7 @@ Before using a manifest:
 ### 2.2 Nido's factory
 
 `ADMIN=<multisig> DELAY_LEDGERS=<delay> scripts/deploy-factory.sh <identity> [network]`
-(or `just deploy-factory`) does steps 1–6 and checks each:
+(or `just deploy-factory`) does steps 1–7 and checks each:
 
 1. Check that the staged account wasm (from `just perch-infra`) is the
    manifest's `perch-account` (`accountWasmHash`) and install it: the factory
@@ -106,18 +106,29 @@ Before using a manifest:
    the multisig doesn't sign during the deploy) and read the admin back.
    Without `ADMIN` the paying identity stays admin, which is fine only on
    testnet.
+7. Write the factory record,
+   `packages/passkey-sdk/src/perch/factory.<network>.json`: the address,
+   wasm hash, the pin, delay, and account hash read back in steps 4–5, the
+   admin, and the commits and toolchain it was built from.
 
 If any step after 3 fails, the script stops and names the factory and the
 step: don't register or use that factory; deploy a fresh one.
 
+Two checks hold the record to the truth. `deployment.test.ts` fails unless
+the record's account and verifier are the manifest's `perch-account` and
+`perch-webauthn-verifier`, so a re-pin that moves either can't merge until
+the factory is redeployed (or upgraded, §3) and the record committed with
+it. `just check-factory` (run in CI) reads the factory's instance
+storage over RPC and fails unless it matches the record.
+
 Not done by the script:
 
-7. Set the factory in `perch.TESTNET` (and DEPLOYED.md), and decide whether
+8. Set the factory in `perch.TESTNET` (and DEPLOYED.md), and decide whether
    to repoint the registry's `factory` name (`scripts/deploy-registry.sh`
    deploys a registry instance and registers names). The wallet uses the
    deployment's factory, so the registry name matters only to builds without
    one and to off-chain discovery.
-8. **Smoke test:** create an account and check its `infra()` and admin rule,
+9. **Smoke test:** create an account and check its `infra()` and admin rule,
    then run §1's testnet specs.
 
 ### 2.3 Front end
@@ -177,7 +188,11 @@ A factory change, before mainnet and after:
 5. Verify the factory's wasm hash, `pinned_verifier()`, and the account hash
    it deploys (simulate `refresh_account_wasm_hash`, which needs no
    signature to simulate), then mint one account and check its code and
-   admin rule. Update DEPLOYED.md.
+   admin rule. Update the factory record
+   (`packages/passkey-sdk/src/perch/factory.<network>.json`: `wasm_hash`,
+   `account_wasm_hash`, `pinned_verifier`) and DEPLOYED.md, and run
+   `just check-factory`, which reads the account hash the minted account
+   cached.
 
 Watch the factory for `change_scheduled` and `admin_changed` and alert on
 every one; outside a planned change, either means the admin key is in use
@@ -374,6 +389,7 @@ user starts a recovery.
    new controller; under `Protected` that needs the current condition.
 3. A new account wasm reaches existing accounts only through each owner's
    seven-day upgrade; new accounts get it from a new factory deployed as in
-   §2.2, or from a scheduled upgrade of the current one (§3).
+   §2.2, or from a scheduled upgrade of the current one (§3), in the same
+   change as the re-pin: the factory record must name the new account.
 4. Update `perch.TESTNET` and DEPLOYED.md (§2.1), and the audit manifest if
    the change lands before sign-off ([AUDIT_SCOPE.md](./AUDIT_SCOPE.md#audit-manifest)).
