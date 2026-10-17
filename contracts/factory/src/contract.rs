@@ -473,35 +473,18 @@ mod test {
         BytesN::from_array(env, &[n; 65])
     }
 
-    /// `setup`'s signature binding `key` to `factory` on `network_id`,
-    /// computed independently of the factory's own code.
-    fn sign_for(
-        env: &Env,
-        setup: &SigningKey,
-        network_id: [u8; 32],
-        factory: &Address,
-        key: &BytesN<65>,
-    ) -> BytesN<64> {
+    /// `setup`'s signature binding `key` to `factory` on the ledger's
+    /// network, computed independently of the factory's own code.
+    fn sign(env: &Env, setup: &SigningKey, factory: &Address, key: &BytesN<65>) -> BytesN<64> {
         let Some(AddressPayload::ContractIdHash(id)) = factory.to_payload() else {
             panic!("not a contract")
         };
         let mut message = Bytes::from_slice(env, b"nido/bind/v1");
-        message.extend_from_array(&network_id);
+        message.extend_from_array(&env.ledger().network_id().to_array());
         message.extend_from_array(&id.to_array());
         message.extend_from_array(&key.to_array());
         let digest = env.crypto().sha256(&message).to_array();
         BytesN::from_array(env, &setup.sign(&digest).to_bytes())
-    }
-
-    /// `setup`'s signature binding `key` to `factory` on this network.
-    fn sign(env: &Env, setup: &SigningKey, factory: &Address, key: &BytesN<65>) -> BytesN<64> {
-        sign_for(
-            env,
-            setup,
-            env.ledger().network_id().to_array(),
-            factory,
-            key,
-        )
     }
 
     /// Create the account for setup key `n` with passkey `n`.
@@ -756,12 +739,14 @@ mod test {
         let setup = setup_key(13);
         let pk = setup_pk(&env, &setup);
         let key = key(&env, 7);
-        let network = env.ledger().network_id().to_array();
         let other_factory = factory_at(&env, 99);
 
         let forged = BytesN::from_array(&env, &[1; 64]);
-        let elsewhere = sign_for(&env, &setup, network, &other_factory, &key);
-        let other_network = sign_for(&env, &setup, [9; 32], &factory, &key);
+        let elsewhere = sign(&env, &setup, &other_factory, &key);
+        let network = env.ledger().network_id().to_array();
+        env.ledger().with_mut(|l| l.network_id = [9; 32]);
+        let other_network = sign(&env, &setup, &factory, &key);
+        env.ledger().with_mut(|l| l.network_id = network);
         for sig in [forged, elsewhere, other_network] {
             assert!(client.try_create_account(&pk, &key, &sig).is_err());
         }
