@@ -9,10 +9,10 @@
 #   2. Build Nido's contracts (`just build-contracts`; the factory embeds that
 #      wasm) unless SKIP_BUILD is set.
 #   3. Deploy the factory with the paying identity as its admin, Perch's
-#      WebAuthn verifier pinned, and the change delay DELAY_LEDGERS, all
-#      constructor arguments: account creation never consults the registry,
-#      and every later change to the code or the pin waits out the delay.
-#   4. Read the pin and the delay back.
+#      WebAuthn verifier pinned, and MANAGER (if set) as the address that
+#      must authorize every account creation, all constructor arguments:
+#      account creation never consults the registry.
+#   4. Read the pin and the manager back.
 #   5. Ask the factory for the account hash it deploys (admin-gated
 #      `refresh_account_wasm_hash`) and check it against the manifest.
 #   6. Hand the factory to ADMIN (`set_admin`, which needs only the current
@@ -21,7 +21,7 @@
 #      multisig ADMIN never has to sign during the deploy.
 #   7. Write the factory record, packages/passkey-sdk/src/perch/
 #      factory.<network>.json: the address, its wasm hash, the account hash,
-#      verifier, and delay read back in steps 4-5, the admin, and the Nido and
+#      verifier, and manager read back in steps 4-5, the admin, and the Nido and
 #      Perch commits and toolchain it was built from. deployment.test.ts
 #      checks the record's account and verifier against the manifest, and
 #      scripts/check-factory.sh checks the record against the chain.
@@ -50,11 +50,11 @@
 #
 # Env:
 #   ADMIN          The factory's final admin (default: the identity's address,
-#                  fine only on testnet). On mainnet this must be the multisig.
-#   DELAY_LEDGERS  Ledgers every change to the factory waits between
-#                  `schedule_change` and `execute_change` (`change_delay()`).
-#                  Fixed for the factory's life. Required except on testnet,
-#                  where it defaults to 720 (an hour at five-second ledgers).
+#                  fine only on testnet). On mainnet this must be the admin
+#                  smart account that enforces the change delay (RUNBOOKS §3).
+#   MANAGER        The address that must authorize every `create_account`
+#                  (default: none, so anyone may create an account; testnet
+#                  keeps none). On mainnet, the manager smart account.
 #   SKIP_BUILD     Skip `just build-contracts`. The record's toolchain is then
 #                  null: this script did not see what built the wasm.
 #
@@ -91,11 +91,8 @@ VERIFIER="$(m '.contracts["perch-webauthn-verifier"].address')"
 DEPLOYER="$(stellar keys address "$IDENTITY")"
 ADMIN="${ADMIN:-$DEPLOYER}"
 [[ "$ADMIN" =~ ^[GC][A-Z2-7]{55}$ ]] || die "ADMIN '$ADMIN' is not an address"
-if [ -z "${DELAY_LEDGERS:-}" ]; then
-    [ "$NETWORK" = testnet ] || die "set DELAY_LEDGERS, the factory's change delay, for $NETWORK"
-    DELAY_LEDGERS=720
-fi
-[[ "$DELAY_LEDGERS" =~ ^[0-9]+$ ]] || die "DELAY_LEDGERS '$DELAY_LEDGERS' is not a ledger count"
+MANAGER="${MANAGER:-}"
+[ -z "$MANAGER" ] || [[ "$MANAGER" =~ ^[GC][A-Z2-7]{55}$ ]] || die "MANAGER '$MANAGER' is not an address"
 # shellcheck source=scripts/stellar-rpc.sh
 . scripts/stellar-rpc.sh
 rpc_select "$(m .rpc_url)" "$(m .network_passphrase)" || die "no usable RPC endpoint for $NETWORK"
@@ -119,9 +116,12 @@ fi
 [ -f "$FACTORY_WASM" ] || die "$FACTORY_WASM missing"
 FACTORY_WASM_HASH="$(sha256 "$FACTORY_WASM")"
 
-note "deploy factory (admin $DEPLOYER until step 6, verifier $VERIFIER, delay $DELAY_LEDGERS ledgers)"
+# An absent `--manager` is the constructor's `None`.
+MANAGER_ARG=()
+[ -z "$MANAGER" ] || MANAGER_ARG=(--manager "$MANAGER")
+note "deploy factory (admin $DEPLOYER until step 6, verifier $VERIFIER, manager ${MANAGER:-none})"
 FACTORY="$(stellar contract deploy --wasm "$FACTORY_WASM" "${NET[@]}" -- \
-    --admin "$DEPLOYER" --verifier "$VERIFIER" --delay_ledgers "$DELAY_LEDGERS" | tail -1)"
+    --admin "$DEPLOYER" --verifier "$VERIFIER" ${MANAGER_ARG[@]+"${MANAGER_ARG[@]}"} | tail -1)"
 [[ "$FACTORY" =~ ^C[A-Z2-7]{55}$ ]] || die "deploy returned '$FACTORY'"
 echo "  factory $FACTORY (wasm $FACTORY_WASM_HASH)" >&2
 
@@ -135,11 +135,11 @@ abandoned() {
 trap abandoned ERR
 fail() { echo "error: $*" >&2; false; }
 
-step="check the verifier pin and the change delay"; note "$step"
+step="check the verifier pin and the manager"; note "$step"
 pinned="$(stellar contract invoke --id "$FACTORY" "${NET[@]}" --send=no -- pinned_verifier | tr -d '"')"
 [ "$pinned" = "$VERIFIER" ] || fail "pinned verifier reads back as '$pinned'"
-delay="$(stellar contract invoke --id "$FACTORY" "${NET[@]}" --send=no -- change_delay)"
-[ "$delay" = "$DELAY_LEDGERS" ] || fail "change delay reads back as '$delay'"
+manager="$(stellar contract invoke --id "$FACTORY" "${NET[@]}" --send=no -- manager | tr -d '"')"
+[ "$manager" = "${MANAGER:-null}" ] || fail "manager reads back as '$manager'"
 
 step="check the account hash the factory deploys"; note "$step"
 deploys="$(stellar contract invoke --id "$FACTORY" "${NET[@]}" -- refresh_account_wasm_hash | tr -d '"')"
@@ -164,7 +164,7 @@ jq -n \
     --arg wasm "$FACTORY_WASM_HASH" \
     --arg account "$deploys" \
     --arg verifier "$pinned" \
-    --argjson delay "$delay" \
+    --arg manager "$MANAGER" \
     --arg admin "$admin" \
     --arg commit "$(git rev-parse HEAD)" \
     --argjson dirty "$dirty" \
@@ -172,7 +172,8 @@ jq -n \
     --argjson toolchain "$TOOLCHAIN" \
     --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     '{schema: 1, network: $network, network_passphrase: $passphrase, factory: $factory,
-      wasm_hash: $wasm, account_wasm_hash: $account, pinned_verifier: $verifier, change_delay: $delay, admin: $admin,
+      wasm_hash: $wasm, account_wasm_hash: $account, pinned_verifier: $verifier,
+      manager: (if $manager == "" then null else $manager end), admin: $admin,
       source: {commit: $commit, dirty: $dirty, perch_commit: $perch},
       toolchain: $toolchain, deployed_at: $at}' > "$RECORD" \
     || die "factory $FACTORY is deployed and checked, but writing $RECORD failed"

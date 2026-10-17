@@ -265,13 +265,13 @@ This section is the one home for Nido's package-migration plans.
   against a hardcoded `REGISTRY` constant, the unverified testnet Stellar
   Registry `CDBL7MNO7UI5OAAIC67UIWKQ4P3S6RVQSFCQXUHUW6TOFCXSYRPNHY4S`.
   `create_account` resolves only `"verifier"`: the pin set by the
-  constructor or a scheduled `PinVerifier` change if there is one, else an
+  constructor or `pin_verifier` if there is one, else an
   address cached in the factory's instance storage from an earlier lookup,
   else a registry lookup that it then caches. The Perch account wasm is
   embedded at build time: `contracts/factory/build.rs` stages the wasm
   `just perch-infra` fetched and exports its path as `PERCH_ACCOUNT_WASM`;
   the factory `include_bytes!` it, deploys by `sha256` of those bytes
-  (cached; an executed upgrade clears the cache), and needs the same bytes
+  (cached; an upgrade clears the cache), and needs the same bytes
   already installed on the network.
 - **Why it is safe to defer:** the deployed factory has Perch's verifier
   pinned, so the registry is off the account-creation path; a repointed or

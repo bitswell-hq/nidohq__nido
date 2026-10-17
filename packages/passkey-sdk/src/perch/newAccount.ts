@@ -1,12 +1,14 @@
 /**
  * Checking a just-created account before the wallet trusts it.
  *
- * Nido's factory derives an account's address from the setup salt alone, and
- * `create_account(salt, key)` is permissionless, so whoever submits a salt
- * first owns its address with their own key as the admin. The relayer sees
- * every setup transaction before it lands, and anyone else who learns a salt
- * can race it. A relayer's report that "the transaction succeeded" says
- * nothing about which key was installed, or even which transaction it was.
+ * Nido's factory derives an account's address from a one-time setup key and
+ * deploys there only the passkey that setup key signed (`perch/setupKey.ts`),
+ * so neither the relayer nor anyone else who sees the setup public key can
+ * claim the address. Whoever holds the setup SECRET can, though: a thief who
+ * reads it from the browser before the passkey exists, or a factory other
+ * than the deployment's. A relayer's report that "the transaction succeeded"
+ * says nothing about which key was installed, or even which transaction it
+ * was.
  *
  * So the wallet reads the account back from RPC and accepts it only in the
  * exact state the user's own `create_account` leaves it in: the deployment's
@@ -19,7 +21,7 @@
  * account rules that out.
  *
  * This detects a claimed address; it cannot prevent one. A claimed address is
- * lost to its user, who has to start again with a new salt.
+ * lost to its user, who has to start again with a new setup key.
  */
 
 import { Buffer } from 'buffer';

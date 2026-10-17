@@ -45,8 +45,8 @@ use soroban_sdk::xdr::{
     SorobanAuthorizedInvocation, SorobanCredentials, StringM, ToXdr as _, VecM, WriteXdr,
 };
 use soroban_sdk::{
-    contract, contractclient, contracterror, contractimpl, contracttype, symbol_short, vec,
-    Address, Bytes, BytesN, Env, IntoVal, Map, Symbol, TryFromVal, Val, Vec,
+    contract, contractclient, contractimpl, symbol_short, vec, Address, Bytes, BytesN, Env,
+    IntoVal, Map, Symbol, TryFromVal, Val, Vec,
 };
 use std::cell::Cell;
 use std::format;
@@ -85,53 +85,66 @@ impl Target {
     }
 }
 
-/// The ledgers every change to the world's factory waits.
-pub const FACTORY_DELAY: u32 = 1_000;
-
-/// Nido's factory: what the world and the governance suite drive (the
-/// factory crate is cdylib-only, so it has no Rust client of its own; the
-/// types below mirror its own).
+/// Nido's factory: what the world and the factory suites drive (the
+/// factory crate is cdylib-only, so it has no Rust client of its own).
 #[contractclient(name = "FactoryClient")]
 pub trait Factory {
-    fn create_account(e: Env, salt: BytesN<32>, key: BytesN<65>) -> Address;
-    fn get_c_address(e: Env, salt: BytesN<32>) -> Address;
+    fn create_account(
+        e: Env,
+        setup_pk: BytesN<32>,
+        key: BytesN<65>,
+        setup_sig: BytesN<64>,
+    ) -> Address;
+    fn get_c_address(e: Env, setup_pk: BytesN<32>) -> Address;
     fn admin(e: Env) -> Address;
+    fn set_admin(e: Env, new_admin: Address);
     fn pinned_verifier(e: Env) -> Option<Address>;
-    fn change_delay(e: Env) -> Option<u32>;
-    fn pending_change(e: Env) -> Option<PendingChange>;
-    fn schedule_change(e: Env, change: Change) -> Result<u64, FactoryError>;
-    fn execute_change(e: Env, id: u64) -> Result<(), FactoryError>;
-    fn cancel_change(e: Env, id: u64) -> Result<(), FactoryError>;
+    fn manager(e: Env) -> Option<Address>;
+    fn upgrade(e: Env, wasm_hash: BytesN<32>);
+    fn pin_verifier(e: Env, verifier: Address);
+    fn set_manager(e: Env, manager: Option<Address>);
 }
 
-/// The factory's `Change`.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum Change {
-    Upgrade(BytesN<32>),
-    PinVerifier(Address),
-}
+/// A one-time setup key, as the browser generates one in place of a salt:
+/// its public key fixes the account's address, and its signature binds the
+/// passkey there.
+pub struct SetupKey(ed25519_dalek::SigningKey);
 
-/// The factory's `PendingChange`.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PendingChange {
-    pub id: u64,
-    pub change: Change,
-    pub executable_at: u32,
-}
+impl SetupKey {
+    /// The deterministic setup key for `label`.
+    #[must_use]
+    pub fn labelled(label: &str) -> Self {
+        use sha2::{Digest, Sha256};
+        let seed: [u8; 32] = Sha256::digest(format!("nido-it/setup/{label}")).into();
+        Self(ed25519_dalek::SigningKey::from_bytes(&seed))
+    }
 
-/// The factory's `FactoryError`.
-#[contracterror]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[repr(u32)]
-pub enum FactoryError {
-    ChangePending = 1,
-    NoPendingChange = 2,
-    WrongChange = 3,
-    ChangeNotReady = 4,
-    NoDelay = 5,
-    DelayOverflow = 6,
+    #[must_use]
+    pub fn public(&self, env: &Env) -> BytesN<32> {
+        BytesN::from_array(env, &self.0.verifying_key().to_bytes())
+    }
+
+    /// The signature binding passkey `key` to `factory` on this network:
+    /// over `sha256("nido/bind/v1" || network_id || factory_id || key)`.
+    #[must_use]
+    pub fn bind(&self, env: &Env, factory: &Address, key: &BytesN<65>) -> BytesN<64> {
+        use ed25519_dalek::Signer as _;
+        let mut message = Bytes::from_slice(env, b"nido/bind/v1");
+        message.extend_from_array(&env.ledger().network_id().to_array());
+        message.extend_from_array(&contract_id(factory));
+        message.extend_from_array(&key.to_array());
+        let digest = env.crypto().sha256(&message).to_array();
+        BytesN::from_array(env, &self.0.sign(&digest).to_bytes())
+    }
+
+    /// The deploy salt the factory derives from this key:
+    /// `sha256("nido/setup/v1" || setup_pk)`.
+    #[must_use]
+    pub fn salt(&self, env: &Env) -> BytesN<32> {
+        let mut preimage = Bytes::from_slice(env, b"nido/setup/v1");
+        preimage.extend_from_array(&self.public(env).to_array());
+        env.crypto().sha256(&preimage).to_bytes()
+    }
 }
 
 /// The ZK adapter's identity views.
@@ -483,7 +496,7 @@ pub fn world() -> World {
     env.register_at(
         &factory,
         FACTORY_WASM,
-        (admin, Some(verifier.clone()), FACTORY_DELAY),
+        (admin, Some(verifier.clone()), None::<Address>),
     );
     env.deployer().upload_contract_wasm(PERCH_ACCOUNT_WASM);
 
@@ -541,8 +554,9 @@ impl World {
 
     // --- accounts ----------------------------------------------------------
 
-    /// Mint an account through the factory: salt `sha256("nido-it/salt/<label>")`,
-    /// admin passkey `owner`, plus `extra` passkeys its documents may name.
+    /// Mint an account through the permissionless world factory: setup key
+    /// [`SetupKey::labelled`]`(label)`, admin passkey `owner`, plus `extra`
+    /// passkeys its documents may name.
     #[must_use]
     pub fn mint(
         &self,
@@ -550,16 +564,13 @@ impl World {
         owner: Passkey,
         extra: std::vec::Vec<(&'static str, Passkey)>,
     ) -> Account {
-        let salt = self
-            .env
-            .crypto()
-            .sha256(&Bytes::from_slice(
-                &self.env,
-                format!("nido-it/salt/{label}").as_bytes(),
-            ))
-            .to_bytes();
-        let address = FactoryClient::new(&self.env, &self.factory)
-            .create_account(&salt, &BytesN::from_array(&self.env, &owner.pubkey()));
+        let setup = SetupKey::labelled(label);
+        let key = BytesN::from_array(&self.env, &owner.pubkey());
+        let address = FactoryClient::new(&self.env, &self.factory).create_account(
+            &setup.public(&self.env),
+            &key,
+            &setup.bind(&self.env, &self.factory, &key),
+        );
         let mut keys = std::vec![("owner", owner)];
         keys.extend(extra);
         Account { address, keys }
