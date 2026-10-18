@@ -126,6 +126,20 @@ holds no passkey. A storage bridge (`/nido-storage-bridge/`,
 browser's account list, names, and the setup keys of accounts still being
 created across the apex and account origins.
 
+Hosts are read against a list of known apexes, never by counting labels:
+`splitHost` and `NIDO_APEXES` in `packages/passkey-sdk/src/url.ts` (`test.nido.fyi`
+and `nido.fyi`, longest first, plus `localhost`). An account, name or built-in
+dApp is exactly one label below its apex; a PR preview adds `--<N>` to that
+label, and `<N>.<apex>` is the preview root. An apex is never an account, so
+`test.nido.fyi` is the testnet apex and not a name `test` on `nido.fyi`, and the
+storage bridge, return-URL checks and links never cross from one apex to the
+other. Names that are, or would shadow, a host (`test`, `www`, `nido`, `relay`,
+the built-in dApps, preview roots) are reserved on both networks. No RP ID is
+ever an apex: a credential for `nido.fyi` would be usable from every testnet and
+preview origin (`packages/frontend/src/lib/rpIdInvariant.test.ts`). Wallet state
+in `localStorage` that is not tied to one account address lives under
+`nido:<network>:*`, so one origin serving another network later starts empty.
+
 ## 3. Onboarding
 
 ```mermaid
@@ -165,7 +179,7 @@ anyone else who sees the setup transaction see only the public key and the
 signature, so they can't bind another passkey to the address. The secret
 travels in the URL fragment (as `salt`) and is scrubbed from the address bar
 on load. During setup it is also kept in the browser's `nido:<network>:pending` storage
-and in a `nido_setup_<account>` cookie on the parent domain (30 minutes),
+and in a `nido_setup_<account>` cookie on the site apex (30 minutes),
 which sends it with requests to Nido's subdomains until the account exists;
 the page drops its copies once the account is checked. Whoever holds the
 secret can still bind its own passkey first, and a second `create_account`
