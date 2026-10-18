@@ -353,8 +353,12 @@ import PasskeySheet from '../../components/PasskeySheet.astro';
       if (payload && account) {
         const passphrase = req.networkPassphrase ?? network ?? NETWORK_PASSPHRASE;
         void renderTxDetail(payload, account, passphrase);
-        reviewPending = true;
-        void reviewTxAuth(payload, account, passphrase);
+        // A request for another network is refused by validate() below; don't
+        // simulate it, or the review's own error would replace that refusal.
+        if (!networkProblem(passphrase, NETWORK_PASSPHRASE)) {
+          reviewPending = true;
+          void reviewTxAuth(payload, account, passphrase);
+        }
       }
     } else if (op.type === 'transfer') {
       // Descriptor transfer — render directly without XDR decode.
