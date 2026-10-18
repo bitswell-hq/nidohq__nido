@@ -78,29 +78,35 @@ Every box here is checked before mainnet.
     `perch-account` and is constructed with the manifest's
     `perch-webauthn-verifier` pinned, which is constructorless and has no
     admin (THREAT_MODEL 7). `scripts/deploy-factory.sh` reads back the pin,
-    the delay, and the account hash the factory deploys. Pinning constrains
-    the registry, not the admin: the admin can still schedule an upgrade
-    (which replaces the embedded account code and the pin together) or a
+    the manager, and the account hash the factory deploys. Pinning
+    constrains the registry, not the admin: the admin can still upgrade
+    (which replaces the embedded account code and the pin together) or
     repin.
-  - **Every change to the factory waits out a published delay, under a
-    multisig.** The factory exports no `upgrade` and no
-    `set_registry_pins`. A `Change::Upgrade` or `Change::PinVerifier`
-    takes effect only through `execute_change`, at
-    least `change_delay()` ledgers after `schedule_change` announced it
-    (SECURITY_INVARIANTS F6). `factory_governance.rs` shows this against
-    the factory wasm under enforcing authorization, with a smart account as
-    the admin.
+  - **The factory admin is a smart account that enforces a 24-hour delay.**
+    The factory takes `upgrade`, `pin_verifier`, `set_manager`, and
+    `set_admin` from its admin at once and announces each (`upgraded`,
+    `verifier_pinned`, `manager_changed`, `admin_changed`;
+    SECURITY_INVARIANTS F4). The delay is the admin account's: every
+    factory change is announced at least 24 hours (17,280 ledgers) before
+    the admin makes it, its signers can cancel in that window, and no single
+    key can make a change. Keeping the delay out of the factory keeps the
+    factory minimal and lets the mechanism change without a redeploy;
+    RUNBOOKS §3 lists candidates (an OpenZeppelin timelock, a Perch delay
+    policy, Tansu) and what each needs. `factory_governance.rs` shows the
+    factory obeying only its admin under enforcing authorization, with a
+    Nido account as the admin.
 
-  Still to do before B1 is checked: choose the multisig that holds the
-  factory admin (RUNBOOKS §3 says how to point the admin at a multisig
-  account); choose `DELAY_LEDGERS` and publish it in DEPLOYED.md; alert on
-  the factory's `change_scheduled`, `change_executed`, `change_cancelled`,
-  and `admin_changed` events (RUNBOOKS §3); and rehearse on a deployed
-  testnet factory that a non-admin's schedule, execute, and cancel are
-  refused, that an upgrade executes only after the delay, and that the next
-  account runs the new factory's embedded `perch-account`. A wallet check of
-  each new account's code and verifier (A6) is a separate gate, not a
-  substitute for this one.
+  Mainnet values: admin = a smart account; change delay = 24 hours,
+  enforced by that account. Still to do before B1 is checked: choose and
+  build the admin account's delay mechanism and its signers; alert on the
+  factory's `upgraded`, `verifier_pinned`, `manager_changed`, and
+  `admin_changed` events and on the admin account's announcements (RUNBOOKS
+  §3); and rehearse on a deployed testnet factory that a non-admin's calls
+  are refused, that a change made through the admin account waits out its
+  delay and can be cancelled, and that after an upgrade the next account
+  runs the new factory's embedded `perch-account`. A wallet check of each
+  new account's code and verifier (A6) is a separate gate, not a substitute
+  for this one.
 - [ ] **B2. Name-registry, policy, and registry-owner keys behind the
   multisig**, with alerts on any registry address change.
 - [ ] **A3. Relayer keys in KMS/HSM.** Sponsor and channel keys are held in
@@ -109,37 +115,37 @@ Every box here is checked before mainnet.
 ### Account setup
 
 - [ ] **A6. An account being set up cannot be claimed by someone else.**
-  `create_account(salt, key)` is permissionless and the address derives from
-  the salt alone, so whoever submits the salt first owns the address
-  (THREAT_MODEL 10, L5; pinned by the factory test
-  `whoever_submits_the_salt_first_owns_the_address`). Before the wallet
-  activates a newly created account or moves any funds into it, it checks on
-  chain that the account runs the manifest's `perch-account` wasm and that
-  its only rule is the admin rule, scoped to the account, whose single
-  signer is the user's new passkey under the pinned Perch WebAuthn
-  verifier; on any mismatch it stops with an explicit failure that tells the
-  user the address was taken, and never funds it. A reviewed mechanism that
-  prevents the race (for example, a factory commitment to the key before
-  the salt is revealed) meets A6 instead. Evidence: an adversarial setup
-  test in which a front-runner creates the account first, and a test of the
-  wallet's failure path. Tracked in nidohq/nido#245.
+  The address derives from a one-time setup key, and `create_account`
+  deploys only the passkey that key signed (SECURITY_INVARIANTS F6), so
+  whoever sees the setup public key (the relayer, a mempool watcher, the
+  manager) can't claim it. Whoever holds the setup secret still can
+  (THREAT_MODEL 5, L5). Before the wallet activates a newly created account
+  or moves any funds into it, it checks on chain that the account runs the
+  manifest's `perch-account` wasm and that its only rule is the admin rule,
+  scoped to the account, whose single signer is the user's new passkey
+  under the pinned Perch WebAuthn verifier; on any mismatch it stops with an
+  explicit failure that tells the user the address was taken, and never
+  funds it. Evidence: an adversarial setup test in which a front-runner
+  creates the account first, and a test of the wallet's failure path.
+  Tracked in nidohq/nido#245.
   _Status:_ the wallet check is built (`perch/newAccount.ts` in the SDK, run by
   the onboarding page and the account switcher; SECURITY_INVARIANTS W11).
-  `new_account_reads.rs` records accounts a front-runner created first, and
-  `newAccount.test.ts` requires the wallet to refuse them; a browser test
-  drives a resumed setup at a claimed address to its refusal, and the refusal
-  after a submission is reviewed. The check names the deployment's
-  account wasm and verifier, so it refuses every account a factory built
-  around other ones creates: on testnet, until Nido's factory is redeployed on
-  the manifest's account (DEPLOYED.md).
-- [ ] **A7. Account setup can't be denied by claiming its address.** A6
-  detects a claimed address; nothing prevents the claim. The relayer, or
-  anyone who learns a salt before its deploy, can take every address it sees,
-  and each user loses that address and the passkey made for it (THREAT_MODEL
-  10, L5). Meeting A7 needs a mechanism that binds the key before the salt is
-  public, for example a factory commitment to the key that `create_account`
-  checks, or a recorded decision to launch with the denial, with a runbook
-  for answering it (RUNBOOKS §5). Tracked in nidohq/nido#245.
+  `new_account_reads.rs` records accounts a thief holding the setup secret
+  created first, and `newAccount.test.ts` requires the wallet to refuse
+  them; a browser test drives a resumed setup at a claimed address to its
+  refusal, and the refusal after a submission is reviewed. The check names
+  the deployment's account wasm and verifier, so it refuses every account a
+  factory built around other ones creates: on testnet, until Nido's factory
+  is redeployed on the manifest's account (DEPLOYED.md).
+- [ ] **A7. Account setup can't be denied by claiming its address.** The
+  factory's setup-key binding prevents a claim by anyone without the setup
+  secret: a front-runner with another key, a forged signature, or the
+  manager's own approval are all refused (SECURITY_INVARIANTS F6, F7;
+  `factory_governance.rs`). It closes the race the relayer could win
+  (THREAT_MODEL 10, L5). Still to do before A7 is checked: deploy a factory
+  with the binding on testnet and point the wallet at it (the deployed
+  testnet factory predates it, DEPLOYED.md), and onboard through the hosted
+  relayer against it. Tracked in nidohq/nido#245.
 
 ### Reproducible builds
 
@@ -230,8 +236,9 @@ Every box here is checked before mainnet.
 
 Met, with their evidence; kept here so their IDs stay resolvable.
 
-- [x] **A2. Setup secret out of query strings.** The salt travels in the URL
-  fragment and legacy query links are scrubbed on load (W5).
+- [x] **A2. Setup secret out of query strings.** The setup secret travels in
+  the URL fragment (as `salt`) and legacy query links are scrubbed on load
+  (W5).
 - [x] **D8. The wallet on Perch's consumer interface.** Every wallet apply
   names the revision its document was composed from, so the later of two
   edits prepared at once is refused instead of overwriting the earlier
@@ -281,8 +288,8 @@ boundary it changes.
    gives (step 2).
 4. Build the factory around the published account wasm, upload the account
    wasm, deploy the factory with the manifest's verifier pinned and the
-   chosen change delay, hand it to the multisig (B1), and register it
-   (RUNBOOKS §2.2).
+   manager account as its manager, hand it to the admin smart account that
+   enforces the 24-hour delay (B1), and register it (RUNBOOKS §2.2).
 5. Relayer on KMS (A3), alerts live, incident drill run.
 6. Front end built with the single mainnet manifest (N1), with a funded
    recovery submission path (N2); smoke-test onboarding and one full recovery

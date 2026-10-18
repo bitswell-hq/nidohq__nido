@@ -52,7 +52,8 @@ contracts' own authorization.
 Onboarding is sponsored by the hosted relayer. When it is unavailable, build
 without it and let the specs create accounts from Node
 (`tests/support/directDeploy.ts`: a Friendbot-funded payer calls the
-factory's permissionless `create_account`, and the passkey is seeded into the
+testnet factory's `create_account` (no manager, so only a fresh setup key
+signs), and the passkey is seeded into the
 account's origin); every recovery step still runs through the wallet:
 
 ```bash
@@ -117,7 +118,7 @@ Before using a manifest:
 
 ### 2.2 Nido's factory
 
-`ADMIN=<multisig> DELAY_LEDGERS=<delay> scripts/deploy-factory.sh <identity> [network]`
+`ADMIN=<admin account> MANAGER=<manager account> scripts/deploy-factory.sh <identity> [network]`
 (or `just deploy-factory`) does steps 1–7 and checks each:
 
 1. Check that the staged account wasm (from `just perch-infra`) is the
@@ -126,12 +127,12 @@ Before using a manifest:
 2. Build Nido's contracts (skipped with `SKIP_BUILD`); the factory embeds
    that wasm.
 3. Deploy the factory with the paying identity as its admin, Perch's
-   WebAuthn verifier pinned, and the change delay (`DELAY_LEDGERS`; required
-   off testnet, 720 ledgers by default on testnet). All three are
-   constructor arguments. From the first account on, the registry is off the
-   account-creation path (F5), and every later change waits out the delay
-   (§3). The delay is fixed for the factory's life.
-4. Read the pin and the delay back.
+   WebAuthn verifier pinned, and `MANAGER`, if set, as the address that must
+   authorize every `create_account` (none by default; testnet keeps none, so
+   creation stays permissionless there). All three are constructor
+   arguments. From the first account on, the registry is off the
+   account-creation path (F5).
+4. Read the pin and the manager back.
 5. Read back the account hash the factory deploys
    (`refresh_account_wasm_hash`) and check it against the manifest.
 6. Hand the factory to `ADMIN` (`set_admin` needs only the current admin, so
@@ -140,7 +141,7 @@ Before using a manifest:
    testnet.
 7. Write the factory record,
    `packages/passkey-sdk/src/perch/factory.<network>.json`: the address,
-   wasm hash, the pin, delay, and account hash read back in steps 4–5, the
+   wasm hash, the pin, manager, and account hash read back in steps 4–5, the
    admin, and the commits and toolchain it was built from.
 
 If any step after 3 fails, the script stops and names the factory and the
@@ -181,9 +182,12 @@ Who can change what Nido's users depend on, at this revision:
 
 | What changes | Who | How | Delay | What to watch |
 | --- | --- | --- | --- | --- |
-| The account code new accounts get (the `perch-account` the factory embeds) | Factory admin | `schedule_change(Upgrade(<factory wasm hash>))`, then `execute_change(<id>)`; the new factory wasm brings its own embedded account | `change_delay()` ledgers, enforced by the factory | Factory events `change_scheduled`, `change_executed`, `change_cancelled`; `pending_change()` |
-| The verifier new accounts' passkeys name | Factory admin | `schedule_change(PinVerifier(<verifier>))`, then `execute_change(<id>)` | `change_delay()` ledgers | The same events |
-| Who the factory admin is | Factory admin | `set_admin` | None: rotating the admin changes who may schedule, not what the factory does, and a scheduled change still waits out its delay | Factory event `admin_changed` |
+| The account code new accounts get (the `perch-account` the factory embeds) | Factory admin | `upgrade(<factory wasm hash>)`; the new factory wasm brings its own embedded account | None in the factory; the admin account's (below) | Factory event `upgraded` |
+| The verifier new accounts' passkeys name | Factory admin | `pin_verifier(<verifier>)` | The admin account's | Factory event `verifier_pinned` |
+| Who may create an account | Factory admin | `set_manager(<manager>)`, or `set_manager(None)` to let anyone | The admin account's | Factory event `manager_changed`; `manager()` |
+| Who the factory admin is | Factory admin | `set_admin` | The admin account's | Factory event `admin_changed` |
+| Which accounts are created | The manager, if one is set | Its authorization of each `create_account` | None | Factory event `account_created` |
+| Whose passkey an account gets | Only the holder of that account's setup key | The setup key's signature over the passkey (F6) | n/a | `account_created` carries the setup key and passkey |
 | An existing account's code, rules, or verifier | Only that account | Its own `schedule_upgrade` / `execute_upgrade` and `apply_doc` | Seven days for an upgrade (U1) | The account's own events |
 | The registry's `verifier` and `factory` names, and the registry itself | The registry owner key | The registry's own entry points | None in Nido's control | Registry address changes (B2). Off the account-creation path for a pinned factory (F5) |
 | The name service (`contracts/name-registry`) | Name-registry admin | `admin-sep` `set_admin` / `upgrade` | None: its `upgrade` takes effect at once | Its admin and wasm hash (B2) |
@@ -191,51 +195,87 @@ Who can change what Nido's users depend on, at this revision:
 | Perch's verifier, controller, pool, adapter, compiler, and policies | Nobody: no admin, no upgrade entry point | A new deployment at a new address | n/a | Perch's manifest |
 | The passkey checks of accounts minted by pre-Perch factories (testnet only) | The admin of Nido's former WebAuthn verifier | That verifier's own upgrade | None | THREAT_MODEL 7 |
 
-The factory admin is an address, so it can be a multisig smart account:
-deploy with `ADMIN=<the multisig's C-address>`, or rotate an existing
-factory with `set_admin`. The factory calls only `admin.require_auth()`, so
-the multisig's own rule decides which signers and how many: a rule its
-document scopes to the factory, with the multisig's signers and threshold.
-`factory_governance.rs` drives a factory whose admin is a Nido account
-authorizing through such a rule. On testnet the factory admin is a single
-throwaway key (DEPLOYED.md). The mainnet multisig is not chosen yet
-(MAINNET_READINESS B1, B2).
+**The factory takes every admin call at once.** It calls only
+`admin.require_auth()`, and each change emits its event in the same
+transaction. Any delay, quorum, or cancellation belongs to the admin, which on
+mainnet is a smart account that enforces a 24-hour delay (17,280 ledgers at
+five seconds) between announcing a factory change and making it
+(MAINNET_READINESS B1). Keeping that out of the factory keeps the factory
+small, and lets the delay mechanism change without a factory redeploy. Deploy
+with `ADMIN=<the admin account's C-address>`, or rotate an existing factory
+with `set_admin`. `factory_governance.rs` drives a factory whose admin is a
+Nido account authorizing through a rule its document scopes to the factory.
+On testnet the factory admin is a single throwaway key (DEPLOYED.md).
+
+Candidate mechanisms for the admin account's delay; none is built or chosen
+yet:
+
+- **An OpenZeppelin timelock as the admin.** OZ's `stellar-governance` crate,
+  at the rev Nido pins, has a `Timelock` module (schedule, execute, cancel,
+  a minimum delay in ledgers) and a `timelock-controller` example with
+  proposer, executor, and canceller roles. The factory admin would be such a
+  controller with a 17,280-ledger minimum delay, and its roles held by a
+  multisig Perch account. Needs: deploying and reviewing the controller (an
+  OZ example, not part of Perch's deployment), and a runbook for its roles.
+- **A delay policy on the admin's Perch account.** The admin account's rule
+  scoped to the factory would carry a policy that lets a call through only
+  if the same call was announced at least 17,280 ledgers earlier. Perch
+  documents attach only its interpreter and spending-limit policies today,
+  and neither keeps an announcement queue, so this needs a new policy
+  contract that Perch's document format can name, and its review.
+- **Tansu.** Tansu's DAO contract holds a proposal open for at least 24 hours
+  and then waits another 24 hours before it can execute, and runs an
+  approved proposal's outcome call through a stateless executor whose own
+  authority is deliberately worthless. The factory admin would be an adapter
+  contract, like Tansu's own `registry-tansu-manager`, that makes the
+  factory call only for a proposal Tansu marked approved and executed.
+  Needs: that adapter for the factory's four admin calls, a Tansu project
+  for Nido, and a decision on who votes.
+
+**What to watch.** Alert on every `upgraded`, `verifier_pinned`,
+`manager_changed`, and `admin_changed`, and on the admin account's own
+announcement of a factory change; outside a planned change, any of them means
+the admin key is in use without a reason. The delay only helps if someone is
+watching and the admin account can cancel: a compromised admin can announce,
+and the same admin can act once the delay passes. Watch `account_created`
+for volume against invites issued, and for setup keys and passkeys that
+don't match what the wallet submitted.
+
+**The manager.** The manager decides only whether an account is created:
+the setup-key signature, checked by the factory itself, decides whose passkey
+it gets, so a compromised manager can admit accounts it shouldn't but can't
+claim anyone's address. On mainnet the manager is a Perch account whose
+`onboard` rule, scoped to the factory's `create_account`, has one signer: a
+relayer key checked by Perch's Ed25519 verifier, with the relayer checking
+invites off-chain. Changing how admission works (rotating that key, adding
+a voucher rule, an emergency rule) is a document change on the manager, not
+a factory change; changing which account is the manager is `set_manager`,
+behind the admin's delay. Neither the manager account nor its document is
+deployed yet.
 
 A factory change, before mainnet and after:
 
-1. Issue and review, with the new factory wasm's hash and source diff, or the
-   new verifier's address and manifest entry. For an upgrade, install the
-   new factory wasm and the account wasm it embeds (`stellar contract
-   upload`); the next `create_account` fails until the account wasm is
-   installed.
-2. The multisig signs `schedule_change`. Announce the change id, the change,
-   and `executable_at` (the `change_scheduled` event carries all three).
-3. Wait out the delay. Anyone can read `pending_change()` and check the
-   scheduled wasm or verifier. The multisig cancels with
-   `cancel_change(<id>)` if review finds a problem. Wallets that should not
-   create accounts under the coming change stop before `executable_at`.
-4. The multisig signs `execute_change(<id>)`. An upgrade clears the factory's
-   cached account hash, so the next account is the new wasm's embedded
-   account.
-5. Verify the factory's wasm hash, `pinned_verifier()`, and the account hash
-   it deploys (simulate `refresh_account_wasm_hash`, which needs no
-   signature to simulate), then mint one account and check its code and
-   admin rule. Update the factory record
+1. Issue and review, with the new factory wasm's hash and source diff, the
+   new verifier's address and manifest entry, or the new manager. For an
+   upgrade, install the new factory wasm and the account wasm it embeds
+   (`stellar contract upload`); the next `create_account` fails until the
+   account wasm is installed.
+2. The admin account announces the change and starts its delay. Publish the
+   change and when it can be made.
+3. Wait out the delay. Anyone can check the announced wasm, verifier, or
+   manager. Cancel through the admin account if review finds a problem.
+   Wallets that should not create accounts under the coming change stop
+   before it lands.
+4. The admin account makes the call. An upgrade clears the factory's cached
+   account hash, so the next account is the new wasm's embedded account.
+5. Verify the factory's wasm hash, `pinned_verifier()`, `manager()`, and the
+   account hash it deploys (simulate `refresh_account_wasm_hash`, which
+   needs no signature to simulate), then mint one account and check its code
+   and admin rule. Update the factory record
    (`packages/passkey-sdk/src/perch/factory.<network>.json`: `wasm_hash`,
-   `account_wasm_hash`, `pinned_verifier`) and DEPLOYED.md, and run
-   `just check-factory`, which reads the account hash the minted account
+   `account_wasm_hash`, `pinned_verifier`, `manager`) and DEPLOYED.md, and
+   run `just check-factory`, which reads the account hash the minted account
    cached.
-
-Watch the factory for `change_scheduled` and `admin_changed` and alert on
-every one; outside a planned change, either means the admin key is in use
-without a reason. The delay only helps if someone is watching: a compromised
-admin can schedule, and the same admin can execute once the delay passes.
-The factory has no separate canceller and no emergency path.
-
-A factory whose wasm was installed by an upgrade from factory code that
-predates the change delay has no delay stored and refuses every change
-(`FactoryError::NoDelay`). Don't upgrade such a factory in place; deploy a
-fresh one (§2.2).
 
 Nido can't upgrade a user's account. Only its owner can, through the
 seven-day `schedule_upgrade` path (plus the recovery condition under
@@ -256,9 +296,11 @@ seven-day `schedule_upgrade` path (plus the recovery condition under
 The relayer (`infra/relayer`, Fly.io) sponsors and submits transactions. For
 an existing account it can't forge authorization, so there the worst case is
 censorship or a drained sponsor budget. For an account being set up it is
-worse: the relayer sees the setup salt before the account exists, and a
-compromised host can create that account with its own key first
-(THREAT_MODEL 10).
+different: the relayer sees the setup public key and the user's passkey
+before the account exists, and can withhold the setup, but can't bind
+another passkey to the address (THREAT_MODEL 10). On a factory with a
+manager whose signer the relayer holds, a compromised host can also admit
+accounts it shouldn't.
 
 **Defences in place.** A per-IP token bucket in Caddy (30 relays per minute
 per `Fly-Client-IP`) under the relayer's global 20 req/s; the channels
@@ -287,8 +329,13 @@ relayer for drains, redeploy via `deploy-relayer.yml` for outages, rotate keys
 for compromise), confirm recovery, and write a post-mortem outside this
 runbook.
 
-**Host compromise.** Treat every account set up through the relayer during
-the window as possibly claimed. A wallet build with the new-account check
+**Host compromise.** A factory with the setup-key binding (this tree's)
+installs only the passkey the setup key signed, so the relayer can't claim
+the accounts it relays; contain the host, rotate the manager's relayer key
+through a manager document change, and review `account_created` for
+admissions nobody invited. For accounts created by a factory that predates
+the binding (testnet's deployed factory, DEPLOYED.md), treat every account
+set up through the relayer during the window as possibly claimed. A wallet build with the new-account check
 refuses a claimed address before activating or funding it
 (SECURITY_INVARIANTS W11), so its users see setup stop and start again on a
 new address; the check below is still needed for accounts older builds

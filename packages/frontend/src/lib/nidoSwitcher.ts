@@ -85,8 +85,8 @@ function refreshOpenSwitchers() {
 
 // Promote a pending account once it is deployed as this device's own: the
 // account create_account makes for the passkey this origin registered for it.
-// A contract at the address proves nothing by itself (anyone who has the salt
-// can deploy there first), and without the passkey there is nothing to check,
+// A contract at the address proves nothing by itself (anyone who has the setup
+// secret can deploy there first), and without the passkey there is nothing to check,
 // so such an account stays pending; resuming it on its own page settles it.
 async function verifyPendingAccounts(): Promise<boolean> {
   const pending = loadPendingAccounts();

@@ -23,7 +23,7 @@ const OTHER_KEY = Uint8Array.from({ length: 65 }, (_, i) => (i === 0 ? 4 : 255 -
 const expectation: NewAccountExpectation = { account: ACCOUNT, adminKey: KEY, deployment: TESTNET };
 const code: AccountCode = { wasmHash: TESTNET.accountWasmHash };
 
-/** The account `create_account(salt, KEY)` leaves behind. */
+/** The account `create_account(setup_pk, KEY, setup_sig)` leaves behind. */
 function fresh(): AccountConfiguration {
   return {
     revision: 0n,
@@ -190,7 +190,8 @@ describe('verifyNewAccount', () => {
 
 // Real reads from the integration suite (`new_account_reads.rs`): accounts
 // created through Nido's factory and Perch's account wasm, one by the owner
-// and two by a front-runner that submitted the owner's salt first.
+// and two by a front-runner that held the owner's setup secret and bound its
+// own key first.
 describe('accounts a front-runner created first', () => {
   interface Recorded {
     account: string;
