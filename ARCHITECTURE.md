@@ -164,7 +164,7 @@ deploys only with that signature (SECURITY_INVARIANTS F6). The relayer and
 anyone else who sees the setup transaction see only the public key and the
 signature, so they can't bind another passkey to the address. The secret
 travels in the URL fragment (as `salt`) and is scrubbed from the address bar
-on load. During setup it is also kept in the browser's `nido:pending` storage
+on load. During setup it is also kept in the browser's `nido:<network>:pending` storage
 and in a `nido_setup_<account>` cookie on the parent domain (30 minutes),
 which sends it with requests to Nido's subdomains until the account exists;
 the page drops its copies once the account is checked. Whoever holds the

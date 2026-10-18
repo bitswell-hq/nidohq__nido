@@ -97,9 +97,9 @@ test.describe('transfer page — UI only (no chain) @fast', () => {
     await page.goto('/');
     await page.evaluate(
       ({ first, second }) => {
-        localStorage.setItem('nido:accounts', JSON.stringify([first, second]));
-        localStorage.setItem(`nido:names:${first}`, 'alpha');
-        localStorage.setItem(`nido:names:${second}`, 'beta');
+        localStorage.setItem('nido:testnet:accounts', JSON.stringify([first, second]));
+        localStorage.setItem(`nido:testnet:names:${first}`, 'alpha');
+        localStorage.setItem(`nido:testnet:names:${second}`, 'beta');
       },
       { first, second },
     );

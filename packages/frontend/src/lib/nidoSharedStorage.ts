@@ -1,11 +1,13 @@
-import { RESERVED_DAPP_SUBDOMAINS, splitHost, stripSubdomain } from "@nidohq/passkey-sdk";
+import { RESERVED_DAPP_SUBDOMAINS, nidoKey, splitHost, stripSubdomain } from "@nidohq/passkey-sdk";
 import type { PendingAccount } from "./myNidoModel";
 import { isContractStrKey } from "./address";
 import { isLoopbackHttpHost } from "./loopbackHost";
 
-const ACCOUNT_KEY = "nido:accounts";
-const PENDING_KEY = "nido:pending";
-const NAME_PREFIX = "nido:names:";
+// The passkey-sdk's account-list keys (saveAccount, savePendingAccount,
+// saveAccountName), in this build's network namespace.
+const accountKey = () => nidoKey("accounts");
+const pendingKey = () => nidoKey("pending");
+const namePrefix = () => nidoKey("names:");
 const VALID_NAME_RE = /^[a-z][a-z0-9]{0,14}$/;
 export const NIDO_STORAGE_REQUEST = "nido:storage:request:v1";
 export const NIDO_STORAGE_RESPONSE = "nido:storage:response:v1";
@@ -114,20 +116,20 @@ function storageOrNull(): StorageLike | null {
 export function localNidoSnapshot(store: StorageLike | null = storageOrNull()): NidoAccountSnapshot {
   if (!store) return { accounts: [], pending: [], names: {} };
 
-  const accounts = uniqueContractIds(readJson(store.getItem(ACCOUNT_KEY)));
+  const accounts = uniqueContractIds(readJson(store.getItem(accountKey())));
   const active = new Set(accounts);
-  const pending = normalizePending(readJson(store.getItem(PENDING_KEY)), active);
+  const pending = normalizePending(readJson(store.getItem(pendingKey())), active);
   const names: Record<string, string> = {};
 
   for (const contractId of [...accounts, ...pending.map((p) => p.contractId)]) {
-    const name = store.getItem(`${NAME_PREFIX}${contractId}`);
+    const name = store.getItem(`${namePrefix()}${contractId}`);
     if (name && VALID_NAME_RE.test(name)) names[contractId] = name;
   }
 
   for (let i = 0; i < store.length; i++) {
     const key = store.key(i);
-    if (!key?.startsWith(NAME_PREFIX)) continue;
-    const contractId = normalizeContractId(key.slice(NAME_PREFIX.length));
+    if (!key?.startsWith(namePrefix())) continue;
+    const contractId = normalizeContractId(key.slice(namePrefix().length));
     const name = key ? store.getItem(key) : null;
     if (contractId && name && VALID_NAME_RE.test(name)) names[contractId] = name;
   }
@@ -168,10 +170,10 @@ export function mergeNidoSnapshot(
 
   if (stableSnapshot(before) === stableSnapshot(after)) return false;
 
-  store.setItem(ACCOUNT_KEY, JSON.stringify(after.accounts));
-  store.setItem(PENDING_KEY, JSON.stringify(after.pending));
+  store.setItem(accountKey(), JSON.stringify(after.accounts));
+  store.setItem(pendingKey(), JSON.stringify(after.pending));
   for (const [contractId, name] of Object.entries(after.names)) {
-    store.setItem(`${NAME_PREFIX}${contractId}`, name);
+    store.setItem(`${namePrefix()}${contractId}`, name);
   }
 
   return true;

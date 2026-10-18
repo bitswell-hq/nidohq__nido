@@ -28,8 +28,8 @@ test.describe('resuming a setup whose address is taken @fast', () => {
       ({ id, salt }) => {
         if (sessionStorage.getItem('seeded')) return;
         sessionStorage.setItem('seeded', '1');
-        localStorage.setItem('nido:pending', JSON.stringify([{ contractId: id, setupKey: salt }]));
-        localStorage.setItem('nido:pending:ts', JSON.stringify({ [id]: Date.now() }));
+        localStorage.setItem('nido:testnet:pending', JSON.stringify([{ contractId: id, setupKey: salt }]));
+        localStorage.setItem('nido:testnet:pending:ts', JSON.stringify({ [id]: Date.now() }));
       },
       { id: CONTRACT_ID, salt: SALT },
     );
@@ -57,8 +57,8 @@ test.describe('resuming a setup whose address is taken @fast', () => {
     await expect(page.locator('#deploy-section')).toBeHidden();
 
     const stored = await page.evaluate((id) => ({
-      pending: localStorage.getItem('nido:pending'),
-      accounts: localStorage.getItem('nido:accounts'),
+      pending: localStorage.getItem('nido:testnet:pending'),
+      accounts: localStorage.getItem('nido:testnet:accounts'),
       credential: localStorage.getItem(`passkey:${id}:credentialId`),
     }), CONTRACT_ID);
     expect(stored.pending ?? '').not.toContain(CONTRACT_ID);

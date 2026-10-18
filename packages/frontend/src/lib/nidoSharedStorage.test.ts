@@ -199,8 +199,8 @@ describe("answerBridgeRequest", () => {
   const request = (snapshot: unknown) => ({ type: NIDO_STORAGE_REQUEST, id: "r1", snapshot });
   const apexStore = () =>
     new MemoryStorage({
-      "nido:accounts": JSON.stringify([A]),
-      "nido:pending": JSON.stringify([{ contractId: B, setupKey: "salt-b" }]),
+      "nido:testnet:accounts": JSON.stringify([A]),
+      "nido:testnet:pending": JSON.stringify([{ contractId: B, setupKey: "salt-b" }]),
     });
 
   it("answers its embedding account origin with that account's setup entry", () => {
@@ -279,10 +279,10 @@ describe("answerBridgeRequest", () => {
 describe("Nido account snapshot storage", () => {
   it("loads local accounts, pending rows, and cached names", () => {
     const store = new MemoryStorage({
-      "nido:accounts": JSON.stringify([A, "not-an-account"]),
-      "nido:pending": JSON.stringify([{ contractId: B, secretKey: "S123" }]),
-      [`nido:names:${A}`]: "alpha",
-      [`nido:names:${B}`]: "beta",
+      "nido:testnet:accounts": JSON.stringify([A, "not-an-account"]),
+      "nido:testnet:pending": JSON.stringify([{ contractId: B, secretKey: "S123" }]),
+      [`nido:testnet:names:${A}`]: "alpha",
+      [`nido:testnet:names:${B}`]: "beta",
     });
 
     expect(localNidoSnapshot(store)).toEqual({
@@ -294,9 +294,9 @@ describe("Nido account snapshot storage", () => {
 
   it("merges bridge accounts and removes pending rows once active", () => {
     const store = new MemoryStorage({
-      "nido:accounts": JSON.stringify([A]),
-      "nido:pending": JSON.stringify([{ contractId: B, secretKey: "S123" }]),
-      [`nido:names:${A}`]: "alpha",
+      "nido:testnet:accounts": JSON.stringify([A]),
+      "nido:testnet:pending": JSON.stringify([{ contractId: B, secretKey: "S123" }]),
+      [`nido:testnet:names:${A}`]: "alpha",
     });
 
     const changed = mergeNidoSnapshot(

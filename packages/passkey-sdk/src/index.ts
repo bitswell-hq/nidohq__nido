@@ -71,9 +71,12 @@ export {
 } from "./relayer.js";
 export type { RelayerStatus, RelayerTxResponse } from "./relayer.js";
 
-export type { PendingAccount, SessionKeyMaterial } from "./storage.js";
+export type { PendingAccount, SessionKeyMaterial, StorageNetwork, KeyValueStore } from "./storage.js";
 
 export {
+  nidoKey,
+  setStorageNetwork,
+  moveLegacyNidoKeys,
   saveCredential,
   loadCredential,
   saveAccount,

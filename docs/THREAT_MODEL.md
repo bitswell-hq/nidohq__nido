@@ -24,7 +24,7 @@ and infrastructure bring.
 | Passkey private key | The user's authenticator; never leaves it | Full control under `Loss`; ordinary activity under `Protected`. |
 | Recovery kit (ZK secret) | A JSON file the user downloads | The ZK factor: alone under `ZkOnly`, half of `Combined`. |
 | Guardian accounts | Each guardian's own Nido or G wallet | One guardian's share of the quorum. |
-| Setup secret (the setup key's seed, carried as `salt`) | URL fragment, a `nido_setup_<account>` cookie on the parent domain (30 minutes), and the browser's `nido:pending` storage until the account exists. The relayer sees only the setup PUBLIC key and the setup key's signature over the user's passkey | Whoever holds it can bind its own passkey to the address first (F6 stops everyone else). The wallet then refuses that address rather than activate or fund it (W11), so the owner loses the address, not funds. |
+| Setup secret (the setup key's seed, carried as `salt`) | URL fragment, a `nido_setup_<account>` cookie on the parent domain (30 minutes), and the browser's `nido:<network>:pending` storage until the account exists. The relayer sees only the setup PUBLIC key and the setup key's signature over the user's passkey | Whoever holds it can bind its own passkey to the address first (F6 stops everyone else). The wallet then refuses that address rather than activate or fund it (W11), so the owner loses the address, not funds. |
 | Factory admin key | Nido operators | The account code and the verifier new accounts get, once a scheduled change waits out the factory's delay (adversary 8). |
 | Relayer keys | Fly.io host | Sponsor budget; censorship; claiming, and so denying, accounts that are being set up (adversary 10). |
 | The wallet's deployment (`perch.TESTNET`, or a `PUBLIC_PERCH_DEPLOYMENT` override) | Baked into the wallet at build time | Which factory, controller, pool, adapter, and verifier the wallet tells users to trust (adversary 9). |
@@ -68,7 +68,7 @@ and infrastructure bring.
    secret travels in the URL fragment and is scrubbed from the address bar,
    but during setup it is also in a cookie on the parent domain (sent with
    every request to Nido's subdomains, so it reaches the worker and Pages
-   logs if they record cookies) and in `nido:pending`, which the storage
+   logs if they record cookies) and in `nido:<network>:pending`, which the storage
    bridge shares with that account's own origin and no other (adversary 15).
    A second `create_account` with the same setup key fails (F2), so the risk
    is a race before the first deploy, not a takeover after. The wallet
@@ -78,7 +78,7 @@ and infrastructure bring.
    (F6), so the relayer (adversary 10) and the manager can't race. See L5.
 6. **Script in the wallet origin (XSS, malicious extension, compromised CDN).**
    Can't read the passkey, but can ask the authenticator to sign whatever the
-   page builds, read the setup keys in `nido:pending`, and swap the recovery
+   page builds, read the setup keys in `nido:<network>:pending`, and swap the recovery
    kit before download. Mitigations: per-account origins, security headers
    (the CSP is report-only, MAINNET_READINESS E1), and every script bundled at
    build time. Proving downloads Barretenberg's reference string from
@@ -223,7 +223,7 @@ and infrastructure bring.
     token transfer, a swap) is approved on the dApp's word, and the dApp's
     claimed origin is unauthenticated.
 15. **Script on a sibling origin under the apex.** The apex's storage bridge
-    holds every account's setup key in `nido:pending` and the account list
+    holds every account's setup key in `nido:<network>:pending` and the account list
     every origin's switcher shows. Pages that share the apex but are not this
     account's wallet — the built-in status-message dApp, the relayer's host,
     any future service on `*.nido.fyi`, or a network attacker serving one of

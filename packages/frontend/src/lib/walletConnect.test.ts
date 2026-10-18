@@ -66,18 +66,18 @@ describe('session store', () => {
   });
 
   it('returns null (rather than throwing) on corrupt JSON', () => {
-    const store = fakeStorage({ 'nido:walletSession': '{not json' });
+    const store = fakeStorage({ 'nido:testnet:walletSession': '{not json' });
     expect(readSession(store)).toBeNull();
   });
 
   it('returns null when the stored object is missing required fields', () => {
-    const store = fakeStorage({ 'nido:walletSession': JSON.stringify({ walletId: 'g2c' }) });
+    const store = fakeStorage({ 'nido:testnet:walletSession': JSON.stringify({ walletId: 'g2c' }) });
     expect(readSession(store)).toBeNull();
   });
 
   it('normalizes the legacy stored Nido wallet id', () => {
     const store = fakeStorage({
-      'nido:walletSession': JSON.stringify({ walletId: 'g2c', walletAddress: 'CABC' }),
+      'nido:testnet:walletSession': JSON.stringify({ walletId: 'g2c', walletAddress: 'CABC' }),
     });
     expect(readSession(store)).toEqual({ walletId: NIDO_ID, walletAddress: 'CABC' });
   });
@@ -187,7 +187,7 @@ describe('restoreWith', () => {
 
   it('re-selects Nido for a legacy stored wallet id', () => {
     const store = fakeStorage({
-      'nido:walletSession': JSON.stringify({ walletId: 'g2c', walletAddress: 'CABC' }),
+      'nido:testnet:walletSession': JSON.stringify({ walletId: 'g2c', walletAddress: 'CABC' }),
     });
     const setWallet = vi.fn();
     const session = restoreWith({ setWallet }, store);
