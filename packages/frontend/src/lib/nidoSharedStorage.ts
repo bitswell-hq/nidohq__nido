@@ -221,9 +221,6 @@ export function apexHostForHost(host: string): string {
  */
 export type BridgeRequester = { kind: "account"; contractId: string } | { kind: "name" };
 
-// Single-label hosts under the apex that are not wallet pages (the built-in
-// dApps, the relayer, and every other reserved name) are refused. A name-shaped
-// label is otherwise taken to be a registered name's wallet origin.
 const ACCOUNT_LABEL_RE = /^c[a-z2-7]{55}$/;
 
 /**
@@ -254,6 +251,8 @@ export function bridgeRequester(origin: string, bridgeHost: string): BridgeReque
     const contractId = label.toUpperCase();
     return isContractStrKey(contractId) ? { kind: "account", contractId } : null;
   }
+  // A reserved label (a built-in dApp, the relayer, ...) is not a wallet page;
+  // any other name-shaped label is a registered name's wallet origin.
   if (VALID_NAME_RE.test(label) && !isReservedName(label)) return { kind: "name" };
   return null;
 }

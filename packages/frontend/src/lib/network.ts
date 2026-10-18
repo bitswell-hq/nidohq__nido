@@ -7,6 +7,7 @@ export const NETWORK_NAME = "testnet" as const;
 // Wallet state in localStorage lives under `nido:<network>:*` (passkey-sdk
 // `nidoKey`), so a build for one network never reads another's.
 setStorageNetwork(NETWORK_NAME);
+
 export const NETWORK_PASSPHRASE = Networks.TESTNET;
 export const RPC_URL = "https://soroban-testnet.stellar.org";
 
