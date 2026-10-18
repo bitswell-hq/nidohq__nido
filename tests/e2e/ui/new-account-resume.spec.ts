@@ -4,11 +4,12 @@ import { test, expect } from '../../support/fixtures';
 
 // Resuming a setup (the My Nido menu's pending row, or a reload) whose address
 // already holds a contract that this browser registered no passkey for: the
-// salt was used by someone else first. The page must stop before offering a
-// passkey, never activate the account, and drop its copy of the salt.
+// setup secret was used by someone else first. The page must stop before
+// offering a passkey, never activate the account, and drop its copy of the
+// secret.
 //
-// The RPC answers with a real contract-instance entry: the account a
-// front-runner created first in `new_account_reads.rs`.
+// The RPC answers with a real contract-instance entry: the account a thief
+// holding the setup secret created first in `new_account_reads.rs`.
 
 // Specs are transpiled to CommonJS, so resolve from the project root
 // (Playwright's cwd) rather than import.meta.
