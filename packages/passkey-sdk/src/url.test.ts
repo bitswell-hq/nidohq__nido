@@ -5,6 +5,7 @@ import {
   dappPathFromHostname,
   dappUrl,
   nameFromHostname,
+  isReservedName,
   splitHost,
   stripSubdomain,
 } from './url.js';
@@ -289,5 +290,26 @@ describe('host helpers on the testnet apex', () => {
   it('dappPathFromHostname below the testnet apex', () => {
     expect(dappPathFromHostname('status-message.test.nido.fyi')).toBe('/status-message/');
     expect(dappPathFromHostname('test.nido.fyi')).toBe(null);
+  });
+});
+
+describe('isReservedName', () => {
+  it('reserves the labels that collide with hosts', () => {
+    for (const name of ['test', 'www', 'nido', 'relay', 'status-message', 'TEST']) {
+      expect(isReservedName(name), name).toBe(true);
+    }
+  });
+  it('reserves numeric and pr-<N> preview roots', () => {
+    expect(isReservedName('126')).toBe(true);
+    expect(isReservedName('pr-126')).toBe(true);
+  });
+  it('leaves ordinary names free', () => {
+    expect(isReservedName('alice')).toBe(false);
+    expect(isReservedName('tester')).toBe(false);
+  });
+  it('nameFromHostname never yields a reserved name', () => {
+    expect(nameFromHostname('www.nido.fyi')).toBe(null);
+    expect(nameFromHostname('relay.nido.fyi')).toBe(null);
+    expect(nameFromHostname('nido.test.nido.fyi')).toBe(null);
   });
 });

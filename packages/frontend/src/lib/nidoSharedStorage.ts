@@ -1,4 +1,4 @@
-import { RESERVED_DAPP_SUBDOMAINS, nidoKey, splitHost, stripSubdomain } from "@nidohq/passkey-sdk";
+import { isReservedName, nidoKey, splitHost, stripSubdomain } from "@nidohq/passkey-sdk";
 import type { PendingAccount } from "./myNidoModel";
 import { isContractStrKey } from "./address";
 import { isLoopbackHttpHost } from "./loopbackHost";
@@ -221,10 +221,9 @@ export function apexHostForHost(host: string): string {
  */
 export type BridgeRequester = { kind: "account"; contractId: string } | { kind: "name" };
 
-// Single-label hosts under the apex that are not wallet pages: the built-in
-// dApps and the relayer. A name-shaped label is otherwise taken to be a
-// registered name's wallet origin.
-const NON_WALLET_LABELS = new Set(["relay", ...Object.keys(RESERVED_DAPP_SUBDOMAINS)]);
+// Single-label hosts under the apex that are not wallet pages (the built-in
+// dApps, the relayer, and every other reserved name) are refused. A name-shaped
+// label is otherwise taken to be a registered name's wallet origin.
 const ACCOUNT_LABEL_RE = /^c[a-z2-7]{55}$/;
 
 /**
@@ -255,7 +254,7 @@ export function bridgeRequester(origin: string, bridgeHost: string): BridgeReque
     const contractId = label.toUpperCase();
     return isContractStrKey(contractId) ? { kind: "account", contractId } : null;
   }
-  if (VALID_NAME_RE.test(label) && !NON_WALLET_LABELS.has(label)) return { kind: "name" };
+  if (VALID_NAME_RE.test(label) && !isReservedName(label)) return { kind: "name" };
   return null;
 }
 

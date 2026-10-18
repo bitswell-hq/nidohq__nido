@@ -136,6 +136,16 @@ describe("nido-resolver handler", () => {
     expect(asked).toBe(false);
   });
 
+  it("never looks up a reserved name", async () => {
+    let asked = false;
+    const resolve = async () => { asked = true; return CONTRACT; };
+    for (const host of ["www.nido.fyi", "relay.nido.fyi", "nido.test.nido.fyi"]) {
+      const res = await handleResolve(req(host), reg({ resolve }), "testnet");
+      expect(res.status).toBe(404);
+    }
+    expect(asked).toBe(false);
+  });
+
   it("rejects hosts outside the configured apexes", async () => {
     const res = await handleResolve(req("alice.nido.fyi"), reg({ resolve: async () => CONTRACT }), "testnet", ["test.nido.fyi"]);
     expect(res.status).toBe(404);

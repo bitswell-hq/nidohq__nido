@@ -83,6 +83,31 @@ export const RESERVED_DAPP_SUBDOMAINS: Record<string, string> = {
 };
 
 /**
+ * Labels no Nido name may take, on either network: each is, or would collide
+ * with, a host of its own one label below an apex. `test` is the testnet apex
+ * (`test.nido.fyi` under `nido.fyi`), `www` and `nido` are aliases people type
+ * for an apex, `relay` is the recovery relay, and the built-in dApps have their
+ * subdomains. Keep in sync with infra/nido-resolver/src/handler.ts.
+ */
+export const RESERVED_NAMES: ReadonlySet<string> = new Set([
+  'test',
+  'www',
+  'nido',
+  'relay',
+  ...Object.keys(RESERVED_DAPP_SUBDOMAINS),
+]);
+
+/**
+ * Whether `label` is reserved: one of {@link RESERVED_NAMES}, or a numeric or
+ * `pr-<N>` preview root (`<N>.<apex>`). The name syntax already refuses the
+ * preview roots; they are listed so every host-shaped check agrees.
+ */
+export function isReservedName(label: string): boolean {
+  const l = label.toLowerCase();
+  return RESERVED_NAMES.has(l) || PREVIEW_ROOT_RE.test(l);
+}
+
+/**
  * If `host` is a reserved dApp subdomain, return the path the root should
  * redirect to. Ignores any numeric preview suffix, so
  * `status-message--24.<base>` resolves the same as production.
@@ -139,8 +164,8 @@ export function contractIdFromHostname(hostname: string): string | null {
 
 /**
  * Extract a human-readable name from a subdomain hostname.
- * Returns null if the subdomain is a contract ID, a reserved dApp, or there is
- * no account label (an apex or a preview root).
+ * Returns null if the subdomain is a contract ID, a reserved name (built-in
+ * dApps included), or there is no account label (an apex or a preview root).
  *   "alice.mysoroban.xyz"               → "alice"
  *   "alice--10.mysoroban.xyz"           → "alice"
  *   "cabc1234...mysoroban.xyz"          → null (contract ID)
@@ -151,7 +176,7 @@ export function nameFromHostname(hostname: string): string | null {
   const { label } = splitHost(hostname);
   if (!label) return null;
   if (isContractId(label)) return null;
-  if (RESERVED_DAPP_SUBDOMAINS[label]) return null;
+  if (isReservedName(label)) return null;
   return label;
 }
 

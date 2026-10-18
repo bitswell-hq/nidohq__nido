@@ -95,6 +95,12 @@ describe("bridgeRequester", () => {
     expect(bridgeRequester("https://alice.test.nido.fyi", "test.nido.fyi")).toEqual({ kind: "name" });
   });
 
+  it("refuses reserved-name hosts", () => {
+    for (const label of ["www", "nido", "relay", "status-message"]) {
+      expect(bridgeRequester(`https://${label}.nido.fyi`, "nido.fyi")).toBeNull();
+    }
+  });
+
   it("keeps the two apexes' bridges apart", () => {
     expect(bridgeRequester(`https://${a}.test.nido.fyi`, "nido.fyi")).toBeNull();
     expect(bridgeRequester(`https://${a}.nido.fyi`, "test.nido.fyi")).toBeNull();

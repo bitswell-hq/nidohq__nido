@@ -54,6 +54,8 @@ export {
   splitHost,
   NIDO_APEXES,
   RESERVED_DAPP_SUBDOMAINS,
+  RESERVED_NAMES,
+  isReservedName,
 } from "./url.js";
 export type { HostParts } from "./url.js";
 

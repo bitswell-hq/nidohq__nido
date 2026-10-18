@@ -27,6 +27,8 @@ const CORS: Record<string, string> = {
 
 // Subdomain rules — keep in sync with packages/passkey-sdk/src/url.ts.
 const RESERVED_DAPP_SUBDOMAINS: Record<string, true> = { "status-message": true };
+/** Labels no name may take (RESERVED_NAMES in url.ts): never looked up. */
+const RESERVED_NAMES = new Set(["test", "www", "nido", "relay", ...Object.keys(RESERVED_DAPP_SUBDOMAINS)]);
 /** Apexes the resolver answers under when the worker sets none (NIDO_APEXES). */
 export const DEFAULT_APEXES: readonly string[] = ["test.nido.fyi", "nido.fyi"];
 // Contract id: 56-char strkey, 'C' + 55 base32 (RFC4648, no padding) chars.
@@ -104,10 +106,10 @@ export async function handleResolve(
   }
 
   // Name subdomain -> forward resolve. Exclude preview roots ("126", "pr-126")
-  // and reserved dApp subdomains, mirroring nameFromHostname.
+  // and reserved names, mirroring nameFromHostname.
   const name = raw.toLowerCase();
   const isPreviewRoot = /^\d+$/.test(firstLabel) || /^pr-\d+$/.test(firstLabel);
-  if (!isPreviewRoot && NAME_RE.test(name) && !RESERVED_DAPP_SUBDOMAINS[name]) {
+  if (!isPreviewRoot && NAME_RE.test(name) && !RESERVED_NAMES.has(name)) {
     try {
       const address = await registry.resolve(name);
       if (!address) {
