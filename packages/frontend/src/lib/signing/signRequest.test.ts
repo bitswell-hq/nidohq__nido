@@ -97,6 +97,20 @@ describe("safeRouteUrl (F1 XSS / open-redirect guard)", () => {
     expect(safeRouteUrl("https://alice.nido.fyi/account/?namepasskey=1", ORIGIN))
       .toBe("https://alice.nido.fyi/account/?namepasskey=1");
   });
+  it("rejects the other Nido apex and its subdomains", () => {
+    expect(safeRouteUrl("https://alice.test.nido.fyi/account/", ORIGIN)).toBeNull();
+    expect(safeRouteUrl("https://test.nido.fyi/", ORIGIN)).toBeNull();
+    expect(safeRouteUrl("https://nido.fyi/", "https://cabc.test.nido.fyi")).toBeNull();
+    expect(safeRouteUrl("https://alice.nido.fyi/", "https://cabc.test.nido.fyi")).toBeNull();
+  });
+  it("accepts siblings and the apex on the testnet apex", () => {
+    expect(safeRouteUrl("https://alice.test.nido.fyi/account/", "https://cabc.test.nido.fyi"))
+      .toBe("https://alice.test.nido.fyi/account/");
+    expect(safeRouteUrl("https://test.nido.fyi/", "https://cabc.test.nido.fyi")).toBe("https://test.nido.fyi/");
+  });
+  it("rejects a preview host from production", () => {
+    expect(safeRouteUrl("https://alice--24.nido.fyi/account/", ORIGIN)).toBeNull();
+  });
   it("accepts the status-message sibling subdomain (Set-note bridge)", () => {
     expect(safeRouteUrl("https://status-message.nido.fyi/status-message/?contract=C", ORIGIN))
       .toBe("https://status-message.nido.fyi/status-message/?contract=C");

@@ -56,6 +56,14 @@ describe("apexHostForHost", () => {
     expect(apexHostForHost("alice.nido.fyi")).toBe("nido.fyi");
   });
 
+  it("keeps the testnet apex its own apex, never nido.fyi", () => {
+    expect(apexHostForHost("test.nido.fyi")).toBe("test.nido.fyi");
+    expect(apexHostForHost("alice.test.nido.fyi")).toBe("test.nido.fyi");
+    expect(apexHostForHost("status-message.test.nido.fyi")).toBe("test.nido.fyi");
+    expect(apexHostForHost("126.test.nido.fyi")).toBe("126.test.nido.fyi");
+    expect(apexHostForHost("alice--126.test.nido.fyi")).toBe("126.test.nido.fyi");
+  });
+
   it("maps localhost account subdomains to localhost", () => {
     expect(apexHostForHost("alice.localhost:4399")).toBe("localhost:4399");
   });
@@ -82,6 +90,18 @@ describe("apexHostForHost", () => {
 });
 
 describe("bridgeRequester", () => {
+  it("accepts an origin below the testnet apex on the testnet bridge", () => {
+    expect(bridgeRequester(`https://${a}.test.nido.fyi`, "test.nido.fyi")).toEqual({ kind: "account", contractId: A });
+    expect(bridgeRequester("https://alice.test.nido.fyi", "test.nido.fyi")).toEqual({ kind: "name" });
+  });
+
+  it("keeps the two apexes' bridges apart", () => {
+    expect(bridgeRequester(`https://${a}.test.nido.fyi`, "nido.fyi")).toBeNull();
+    expect(bridgeRequester(`https://${a}.nido.fyi`, "test.nido.fyi")).toBeNull();
+    // The testnet apex itself is not a requester on the nido.fyi bridge.
+    expect(bridgeRequester("https://test.nido.fyi", "nido.fyi")).toBeNull();
+  });
+
   it("accepts an https account origin and names its account", () => {
     expect(bridgeRequester(`https://${a}.nido.fyi`, "nido.fyi")).toEqual({ kind: "account", contractId: A });
   });

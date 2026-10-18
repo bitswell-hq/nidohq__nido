@@ -243,8 +243,9 @@ export function deriveBase(
   // would DROP the `--<N>` preview suffix and collapse every preview host to the
   // production apex, so the kit module would build its WebAuthn ceremony origins
   // on production and the rpId would not match the preview credential.
-  // apexHostForHost preserves the preview root (`<N>.<apex>`), keeps the 2-label
-  // apex intact, and resolves localhost — exactly the base NidoModule expects.
+  // apexHostForHost preserves the preview root (`<N>.<apex>`), keeps an apex
+  // (`nido.fyi`, `test.nido.fyi`) intact, and resolves localhost — exactly the
+  // base NidoModule expects.
   const { protocol, hostname, port } = loc;
   const apexHost = apexHostForHost(hostname);
   const portPart = port ? `:${port}` : '';

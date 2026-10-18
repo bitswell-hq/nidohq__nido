@@ -51,8 +51,11 @@ export {
   stripSubdomain,
   dappPathFromHostname,
   dappUrl,
+  splitHost,
+  NIDO_APEXES,
   RESERVED_DAPP_SUBDOMAINS,
 } from "./url.js";
+export type { HostParts } from "./url.js";
 
 export { resolveName, resolveNameCached, lookupName } from "./resolve.js";
 

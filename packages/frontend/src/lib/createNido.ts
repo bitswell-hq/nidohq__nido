@@ -1,21 +1,5 @@
 import { buf2hex, stripSubdomain } from "@nidohq/passkey-sdk";
 
-function setupHost(host: string): string {
-  const hostname = host.split(":")[0];
-  if (hostname === "localhost" || /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)) {
-    return host;
-  }
-  const first = hostname.split(".")[0];
-  if (/^\d+$/.test(first) || hostname.split(".").length <= 2) {
-    return host;
-  }
-  const legacyPreview = first.match(/^pr-(\d+)$/);
-  if (legacyPreview) {
-    return host.replace(/^pr-\d+(?=\.)/, legacyPreview[1]);
-  }
-  return stripSubdomain(host);
-}
-
 export function createNido(host: string): string {
   const secret = new Uint8Array(32);
   crypto.getRandomValues(secret);
@@ -28,5 +12,5 @@ export function createNido(host: string): string {
   // the fragment is never sent to the server, so it stays out of worker/CDN
   // access logs and cross-origin Referer. `setup=1` is not secret and stays a
   // query param (the receiver reads it before the secret is scrubbed).
-  return `//${setupHost(host)}/new-account/?setup=1#salt=${buf2hex(secret)}`;
+  return `//${stripSubdomain(host)}/new-account/?setup=1#salt=${buf2hex(secret)}`;
 }

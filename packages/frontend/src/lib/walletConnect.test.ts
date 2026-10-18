@@ -30,6 +30,12 @@ describe('deriveBase', () => {
     expect(deriveBase(loc('nido.fyi'))).toBe('https://nido.fyi');
   });
 
+  it('keeps testnet hosts on the testnet apex', () => {
+    expect(deriveBase(loc('test.nido.fyi'))).toBe('https://test.nido.fyi');
+    expect(deriveBase(loc('status-message.test.nido.fyi'))).toBe('https://test.nido.fyi');
+    expect(deriveBase(loc('status-message--100.test.nido.fyi'))).toBe('https://100.test.nido.fyi');
+  });
+
   it('keeps the scheme and port for localhost dev', () => {
     expect(deriveBase(loc('status-message.localhost', 'http:', '4321'))).toBe('http://localhost:4321');
     expect(deriveBase(loc('localhost', 'http:', '4321'))).toBe('http://localhost:4321');
