@@ -63,20 +63,21 @@ jobs:
           RPC_URL: ${{ vars.RPC_URL }}
         run: just perch-infra
 
-      # Nido's own contracts; the factory embeds the fetched Perch account.
+      # Nido's own contracts; the factory pins the manifest's Perch account hash.
       - name: Build contract wasms
         run: just build-contracts
 
       # The vendored Perch stack can't silently diverge from what Nido
       # consumes: submodule pin and branch, Cargo's Perch rev, the fetched
-      # wasm, build-time pins, and factory embed against the manifest
+      # wasm, build-time pins, and factory pin against the manifest
       # (scripts/check-perch-drift.sh).
       - name: Check vendor/perch for drift
         run: just check-vendor-drift
 
       # The factory record (packages/passkey-sdk/src/perch/factory.testnet.json)
-      # against the deployed factory's instance storage, read over RPC. The
-      # SDK's deployment.test.ts checks the record against the manifest.
+      # against the deployed factory, read over RPC, and the account hash it
+      # deploys against the manifest. The SDK's deployment.test.ts checks the
+      # record against the manifest.
       - name: Check the factory record against testnet
         env:
           RPC_URL: ${{ vars.RPC_URL }}
@@ -109,6 +110,9 @@ jobs:
       # Stub RPC/Horizon servers; no network.
       - name: Fallback, staleness, network, and override tests
         run: python3 scripts/test_rpc_fallback.py -v
+      # A fake `stellar` stands in for the chain.
+      - name: Factory check against the record and the manifest
+        run: python3 scripts/test_check_factory.py -v
       - name: shellcheck
         run: shellcheck -s bash -x -S warning scripts/stellar-rpc.sh scripts/perch-infra.sh scripts/deploy-factory.sh scripts/check-factory.sh
 

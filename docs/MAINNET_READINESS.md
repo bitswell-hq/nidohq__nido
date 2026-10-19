@@ -56,7 +56,7 @@ Every box here is checked before mainnet.
 
 - [ ] **A1. Perch's mainnet deployment published and verified.** A mainnet
   manifest records every Perch contract by hash and address and passes
-  Perch's `verify-deployment.sh`; the factory embeds its `perch-account`;
+  Perch's `verify-deployment.sh`; the factory pins its `perch-account` hash;
   and the wallet's deployment is checked against it, a
   `PUBLIC_PERCH_DEPLOYMENT` override included (THREAT_MODEL 9). On testnet
   all of this holds except the override check: `just perch-infra` fetches
@@ -74,13 +74,13 @@ Every box here is checked before mainnet.
 
 - [ ] **B1. Factory governance.** Both of these hold for the mainnet
   factory; neither stands in for the other (THREAT_MODEL 8).
-  - **Immutable dependencies, verified.** The factory embeds the manifest's
-    `perch-account` and is constructed with the manifest's
+  - **Immutable dependencies, verified.** The factory pins the manifest's
+    `perch-account` hash and is constructed with the manifest's
     `perch-webauthn-verifier` pinned, which is constructorless and has no
     admin (THREAT_MODEL 7). `scripts/deploy-factory.sh` reads back the pin,
     the manager, and the account hash the factory deploys. Pinning
     constrains the registry, not the admin: the admin can still upgrade
-    (which replaces the embedded account code and the pin together) or
+    (which replaces the pinned account hash and the pin together) or
     repin.
   - **The factory admin is a smart account that enforces a 24-hour delay.**
     The factory takes `upgrade`, `pin_verifier`, `set_manager`, and
@@ -104,7 +104,7 @@ Every box here is checked before mainnet.
   §3); and rehearse on a deployed testnet factory that a non-admin's calls
   are refused, that a change made through the admin account waits out its
   delay and can be cancelled, and that after an upgrade the next account
-  runs the new factory's embedded `perch-account`. A wallet check of each
+  runs the `perch-account` the new factory pins. A wallet check of each
   new account's code and verifier (A6) is a separate gate, not a substitute
   for this one.
 - [ ] **B2. Name-registry, policy, and registry-owner keys behind the

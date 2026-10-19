@@ -14,8 +14,13 @@
 # again. Any other failure (a hash or content-address mismatch, a contract
 # error, a missing entry) fails as it is.
 #
+# It first writes the manifest's `perch-account` hash to the factory's pin,
+# contracts/factory/wasm/perch-account.sha256, which the factory's
+# `registry_contract!` compiles in. A manifest without that hash fails here:
+# the pin never comes from another network.
+#
 # Env: STELLAR_NETWORK (default testnet) picks vendor/perch/deployments/<net>.json;
-# NIDO_PERCH_DIR overrides vendor/perch (tests).
+# NIDO_PERCH_DIR overrides vendor/perch and NIDO_FACTORY_PIN the pin file (tests).
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -25,6 +30,12 @@ manifest="$perch/deployments/${STELLAR_NETWORK:-testnet}.json"
 fetch="$perch/scripts/fetch-infra-wasm.sh"
 [ -f "$manifest" ] || { echo "error: no manifest at $manifest (git submodule update --init)" >&2; exit 1; }
 command -v jq >/dev/null || { echo "error: jq not found" >&2; exit 1; }
+
+pin="${NIDO_FACTORY_PIN:-$repo_root/contracts/factory/wasm/perch-account.sha256}"
+account="$(jq -r '.contracts["perch-account"].sha256 // empty' "$manifest")"
+[[ "$account" =~ ^[0-9a-f]{64}$ ]] ||
+    { echo "error: $manifest has no perch-account hash for the factory to pin" >&2; exit 1; }
+printf '%s\n' "$account" >"$pin"
 
 if grep -q 'stellar-rpc\.sh' "$fetch"; then
     cd "$perch" && exec bash "$fetch" --manifest "$manifest" --stack "$stack"

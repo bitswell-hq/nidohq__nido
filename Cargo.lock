@@ -1039,6 +1039,8 @@ version = "0.1.0"
 dependencies = [
  "admin-sep",
  "ed25519-dalek",
+ "perch-registry-resolve",
+ "serde_json",
  "soroban-sdk",
  "soroban-sdk-tools",
  "stellar-accounts",

@@ -7,10 +7,12 @@
 #      and the Perch git dependencies in Cargo.toml move to the same rev
 #      (Cargo.lock follows), so the crates Nido builds and the manifest it
 #      fetches by come from one Perch commit;
-#   2. `just perch-infra` fetches the stack by the manifest's hashes and
-#      content addresses (Perch's fetch-infra-wasm.sh refuses any other byte;
-#      nothing is resolved by name), then `just build-contracts` rebuilds the
-#      factory around the fetched account;
+#   2. `just perch-infra` writes the factory's account pin
+#      (contracts/factory/wasm/perch-account.sha256) from the manifest and
+#      fetches the stack by the manifest's hashes and content addresses
+#      (Perch's fetch-infra-wasm.sh refuses any other byte; nothing is
+#      resolved by name), then `just build-contracts` rebuilds the factory
+#      around that pin;
 #   3. `just bindings-perch` regenerates packages/contract-bindings/perch-*;
 #   4. scripts/repin-perch-pins.mjs rewrites the SDK's Perch pins from the
 #      manifest (`perch.TESTNET`, except Nido's own factory, and the policyDoc

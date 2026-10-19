@@ -262,28 +262,39 @@ fn a_repin_reaches_only_accounts_created_after_it() {
     assert_eq!(g.verifier_of(&before), g.w.verifier);
 }
 
-/// An upgrade installs exactly the given wasm and clears the cached account
-/// hash, so the next account is the account wasm the running factory
-/// embeds. The stale cache is seeded directly: it is what a factory build
-/// embedding an earlier account leaves behind, and the first mint shows the
-/// factory honours it.
+/// The factory wasm deploys every account from exactly the hash it pins:
+/// the testnet manifest's `perch-account`, which is the hash of the account
+/// wasm the stack installs. An account-hash cache an earlier factory build
+/// left in the instance changes nothing, before or after an upgrade, and an
+/// upgrade installs exactly the given wasm.
 #[test]
-fn an_upgrade_clears_the_cached_account_hash_so_new_accounts_get_the_embedded_account() {
+fn the_factory_deploys_exactly_the_pinned_account_before_and_after_an_upgrade() {
     let g = governed();
     let env = &g.w.env;
+    let manifest: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../vendor/perch/deployments/testnet.json"
+    ))
+    .unwrap();
+    let pinned = g.client().account_wasm_hash();
+    assert_eq!(
+        hex::encode(pinned.to_array()),
+        manifest["contracts"]["perch-account"]["sha256"]
+    );
+    assert_eq!(
+        env.deployer().upload_contract_wasm(PERCH_ACCOUNT_WASM),
+        pinned
+    );
+
+    // The key an earlier factory build cached its account hash under.
     let previous = env.deployer().upload_contract_wasm(OLD_PERCH_ACCOUNT_WASM);
-    let embedded = env.deployer().upload_contract_wasm(PERCH_ACCOUNT_WASM);
-    // The factory's account-hash cache (`Config::account`, which
-    // `#[contractstorage]` keys by the field's name).
     env.as_contract(&g.factory, || {
         env.storage()
             .instance()
             .set(&Symbol::new(env, "Account"), &previous);
     });
     assert_eq!(
-        g.mint("cached").executable(),
-        Some(Executable::Wasm(previous)),
-        "the seeded cache is what deploys"
+        g.mint("before-upgrade").executable(),
+        Some(Executable::Wasm(pinned.clone()))
     );
 
     let code = match g.factory.executable() {
@@ -294,7 +305,7 @@ fn an_upgrade_clears_the_cached_account_hash_so_new_accounts_get_the_embedded_ac
     assert_eq!(g.factory.executable(), Some(Executable::Wasm(code)));
     assert_eq!(
         g.mint("after-upgrade").executable(),
-        Some(Executable::Wasm(embedded))
+        Some(Executable::Wasm(pinned))
     );
 }
 

@@ -12,8 +12,8 @@ git submodule update --init
 just perch-infra       # Perch's deployed wasm and pin cache, by the hashes in
                        # vendor/perch/deployments/testnet.json (Stellar CLI,
                        # curl, jq; endpoint choice: "RPC endpoints" below)
-just build-contracts   # Nido's contracts; the factory embeds the fetched
-                       # Perch account wasm
+just build-contracts   # Nido's contracts; the factory compiles in the pin
+                       # just perch-infra wrote (contracts/factory/wasm/)
 just test              # cargo test --workspace: integration tests replay the
                        # committed proofs
 just check-vendor-drift  # vendor/perch at its pin, consumed wasm = the manifest's
@@ -122,29 +122,36 @@ Before using a manifest:
 (or `just deploy-factory`) does steps 1–7 and checks each:
 
 1. Check that the staged account wasm (from `just perch-infra`) is the
-   manifest's `perch-account` (`accountWasmHash`) and install it: the factory
-   deploys by its hash.
-2. Build Nido's contracts (skipped with `SKIP_BUILD`); the factory embeds
-   that wasm.
-3. Deploy the factory with the paying identity as its admin, Perch's
+   manifest's `perch-account` (`accountWasmHash`), install it, and read the
+   installed code back from the ledger by that hash. The factory carries
+   only the hash, so `create_account` fails until this exact code is
+   installed.
+2. Check the factory's account pin (`contracts/factory/wasm/perch-account.sha256`,
+   which `STELLAR_NETWORK=<network> just perch-infra` writes from the
+   manifest) is the manifest's `perch-account`, then build Nido's contracts
+   (skipped with `SKIP_BUILD`). The factory compiles the pin in with Perch's
+   `registry_contract!`; a missing pin fails the build.
+3. Check the factory wasm carries that hash before deploying it, so a
+   `SKIP_BUILD` wasm built for another network or Perch commit is refused.
+4. Deploy the factory with the paying identity as its admin, Perch's
    WebAuthn verifier pinned, and `MANAGER`, if set, as the address that must
    authorize every `create_account` (none by default; testnet keeps none, so
    creation stays permissionless there). All three are constructor
    arguments. From the first account on, the registry is off the
    account-creation path (F5).
-4. Read the pin and the manager back.
-5. Read back the account hash the factory deploys
-   (`refresh_account_wasm_hash`) and check it against the manifest.
+5. Read the verifier pin, the manager, and the account hash the factory
+   deploys (`account_wasm_hash`) back, and check the hash against the
+   manifest.
 6. Hand the factory to `ADMIN` (`set_admin` needs only the current admin, so
    the multisig doesn't sign during the deploy) and read the admin back.
    Without `ADMIN` the paying identity stays admin, which is fine only on
    testnet.
 7. Write the factory record,
    `packages/passkey-sdk/src/perch/factory.<network>.json`: the address,
-   wasm hash, the pin, manager, and account hash read back in steps 4–5, the
+   wasm hash, the pin, manager, and account hash read back in step 5, the
    admin, and the commits and toolchain it was built from.
 
-If any step after 3 fails, the script stops and names the factory and the
+If any step after 4 fails, the script stops and names the factory and the
 step: don't register or use that factory; deploy a fresh one.
 
 Two checks hold the record to the truth. `deployment.test.ts` fails unless
@@ -152,7 +159,10 @@ the record's account and verifier are the manifest's `perch-account` and
 `perch-webauthn-verifier`, so a re-pin that moves either can't merge until
 the factory is redeployed (or upgraded, §3) and the record committed with
 it. `just check-factory` (run in CI) reads the factory's instance
-storage over RPC and fails unless it matches the record.
+storage and simulates its `account_wasm_hash` over RPC, and fails unless
+they match the record and the account hash is the manifest's (a factory
+built at an earlier Perch commit than `vendor/perch` is reported instead,
+since `deployment.test.ts` already holds it).
 
 Not done by the script:
 
@@ -182,7 +192,7 @@ Who can change what Nido's users depend on, at this revision:
 
 | What changes | Who | How | Delay | What to watch |
 | --- | --- | --- | --- | --- |
-| The account code new accounts get (the `perch-account` the factory embeds) | Factory admin | `upgrade(<factory wasm hash>)`; the new factory wasm brings its own embedded account | None in the factory; the admin account's (below) | Factory event `upgraded` |
+| The account code new accounts get (the `perch-account` whose hash the factory pins) | Factory admin | `upgrade(<factory wasm hash>)`; the new factory wasm brings its own pinned account hash | None in the factory; the admin account's (below) | Factory event `upgraded` |
 | The verifier new accounts' passkeys name | Factory admin | `pin_verifier(<verifier>)` | The admin account's | Factory event `verifier_pinned` |
 | Who may create an account | Factory admin | `set_manager(<manager>)`, or `set_manager(None)` to let anyone | The admin account's | Factory event `manager_changed`; `manager()` |
 | Who the factory admin is | Factory admin | `set_admin` | The admin account's | Factory event `admin_changed` |
@@ -257,25 +267,24 @@ A factory change, before mainnet and after:
 
 1. Issue and review, with the new factory wasm's hash and source diff, the
    new verifier's address and manifest entry, or the new manager. For an
-   upgrade, install the new factory wasm and the account wasm it embeds
-   (`stellar contract upload`); the next `create_account` fails until the
-   account wasm is installed.
+   upgrade, install the new factory wasm and the account wasm whose hash it
+   pins (`stellar contract upload`); the next `create_account` fails until
+   the account wasm is installed.
 2. The admin account announces the change and starts its delay. Publish the
    change and when it can be made.
 3. Wait out the delay. Anyone can check the announced wasm, verifier, or
    manager. Cancel through the admin account if review finds a problem.
    Wallets that should not create accounts under the coming change stop
    before it lands.
-4. The admin account makes the call. An upgrade clears the factory's cached
-   account hash, so the next account is the new wasm's embedded account.
-5. Verify the factory's wasm hash, `pinned_verifier()`, `manager()`, and the
-   account hash it deploys (simulate `refresh_account_wasm_hash`, which
-   needs no signature to simulate), then mint one account and check its code
-   and admin rule. Update the factory record
+4. The admin account makes the call. From the next invocation, accounts
+   are deployed from the account hash the new wasm pins.
+5. Verify the factory's wasm hash, `pinned_verifier()`, `manager()`, and
+   `account_wasm_hash()`, then mint one account and check its code and admin
+   rule. Update the factory record
    (`packages/passkey-sdk/src/perch/factory.<network>.json`: `wasm_hash`,
    `account_wasm_hash`, `pinned_verifier`, `manager`) and DEPLOYED.md, and
-   run `just check-factory`, which reads the account hash the minted account
-   cached.
+   run `just check-factory`, which checks the account hash against the
+   record and the manifest.
 
 Nido can't upgrade a user's account. Only its owner can, through the
 seven-day `schedule_upgrade` path (plus the recovery condition under

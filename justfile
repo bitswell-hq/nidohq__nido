@@ -12,10 +12,12 @@ build:
     cargo build --workspace
 
 # Fetch the Perch stack Nido builds and tests against: Perch's testnet
-# deployment, by the hashes in vendor/perch/deployments/testnet.json. Puts
+# deployment, by the hashes in vendor/perch/deployments/testnet.json
+# (STELLAR_NETWORK picks another manifest). Writes the factory's account pin,
+# contracts/factory/wasm/perch-account.sha256, from that manifest first. Puts
 # every deployed contract's wasm in target/wasm32v1-none/contract/
-# (perch_*.wasm), so the tests run the deployed bytes and the factory embeds the
-# deployed account. (The Perch crates build from the pins Perch commits; cargo
+# (perch_*.wasm), so the tests run the deployed bytes, including the account
+# whose hash the factory pins. (The Perch crates build from the pins Perch commits; cargo
 # fetches them at the submodule's commit, see the root Cargo.toml.) Perch's script refuses any
 # file whose sha256 or content address differs from the manifest. Needs the
 # Stellar CLI, curl and jq. Run once after cloning and after bumping
@@ -37,7 +39,7 @@ repin-perch commit:
 
 # Check the vendored Perch stack hasn't drifted from what Nido builds against:
 # the submodule at its recorded commit (on its declared branch), the fetched
-# wasm, pin cache, and factory embed equal to the manifest's, and npm resolving
+# wasm, pin cache, and factory pin equal to the manifest's, and npm resolving
 # Perch's packages to the submodule. See scripts/check-perch-drift.sh. Run after
 # `just perch-infra` and `just build-contracts`.
 check-vendor-drift:
@@ -59,8 +61,9 @@ gen-zk-fixtures:
     (cd vendor/perch/circuits && "$NARGO" compile --workspace)
     NIDO_ZK_PROVE=1 cargo test -p nido-integration-tests --test it -- --test-threads=1
 
-# Build and optimize Nido's Soroban contracts. The factory's build.rs embeds
-# the Perch account wasm `just perch-infra` fetched.
+# Build and optimize Nido's Soroban contracts. The factory compiles in the
+# perch-account hash in contracts/factory/wasm/perch-account.sha256
+# (`registry_contract!`; `just perch-infra` writes it), and fails without it.
 #
 # SOROBAN_SDK_BUILD_SYSTEM_SUPPORTS_SPEC_SHAKING_V2: scaffold invokes raw
 # `cargo rustc` rather than `stellar contract build`, so it does not set the
@@ -70,7 +73,6 @@ gen-zk-fixtures:
 # Scaffold does NOT run wasm-opt, so we optimize Nido's wasm in place
 # afterwards; deployed wasm must stay optimized.
 build-contracts:
-    @test -s target/wasm32v1-none/contract/perch_account.wasm || { echo "Perch stack missing: run 'git submodule update --init' and 'just perch-infra'" >&2; exit 1; }
     SOROBAN_SDK_BUILD_SYSTEM_SUPPORTS_SPEC_SHAKING_V2=1 stellar-scaffold build --profile contract
     @for wasm in target/wasm32v1-none/contract/nido_*.wasm; do \
         case "$wasm" in *.optimized.wasm) continue;; esac; \
@@ -113,7 +115,8 @@ deploy-factory identity network="testnet":
     ./scripts/deploy-factory.sh {{identity}} {{network}}
 
 # Check the factory record against the chain: the deployed factory's wasm,
-# the account hash it deploys, its pinned verifier, and its admin. Read-only.
+# the account hash it deploys (also against the manifest), its pinned
+# verifier, its admin, and its manager. Read-only.
 # See scripts/check-factory.sh.
 check-factory network="testnet":
     ./scripts/check-factory.sh {{network}}

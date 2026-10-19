@@ -4,7 +4,7 @@
 //! and Perch's account, `WebAuthn` verifier, doc compiler, interpreter,
 //! spending limit, recovery controller, ZK membership pool, and ZK adapter,
 //! exactly as deployed on testnet (`just perch-infra`). Accounts are minted by the factory, so
-//! their code is the exact Perch account wasm the factory embeds.
+//! their code is the exact Perch account wasm whose hash the factory pins.
 //!
 //! Every key is a P-256 passkey checked by the `WebAuthn` verifier. Every
 //! authorization is a hand-built `SorobanAuthorizationEntry` signed like a
@@ -101,6 +101,7 @@ pub trait Factory {
     fn pinned_verifier(e: Env) -> Option<Address>;
     fn manager(e: Env) -> Option<Address>;
     fn upgrade(e: Env, wasm_hash: BytesN<32>);
+    fn account_wasm_hash(e: Env) -> BytesN<32>;
     fn pin_verifier(e: Env, verifier: Address);
     fn set_manager(e: Env, manager: Option<Address>);
 }

@@ -172,18 +172,36 @@ exit 1
 class PerchInfra(Case):
     """scripts/perch-infra.sh, against a fake Perch checkout."""
 
-    def run_wrapper(self, primary, good=(), fail="endpoint", native=False, **env):
+    def test_writes_the_factory_pin_from_the_manifest(self):
+        primary = self.stub()
+        r, _ = self.run_wrapper(primary.url, good=[primary.url], account="c" * 64)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        with open(self.pin) as f:
+            self.assertEqual(f.read(), "c" * 64 + "\n")
+
+    def test_a_manifest_without_an_account_hash_pins_nothing_and_fetches_nothing(self):
+        primary = self.stub()
+        r, runs = self.run_wrapper(primary.url, good=[primary.url], account=None)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("has no perch-account hash for the factory to pin", r.stderr)
+        self.assertFalse(os.path.exists(self.pin))
+        self.assertEqual(runs, [])
+
+    def run_wrapper(self, primary, good=(), fail="endpoint", native=False, account="a" * 64, **env):
         d = tempfile.mkdtemp()
+        self.pin = f"{d}/pin"
         os.makedirs(f"{d}/deployments")
         os.makedirs(f"{d}/scripts")
         with open(f"{d}/deployments/testnet.json", "w") as f:
-            json.dump({"network_passphrase": TESTNET, "rpc_url": primary, "contracts": {}}, f)
+            json.dump({"network_passphrase": TESTNET, "rpc_url": primary,
+                       "contracts": {"perch-account": {"sha256": account}} if account else {}}, f)
         with open(f"{d}/scripts/fetch-infra-wasm.sh", "w") as f:
             f.write(FAKE_FETCH.replace("MARKER", "Sources scripts/stellar-rpc.sh." if native else ""))
         log = f"{d}/log"
         open(log, "w").close()
         r = subprocess.run(["bash", WRAPPER], capture_output=True, text=True,
-                           env=base_env(NIDO_PERCH_DIR=d, FAKE_LOG=log, FAKE_GOOD=" ".join(good),
+                           env=base_env(NIDO_PERCH_DIR=d, NIDO_FACTORY_PIN=self.pin, FAKE_LOG=log,
+                                        FAKE_GOOD=" ".join(good),
                                         FAKE_FAIL=fail, PERCH_RPC_CALL_ATTEMPTS="1", **env))
         with open(log) as f:
             return r, f.read().split()
