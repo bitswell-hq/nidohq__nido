@@ -11,7 +11,7 @@
 #      (vendor/perch/deployments/$STELLAR_NETWORK.json, default testnet): the
 #      fetched stack in target/wasm32v1-none/contract/, the build-time pins
 #      the smart account compiles in (committed in Perch, read here from the
-#      submodule), and the account wasm the factory embedded;
+#      submodule), and the account hash the built factory pins;
 #   4. npm doesn't resolve a Perch package the root workspace list vendors
 #      (today only perch-zk, which Perch hasn't published) to the submodule,
 #      or the SDK pins another version than it carries. Published Perch
@@ -103,11 +103,12 @@ done
 if [ "$(tr -d '[:space:]' < "$pins/stateless.id" 2>/dev/null)" != "$(jq -r .registry.id "$manifest")" ]; then
     problem "$pins/stateless.id is not the manifest's registry ($(jq -r .registry.id "$manifest"))"
 fi
-staged=(target/stellar/*/perch_account.wasm)
-if [ -e "${staged[0]}" ]; then
-    for file in "${staged[@]}"; do check "$file" perch-account; done
-else
-    problem "no factory build has staged perch_account.wasm under target/stellar/ (just build-contracts)"
+# The factory's build.rs pins the manifest's account hash as 32 raw bytes.
+factory=target/wasm32v1-none/contract/nido_factory.wasm
+if [ ! -f "$factory" ]; then
+    problem "$factory is missing (just build-contracts)"
+elif ! od -An -v -tx1 "$factory" | tr -d ' \n' | grep -q "$(want perch-account)"; then
+    problem "$factory does not pin the manifest's perch-account ($(want perch-account)); rebuild it (just build-contracts)"
 fi
 
 # 4. npm resolves each vendored Perch package to the submodule, at the version
@@ -154,4 +155,4 @@ if [ ${#problems[@]} -gt 0 ]; then
     printf '  - %s\n' "${problems[@]}" >&2
     exit 1
 fi
-echo "vendor/perch ${pinned:0:7} on $branch; Cargo's Perch crates at the same commit; consumed wasm, build-time pins, factory embed, and npm workspaces match $manifest"
+echo "vendor/perch ${pinned:0:7} on $branch; Cargo's Perch crates at the same commit; consumed wasm, build-time pins, factory pin, and npm workspaces match $manifest"

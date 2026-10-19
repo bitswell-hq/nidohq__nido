@@ -1,86 +1,48 @@
-//! Stage Perch's account wasm and expose its path to the crate.
+//! Pin the Perch account wasm hash the factory deploys.
 //!
-//! The factory embeds the Perch smart-account wasm (via `include_bytes!` in
-//! `src/contract.rs`) so it can derive the deploy hash at runtime instead of
-//! hardcoding it. `just perch-infra` fetches it, by the hash in Perch's
-//! deployment manifest, to `target/wasm32v1-none/contract/perch_account.wasm`.
+//! The factory deploys every account from one installed `perch-account` wasm,
+//! by its hash. The hash comes from Perch's deployment manifest for the
+//! network the build targets, `vendor/perch/deployments/<network>.json`,
+//! where `<network>` is `STELLAR_NETWORK` (default `testnet`, as for
+//! `just perch-infra`). A missing manifest, a manifest naming another network,
+//! or one without the account's hash fails the build: there is no fallback
+//! to another network's account.
 //!
-//! This script copies that wasm to a stable staging location —
-//!   `<workspace-target>/stellar/<STELLAR_NETWORK or "local">/perch_account.wasm`
-//! — and exports `PERCH_ACCOUNT_WASM` pointing at it, so the embed path lives
-//! in exactly one place.
-//!
-//! Build scripts complete before the crate they belong to is compiled, so the
-//! file and env var are in place by the time the source is built.
+//! The pin is written to `$OUT_DIR/perch_account.rs`, which `src/contract.rs`
+//! includes as `perch_account::WASM_HASH`.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+
+#[path = "src/pin.rs"]
+mod pin;
 
 fn main() {
-    let target_dir = workspace_target_dir();
-
-    let built_wasm = target_dir
-        .join("wasm32v1-none")
-        .join("contract")
-        .join("perch_account.wasm");
-
-    // Mirror `stellar_build`: network dir defaults to "local".
-    let network = std::env::var("STELLAR_NETWORK").unwrap_or_else(|_| "local".to_owned());
-    let stellar_dir = target_dir.join("stellar").join(&network);
-    let staged = stellar_dir.join("perch_account.wasm");
-
     println!("cargo:rerun-if-env-changed=STELLAR_NETWORK");
-    println!("cargo:rerun-if-changed={}", built_wasm.display());
+    let network = std::env::var("STELLAR_NETWORK").unwrap_or_else(|_| "testnet".to_owned());
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../vendor/perch/deployments")
+        .join(format!("{network}.json"));
+    println!("cargo:rerun-if-changed={}", manifest.display());
 
-    let embed_path = if built_wasm.exists() {
-        std::fs::create_dir_all(&stellar_dir)
-            .unwrap_or_else(|e| panic!("create_dir_all {}: {e}", stellar_dir.display()));
-        std::fs::copy(&built_wasm, &staged).unwrap_or_else(|e| {
-            panic!("copy {} -> {}: {e}", built_wasm.display(), staged.display())
-        });
-        staged
-    } else if staged.exists() {
-        // No freshly-built wasm this run; fall back to a copy a previous build
-        // (or the registry-download path) staged. This can embed STALE bytes,
-        // so make it loud — a developer who forgot `just perch-infra` after
-        // bumping vendor/perch would otherwise silently ship the old wasm.
-        println!(
-            "cargo:warning=factory: embedding PREVIOUSLY-STAGED perch account wasm \
-             ({}); freshly-fetched {} not found. Run `just perch-infra` to embed \
-             the current bytes.",
-            staged.display(),
-            built_wasm.display()
-        );
-        staged
-    } else {
+    let text = std::fs::read_to_string(&manifest).unwrap_or_else(|e| {
         panic!(
-            "perch account wasm not found.\n\
-             Expected fetched wasm at: {}\n\
-             or a staged copy at:    {}\n\
-             Run `just perch-infra` first so the factory can embed the Perch \
-             account wasm.",
-            built_wasm.display(),
-            staged.display()
-        );
-    };
-
-    // `include_bytes!(env!("PERCH_ACCOUNT_WASM"))` reads this.
-    println!(
-        "cargo:rustc-env=PERCH_ACCOUNT_WASM={}",
-        embed_path.display()
-    );
-}
-
-/// Resolve the Cargo target directory (the `target/` containing build outputs).
-/// `OUT_DIR` is `<target>/<profile>/build/<pkg>-<hash>/out`; walk up to the
-/// `target` dir that holds `wasm32v1-none`.
-fn workspace_target_dir() -> PathBuf {
-    let out_dir = PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR not set"));
-    out_dir
-        .ancestors()
-        .find(|p| p.join("wasm32v1-none").is_dir() || p.file_name() == Some("target".as_ref()))
-        .map_or_else(
-            // Conventional fallback: OUT_DIR/../../../..
-            || out_dir.join("..").join("..").join("..").join(".."),
-            Path::to_path_buf,
+            "factory: no Perch deployment manifest for network {network:?} at {} ({e}). \
+             STELLAR_NETWORK picks the manifest; run `git submodule update --init` \
+             for vendor/perch.",
+            manifest.display()
         )
+    });
+    let hash = pin::account_wasm_hash(&text, &network).unwrap_or_else(|why| {
+        panic!(
+            "factory: cannot pin the perch-account wasm from {}: {why}",
+            manifest.display()
+        )
+    });
+
+    let out = PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR not set"));
+    std::fs::write(
+        out.join("perch_account.rs"),
+        format!("pub const WASM_HASH: [u8; 32] = {hash:?};\n"),
+    )
+    .expect("write the account pin");
 }

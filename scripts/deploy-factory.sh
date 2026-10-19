@@ -4,27 +4,33 @@
 #
 #   1. Check the staged account wasm (target/wasm32v1-none/contract/
 #      perch_account.wasm, from `just perch-infra`) is the manifest's
-#      `perch-account`, and install it on the network: the factory deploys
-#      accounts by its hash.
-#   2. Build Nido's contracts (`just build-contracts`; the factory embeds that
-#      wasm) unless SKIP_BUILD is set.
-#   3. Deploy the factory with the paying identity as its admin, Perch's
+#      `perch-account`, install it on the network, and read the installed
+#      code back from the ledger by that hash: the factory deploys accounts
+#      by the hash it pins, and `create_account` fails until that code is
+#      installed.
+#   2. Build Nido's contracts for this network (`STELLAR_NETWORK=<network>
+#      just build-contracts`; the factory's build.rs pins the manifest's
+#      `perch-account` hash) unless SKIP_BUILD is set.
+#   3. Check the factory wasm carries the manifest's account hash, before
+#      anything is deployed: a SKIP_BUILD wasm built for another network or
+#      Perch pin is refused here.
+#   4. Deploy the factory with the paying identity as its admin, Perch's
 #      WebAuthn verifier pinned, and MANAGER (if set) as the address that
 #      must authorize every account creation, all constructor arguments:
 #      account creation never consults the registry.
-#   4. Read the pin and the manager back.
-#   5. Ask the factory for the account hash it deploys (admin-gated
-#      `refresh_account_wasm_hash`) and check it against the manifest.
+#   5. Read the verifier pin, the manager, and the account hash the factory
+#      deploys (`account_wasm_hash`) back, and check the hash against the
+#      manifest.
 #   6. Hand the factory to ADMIN (`set_admin`, which needs only the current
-#      admin's signature) and read the admin back. Last, so the hash is
-#      checked while the paying identity can still sign for it, and a
-#      multisig ADMIN never has to sign during the deploy.
+#      admin's signature) and read the admin back. Last, so a multisig ADMIN
+#      never has to sign during the deploy.
 #   7. Write the factory record, packages/passkey-sdk/src/perch/
 #      factory.<network>.json: the address, its wasm hash, the account hash,
-#      verifier, and manager read back in steps 4-5, the admin, and the Nido and
+#      verifier, and manager read back in step 5, the admin, and the Nido and
 #      Perch commits and toolchain it was built from. deployment.test.ts
 #      checks the record's account and verifier against the manifest, and
-#      scripts/check-factory.sh checks the record against the chain.
+#      scripts/check-factory.sh checks the record and the manifest against
+#      the chain.
 #
 # If any step after the factory exists fails, the script stops and names the
 # factory and the step: don't register or use that factory. It is never
@@ -104,17 +110,25 @@ note "account wasm"
 [ "$(sha256 "$ACCOUNT_WASM")" = "$ACCOUNT_HASH" ] || die "$ACCOUNT_WASM is not the manifest's perch-account ($ACCOUNT_HASH)"
 installed="$(stellar contract upload --wasm "$ACCOUNT_WASM" "${NET[@]}" 2>/dev/null | grep -oE '[0-9a-f]{64}' | tail -1)"
 [ "$installed" = "$ACCOUNT_HASH" ] || die "installed account hash ${installed:-<none>} != $ACCOUNT_HASH"
+code="$(stellar ledger entry fetch contract-code --wasm-hash "$ACCOUNT_HASH" --rpc-url "$RPC" \
+    --network-passphrase "$(m .network_passphrase)" --output json \
+    | jq -r '[.. | objects | select(has("contract_code")) | .contract_code | select((.code // "") != "") | .hash][0] // empty')"
+[ "$code" = "$ACCOUNT_HASH" ] || die "account code $ACCOUNT_HASH does not read back from the ledger"
 echo "  installed $ACCOUNT_HASH" >&2
 
 TOOLCHAIN=null
 if [ -z "${SKIP_BUILD:-}" ]; then
-    note "build"
-    just build-contracts >&2
+    note "build for $NETWORK"
+    STELLAR_NETWORK="$NETWORK" just build-contracts >&2
     TOOLCHAIN="$(jq -n --arg rustc "$(rustc --version)" --arg stellar "$(stellar --version | head -1)" \
         --arg scaffold "$(stellar-scaffold --version | head -1)" '{rustc: $rustc, stellar: $stellar, scaffold: $scaffold}')"
 fi
 [ -f "$FACTORY_WASM" ] || die "$FACTORY_WASM missing"
 FACTORY_WASM_HASH="$(sha256 "$FACTORY_WASM")"
+# The pin is 32 raw bytes in the wasm's data; `account_wasm_hash` reads it
+# back from the deployed factory in step 5.
+od -An -v -tx1 "$FACTORY_WASM" | tr -d ' \n' | grep -q "$ACCOUNT_HASH" \
+    || die "$FACTORY_WASM does not pin the manifest's perch-account ($ACCOUNT_HASH): build it with STELLAR_NETWORK=$NETWORK"
 
 # An absent `--manager` is the constructor's `None`.
 MANAGER_ARG=()
@@ -135,14 +149,12 @@ abandoned() {
 trap abandoned ERR
 fail() { echo "error: $*" >&2; false; }
 
-step="check the verifier pin and the manager"; note "$step"
+step="check the verifier pin, the manager, and the account hash"; note "$step"
 pinned="$(stellar contract invoke --id "$FACTORY" "${NET[@]}" --send=no -- pinned_verifier | tr -d '"')"
 [ "$pinned" = "$VERIFIER" ] || fail "pinned verifier reads back as '$pinned'"
 manager="$(stellar contract invoke --id "$FACTORY" "${NET[@]}" --send=no -- manager | tr -d '"')"
 [ "$manager" = "${MANAGER:-null}" ] || fail "manager reads back as '$manager'"
-
-step="check the account hash the factory deploys"; note "$step"
-deploys="$(stellar contract invoke --id "$FACTORY" "${NET[@]}" -- refresh_account_wasm_hash | tr -d '"')"
+deploys="$(stellar contract invoke --id "$FACTORY" "${NET[@]}" --send=no -- account_wasm_hash | tr -d '"')"
 [ "$deploys" = "$ACCOUNT_HASH" ] || fail "factory deploys $deploys, manifest says $ACCOUNT_HASH"
 
 if [ "$ADMIN" != "$DEPLOYER" ]; then

@@ -95,7 +95,7 @@ and infrastructure bring.
    move to a new account (DEPLOYED.md, "Compatibility appendix"). None of
    these legacy contracts deploys to mainnet.
 8. **Malicious or compromised factory admin.** Can upgrade the factory to
-   embed different account code, pin a verifier that accepts anything, set
+   pin different account code, pin a verifier that accepts anything, set
    a manager that admits no one (or anyone), or hand the factory to another
    admin. The factory makes each change at once and announces it
    (`upgraded`, `verifier_pinned`, `manager_changed`, `admin_changed`;

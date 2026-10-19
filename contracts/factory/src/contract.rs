@@ -15,23 +15,18 @@ use stellar_accounts::smart_account::Signer;
 // defines no error type.
 
 mod perch_account {
-    //! Embeds Perch's smart-account wasm (`perch-account`, the deployed bytes
-    //! `just perch-infra` fetches by the manifest's hash) so the factory derives
-    //! the deploy hash from the bytes instead of hardcoding it:
+    //! The Perch smart-account wasm (`perch-account`) every account is
+    //! deployed from, pinned by hash at build time: `build.rs` reads it from
+    //! Perch's deployment manifest for the network the build targets
+    //! (`vendor/perch/deployments/<STELLAR_NETWORK>.json`, default testnet)
+    //! and fails the build if that manifest has no account hash.
     //!
-    //!  1. `build.rs` stages `target/wasm32v1-none/contract/perch_account.wasm`
-    //!     and emits `PERCH_ACCOUNT_WASM` pointing at it.
-    //!  2. `include_bytes!(env!("PERCH_ACCOUNT_WASM"))` embeds those bytes.
-    //!  3. At runtime the factory computes `sha256(WASM)` (see
-    //!     `super::Contract::account_wasm_hash`) and deploys that hash.
-    //!
-    //! For `deploy_v2` to resolve, the same bytes must already be installed
-    //! on-chain. Once Perch's release workstream publishes the account wasm,
-    //! this embed is checked against the published hash instead of a local
-    //! build.
+    //! The factory carries only the 32-byte hash. `deploy_v2` resolves it
+    //! against installed code, so the wasm with exactly this hash must be
+    //! installed on the network before the factory creates an account
+    //! (`scripts/deploy-factory.sh` installs it and reads the pin back).
 
-    /// Raw Perch account wasm, embedded at build time.
-    pub const WASM: &[u8] = include_bytes!(env!("PERCH_ACCOUNT_WASM"));
+    include!(concat!(env!("OUT_DIR"), "/perch_account.rs"));
 }
 
 /// Stellar Registry "unverified" testnet contract — the one that holds
@@ -70,7 +65,7 @@ pub struct AccountCreated {
 }
 
 /// The factory's wasm was replaced; the new wasm runs from the next
-/// invocation, and with it the account code the factory embeds.
+/// invocation, and with it the account wasm hash that wasm pins.
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Upgraded {
@@ -100,8 +95,6 @@ pub struct AdminChanged {
 
 #[contractstorage]
 pub struct Config {
-    /// Cached `sha256(perch_account::WASM)`.
-    account: InstanceItem<BytesN<32>>,
     // The `admin` is not stored here: admin/set_admin come from the shared
     // `admin-sep` crate, which owns its own `ADMIN` key.
     /// The address for the `"verifier"` registry name. `None` = unpinned:
@@ -170,14 +163,11 @@ impl Contract {
         }
     }
 
-    /// Replace the factory's wasm with the installed wasm `wasm_hash`.
-    /// Admin only.
+    /// Replace the factory's wasm with the installed wasm `wasm_hash`, and
+    /// with it the account wasm hash new accounts are deployed from. Admin
+    /// only.
     pub fn upgrade(e: &Env, wasm_hash: BytesN<32>) {
         Self::admin(e).require_auth();
-        // Load-bearing: the new wasm embeds different account bytes, and a
-        // surviving cache would make every later `create_account` deploy the
-        // old account wasm.
-        Config::new(e).account.remove();
         Upgraded {
             wasm_hash: wasm_hash.clone(),
         }
@@ -250,16 +240,10 @@ impl Contract {
         Self::deployer(e, setup_pk).deployed_address()
     }
 
-    /// Recompute and store the embedded account-wasm hash, returning it.
-    /// Admin-gated repair for the cache `upgrade` clears: after upgrading a
-    /// factory whose old code did not clear it (the upgrade transaction runs
-    /// the old code), the stale cache survives; calling this once afterwards
-    /// repairs it. It can only store the hash of the bytes this wasm embeds.
-    pub fn refresh_account_wasm_hash(e: &Env) -> BytesN<32> {
-        Self::admin(e).require_auth();
-        let hash = Self::compute_account_wasm_hash(e);
-        Config::set_account(e, &hash);
-        hash
+    /// The installed `perch-account` wasm hash `create_account` deploys,
+    /// pinned when this wasm was built.
+    pub fn account_wasm_hash(e: &Env) -> BytesN<32> {
+        BytesN::from_array(e, &perch_account::WASM_HASH)
     }
 
     fn store_verifier(e: &Env, verifier: Address) {
@@ -322,24 +306,6 @@ impl Contract {
             _ => None,
         }
     }
-
-    /// SHA-256 of the embedded account wasm — the installed hash `deploy_v2`
-    /// expects. Cached in instance storage after the first call.
-    fn account_wasm_hash(e: &Env) -> BytesN<32> {
-        if let Some(cached) = Config::get_account(e) {
-            return cached;
-        }
-        let hash = Self::compute_account_wasm_hash(e);
-        Config::set_account(e, &hash);
-        hash
-    }
-
-    /// Freshly compute `sha256(perch_account::WASM)` without the cache.
-    fn compute_account_wasm_hash(e: &Env) -> BytesN<32> {
-        e.crypto()
-            .sha256(&Bytes::from_slice(e, perch_account::WASM))
-            .to_bytes()
-    }
 }
 
 #[cfg(test)]
@@ -359,11 +325,19 @@ mod test {
         contract, contractclient, contractimpl, Env, Event as _, Executable, IntoVal, TryFromVal,
     };
 
-    /// A Perch account wasm an earlier factory build embedded (the
-    /// integration suite's committed copy): the stale cache the upgrade test
-    /// seeds names it.
+    /// The account wasm the factory pins: the deployed bytes `just
+    /// perch-infra` fetches by the testnet manifest's hash. Only the tests
+    /// read it, to install it.
+    const ACCOUNT_WASM: &[u8] =
+        include_bytes!("../../../target/wasm32v1-none/contract/perch_account.wasm");
+
+    /// An earlier Perch account wasm (the integration suite's committed
+    /// copy), installed beside the pinned one.
     const PREVIOUS_ACCOUNT_WASM: &[u8] =
         include_bytes!("../../../crates/integration-tests/fixtures/old-perch-account.wasm");
+
+    /// The manifest the pin is read from when `STELLAR_NETWORK` is unset.
+    const TESTNET_MANIFEST: &str = include_str!("../../../vendor/perch/deployments/testnet.json");
 
     // Minimal mock: every `fetch_contract_id` call returns a fixed address.
     #[contract]
@@ -436,7 +410,7 @@ mod test {
     }
 
     /// A permissionless factory whose registry resolves `"verifier"` to a
-    /// stub verifier, with the embedded account wasm installed. Returns the
+    /// stub verifier, with the pinned account wasm installed. Returns the
     /// factory, the verifier, and the admin.
     fn setup(env: &Env) -> (Address, Address, Address) {
         env.mock_all_auths();
@@ -446,7 +420,7 @@ mod test {
             MockRegistry,
             (verifier.clone(),),
         );
-        env.deployer().upload_contract_wasm(perch_account::WASM);
+        env.deployer().upload_contract_wasm(ACCOUNT_WASM);
         let admin = Address::generate(env);
         (factory(env, &admin), verifier, admin)
     }
@@ -609,7 +583,7 @@ mod test {
     fn the_wallets_setup_signature_creates_the_account() {
         let env = Env::default();
         on_testnet(&env);
-        env.deployer().upload_contract_wasm(perch_account::WASM);
+        env.deployer().upload_contract_wasm(ACCOUNT_WASM);
         let verifier = env.register(StubVerifier, ());
         let factory = factory_at(&env, 7);
         env.register_at(
@@ -844,23 +818,6 @@ mod test {
         assert_eq!(client.admin(), new_admin);
     }
 
-    #[test]
-    fn refresh_account_wasm_hash_repairs_stale_cache() {
-        let env = Env::default();
-        env.mock_all_auths();
-        let id = factory(&env, &Address::generate(&env));
-        let client = ContractClient::new(&env, &id);
-        env.as_contract(&id, || {
-            Config::set_account(&env, &BytesN::from_array(&env, &[7u8; 32]));
-        });
-        let refreshed = client.refresh_account_wasm_hash();
-        let expected = env.as_contract(&id, || Contract::compute_account_wasm_hash(&env));
-        assert_eq!(refreshed, expected);
-
-        env.set_auths(&[]);
-        assert!(client.try_refresh_account_wasm_hash().is_err());
-    }
-
     /// Nobody but the admin can upgrade, repin, set the manager, or rotate
     /// the admin; a refused call changes nothing.
     #[test]
@@ -871,7 +828,7 @@ mod test {
         let id = factory(&env, &admin);
         let client = ContractClient::new(&env, &id);
         let code = id.executable();
-        let wasm = env.deployer().upload_contract_wasm(perch_account::WASM);
+        let wasm = env.deployer().upload_contract_wasm(ACCOUNT_WASM);
         let verifier = Address::generate(&env);
         let manager = Some(Address::generate(&env));
         let new_admin = Address::generate(&env);
@@ -981,25 +938,13 @@ mod test {
         client.create_account(&setup_pk(&env, &setup), &key, &sig);
     }
 
-    /// The account code a factory deploys comes from the cached hash, and an
-    /// upgrade clears it, so the code that runs next derives the hash of the
-    /// account wasm it embeds. (The test host runs the new wasm after the
-    /// upgrade, so the account minted after it is checked in the integration
-    /// suite, `factory_governance.rs`, against the factory wasm.)
+    /// An upgrade installs exactly the given wasm, and is announced.
     #[test]
-    fn an_upgrade_clears_the_cached_account_hash_and_is_announced() {
+    fn an_upgrade_replaces_the_factory_wasm_and_is_announced() {
         let env = Env::default();
         let (factory, _, _) = setup(&env);
         let client = ContractClient::new(&env, &factory);
-        let previous = env.deployer().upload_contract_wasm(PREVIOUS_ACCOUNT_WASM);
-        env.as_contract(&factory, || Config::set_account(&env, &previous));
-        assert_eq!(
-            mint(&env, &factory, 30).executable(),
-            Some(Executable::Wasm(previous.clone())),
-            "the cached hash is what deploys"
-        );
-
-        let next = env.deployer().upload_contract_wasm(perch_account::WASM);
+        let next = env.deployer().upload_contract_wasm(ACCOUNT_WASM);
         client.upgrade(&next);
         assert_eq!(
             env.events().all().filter_by_contract(&factory),
@@ -1009,43 +954,66 @@ mod test {
             .to_xdr(&env, &factory)]
         );
         assert_eq!(factory.executable(), Some(Executable::Wasm(next)));
-        env.as_contract(&factory, || {
-            assert_eq!(Config::get_account(&env), None);
-            assert_eq!(
-                Contract::account_wasm_hash(&env),
-                Contract::compute_account_wasm_hash(&env)
-            );
-        });
     }
 
-    /// The hash the factory deploys must equal the hash the host assigns when
-    /// the same bytes are installed, or `deploy_v2` cannot resolve it.
+    /// The pin is the manifest's `perch-account` hash, and the hash the host
+    /// assigns the fetched account wasm when it is installed, so `deploy_v2`
+    /// resolves it.
     #[test]
-    fn account_wasm_hash_equals_uploaded_wasm_hash() {
+    fn the_pinned_account_hash_is_the_manifests_and_the_fetched_wasms() {
         let env = Env::default();
-        env.mock_all_auths();
-        assert!(
-            !perch_account::WASM.is_empty(),
-            "embedded account wasm is empty"
+        let client = ContractClient::new(&env, &factory(&env, &Address::generate(&env)));
+        let manifest = crate::pin::account_wasm_hash(TESTNET_MANIFEST, "testnet").unwrap();
+        assert_eq!(client.account_wasm_hash().to_array(), manifest);
+        assert_eq!(
+            env.deployer().upload_contract_wasm(ACCOUNT_WASM),
+            client.account_wasm_hash()
         );
-        let uploaded = env.deployer().upload_contract_wasm(perch_account::WASM);
-        let factory_addr = factory(&env, &Address::generate(&env));
-        let derived = env.as_contract(&factory_addr, || Contract::account_wasm_hash(&env));
-        assert_eq!(derived, uploaded);
     }
 
+    /// Every account is deployed from exactly the pinned hash, even with
+    /// other account code installed and a hash left in the instance under
+    /// the key an earlier factory build cached one in.
     #[test]
-    fn account_wasm_hash_caches_first_computation() {
+    fn create_account_deploys_exactly_the_pinned_account_wasm() {
+        let env = Env::default();
+        let (factory, _, _) = setup(&env);
+        let client = ContractClient::new(&env, &factory);
+        let previous = env.deployer().upload_contract_wasm(PREVIOUS_ACCOUNT_WASM);
+        env.as_contract(&factory, || {
+            env.storage()
+                .instance()
+                .set(&Symbol::new(&env, "Account"), &previous);
+        });
+        assert_eq!(
+            mint(&env, &factory, 30).executable(),
+            Some(Executable::Wasm(client.account_wasm_hash()))
+        );
+    }
+
+    /// The factory never deploys anything but the pinned wasm: until that
+    /// exact code is installed, `create_account` fails, whatever other
+    /// account code is installed.
+    #[test]
+    fn without_the_pinned_account_wasm_installed_create_account_fails() {
         let env = Env::default();
         env.mock_all_auths();
-        let factory_addr = factory(&env, &Address::generate(&env));
-        env.as_contract(&factory_addr, || {
-            assert!(Config::get_account(&env).is_none());
-            let fresh = Contract::compute_account_wasm_hash(&env);
-            assert_eq!(Contract::account_wasm_hash(&env), fresh);
-            assert_eq!(Config::get_account(&env), Some(fresh.clone()));
-            assert_eq!(Contract::account_wasm_hash(&env), fresh);
-        });
+        env.deployer().upload_contract_wasm(PREVIOUS_ACCOUNT_WASM);
+        let verifier = env.register(StubVerifier, ());
+        let factory = env.register(
+            Contract,
+            (Address::generate(&env), Some(verifier), None::<Address>),
+        );
+        let setup = setup_key(31);
+        let key = key(&env, 31);
+        let client = ContractClient::new(&env, &factory);
+        let sig = sign(&env, &setup, &factory, &key);
+        assert!(client
+            .try_create_account(&setup_pk(&env, &setup), &key, &sig)
+            .is_err());
+
+        env.deployer().upload_contract_wasm(ACCOUNT_WASM);
+        client.create_account(&setup_pk(&env, &setup), &key, &sig);
     }
 
     /// With the verifier pinned, `create_account` never constructs the
@@ -1055,7 +1023,7 @@ mod test {
     fn pinned_resolve_never_consults_registry() {
         let env = Env::default();
         env.register_at(&Address::from_str(&env, REGISTRY), PanicRegistry, ());
-        env.deployer().upload_contract_wasm(perch_account::WASM);
+        env.deployer().upload_contract_wasm(ACCOUNT_WASM);
         let pinned = env.register(StubVerifier, ());
         let factory = env.register(
             Contract,
