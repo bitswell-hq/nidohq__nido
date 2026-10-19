@@ -12,8 +12,8 @@ git submodule update --init
 just perch-infra       # Perch's deployed wasm and pin cache, by the hashes in
                        # vendor/perch/deployments/testnet.json (Stellar CLI,
                        # curl, jq; endpoint choice: "RPC endpoints" below)
-just build-contracts   # Nido's contracts; the factory pins the manifest's
-                       # perch-account hash (STELLAR_NETWORK, default testnet)
+just build-contracts   # Nido's contracts; the factory compiles in the pin
+                       # just perch-infra wrote (contracts/factory/wasm/)
 just test              # cargo test --workspace: integration tests replay the
                        # committed proofs
 just check-vendor-drift  # vendor/perch at its pin, consumed wasm = the manifest's
@@ -126,9 +126,11 @@ Before using a manifest:
    installed code back from the ledger by that hash. The factory carries
    only the hash, so `create_account` fails until this exact code is
    installed.
-2. Build Nido's contracts for the network (`STELLAR_NETWORK=<network>`;
-   skipped with `SKIP_BUILD`). The factory's `build.rs` pins the manifest's
-   `perch-account` hash and fails if the manifest has none.
+2. Check the factory's account pin (`contracts/factory/wasm/perch-account.sha256`,
+   which `STELLAR_NETWORK=<network> just perch-infra` writes from the
+   manifest) is the manifest's `perch-account`, then build Nido's contracts
+   (skipped with `SKIP_BUILD`). The factory compiles the pin in with Perch's
+   `registry_contract!`; a missing pin fails the build.
 3. Check the factory wasm carries that hash before deploying it, so a
    `SKIP_BUILD` wasm built for another network or Perch commit is refused.
 4. Deploy the factory with the paying identity as its admin, Perch's

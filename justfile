@@ -12,7 +12,9 @@ build:
     cargo build --workspace
 
 # Fetch the Perch stack Nido builds and tests against: Perch's testnet
-# deployment, by the hashes in vendor/perch/deployments/testnet.json. Puts
+# deployment, by the hashes in vendor/perch/deployments/testnet.json
+# (STELLAR_NETWORK picks another manifest). Writes the factory's account pin,
+# contracts/factory/wasm/perch-account.sha256, from that manifest first. Puts
 # every deployed contract's wasm in target/wasm32v1-none/contract/
 # (perch_*.wasm), so the tests run the deployed bytes, including the account
 # whose hash the factory pins. (The Perch crates build from the pins Perch commits; cargo
@@ -59,9 +61,9 @@ gen-zk-fixtures:
     (cd vendor/perch/circuits && "$NARGO" compile --workspace)
     NIDO_ZK_PROVE=1 cargo test -p nido-integration-tests --test it -- --test-threads=1
 
-# Build and optimize Nido's Soroban contracts. The factory's build.rs pins the
-# perch-account hash from vendor/perch/deployments/<STELLAR_NETWORK>.json
-# (default testnet) and fails if that manifest has none.
+# Build and optimize Nido's Soroban contracts. The factory compiles in the
+# perch-account hash in contracts/factory/wasm/perch-account.sha256
+# (`registry_contract!`; `just perch-infra` writes it), and fails without it.
 #
 # SOROBAN_SDK_BUILD_SYSTEM_SUPPORTS_SPEC_SHAKING_V2: scaffold invokes raw
 # `cargo rustc` rather than `stellar contract build`, so it does not set the

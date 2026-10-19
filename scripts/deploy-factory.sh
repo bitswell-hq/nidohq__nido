@@ -8,12 +8,14 @@
 #      code back from the ledger by that hash: the factory deploys accounts
 #      by the hash it pins, and `create_account` fails until that code is
 #      installed.
-#   2. Build Nido's contracts for this network (`STELLAR_NETWORK=<network>
-#      just build-contracts`; the factory's build.rs pins the manifest's
-#      `perch-account` hash) unless SKIP_BUILD is set.
+#   2. Check the factory's account pin (contracts/factory/wasm/
+#      perch-account.sha256, which `STELLAR_NETWORK=<network> just
+#      perch-infra` writes) is the manifest's `perch-account`, then build
+#      Nido's contracts (`just build-contracts`; the factory's
+#      `registry_contract!` compiles the pin in) unless SKIP_BUILD is set.
 #   3. Check the factory wasm carries the manifest's account hash, before
-#      anything is deployed: a SKIP_BUILD wasm built for another network or
-#      Perch pin is refused here.
+#      anything is deployed: a SKIP_BUILD wasm built from another network's
+#      or Perch commit's pin is refused here.
 #   4. Deploy the factory with the paying identity as its admin, Perch's
 #      WebAuthn verifier pinned, and MANAGER (if set) as the address that
 #      must authorize every account creation, all constructor arguments:
@@ -118,8 +120,11 @@ echo "  installed $ACCOUNT_HASH" >&2
 
 TOOLCHAIN=null
 if [ -z "${SKIP_BUILD:-}" ]; then
-    note "build for $NETWORK"
-    STELLAR_NETWORK="$NETWORK" just build-contracts >&2
+    note "build"
+    PIN=contracts/factory/wasm/perch-account.sha256
+    [ "$(tr -d '[:space:]' < "$PIN")" = "$ACCOUNT_HASH" ] ||
+        die "$PIN is not the manifest's perch-account ($ACCOUNT_HASH): run 'STELLAR_NETWORK=$NETWORK just perch-infra'"
+    just build-contracts >&2
     TOOLCHAIN="$(jq -n --arg rustc "$(rustc --version)" --arg stellar "$(stellar --version | head -1)" \
         --arg scaffold "$(stellar-scaffold --version | head -1)" '{rustc: $rustc, stellar: $stellar, scaffold: $scaffold}')"
 fi
@@ -128,7 +133,7 @@ FACTORY_WASM_HASH="$(sha256 "$FACTORY_WASM")"
 # The pin is 32 raw bytes in the wasm's data; `account_wasm_hash` reads it
 # back from the deployed factory in step 5.
 od -An -v -tx1 "$FACTORY_WASM" | tr -d ' \n' | grep -q "$ACCOUNT_HASH" \
-    || die "$FACTORY_WASM does not pin the manifest's perch-account ($ACCOUNT_HASH): build it with STELLAR_NETWORK=$NETWORK"
+    || die "$FACTORY_WASM does not pin the manifest's perch-account ($ACCOUNT_HASH): run 'STELLAR_NETWORK=$NETWORK just perch-infra' and rebuild"
 
 # An absent `--manager` is the constructor's `None`.
 MANAGER_ARG=()

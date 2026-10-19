@@ -104,8 +104,9 @@ workflow step that fails while the SDK is unpublishable (an edit to
       commit or declared branch, a consumed wasm, the pin cache, or a built
       `nido_factory.wasm` whose pinned `perch-account` hash is not the
       manifest's, or npm resolving perch-zk elsewhere (`just
-      check-vendor-drift`, `scripts/check-perch-drift.sh`). The factory's
-      `build.rs` reads that hash from the manifest and fails without one.
+      check-vendor-drift`, `scripts/check-perch-drift.sh`), or a committed
+      factory pin (`contracts/factory/wasm/perch-account.sha256`, which `just
+      perch-infra` writes from the manifest) unlike it.
       On chain, `scripts/deploy-factory.sh` installs the account wasm, reads
       it back, and checks the deployed factory's `account_wasm_hash` against
       the manifest, and `just check-factory` repeats that check in CI.

@@ -14,10 +14,8 @@ soroban-sdk = { workspace = true, features = ["hazmat-address"] }
 stellar-accounts = { workspace = true }
 soroban-sdk-tools = { workspace = true }
 admin-sep = { workspace = true }
-
-[build-dependencies]
-# Reads the account hash out of Perch's deployment manifest (build.rs).
-serde_json = "1"
+# `registry_contract!`: pins the perch-account wasm hash from wasm/perch-account.sha256.
+perch-registry-resolve = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

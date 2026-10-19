@@ -14,19 +14,22 @@ use stellar_accounts::smart_account::Signer;
 // surfaces as the host's or the registry's own error, so the factory
 // defines no error type.
 
-mod perch_account {
-    //! The Perch smart-account wasm (`perch-account`) every account is
-    //! deployed from, pinned by hash at build time: `build.rs` reads it from
-    //! Perch's deployment manifest for the network the build targets
-    //! (`vendor/perch/deployments/<STELLAR_NETWORK>.json`, default testnet)
-    //! and fails the build if that manifest has no account hash.
-    //!
-    //! The factory carries only the 32-byte hash. `deploy_v2` resolves it
-    //! against installed code, so the wasm with exactly this hash must be
-    //! installed on the network before the factory creates an account
-    //! (`scripts/deploy-factory.sh` installs it and reads the pin back).
-
-    include!(concat!(env!("OUT_DIR"), "/perch_account.rs"));
+// The Perch smart-account wasm (`perch-account`) every account is deployed
+// from, pinned by hash at build time from the committed
+// `wasm/perch-account.sha256` (a missing or malformed pin fails the build).
+// `just perch-infra` writes that file from Perch's deployment manifest,
+// `vendor/perch/deployments/<STELLAR_NETWORK>.json` (default testnet), and
+// `just check-vendor-drift` fails when the two differ.
+//
+// The factory carries only the 32-byte hash. `deploy_v2` resolves it against
+// installed code, so the wasm with exactly this hash must be installed on the
+// network before the factory creates an account (`scripts/deploy-factory.sh`
+// installs it, refuses a factory wasm pinning another hash, and reads the pin
+// back).
+perch_registry_resolve::registry_contract! {
+    mod: perch_account,
+    wasm_name: "perch-account",
+    hash_file: "wasm/perch-account.sha256",
 }
 
 /// Stellar Registry "unverified" testnet contract — the one that holds
@@ -243,7 +246,7 @@ impl Contract {
     /// The installed `perch-account` wasm hash `create_account` deploys,
     /// pinned when this wasm was built.
     pub fn account_wasm_hash(e: &Env) -> BytesN<32> {
-        BytesN::from_array(e, &perch_account::WASM_HASH)
+        perch_account::hash(e)
     }
 
     fn store_verifier(e: &Env, verifier: Address) {
@@ -335,9 +338,6 @@ mod test {
     /// copy), installed beside the pinned one.
     const PREVIOUS_ACCOUNT_WASM: &[u8] =
         include_bytes!("../../../crates/integration-tests/fixtures/old-perch-account.wasm");
-
-    /// The manifest the pin is read from when `STELLAR_NETWORK` is unset.
-    const TESTNET_MANIFEST: &str = include_str!("../../../vendor/perch/deployments/testnet.json");
 
     // Minimal mock: every `fetch_contract_id` call returns a fixed address.
     #[contract]
@@ -956,15 +956,29 @@ mod test {
         assert_eq!(factory.executable(), Some(Executable::Wasm(next)));
     }
 
-    /// The pin is the manifest's `perch-account` hash, and the hash the host
-    /// assigns the fetched account wasm when it is installed, so `deploy_v2`
-    /// resolves it.
+    /// The pin is the `perch-account` hash in the manifest `just
+    /// perch-infra` writes it from (`STELLAR_NETWORK`, default testnet), and
+    /// the hash the host assigns the fetched account wasm when it is
+    /// installed, so `deploy_v2` resolves it.
     #[test]
     fn the_pinned_account_hash_is_the_manifests_and_the_fetched_wasms() {
         let env = Env::default();
         let client = ContractClient::new(&env, &factory(&env, &Address::generate(&env)));
-        let manifest = crate::pin::account_wasm_hash(TESTNET_MANIFEST, "testnet").unwrap();
-        assert_eq!(client.account_wasm_hash().to_array(), manifest);
+        let network = std::env::var("STELLAR_NETWORK").unwrap_or_else(|_| "testnet".into());
+        let path = std::format!(
+            "{}/../../vendor/perch/deployments/{network}.json",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let manifest: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        let mut pin = std::string::String::new();
+        for byte in client.account_wasm_hash().to_array() {
+            core::fmt::Write::write_fmt(&mut pin, format_args!("{byte:02x}")).unwrap();
+        }
+        assert_eq!(
+            pin, manifest["contracts"]["perch-account"]["sha256"],
+            "wasm/perch-account.sha256 is not {path}'s perch-account: run `just perch-infra`"
+        );
         assert_eq!(
             env.deployer().upload_contract_wasm(ACCOUNT_WASM),
             client.account_wasm_hash()

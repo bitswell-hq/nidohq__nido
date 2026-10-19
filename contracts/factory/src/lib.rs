@@ -2,5 +2,3 @@
 #![allow(dead_code)]
 
 mod contract;
-#[cfg(test)]
-mod pin;
