@@ -22,6 +22,7 @@ import {
   buf2hex,
   type PasskeySignature,
   type PolicyDoc,
+  nidoKey,
 } from '@nidohq/passkey-sdk';
 import { resolveSignerRule } from './policyChainFetch.js';
 import {
@@ -39,9 +40,9 @@ const FRIENDBOT_URL = 'https://friendbot.stellar.org';
 // signing path (here + walletSign) shares ONE source of
 // truth, passed identically to buildAuthHash and the injector.
 
-/** localStorage key shared with `account/index.astro` so we don't
- *  proliferate ephemeral submitter accounts. */
-const SUBMITTER_KEY = 'nido:name-keypair';
+/** One stored submitter keypair, so we don't proliferate ephemeral
+ *  submitter accounts. */
+const submitterKey = () => nidoKey('name-keypair');
 
 /**
  * Get or mint an ephemeral G-address keypair used as the tx submitter
@@ -54,12 +55,12 @@ const SUBMITTER_KEY = 'nido:name-keypair';
  * fees. Auth is via the passkey on the auth entry, not the source.
  */
 export async function getSubmitter(): Promise<Keypair> {
-  const stored = localStorage.getItem(SUBMITTER_KEY);
+  const stored = localStorage.getItem(submitterKey());
   if (stored) return Keypair.fromSecret(stored);
   const kp = Keypair.random();
   const resp = await fetch(`${FRIENDBOT_URL}?addr=${kp.publicKey()}`);
   if (!resp.ok) throw new Error(`Friendbot funding failed: ${resp.statusText}`);
-  localStorage.setItem(SUBMITTER_KEY, kp.secret());
+  localStorage.setItem(submitterKey(), kp.secret());
   return kp;
 }
 

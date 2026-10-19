@@ -56,6 +56,14 @@ describe("apexHostForHost", () => {
     expect(apexHostForHost("alice.nido.fyi")).toBe("nido.fyi");
   });
 
+  it("keeps the testnet apex its own apex, never nido.fyi", () => {
+    expect(apexHostForHost("test.nido.fyi")).toBe("test.nido.fyi");
+    expect(apexHostForHost("alice.test.nido.fyi")).toBe("test.nido.fyi");
+    expect(apexHostForHost("status-message.test.nido.fyi")).toBe("test.nido.fyi");
+    expect(apexHostForHost("126.test.nido.fyi")).toBe("126.test.nido.fyi");
+    expect(apexHostForHost("alice--126.test.nido.fyi")).toBe("126.test.nido.fyi");
+  });
+
   it("maps localhost account subdomains to localhost", () => {
     expect(apexHostForHost("alice.localhost:4399")).toBe("localhost:4399");
   });
@@ -82,6 +90,24 @@ describe("apexHostForHost", () => {
 });
 
 describe("bridgeRequester", () => {
+  it("accepts an origin below the testnet apex on the testnet bridge", () => {
+    expect(bridgeRequester(`https://${a}.test.nido.fyi`, "test.nido.fyi")).toEqual({ kind: "account", contractId: A });
+    expect(bridgeRequester("https://alice.test.nido.fyi", "test.nido.fyi")).toEqual({ kind: "name" });
+  });
+
+  it("refuses reserved-name hosts", () => {
+    for (const label of ["www", "nido", "relay", "status-message"]) {
+      expect(bridgeRequester(`https://${label}.nido.fyi`, "nido.fyi")).toBeNull();
+    }
+  });
+
+  it("keeps the two apexes' bridges apart", () => {
+    expect(bridgeRequester(`https://${a}.test.nido.fyi`, "nido.fyi")).toBeNull();
+    expect(bridgeRequester(`https://${a}.nido.fyi`, "test.nido.fyi")).toBeNull();
+    // The testnet apex itself is not a requester on the nido.fyi bridge.
+    expect(bridgeRequester("https://test.nido.fyi", "nido.fyi")).toBeNull();
+  });
+
   it("accepts an https account origin and names its account", () => {
     expect(bridgeRequester(`https://${a}.nido.fyi`, "nido.fyi")).toEqual({ kind: "account", contractId: A });
   });
@@ -179,8 +205,8 @@ describe("answerBridgeRequest", () => {
   const request = (snapshot: unknown) => ({ type: NIDO_STORAGE_REQUEST, id: "r1", snapshot });
   const apexStore = () =>
     new MemoryStorage({
-      "nido:accounts": JSON.stringify([A]),
-      "nido:pending": JSON.stringify([{ contractId: B, setupKey: "salt-b" }]),
+      "nido:testnet:accounts": JSON.stringify([A]),
+      "nido:testnet:pending": JSON.stringify([{ contractId: B, setupKey: "salt-b" }]),
     });
 
   it("answers its embedding account origin with that account's setup entry", () => {
@@ -259,10 +285,10 @@ describe("answerBridgeRequest", () => {
 describe("Nido account snapshot storage", () => {
   it("loads local accounts, pending rows, and cached names", () => {
     const store = new MemoryStorage({
-      "nido:accounts": JSON.stringify([A, "not-an-account"]),
-      "nido:pending": JSON.stringify([{ contractId: B, secretKey: "S123" }]),
-      [`nido:names:${A}`]: "alpha",
-      [`nido:names:${B}`]: "beta",
+      "nido:testnet:accounts": JSON.stringify([A, "not-an-account"]),
+      "nido:testnet:pending": JSON.stringify([{ contractId: B, secretKey: "S123" }]),
+      [`nido:testnet:names:${A}`]: "alpha",
+      [`nido:testnet:names:${B}`]: "beta",
     });
 
     expect(localNidoSnapshot(store)).toEqual({
@@ -274,9 +300,9 @@ describe("Nido account snapshot storage", () => {
 
   it("merges bridge accounts and removes pending rows once active", () => {
     const store = new MemoryStorage({
-      "nido:accounts": JSON.stringify([A]),
-      "nido:pending": JSON.stringify([{ contractId: B, secretKey: "S123" }]),
-      [`nido:names:${A}`]: "alpha",
+      "nido:testnet:accounts": JSON.stringify([A]),
+      "nido:testnet:pending": JSON.stringify([{ contractId: B, secretKey: "S123" }]),
+      [`nido:testnet:names:${A}`]: "alpha",
     });
 
     const changed = mergeNidoSnapshot(

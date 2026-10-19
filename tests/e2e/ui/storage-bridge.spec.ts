@@ -17,9 +17,9 @@ async function seedApex(page: Page) {
   await page.goto(BRIDGE);
   await page.evaluate(
     ({ a, b, c }) => {
-      localStorage.setItem('nido:accounts', JSON.stringify([a]));
+      localStorage.setItem('nido:testnet:accounts', JSON.stringify([a]));
       localStorage.setItem(
-        'nido:pending',
+        'nido:testnet:pending',
         JSON.stringify([
           { contractId: b, setupKey: 'salt-b' },
           { contractId: c, setupKey: 'salt-c' },
@@ -79,9 +79,9 @@ test.describe('@fast storage bridge with production headers', () => {
     await seedApex(page);
     await page.goto(`${origin(B)}/account/`);
     await expect
-      .poll(() => page.evaluate(() => localStorage.getItem('nido:accounts')), { timeout: 10_000 })
+      .poll(() => page.evaluate(() => localStorage.getItem('nido:testnet:accounts')), { timeout: 10_000 })
       .toContain(A);
-    expect(await page.evaluate(() => localStorage.getItem('nido:pending'))).not.toContain('salt-c');
+    expect(await page.evaluate(() => localStorage.getItem('nido:testnet:pending'))).not.toContain('salt-c');
   });
 
   test("the bridge answers an account origin with that account's setup entry only", async ({ page }) => {
@@ -107,7 +107,7 @@ test.describe('@fast storage bridge with production headers', () => {
     await page.goto(`https://status-message.${APEX}/__blank`);
     expect(await askBridge(page, 'self')).toBeNull();
     await page.goto(BRIDGE);
-    expect(await page.evaluate(() => localStorage.getItem('nido:pending'))).toContain('salt-c');
+    expect(await page.evaluate(() => localStorage.getItem('nido:testnet:pending'))).toContain('salt-c');
   });
 
   test('another site cannot frame the bridge', async ({ page }) => {

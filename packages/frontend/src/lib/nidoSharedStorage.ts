@@ -1,11 +1,13 @@
-import { RESERVED_DAPP_SUBDOMAINS } from "@nidohq/passkey-sdk";
+import { isReservedName, nidoKey, splitHost, stripSubdomain } from "@nidohq/passkey-sdk";
 import type { PendingAccount } from "./myNidoModel";
 import { isContractStrKey } from "./address";
 import { isLoopbackHttpHost } from "./loopbackHost";
 
-const ACCOUNT_KEY = "nido:accounts";
-const PENDING_KEY = "nido:pending";
-const NAME_PREFIX = "nido:names:";
+// The passkey-sdk's account-list keys (saveAccount, savePendingAccount,
+// saveAccountName), in this build's network namespace.
+const accountKey = () => nidoKey("accounts");
+const pendingKey = () => nidoKey("pending");
+const namePrefix = () => nidoKey("names:");
 const VALID_NAME_RE = /^[a-z][a-z0-9]{0,14}$/;
 export const NIDO_STORAGE_REQUEST = "nido:storage:request:v1";
 export const NIDO_STORAGE_RESPONSE = "nido:storage:response:v1";
@@ -114,20 +116,20 @@ function storageOrNull(): StorageLike | null {
 export function localNidoSnapshot(store: StorageLike | null = storageOrNull()): NidoAccountSnapshot {
   if (!store) return { accounts: [], pending: [], names: {} };
 
-  const accounts = uniqueContractIds(readJson(store.getItem(ACCOUNT_KEY)));
+  const accounts = uniqueContractIds(readJson(store.getItem(accountKey())));
   const active = new Set(accounts);
-  const pending = normalizePending(readJson(store.getItem(PENDING_KEY)), active);
+  const pending = normalizePending(readJson(store.getItem(pendingKey())), active);
   const names: Record<string, string> = {};
 
   for (const contractId of [...accounts, ...pending.map((p) => p.contractId)]) {
-    const name = store.getItem(`${NAME_PREFIX}${contractId}`);
+    const name = store.getItem(`${namePrefix()}${contractId}`);
     if (name && VALID_NAME_RE.test(name)) names[contractId] = name;
   }
 
   for (let i = 0; i < store.length; i++) {
     const key = store.key(i);
-    if (!key?.startsWith(NAME_PREFIX)) continue;
-    const contractId = normalizeContractId(key.slice(NAME_PREFIX.length));
+    if (!key?.startsWith(namePrefix())) continue;
+    const contractId = normalizeContractId(key.slice(namePrefix().length));
     const name = key ? store.getItem(key) : null;
     if (contractId && name && VALID_NAME_RE.test(name)) names[contractId] = name;
   }
@@ -168,10 +170,10 @@ export function mergeNidoSnapshot(
 
   if (stableSnapshot(before) === stableSnapshot(after)) return false;
 
-  store.setItem(ACCOUNT_KEY, JSON.stringify(after.accounts));
-  store.setItem(PENDING_KEY, JSON.stringify(after.pending));
+  store.setItem(accountKey(), JSON.stringify(after.accounts));
+  store.setItem(pendingKey(), JSON.stringify(after.pending));
   for (const [contractId, name] of Object.entries(after.names)) {
-    store.setItem(`${NAME_PREFIX}${contractId}`, name);
+    store.setItem(`${namePrefix()}${contractId}`, name);
   }
 
   return true;
@@ -198,23 +200,14 @@ const PUBLIC_SUFFIXES = new Set([
   "firebaseapp.com",
 ]);
 
-function computeApexHost(host: string): string {
-  const parts = host.split(".");
-  if (parts.length <= 1) return host;
-
-  const [subdomain, ...restParts] = parts;
-  const rest = restParts.join(".");
-  const preview = subdomain.match(/--(?:pr-)?(\d+)$/);
-  if (preview) return `${preview[1]}.${rest}`;
-  if (/^\d+$/.test(subdomain)) return host;
-  const legacyRoot = subdomain.match(/^pr-(\d+)$/);
-  if (legacyRoot) return `${legacyRoot[1]}.${rest}`;
-  if (rest.startsWith("localhost")) return rest;
-  return parts.length > 2 ? rest : host;
-}
-
+/**
+ * The host the storage bridge for `host` lives on: the apex in production, the
+ * `<N>.<apex>` preview root in a preview (`stripSubdomain`, which reads the apex
+ * from the known-apex list, so `cabc.test.nido.fyi` shares `test.nido.fyi` and
+ * never `nido.fyi`).
+ */
 export function apexHostForHost(host: string): string {
-  const apex = computeApexHost(host);
+  const apex = stripSubdomain(host);
   // Never collapse to a bare public suffix: treat such a host as its OWN apex
   // so, e.g., `nido-xyz.pages.dev` and `evil.pages.dev` are different apexes.
   return PUBLIC_SUFFIXES.has(apex.split(":")[0]) ? host : apex;
@@ -228,12 +221,7 @@ export function apexHostForHost(host: string): string {
  */
 export type BridgeRequester = { kind: "account"; contractId: string } | { kind: "name" };
 
-// Single-label hosts under the apex that are not wallet pages: the built-in
-// dApps and the relayer. A name-shaped label is otherwise taken to be a
-// registered name's wallet origin.
-const NON_WALLET_LABELS = new Set(["relay", ...Object.keys(RESERVED_DAPP_SUBDOMAINS)]);
 const ACCOUNT_LABEL_RE = /^c[a-z2-7]{55}$/;
-const PREVIEW_LABEL_RE = /^(.*)--(?:pr-)?\d+$/;
 
 /**
  * Classify a bridge requester's origin, or refuse it (null). The origin must
@@ -254,21 +242,18 @@ export function bridgeRequester(origin: string, bridgeHost: string): BridgeReque
   }
   const apex = apexHostForHost(bridgeHost);
   if (url.host === apex || apexHostForHost(url.host) !== apex) return null;
-  // Exactly one label below the apex host (preview roots are `<N>.<apex>`,
-  // preview accounts `<label>--<N>.<apex>`, so compare against the apex's
-  // own hostname with any `<N>.` stripped).
-  const apexName = apex.split(":")[0];
-  const [first, ...rest] = url.hostname.split(".");
-  const parent = rest.join(".");
-  const previewRootParent = apexName.split(".").slice(1).join(".");
-  if (parent !== apexName && parent !== previewRootParent) return null;
-  const label = (first.match(PREVIEW_LABEL_RE)?.[1] ?? first).toLowerCase();
+  // Reducing to the bridge's apex puts the requester exactly one label below
+  // it (preview accounts are `<label>--<N>.<apex>`); that label is its kind.
+  const { label } = splitHost(url.host);
+  if (!label) return null;
 
   if (ACCOUNT_LABEL_RE.test(label)) {
     const contractId = label.toUpperCase();
     return isContractStrKey(contractId) ? { kind: "account", contractId } : null;
   }
-  if (VALID_NAME_RE.test(label) && !NON_WALLET_LABELS.has(label)) return { kind: "name" };
+  // A reserved label (a built-in dApp, the relayer, ...) is not a wallet page;
+  // any other name-shaped label is a registered name's wallet origin.
+  if (VALID_NAME_RE.test(label) && !isReservedName(label)) return { kind: "name" };
   return null;
 }
 

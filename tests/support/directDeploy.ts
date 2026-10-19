@@ -70,8 +70,8 @@ export async function deployAccountDirect(
   await page.goto(`http://${host}/account/`, { waitUntil: 'domcontentloaded' });
   await seedCredential(page, cAddress, SEED_HEX, label);
   await page.evaluate((account) => {
-    const list: string[] = JSON.parse(localStorage.getItem('nido:accounts') || '[]');
-    if (!list.includes(account)) localStorage.setItem('nido:accounts', JSON.stringify([...list, account]));
+    const list: string[] = JSON.parse(localStorage.getItem('nido:testnet:accounts') || '[]');
+    if (!list.includes(account)) localStorage.setItem('nido:testnet:accounts', JSON.stringify([...list, account]));
   }, cAddress);
   return { cAddress, host };
 }

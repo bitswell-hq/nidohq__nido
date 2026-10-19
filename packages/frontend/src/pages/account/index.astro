@@ -311,10 +311,12 @@ import MyNidoMenu from "../../components/MyNidoMenu.astro";
     saveAccountName,
     loadAccountName,
     fetchRegistryAddress,
+    isReservedName,
   } from "@nidohq/passkey-sdk";
   import { accountShareUrl, accountShareLabel } from "../../lib/accountLinks";
   import {
     classifyNameState,
+    isClaimableName,
     selectClaimer,
     formatClaimerLabel,
     buildClaimHandoffUrl,
@@ -471,7 +473,7 @@ import MyNidoMenu from "../../components/MyNidoMenu.astro";
   async function showClaimEntry(name: string) {
     const state = classifyNameState(name, null); // resolved was null in this branch
     if (state === "invalid") {
-      showError(`"${name}" isn't a valid name.`);
+      showError(isReservedName(name) ? `"${name}" is reserved.` : `"${name}" isn't a valid name.`);
       return;
     }
 
@@ -906,6 +908,10 @@ import MyNidoMenu from "../../components/MyNidoMenu.astro";
         showError("Name must be 1-15 characters, lowercase letters and digits only, starting with a letter.");
         return;
       }
+      if (isReservedName(name)) {
+        showError(`"${name}" is reserved.`);
+        return;
+      }
       if (!contractId) {
         showError("Navigate to your account's subdomain to claim a name.");
         return;
@@ -931,7 +937,7 @@ import MyNidoMenu from "../../components/MyNidoMenu.astro";
     const claimParam = params.get("claim");
     if (claimParam && contractId) {
       const name = claimParam.trim().toLowerCase();
-      if (/^[a-z][a-z0-9]{0,14}$/.test(name)) {
+      if (isClaimableName(name)) {
         const rootHost = stripSubdomain(window.location.host);
         const returnUrl = `${window.location.protocol}${accountUrl(rootHost, name, "/account/?namepasskey=1")}`;
         const req: SignRequest = {

@@ -234,6 +234,7 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
     activateAccount,
     accountUrl,
     stripSubdomain,
+    splitHost,
     perch,
   } from "@nidohq/passkey-sdk";
   import { fetchFactoryAddress } from "../../lib/policyChainFetch.js";
@@ -382,14 +383,15 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
   }
 
   function setupCookieDomain(): string {
-    const host = window.location.hostname;
-    if (host === "localhost" || /^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return "";
-    const base = host.split(".").slice(-2).join(".");
+    // The site apex (`nido.fyi`, `test.nido.fyi`), never a parent of it: a
+    // testnet setup cookie must not reach the other apex. Single-label and IP
+    // hosts get a host-only cookie.
+    const base = splitHost(window.location.hostname).apex;
     // `*.pages.dev` is on the Public Suffix List, so browsers silently reject a
     // `Domain=.pages.dev` cookie. On a direct Cloudflare Pages preview host
     // (the client-side fallback when the worker proxy isn't in the path) fall
     // back to a host-only cookie so the setup salt is actually written.
-    if (!base.includes(".") || base === "pages.dev") return "";
+    if (!base.includes(".") || /^[\d.]+$/.test(base) || base === "pages.dev" || base.endsWith(".pages.dev")) return "";
     return `; Domain=.${base}`;
   }
 
