@@ -5,6 +5,7 @@
 
 import type { PolicyDoc, Rule, SignerDecl } from '@nidohq/passkey-sdk';
 import { diffPolicyDocs } from './docDiff.js';
+import { renameLegacyOwner } from './docDraft.js';
 
 export type GrantReview =
   | { ok: true; rule: Rule; signers: SignerDecl[] }
@@ -17,9 +18,16 @@ export type GrantReview =
  * removes a rule, changes an account-scoped rule (on a first apply the
  * account-scoped rule is the admin baseline being written for the first
  * time, shown in the diff), grants several rules, or changes nothing.
+ *
+ * The grant builder carries a legacy `owner` signer forward as `admin`
+ * (`renameLegacyOwner`): same key, same rules, only the id differs. When
+ * `next` has taken that rename, it is reviewed against `prev` with the same
+ * rename applied, so the rename alone is not a change to the account's own
+ * rule, while a different key or authority under the new id still is.
  */
 export function reviewGrant(prev: PolicyDoc | null, next: PolicyDoc): GrantReview {
-  const diff = diffPolicyDocs(prev, next);
+  const renamed = prev && !next.signers.some((s) => s.id === 'owner') ? renameLegacyOwner(prev) : prev;
+  const diff = diffPolicyDocs(renamed, next);
   if (diff.identical) {
     return { ok: false, reason: 'This access is already in place; there is nothing new to approve.' };
   }
