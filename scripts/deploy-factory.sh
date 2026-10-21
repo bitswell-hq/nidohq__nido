@@ -135,12 +135,13 @@ FACTORY_WASM_HASH="$(sha256 "$FACTORY_WASM")"
 od -An -v -tx1 "$FACTORY_WASM" | tr -d ' \n' | grep -q "$ACCOUNT_HASH" \
     || die "$FACTORY_WASM does not pin the manifest's perch-account ($ACCOUNT_HASH): run 'STELLAR_NETWORK=$NETWORK just perch-infra' and rebuild"
 
-# An absent `--manager` is the constructor's `None`.
+# An absent `--manager` is the constructor's `None`. The CLI reads an
+# `Option<Address>` argument as JSON, so a present one is a quoted string.
 MANAGER_ARG=()
-[ -z "$MANAGER" ] || MANAGER_ARG=(--manager "$MANAGER")
+[ -z "$MANAGER" ] || MANAGER_ARG=(--manager "\"$MANAGER\"")
 note "deploy factory (admin $DEPLOYER until step 6, verifier $VERIFIER, manager ${MANAGER:-none})"
 FACTORY="$(stellar contract deploy --wasm "$FACTORY_WASM" "${NET[@]}" -- \
-    --admin "$DEPLOYER" --verifier "$VERIFIER" ${MANAGER_ARG[@]+"${MANAGER_ARG[@]}"} | tail -1)"
+    --admin "$DEPLOYER" --verifier "\"$VERIFIER\"" ${MANAGER_ARG[@]+"${MANAGER_ARG[@]}"} | tail -1)"
 [[ "$FACTORY" =~ ^C[A-Z2-7]{55}$ ]] || die "deploy returned '$FACTORY'"
 echo "  factory $FACTORY (wasm $FACTORY_WASM_HASH)" >&2
 
