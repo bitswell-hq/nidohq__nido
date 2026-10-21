@@ -105,10 +105,16 @@ export async function submitAsOwner(account: string, operation: xdr.Operation): 
 /** A guardian's approval. A Nido guardian signs on its own subdomain with
  *  its passkey through `rule`, its guardian rule scoped to the controller
  *  `operation` calls (`guardianRuleName`); a `G…` guardian signs the whole
- *  transaction with a connected Stellar wallet. */
-export async function submitAsGuardian(guardian: string, operation: xdr.Operation, rule = GUARDIAN_RULE): Promise<string> {
+ *  transaction with a connected Stellar wallet, once that transaction is
+ *  checked to authorize exactly `approval`. */
+export async function submitAsGuardian(
+  guardian: string,
+  operation: xdr.Operation,
+  approval: perch.GuardianApproval,
+  rule = GUARDIAN_RULE,
+): Promise<string> {
   if (guardian.startsWith('G')) {
-    return (await submitGuardianOp(operation, guardian)).hash;
+    return (await submitGuardianOp(operation, guardian, approval)).hash;
   }
   const result = await signAndSubmit({ account: guardian, operation, ruleName: rule });
   return result.hash;
