@@ -259,7 +259,7 @@ This section is the one home for Nido's package-migration plans.
 
 - **Deferred:** resolving the factory's verifier through the Stellar
   Registry's import macro (registry-resolved contract imports) instead of
-  Nido's own registry client. The account is already pinned that way.
+  Nido's own registry client.
 - **Current behaviour in Nido:** the factory (`contracts/factory/src/contract.rs`)
   declares its own `RegistryInterface` client (`fetch_contract_id(name)`)
   against a hardcoded `REGISTRY` constant, the unverified testnet Stellar
