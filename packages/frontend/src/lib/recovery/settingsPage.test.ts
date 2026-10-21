@@ -1,9 +1,10 @@
 // The settings page's move of recovery from an earlier controller to the
 // deployment's: every setting kept, the switch approved (under Protected) at
-// the controller being left, and the published baseline carried over.
+// the controller being left, and the published baseline carried over, even
+// when its publication fails or the page reloads before it lands.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { StrKey } from '@stellar/stellar-sdk';
-import { buildPolicyDoc, perch, type PolicyDoc } from '@nidohq/passkey-sdk';
+import { buildPolicyDoc, docHash, parsePolicyDocJson, perch, type PolicyDoc } from '@nidohq/passkey-sdk';
 
 const contract = (n: number) => StrKey.encodeContract(Buffer.alloc(32, n));
 const NETWORK = 'Test SDF Network ; September 2015';
@@ -29,29 +30,47 @@ const deployment: perch.PerchDeployment = {
 /** The stack the account enrolled with, before the redeploy. */
 const EARLIER = { ...deployment, recoveryController: contract(50), zkPool: contract(51), zkAdapter: contract(52) };
 
-const page = vi.hoisted(() => ({ state: undefined as unknown, events: [] as string[] }));
+/** The chain as the page sees it: the controller the account adopted, and
+ *  the baseline each controller holds. */
+const page = vi.hoisted(() => ({
+  state: undefined as unknown,
+  events: [] as string[],
+  controller: '',
+  published: new Map<string, string>(),
+  failPublications: 0,
+}));
 const client = {
   baseline: vi.fn(async () => {
     page.events.push('baseline read');
-    return BASELINE;
+    return page.published.get(page.controller);
   }),
-  publishBaseline: vi.fn(async () => {
-    page.events.push('baseline published');
-    return { operations: [{ __op: 'publish_baseline' }] };
-  }),
+  publishBaseline: vi.fn(async (_account: string, json: string) => ({
+    operations: [{ __op: 'publish_baseline', controller: page.controller, json }],
+  })),
 };
 
 vi.mock('./chain.js', () => ({
   readRecoveryState: vi.fn(async () => page.state),
   recoveryClient: () => client,
-  applyDoc: vi.fn(async () => {
+  applyDoc: vi.fn(async (_account: string, doc: PolicyDoc) => {
     page.events.push('applied');
+    page.controller = doc.recovery!.controller;
     return 'hash';
   }),
   currentOrFirstDoc: vi.fn(),
   latestLedger: vi.fn(async () => 100),
   submitAsOwner: vi.fn(),
-  submitOpen: vi.fn(async () => ({ hash: 'h' })),
+  submitOpen: vi.fn(async (op: { __op: string; controller: string; json: string }) => {
+    if (op.__op === 'publish_baseline') {
+      if (page.failPublications > 0) {
+        page.failPublications--;
+        throw new Error('The network is unreachable.');
+      }
+      page.published.set(op.controller, op.json);
+      page.events.push('baseline published');
+    }
+    return { hash: 'h' };
+  }),
 }));
 vi.mock('./deployment.js', () => ({
   perchDeployment: () => deployment,
@@ -101,6 +120,7 @@ function enrolled(on: perch.PerchDeployment, choice: Partial<perch.RecoveryChoic
 }
 
 function at(doc: PolicyDoc, gate: Partial<perch.ActivityGate> = {}) {
+  page.controller = doc.recovery!.controller;
   page.state = {
     doc,
     revision: 6n,
@@ -120,10 +140,17 @@ async function mount(): Promise<HTMLElement> {
 const button = (root: HTMLElement, label: RegExp) =>
   [...root.querySelectorAll('button')].find((b) => label.test(b.textContent!))!;
 const moved = () => vi.mocked(applyDoc).mock.calls[0]![1] as PolicyDoc;
+/** `begin_compromise` refuses with `BaselineNotPublished` until the
+ *  controller the account adopted holds its baseline. */
+const compromiseCanOpen = () => page.published.has(page.controller);
+const savedInBrowser = () => Object.keys(localStorage).some((k) => k.includes(`recovery:baseline:${ACCOUNT}`));
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
   page.events = [];
+  page.published = new Map([[EARLIER.recoveryController, BASELINE]]);
+  page.failPublications = 0;
   URL.createObjectURL = vi.fn(() => 'blob:kit');
 });
 
@@ -157,9 +184,62 @@ describe('settings page: moving recovery to the current controller', () => {
     expect(kept).toEqual(before);
     // The restore point is read where it was published, before the switch,
     // and published again at the new controller after it.
-    expect(page.events).toEqual(['baseline read', 'applied', 'baseline published']);
+    expect(page.events).toEqual(['baseline read', 'applied', 'baseline read', 'baseline published']);
     expect(client.publishBaseline).toHaveBeenCalledWith(ACCOUNT, BASELINE);
-    expect(submitOpen).toHaveBeenCalledWith({ __op: 'publish_baseline' });
+    expect(page.published.get(deployment.recoveryController)).toBe(BASELINE);
+    expect(compromiseCanOpen()).toBe(true);
+    expect(savedInBrowser()).toBe(false);
+  });
+
+  it('keeps the restore point when its publication fails after the move, and publishes it on retry', async () => {
+    at(enrolled(EARLIER, {}));
+    page.failPublications = 1;
+    const root = await mount();
+    button(root, /Move my recovery/).click();
+    await vi.waitFor(() => expect(root.textContent).toMatch(/The network is unreachable/));
+
+    expect(page.controller).toBe(deployment.recoveryController);
+    expect(compromiseCanOpen()).toBe(false);
+    expect(savedInBrowser()).toBe(true);
+
+    const retry = button(root, /Try again/);
+    expect(retry.hidden).toBe(false);
+    retry.click();
+    await vi.waitFor(() => expect(root.textContent).toMatch(/Restore point saved/));
+    expect(page.published.get(deployment.recoveryController)).toBe(BASELINE);
+    expect(compromiseCanOpen()).toBe(true);
+    expect(savedInBrowser()).toBe(false);
+  });
+
+  it('resumes publishing the restore point after a reload', async () => {
+    at(enrolled(EARLIER, {}));
+    page.failPublications = 1;
+    const first = await mount();
+    button(first, /Move my recovery/).click();
+    await vi.waitFor(() => expect(first.textContent).toMatch(/The network is unreachable/));
+
+    // The page reloads onto the moved document; nothing is left to move.
+    at(moved());
+    const root = await mount();
+    expect(root.textContent).not.toMatch(/Move recovery/);
+    await vi.waitFor(() => expect(root.textContent).toMatch(/Restore point saved/));
+    expect(page.published.get(deployment.recoveryController)).toBe(BASELINE);
+    expect(compromiseCanOpen()).toBe(true);
+    expect(savedInBrowser()).toBe(false);
+  });
+
+  it('resumes nothing when the move a restore point was saved for never landed', async () => {
+    at(enrolled(EARLIER, {}));
+    vi.mocked(applyDoc).mockRejectedValueOnce(new Error('Cancelled.'));
+    const first = await mount();
+    button(first, /Move my recovery/).click();
+    await vi.waitFor(() => expect(first.textContent).toMatch(/Cancelled\./));
+    expect(savedInBrowser()).toBe(true);
+
+    const root = await mount();
+    expect(root.textContent).toMatch(/Move recovery/);
+    expect(root.textContent).not.toMatch(/Saving your restore point/);
+    expect(client.publishBaseline).not.toHaveBeenCalled();
   });
 
   it('moves a Protected kit to the deployment’s pool with a new kit, approved before the switch', async () => {
@@ -204,7 +284,25 @@ describe('settings page: moving recovery to the current controller', () => {
     expect(change).toEqual({ kind: 'reconfigure-set', configHash: perch.configHash(next) });
     expect(condition).toEqual({ guardians: 2, zk: true });
     expect(vi.mocked(applyDoc).mock.calls[0]![2]).toEqual({ baseRevision: 6n, approvalValidUntil: 777 });
-    expect(page.events).toEqual(['baseline read', 'approved', 'applied', 'baseline published']);
+    expect(page.events).toEqual(['baseline read', 'approved', 'applied', 'baseline read', 'baseline published']);
+  });
+
+  it('publishes a newly enrolled restore point after a reload when saving it failed', async () => {
+    at(enrolled(deployment, {}));
+    page.failPublications = 1;
+    const first = await mount();
+    button(first, /Save recovery settings/).click();
+    await vi.waitFor(() => expect(first.textContent).toMatch(/The network is unreachable/));
+    expect(compromiseCanOpen()).toBe(false);
+
+    const saved = moved();
+    at(saved);
+    const root = await mount();
+    await vi.waitFor(() => expect(root.textContent).toMatch(/Restore point saved/));
+    const published = page.published.get(deployment.recoveryController)!;
+    expect(docHash(parsePolicyDocJson(published))).toBe(saved.recovery!.baseline!['doc-hash']);
+    expect(compromiseCanOpen()).toBe(true);
+    expect(savedInBrowser()).toBe(false);
   });
 
   it('refuses to save settings that would keep a kit enrolled in an earlier pool', async () => {

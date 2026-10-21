@@ -30,6 +30,21 @@ function grant(current: PolicyDoc, name: string, signer: 'passkey' | 'address' =
   ).doc;
 }
 
+/** The same account as an early document declared it: the founder's signer
+ *  under the legacy `owner` id. */
+function withOwnerId(doc: PolicyDoc): PolicyDoc {
+  const id = (s: string) => (s === 'admin' ? 'owner' : s);
+  return {
+    ...doc,
+    signers: doc.signers.map((s) => ({ ...s, id: id(s.id) })),
+    rules: doc.rules.map((r) =>
+      r.principals.type === 'self-authenticating'
+        ? r
+        : { ...r, principals: { ...r.principals, signers: r.principals.signers.map(id) } },
+    ),
+  };
+}
+
 describe('reviewGrant', () => {
   it('describes the granted rule on a first apply, not the admin rule that leads the document', () => {
     const next = grant(baseline, 'session-key');
@@ -77,5 +92,39 @@ describe('reviewGrant', () => {
   it('refuses a request that changes nothing', () => {
     const applied = grant(baseline, 'first');
     expect(reviewGrant(applied, applied)).toEqual({ ok: false, reason: expect.stringMatching(/already in place/) });
+  });
+
+  describe('an account whose admin signer still has the legacy owner id', () => {
+    const legacy = withOwnerId(baseline);
+
+    it('approves the grant the builder composes, which carries owner forward as admin', () => {
+      const next = grant(legacy, 'session-key');
+      expect(next.signers.map((s) => s.id)).toEqual(['admin', 'session']);
+      const r = reviewGrant(legacy, next);
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(r.rule.name).toBe('session-key');
+      expect(r.signers).toEqual([{ id: 'session', verifier: VERIFIER, key: SESSION_KEY }]);
+    });
+
+    it('refuses a request that moves admin authority to a different key under the new id', () => {
+      const next = grant(legacy, 'session-key');
+      const rekeyed: PolicyDoc = {
+        ...next,
+        signers: next.signers.map((s) => (s.id === 'admin' ? { ...s, key: '04' + 'cd'.repeat(64) } : s)),
+      };
+      expect(reviewGrant(legacy, rekeyed)).toEqual({ ok: false, reason: expect.stringMatching(/own rule "admin"/) });
+    });
+
+    it('refuses a request that changes the admin rule’s authority alongside the new id', () => {
+      const next = grant(legacy, 'session-key');
+      const widened: PolicyDoc = {
+        ...next,
+        rules: next.rules.map((r) =>
+          r.name === 'admin' ? { ...r, principals: { type: 'all' as const, signers: ['admin', 'session'] } } : r,
+        ),
+      };
+      expect(reviewGrant(legacy, widened)).toEqual({ ok: false, reason: expect.stringMatching(/own rule "admin"/) });
+    });
   });
 });
