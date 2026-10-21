@@ -30,6 +30,7 @@ const deployment: perch.PerchDeployment = {
 const chain = vi.hoisted(() => ({
   doc: undefined as unknown,
   statement: undefined as unknown,
+  changeStatement: undefined as unknown,
   /** The controller the requesting account adopted. */
   controller: undefined as unknown as string,
   guardians: [] as string[],
@@ -47,7 +48,9 @@ vi.mock('./chain.js', () => ({
   })),
   recoveryClient: () => ({
     statement: vi.fn(async () => chain.statement),
+    changeStatement: vi.fn(async () => chain.changeStatement),
     submitGuardian: vi.fn(async () => ({ operations: [{ __op: 'submit_guardian' }] })),
+    approveChange: vi.fn(async () => ({ operations: [{ __op: 'approve_change' }] })),
   }),
   applyDoc: vi.fn(),
   currentOrFirstDoc: vi.fn(async () => ({ doc: chain.guardianDoc, revision: 3n })),
@@ -68,6 +71,7 @@ vi.mock('@nidohq/passkey-sdk', async (orig) => ({
 }));
 
 import { applyDoc, submitAsGuardian } from './chain.js';
+import { connect as connectWallet } from '../walletConnect.js';
 import { mountGuardian } from './guardianPage';
 import {
   adminSignerIds,
@@ -80,6 +84,21 @@ import {
 } from './model';
 
 const guardians = [contract(20), contract(21), contract(22)];
+
+/** A statement as a controller's `statement`/`change_statement` reads it. */
+function statementAt(controller: string, subject: perch.StatementSubject): perch.RecoveryStatement {
+  return {
+    networkId: new Uint8Array(32).fill(1),
+    account: ACCOUNT,
+    controller,
+    configEpoch: 2n,
+    configHash: new Uint8Array(32).fill(3),
+    delayLedgers: 10,
+    expiryLedgers: 100,
+    validUntilLedger: 1_000,
+    subject,
+  };
+}
 const zk = { enrollmentId: new Uint8Array(32).fill(5), commitment: new Uint8Array(32).fill(1) };
 
 function docWith(more: Partial<perch.RecoveryChoice> = {}): PolicyDoc {
@@ -271,6 +290,36 @@ describe('guardian page: reconfiguration approval', () => {
     expect(root.querySelector('tr[data-setting]')).toBeNull();
     expect(approvable(root)).toBe(false);
   });
+
+  it("hands a G… guardian's wallet only the approval of the change statement shown", async () => {
+    const wallet = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 70));
+    chain.guardians = [...guardians, wallet];
+    vi.mocked(connectWallet).mockResolvedValue({ walletId: 'freighter', walletAddress: wallet });
+    const proposed = docWith({ quorum: 3 });
+    const configHash = perch.configHash(proposed)!;
+    chain.changeStatement = statementAt(chain.controller, {
+      action: 'reconfigure',
+      change: { kind: 'set', newConfigHash: configHash },
+    });
+    const root = await open(reconfigure(proposed));
+    [...root.querySelectorAll('button')].find((b) => /Connect your Stellar wallet/.test(b.textContent!))!.click();
+    await vi.waitFor(() =>
+      expect([...root.querySelectorAll('button')].some((b) => b.textContent === 'Approve')).toBe(true),
+    );
+    [...root.querySelectorAll('button')].find((b) => b.textContent === 'Approve')!.click();
+
+    await vi.waitFor(() => expect(submitAsGuardian).toHaveBeenCalledTimes(1));
+    expect(submitAsGuardian).toHaveBeenCalledWith(
+      wallet,
+      { __op: 'approve_change' },
+      {
+        controller: deployment.recoveryController,
+        fn: 'approve_change',
+        digest: perch.statementDigest(chain.changeStatement as perch.RecoveryStatement),
+      },
+      undefined,
+    );
+  });
 });
 
 describe('guardian page: recovery approval', () => {
@@ -322,7 +371,11 @@ describe('guardian page: an account enrolled at an earlier controller', () => {
     chain.controller = EARLIER;
     chain.guardians = guardians;
     chain.host = GUARDIAN;
-    chain.statement = { subject: { action: 'cancel' } };
+    chain.statement = statementAt(EARLIER, {
+      action: 'cancel',
+      attemptId: 3n,
+      attemptStatement: new Uint8Array(32).fill(4),
+    });
     // The guardian's own document: its approval rule for the current
     // controller, none for the earlier one.
     chain.guardianDoc = parsePolicyDocJson(
@@ -337,6 +390,14 @@ describe('guardian page: an account enrolled at an earlier controller', () => {
       }),
     );
     chain.guardianRules = [{ name: 'guardian', contract: deployment.recoveryController, recovery: false }];
+  });
+
+  /** The approval of the cancel statement the page read, at the earlier
+   *  controller. */
+  const approval = (): perch.GuardianApproval => ({
+    controller: EARLIER,
+    fn: 'submit_guardian',
+    digest: perch.statementDigest(chain.statement as perch.RecoveryStatement),
   });
 
   async function click(root: HTMLElement, label: RegExp): Promise<void> {
@@ -365,7 +426,7 @@ describe('guardian page: an account enrolled at an earlier controller', () => {
 
     await click(root, /Approve cancelling it/);
     await vi.waitFor(() => expect(submitAsGuardian).toHaveBeenCalledTimes(1));
-    expect(submitAsGuardian).toHaveBeenCalledWith(GUARDIAN, { __op: 'submit_guardian' }, name);
+    expect(submitAsGuardian).toHaveBeenCalledWith(GUARDIAN, { __op: 'submit_guardian' }, approval(), name);
   });
 
   it('approves through the rule it already holds for that controller', async () => {
@@ -373,7 +434,7 @@ describe('guardian page: an account enrolled at an earlier controller', () => {
     const root = await open(cancel);
     await click(root, /Approve cancelling it/);
     await vi.waitFor(() => expect(submitAsGuardian).toHaveBeenCalledTimes(1));
-    expect(submitAsGuardian).toHaveBeenCalledWith(GUARDIAN, { __op: 'submit_guardian' }, 'guardian-older');
+    expect(submitAsGuardian).toHaveBeenCalledWith(GUARDIAN, { __op: 'submit_guardian' }, approval(), 'guardian-older');
     expect(applyDoc).not.toHaveBeenCalled();
     expect(root.textContent).not.toMatch(/Allow my Nido/);
   });

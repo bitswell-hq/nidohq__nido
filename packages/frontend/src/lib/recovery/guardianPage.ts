@@ -10,7 +10,9 @@
  * requesting account adopted, read from that account: after a Perch
  * redeploy it can be an earlier one than the deployment's, and a guardian
  * holds one rule per controller (`guardianRuleAt`). A `G…` guardian opens it
- * on the apex and signs with a connected Stellar wallet.
+ * on the apex and signs with a connected Stellar wallet, which is handed the
+ * transaction only if it authorizes exactly that approval and nothing
+ * beneath it (`perch.guardianApprovalProblem`).
  *
  * What is shown is checked, not trusted: the replacement passkey against the
  * attempt's `replacements_hash` (shown as a check code derived from the whole
@@ -138,7 +140,19 @@ export async function mountGuardian(root: HTMLElement): Promise<void> {
               guardian!,
             )
           : await client.approveChange(request.account, details.subject!, request.validUntil, guardian!);
-      await submitAsGuardian(guardian!, op.operations[0]!, rule);
+      // Everything a `G…` guardian's signature may authorize: the approval,
+      // at this controller, of the attempt statement checked above or of
+      // the change statement for the subject Approve sends.
+      const statement =
+        request.kind === 'attempt'
+          ? details.statement!
+          : await client.changeStatement(request.account, details.subject!, request.validUntil);
+      const approval: perch.GuardianApproval = {
+        controller,
+        fn: request.kind === 'attempt' ? 'submit_guardian' : 'approve_change',
+        digest: perch.statementDigest(statement),
+      };
+      await submitAsGuardian(guardian!, op.operations[0]!, approval, rule);
       status.textContent = 'Approved. You can close this page.';
       toast({ msg: 'Approval recorded', icon: 'check' });
     }),
@@ -156,6 +170,8 @@ interface Described {
   signs: string;
   /** For a change: the subject Approve sends, the one checked here. */
   subject?: perch.ChangeSubject;
+  /** For an attempt: the statement checked here, which Approve signs. */
+  statement?: perch.RecoveryStatement;
 }
 
 /** `value` in full, selectable in one tap so it can be copied whole. */
@@ -186,6 +202,7 @@ async function describe(request: GuardianRequest, doc: PolicyDoc, controller: st
         html: `<p style="margin:0;">Cancel recovery attempt ${esc(request.attemptId)}. Approve only if your friend says they did not start it.</p>`,
         ok: true,
         signs,
+        statement,
       };
     }
     const sub = statement.subject;
@@ -198,7 +215,7 @@ async function describe(request: GuardianRequest, doc: PolicyDoc, controller: st
       .map((r) => `<p style="margin:0;">New passkey for <strong>${esc(r.signerId)}</strong> has check code <code class="mono">${esc(passkeyCheckCode(r.key))}</code>. Ask your friend to read you the check code their recovery page shows; approve only if every character matches.</p>`)
       .join('');
     const what = sub.action === 'compromise' ? 'restore their saved setup (they say their passkey was stolen)' : 'replace a lost passkey';
-    return { html: `<p style="margin:0;">Your friend wants to ${what}.</p>${who}`, ok: true, signs };
+    return { html: `<p style="margin:0;">Your friend wants to ${what}.</p>${who}`, ok: true, signs, statement };
   }
   const c = request.change;
   const signsChange = (subject: perch.ChangeSubject, what: string): string =>
