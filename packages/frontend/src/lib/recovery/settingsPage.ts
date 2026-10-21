@@ -14,9 +14,15 @@
  * working there; `moveCard` offers the switch to the deployment's stack
  * with every setting kept. The switch is a reconfiguration the controller
  * being left evaluates, so under `protected` the helpers approve it there.
+ *
+ * A change that enrolls a baseline is not finished until the controller
+ * holds the baseline's bytes; until then compromise recovery cannot open.
+ * The bytes are saved in this browser before the change lands
+ * (`savePendingBaseline`), and `baselineCard` publishes them after it,
+ * resuming on the next load if the publication failed or the tab closed.
  */
 
-import { docHash, perch, type PolicyDoc } from '@nidohq/passkey-sdk';
+import { docHash, nidoKey, perch, type PolicyDoc } from '@nidohq/passkey-sdk';
 import { esc } from '../html.js';
 import { toast } from '../toast.js';
 import { markBackupSetUp } from '../recoveryBackupPrompt.js';
@@ -79,6 +85,10 @@ export async function mountRecoverySettings(root: HTMLElement, account: string |
   }
   root.innerHTML = '';
   root.append(statusCard(state));
+  // One saved for a change that never landed, or has been replaced since,
+  // stays put: it can only ever resume onto the document it was saved for.
+  const pending = loadPendingBaseline(account);
+  if (pending && awaitsPublication(state, pending)) root.append(baselineCard(account, pending));
   if (state.gate?.authorized_attempt != null) root.append(attemptCard(account, state));
   // Nothing reconfigures while an attempt is authorized (Perch spec §10).
   else if (state.summary) {
@@ -137,15 +147,20 @@ function moveCard(account: string, state: RecoveryState): HTMLElement | undefine
       // The restore point stays: read it at the controller being left, and
       // publish the same bytes at the new one once the account adopts it.
       const baseline = moved.baseline ? await recoveryClient().baseline(account) : undefined;
+      const pending = baseline && moved.baseline
+        ? { controller: moved.controller, docHash: moved.baseline.docHash, baseline }
+        : undefined;
+      if (pending) savePendingBaseline(account, pending);
       await apply(account, state, perch.withRecovery(state.doc!, moved), status);
-      if (baseline) {
-        status.textContent = 'Saving your restore point at the new service…';
-        const op = await recoveryClient().publishBaseline(account, baseline);
-        await submitOpen(op.operations[0]!);
+      const done = () => {
+        toast({ msg: 'Recovery moved', icon: 'check' });
+        setTimeout(() => location.reload(), 1_500);
+      };
+      if (pending) c.replaceWith(baselineCard(account, pending, done));
+      else {
+        status.textContent = 'Moved.';
+        done();
       }
-      status.textContent = 'Moved.';
-      toast({ msg: 'Recovery moved', icon: 'check' });
-      setTimeout(() => location.reload(), 1_500);
     }),
   );
   return c;
@@ -379,16 +394,21 @@ function configureCard(account: string, state: RecoveryState): HTMLElement {
         expiryLedgers: timing.expiryLedgers,
       });
       const next = perch.withRecovery(base, spec);
+      const pending = spec.baseline
+        ? { controller: spec.controller, docHash: spec.baseline.docHash, baseline: JSON.stringify(withoutRecovery) }
+        : undefined;
+      if (pending) savePendingBaseline(account, pending);
       await apply(account, state, next, status);
-      if (spec.baseline) {
-        status.textContent = 'Saving your restore point on chain…';
-        const op = await recoveryClient().publishBaseline(account, JSON.stringify(withoutRecovery));
-        await submitOpen(op.operations[0]!);
-      }
-      status.textContent = 'Saved.';
       markBackupSetUp(account);
-      toast({ msg: 'Recovery saved', icon: 'check' });
-      setTimeout(() => location.reload(), 1_500);
+      const done = () => {
+        toast({ msg: 'Recovery saved', icon: 'check' });
+        setTimeout(() => location.reload(), 1_500);
+      };
+      if (pending) c.replaceWith(baselineCard(account, pending, done));
+      else {
+        status.textContent = 'Saved.';
+        done();
+      }
     }),
   );
 
@@ -425,6 +445,75 @@ async function apply(account: string, state: RecoveryState, next: PolicyDoc, sta
   // collected for this change to that document, and a change that has
   // landed since means starting over.
   await applyDoc(account, next, { baseRevision: state.revision, approvalValidUntil: validUntil });
+}
+
+/** A baseline saved in this browser before the change that enrolls it, kept
+ *  until `controller` holds its bytes. */
+interface PendingBaseline {
+  controller: string;
+  docHash: string;
+  baseline: string;
+}
+
+const pendingBaselineKey = (account: string) => nidoKey(`recovery:baseline:${account}`);
+
+function loadPendingBaseline(account: string): PendingBaseline | undefined {
+  try {
+    const raw = localStorage.getItem(pendingBaselineKey(account));
+    return raw ? (JSON.parse(raw) as PendingBaseline) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Saving throws when this browser cannot keep it, which stops the change
+ *  before it lands rather than after. */
+function savePendingBaseline(account: string, p: PendingBaseline | undefined): void {
+  if (p) localStorage.setItem(pendingBaselineKey(account), JSON.stringify(p));
+  else localStorage.removeItem(pendingBaselineKey(account));
+}
+
+/** Whether the change `pending` was saved for is the one applied now. */
+function awaitsPublication(state: RecoveryState, pending: PendingBaseline): boolean {
+  return state.doc?.recovery?.controller === pending.controller && state.summary?.baselineDocHash === pending.docHash;
+}
+
+/** Publish `pending` at the account's controller, then forget it. A no-op
+ *  publication when the controller already holds those bytes. */
+async function publishPendingBaseline(account: string, pending: PendingBaseline): Promise<void> {
+  const client = recoveryClient();
+  if ((await client.baseline(account)) !== pending.baseline) {
+    const op = await client.publishBaseline(account, pending.baseline);
+    await submitOpen(op.operations[0]!);
+  }
+  savePendingBaseline(account, undefined);
+}
+
+/** Publishes `pending` as soon as it mounts, with a retry until it lands. */
+function baselineCard(account: string, pending: PendingBaseline, done?: () => void): HTMLElement {
+  const c = card(
+    'Saving your restore point',
+    '<p style="margin:0;font-size:13.5px;">Your recovery settings are saved. Until your restore point is saved at ' +
+      'your recovery service too, a recovery after a stolen passkey cannot start.</p>',
+  );
+  const body = c.querySelector('.card') as HTMLElement;
+  const status = el('div', { class: 'mut', style: 'font-size:12.5px;' });
+  const retry = el('button', { class: 'btn primary', type: 'button' }, 'Try again') as HTMLButtonElement;
+  retry.hidden = true;
+  body.append(retry, status);
+  const publish = () =>
+    busy(retry, status, 'Saving your restore point…', async () => {
+      await publishPendingBaseline(account, pending).catch((e: unknown) => {
+        retry.hidden = false;
+        throw e;
+      });
+      retry.hidden = true;
+      status.textContent = 'Restore point saved.';
+      done?.();
+    });
+  retry.addEventListener('click', () => void publish());
+  void publish();
+  return c;
 }
 
 function currentZk(doc: PolicyDoc): perch.ZkEnrollmentSpec {
