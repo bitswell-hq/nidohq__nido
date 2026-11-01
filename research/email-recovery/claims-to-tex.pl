@@ -31,7 +31,8 @@ sub evidence {
     return '' unless ref $ev eq 'HASH';
     return tex($ev->{assumption}) if defined $ev->{assumption};
     my $name = $ev->{lean} // $ev->{test};
-    my $file = '\texttt{' . tex($ev->{file}) . '}';
+    (my $path = tex($ev->{file})) =~ s{/}{/\\allowbreak{}}g;    # let long paths wrap
+    my $file = "\\texttt{$path}";
     return defined $name ? '\texttt{' . tex($name) . "} in $file" : $file;
 }
 

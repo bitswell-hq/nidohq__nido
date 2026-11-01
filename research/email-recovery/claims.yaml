@@ -41,6 +41,44 @@ claims:
       completion still requires the recovery delay and the policy quorum.
     status: unproven
 
+  # Nido's wallet rules for an email guardian (spec section 9.3).
+  - id: wallet-one-email-guardian
+    statement: >-
+      The wallet refuses a recovery configuration that lists more than one
+      email guardian.
+    status: tested
+    evidence:
+      test: "rule 1: accepts one email guardian and refuses a second"
+      file: packages/passkey-sdk/src/perch/recoverySpec.test.ts
+
+  - id: wallet-second-alert-channel
+    statement: >-
+      The wallet lists an email guardian in a recovery configuration only
+      when a second alert channel is registered for the account.
+    status: tested
+    evidence:
+      test: "rule 2: an email guardian needs a second alert channel"
+      file: packages/passkey-sdk/src/perch/recoverySpec.test.ts
+
+  - id: wallet-email-plus-delay
+    statement: >-
+      The wallet builds a configuration in which the email vote alone
+      authorizes a recovery only under the lost-key profile with a delay of
+      at least seven days (120,960 ledgers).
+    status: tested
+    evidence:
+      test: "rule 3: email alone needs the loss profile and a delay of at least 120960 ledgers"
+      file: packages/passkey-sdk/src/perch/recoverySpec.test.ts
+
+  - id: wallet-email-allowed-actions
+    statement: >-
+      When the quorum needs the email vote, the wallet refuses an email
+      guardian that does not allow every recovery action.
+    status: tested
+    evidence:
+      test: "rule 4: refuses narrower allowed actions when the quorum needs the email vote"
+      file: packages/passkey-sdk/src/perch/recoverySpec.test.ts
+
   # The assumptions the properties rest on.
   - id: dkim-unforgeability
     statement: >-

@@ -43,12 +43,39 @@ export interface ZkEnrollmentSpec {
   commitment: Bytes32;
 }
 
+/** The email guardian's `allowed_actions` bits: bit (action code - 1)
+ *  (docs/email-recovery/spec.md §8.1). */
+export const EMAIL_GUARDIAN_ALLOW = {
+  lostKey: 1,
+  compromise: 2,
+  cancel: 4,
+  reconfigure: 8,
+  upgrade: 16,
+  all: 31,
+} as const;
+
+/** A guardian the wallet deployed as the account's email guardian. The
+ *  wallet sets this marker when it deploys the guardian; the builder never
+ *  infers it from an address. */
+export interface EmailGuardian {
+  kind: 'email';
+  address: string;
+  /** The guardian's `allowed_actions`, as fixed at its construction. */
+  allowedActions: number;
+}
+
+/** A guardian address (G… or C…), or the account's email guardian. */
+export type GuardianChoice = string | EmailGuardian;
+
 export interface RecoveryChoice {
   profile: RecoveryProfile;
   mode: RecoveryMode;
-  /** Guardian addresses (G… or C…), for guardian-only and combined. */
-  guardians?: string[];
+  /** Guardians, for guardian-only and combined. */
+  guardians?: GuardianChoice[];
   quorum?: number;
+  /** The second alert channel registered with the alert service for this
+   *  account. Required when a guardian is an email guardian. */
+  secondAlertChannel?: 'web-push';
   /** The credential to enroll, for zk-only and combined. */
   zk?: ZkEnrollmentSpec;
   /** Signer ids a recovery may replace: the document's admin signers. No
@@ -83,6 +110,7 @@ export function recoverySpec(deployment: PerchDeployment, choice: RecoveryChoice
   if (!choice.replaceable?.length) {
     throw new Error('recovery needs at least one replaceable signer');
   }
+  if (needsGuardians) checkEmailGuardian(choice);
   const zk = () => ({
     adapter: deployment.zkAdapter,
     circuitId: deployment.circuitId,
@@ -90,7 +118,10 @@ export function recoverySpec(deployment: PerchDeployment, choice: RecoveryChoice
     enrollmentId: bytesToHex(choice.zk!.enrollmentId),
     commitment: bytesToHex(choice.zk!.commitment),
   });
-  const guardians = { guardians: choice.guardians ?? [], quorum: choice.quorum ?? 0 };
+  const guardians = {
+    guardians: (choice.guardians ?? []).map((g) => (typeof g === 'string' ? g : g.address)),
+    quorum: choice.quorum ?? 0,
+  };
   return {
     profile: choice.profile,
     mode:
@@ -108,6 +139,44 @@ export function recoverySpec(deployment: PerchDeployment, choice: RecoveryChoice
     expiryLedgers: choice.expiryLedgers ?? RECOVERY_DEFAULTS.expiryLedgers,
     maxCancels: choice.maxCancels ?? RECOVERY_DEFAULTS.maxCancels,
   };
+}
+
+/** The shortest delay under which the email vote alone may authorize an
+ *  attempt: seven days. */
+export const EMAIL_ONLY_MIN_DELAY_LEDGERS = 120_960;
+
+/** The wallet's email-recovery rules (docs/email-recovery/spec.md §9.3).
+ *  Perch's validator accepts every configuration these refuse; the rules
+ *  keep the email factor one factor in what Nido builds. */
+function checkEmailGuardian(choice: RecoveryChoice): void {
+  const email = choice.guardians!.filter((g): g is EmailGuardian => typeof g !== 'string');
+  if (email.length === 0) return;
+  // Rule 1: a second guardian for the same inbox would be a second vote for it.
+  if (email.length > 1) {
+    throw new Error(`recovery lists ${email.length} email guardians; at most one is allowed`);
+  }
+  // Rule 2.
+  if (choice.secondAlertChannel === undefined) {
+    throw new Error('an email guardian needs a second alert channel registered');
+  }
+  // Rule 3: in combined mode the ZK factor is always needed as well.
+  const quorum = choice.quorum!;
+  if (choice.mode === 'guardian-only' && quorum === 1) {
+    const delay = choice.delayLedgers ?? RECOVERY_DEFAULTS.delayLedgers;
+    if (choice.profile !== 'loss' || delay < EMAIL_ONLY_MIN_DELAY_LEDGERS) {
+      throw new Error(
+        `the email vote alone authorizes this recovery, so it needs the loss profile and a delay of at least ${EMAIL_ONLY_MIN_DELAY_LEDGERS} ledgers`,
+      );
+    }
+  }
+  // Rule 4: a Protected account whose quorum needs the email vote could
+  // otherwise never reconfigure or upgrade.
+  const others = choice.guardians!.length - 1;
+  if (email[0]!.allowedActions !== EMAIL_GUARDIAN_ALLOW.all && others < quorum) {
+    throw new Error(
+      'the quorum needs the email vote, so the email guardian must allow every action',
+    );
+  }
 }
 
 function zkToWire(zk: ZkFactorSpec): Record<string, unknown> {

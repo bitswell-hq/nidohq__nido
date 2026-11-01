@@ -668,7 +668,7 @@ It approves only its own account's statements, on its own controller and
 network, for allowed actions, before expiry, with a proof bound to its own
 `C` (§8.3). It cannot see the account's quorum, profile, or delay (§8.3).
 
-### 9.3 Nido's wallet policy [specified]
+### 9.3 Nido's wallet policy [built, tested]
 
 Nido's wallet builds every recovery member through `recoverySpec` in
 `packages/passkey-sdk/src/perch/doc.ts`. That builder **must** refuse a
@@ -691,6 +691,23 @@ exactly what that validator refuses.)
    quorum (the member's other guardians number fewer than `quorum`),
    because a `Protected` account whose quorum needs the email vote could
    otherwise never reconfigure or upgrade.
+
+The builder tells the email guardian apart by a typed marker, never by its
+address: the wallet lists it in `RecoveryChoice.guardians` as
+`{ kind: 'email', address, allowedActions }` when it deploys it, and states
+the registered second channel as `RecoveryChoice.secondAlertChannel`
+(`'web-push'`). The alert service that registers the channel is
+**[specified]** (§10). `packages/passkey-sdk/src/perch/recoverySpec.test.ts`
+("email guardian rules") pins each rule at its boundary **[built, tested]**:
+
+| Test | What it shows |
+| --- | --- |
+| `rule 1: accepts one email guardian and refuses a second` | One email guardian is accepted; two are refused |
+| `rule 2: an email guardian needs a second alert channel` | With `secondAlertChannel` accepted, without it refused |
+| `rule 3: email alone needs the loss profile and a delay of at least 120960 ledgers` | `guardian-only`, quorum 1: delay 120,959 refused, 120,960 and the default accepted, `protected` refused; also with other guardians listed at quorum 1 |
+| `rule 3: does not apply when the email vote alone cannot authorize` | Quorum 2, and `combined` with quorum 1, accept `protected` and a 24-ledger delay |
+| `rule 4: refuses narrower allowed actions when the quorum needs the email vote` | A narrower set is refused with two other guardians at quorum 3 and in `combined` with quorum 1, accepted with two other guardians at quorum 2; `ALLOW_ALL` is accepted at quorum 3 |
+| `leaves configurations without an email guardian unaffected` | Without an email guardian, quorum 1, `protected`, a 24-ledger delay, and no second channel are accepted |
 
 **What each layer guarantees.** On chain, for every configuration: email
 approvals alone never complete a recovery without the delay passing, and
@@ -812,7 +829,7 @@ proven yet.
 | 1 Soundness | C1, C2, C3, C4, C5, C6 | §8.3 checks 1 to 12; §8.2 wiring check | Statement construction from controller state (Perch §4) | A1, A2, A3 (collision), A4 (soundness), A5, A7 | Guardian checks tested; circuit specified; assumptions assumed |
 | 2 Privacy | Public inputs are exactly §6.1; nothing else is exposed | Stores `C` and a salted pin root, never an address or key hash; emits nothing | — | A3 (random function), A4 (zero-knowledge), A6 | Guardian storage tested; circuit specified |
 | 3 Replay | C5 binds `d` | Checks 1, 2, 5, 6, 8, 12 | One vote per guardian per attempt and domain, or per change digest (Perch §6.3 T2, §5); attempt ids never reused (T1); epochs only grow (§3.3) | A2, A3, A4 | Tested (unit and integration) |
-| 4 One-factor safety | — | The guardian is one address | Quorum (T4), delay (T5), cancellation (T6, T7) | — | On-chain part tested; wallet policy specified |
+| 4 One-factor safety | — | The guardian is one address | Quorum (T4), delay (T5), cancellation (T6, T7) | — | On-chain part tested; wallet policy tested (§9.3) |
 
 ## 12. Measurements
 
@@ -877,8 +894,10 @@ guardian's checks and the proof verification.
 10. **Guardian deployment.** Whether guardians are deployed through a Nido
     factory (fixing the wasm hash and the address derivation) or directly by
     the wallet.
-11. **Wallet policy.** The rules of §9.3 are not yet implemented in
-    `recoverySpec`.
+11. **Wallet policy.** The rules of §9.3 are built in `recoverySpec` and
+    tested (§9.3 lists the tests). They bind Nido's wallet only: the chain
+    accepts any configuration the owner applies, and the second alert
+    channel is an input the alert service, not yet built, will back.
 12. **Address and domain bounds.** `ADDR_MAX = 124` and the 62-byte leaf
     domain cover the launch providers. Custom domains would need larger
     bounds, which change `C`'s packing and the leaf format (a new version).
