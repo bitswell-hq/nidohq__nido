@@ -1,0 +1,8 @@
+[package]
+name = "bench_header_sha_1024"
+type = "bin"
+compiler_version = ">=1.0.0"
+
+[dependencies]
+email_recovery = { path = "../../lib" }
+sha256 = { path = "../../vendor/sha256" }

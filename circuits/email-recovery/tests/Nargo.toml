@@ -1,0 +1,8 @@
+[package]
+name = "email_recovery_tests"
+type = "lib"
+compiler_version = ">=1.0.0"
+
+[dependencies]
+email_recovery = { path = "../lib" }
+poseidon = { path = "../../../vendor/perch/circuits/vendor/poseidon" }

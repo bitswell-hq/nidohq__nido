@@ -239,8 +239,9 @@ addr-spec    = local-part "@" domain
 local-part   = atom *( "." atom )                   ; RFC 5322 dot-atom, no quoting
 atom         = 1*( ALPHA / DIGIT / "!" / "#" / "$" / "%" / "&" / "'" / "*" / "+"
                    / "-" / "/" / "=" / "?" / "^" / "_" / "`" / "{" / "|" / "}" / "~" )
-domain       = label *( "." label )                 ; LDH labels, at least two
-label        = ALPHA / DIGIT / ALPHA *( ALPHA / DIGIT / "-" ) ( ALPHA / DIGIT )
+domain       = label 1*( "." label )                ; at least two labels
+label        = let-dig [ *61( let-dig / "-" ) let-dig ]   ; RFC 1123 §2.1, 1 to 63 bytes
+let-dig      = ALPHA / DIGIT
 ```
 
 - If the value contains `<`, it contains exactly one `<` and exactly one `>`,
@@ -250,6 +251,13 @@ label        = ALPHA / DIGIT / ALPHA *( ALPHA / DIGIT / "-" ) ( ALPHA / DIGIT )
 - `1 ≤ len(addr-spec) ≤ 124` bytes (`ADDR_MAX`).
 - The address is used **exactly as these bytes**: case, dots, and `+` tags
   are preserved, and nothing is normalized.
+- Labels follow RFC 1123 host-name syntax, so a label may start with a
+  digit (`123mail.org`). Which domains are usable is decided by the registry
+  allowlist (§7.3), not by this grammar.
+
+The circuit's `From` parser implements this grammar **[built, tested]**
+(`circuits/email-recovery/lib/src/from_address.nr`; tests in
+`circuits/email-recovery/tests/`).
 
 ## 5. Enrollment
 
