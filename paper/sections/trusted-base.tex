@@ -1,0 +1,89 @@
+\section{What Is Proven, Tested and Trusted}\label{sec:tcb}
+
+Table~\ref{tab:tcb} separates the parts of the system by how each is assured.
+The proofs cover the evaluator's translation, from \code{allows},
+\code{allows\_all} and the budget functions to the model; everything that
+feeds the evaluator actions or acts on its verdict is wiring, tested but not
+proven.
+
+\begin{table*}[t]
+\caption{Assurance by component. Lines are non-blank Rust lines that do not
+start with \code{//}, counted by the build.}\label{tab:tcb}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{0.21\linewidth}r>{\raggedright\arraybackslash}X@{}}
+\toprule
+\textbf{Component} & \textbf{Lines} & \textbf{Assurance} \\
+\midrule
+Evaluator, \file{crates/grant-eval} & \LocGrantEval &
+  Translation proven equal to the model on every input; Theorems 1--4
+  (\S\ref{sec:proofs}). Exhaustive tests on small universes. \\
+Grant signer, \file{contracts/grant-signer/src} & \LocSigner &
+  Wiring: context mapping (\file{actions.rs}, \LocSignerActions), lineage,
+  guards and storage (\file{contract.rs}, \LocSignerContract). Integration
+  tests and the attack suite under enforcing authorization. \\
+Component, \file{crates/grant-component} & \LocComponent &
+  Argument conversion only; agreement with the native evaluator tested. \\
+Agent host, \file{crates/agent-host/src} & \LocHost &
+  Wiring for files (\file{fs.rs}, \LocHostFs), network (\file{net.rs},
+  \LocHostNet) and signing (\file{sign.rs}, \LocHostSign), plus grants, the
+  host loop, the workload runner and the benchmark. Tested, including symlink,
+  case and check-then-open races, and by the host attack suite. \\
+Relay, \file{crates/grant-relay/src} & \LocRelay &
+  XDR-to-action mapping (\file{actions.rs}, \LocRelayActions), configuration,
+  the request pipeline, channels and RPC. Tested in process, against Nido's
+  TypeScript client, and on a local Stellar network. \\
+\midrule
+\multicolumn{3}{@{}l}{\textbf{Trusted, not proven}} \\
+\multicolumn{3}{@{}>{\raggedright\arraybackslash}p{\linewidth}@{}}{%
+  rustc for the host and \code{wasm32v1-none}; Charon and Aeneas; Aeneas's
+  Lean library, including its interaction-tree \code{Result}, its \code{loop}
+  defined by \code{partial\_fixpoint}, and its models of the Rust items the
+  translation calls; Lean's kernel\claim{toolchain-trusted}. The denotation
+  functions, which are part of the specification (\S\ref{sec:proofs}).
+  Wasmtime, \code{wit-bindgen} and \code{wit-component}\claim{runtime-trusted}.
+  The Soroban SDK and host, whose CAP-0071 behaviour Perch's tests pin for the
+  pinned version\claim{cap71-contexts}. The operating system's
+  \code{realpath}, descriptor paths and DNS\claim{os-wiring}. The key
+  keeper\claim{keeper-trusted}. The Soroban RPC server's simulations and
+  status reports, on which the relay's recorded-tree check and fee depend.} \\
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+The trust in the translation is narrower than it looks: it covers Aeneas's
+models of the Rust \code{core} and \code{alloc} items the evaluator calls,
+since the evaluator calls nothing else: \code{Vec} with \code{deref},
+\code{deref\_mut}, \code{len} and \code{push}; slices with indexing,
+\code{get}, \code{get\_mut} and \code{len}; checked \code{usize} and
+\code{u128} addition and unchecked \code{u128} addition; \code{u32 as usize};
+scalar comparison; and \code{usize::BITS}, read by a compile-time assertion
+the proofs do not use. The same evaluator source reaches all three
+deployments, but each deploys its own compiled artifact: the grant signer
+embeds it in a Soroban contract built by rustc for \code{wasm32v1-none}, the
+agent host runs a separately built \code{wasm32v1-none} component, and the
+relay links the native build.
+
+\paragraph{Known gaps in the wiring.} Table~\ref{tab:gaps} collects the gaps
+the paper states, each in the section that describes it.
+
+\begin{table}[t]
+\caption{Known gaps in the current design.}\label{tab:gaps}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}p{0.12\linewidth}@{}}
+\toprule
+\textbf{Gap} & \textbf{Where} \\
+\midrule
+Under an empty grant, the grant signer's own address can authorize any call
+on another contract. & \S\ref{sec:soroban} \\
+The holder's signature does not cover the grant id. & \S\ref{sec:soroban} \\
+That the grant signer's storage, lineage and loops are the Lean definitions
+of its budget path is trusted. & \S\ref{sec:soroban} \\
+Effects that need no authorization from the account are outside the tree. &
+\S\ref{sec:soroban} \\
+No caveat binds a signed transaction's fee, sequence number, time bounds or
+memo. & \S\ref{sec:host} \\
+Network caveats bind names, not resolved addresses. & \S\ref{sec:host} \\
+Renames after the descriptor check, and hard links. & \S\ref{sec:host} \\
+\bottomrule
+\end{tabularx}
+\end{table}

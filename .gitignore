@@ -71,3 +71,6 @@ infra/relayer/config/keys/
 
 # Email-recovery paper and slides build output (research/email-recovery/build.sh)
 research/email-recovery/build/
+
+# Attenuating-grants paper and slides build output (make -C paper)
+paper/build/

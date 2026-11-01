@@ -1,0 +1,295 @@
+\section{From Rust to the Model}\label{sec:proofs}
+
+The theorems are proven about the Lean translation of the evaluator the
+boundaries run, not about a separate model alone. Figure~\ref{fig:pipeline}
+shows the chain:
+\begin{enumerate}
+\item The evaluator, \file{crates/grant-eval}, is \code{no\_std} Rust with no
+  dependencies and \code{forbid(unsafe\_code)}, written in a restricted subset.
+\item Charon compiles the crate to LLBC and Aeneas translates the LLBC to Lean
+  (\file{formal/AttenuatingGrants/Extracted/GrantEval.lean}, generated, never
+  edited by hand).
+\item Proofs in \file{formal/AttenuatingGrants/Equiv/} show that the
+  translation computes the readable model on every input.
+\item The same Rust compiles to \code{wasm32v1-none} for the grant signer and
+  the host's component, and natively for the relay.
+\end{enumerate}
+The readable model is close to a reference implementation, not an independent
+specification: the equivalence rules out faults of the Rust (indexing, loop
+bounds, early returns, overflow, comparing values of different variants), but
+whether a caveat's meaning is what an owner intends is a question about the
+model, such as the positional semantics of \S\ref{sec:grants}.
+
+\begin{figure*}[t]
+\centering
+\resizebox{\linewidth}{!}{\input{pipeline}}
+\caption{The proof runs from the deployed Rust back to the readable model.
+Solid green edges are proven in Lean; dashed orange edges are trusted.
+Theorem~\ref{thm:total}'s step bound is about a counted copy of the model, not
+the translation.}
+\label{fig:pipeline}
+\Description{Rust source flows through Charon and Aeneas to a Lean
+translation, which equivalence proofs relate to the readable model where the
+four theorems are proven; the same Rust compiles through rustc to wasm32v1-none
+for the grant signer and the agent host's component, and natively for the
+relay.}
+\end{figure*}
+
+\subsection{The restricted subset}
+
+The evaluator is written so that every item translates with no opaque part.
+Data is plain structs and enums. One trait, \code{Check<A>}, is used with
+static dispatch only; there are no trait objects, closures, iterator adaptors
+or derived equality, so enums compare through explicit \code{match} and byte
+strings through one loop. Each loop is a single \code{while i < s.len()} over
+one slice with an early \code{return}, the loop form Aeneas supports. Nothing
+on the evaluation path can panic: slices are indexed only under
+\code{i < s.len()}, argument indices that come from caveats go through
+\code{get}, and budget amounts use \code{checked\_add}. The generic check is:
+\begin{lstlisting}[language=Rust]
+pub fn allows<A, C: Check<A>>(grant: &[C], action: &A) -> bool {
+    let mut i = 0;
+    while i < grant.len() {
+        if !grant[i].holds(action) { return false; }
+        i += 1;
+    }
+    true
+}
+\end{lstlisting}
+The generated Lean builds against Aeneas's library with no \code{axiom} or
+\code{opaque} declaration. CI re-runs Charon and Aeneas, pinned to one Aeneas
+commit and the Charon and Rust toolchain its Nix flake fixes, and fails if the
+result differs from the committed translation\claim{extraction-fresh}. Aeneas
+runs with \code{-warnings-as-errors}, yet logs that ``the crate contains
+extracted external, unknown definitions''. Reading Aeneas's source at the
+pinned commit, that line is a log message, not one of the diagnostics the
+option governs, and it is printed whenever the translation refers to a
+definition with no Rust body, as it does for the library items Aeneas's Lean
+library models (\code{Vec::push}, slice \code{get}, \code{usize::BITS}).
+
+\subsection{Equivalence}
+
+For each vocabulary $V$, \file{Equiv/V.lean} defines a denotation from the
+translated types to the model's. It is part of the specification, so we show
+chain's, verbatim:
+\begin{lstlisting}[language=Lean]
+def denoteVal : grant_eval.chain.Val → Val
+  | .I128 x => .i128 x.bv
+  | .U64 x => .u64 (denoteU64 x)
+  | .Bool b => .bool b
+  | .Bytes v => .bytes (bytesOf v.val)
+  | .Address v => .address (bytesOf v.val)
+  | .Symbol v => .symbol (bytesOf v.val)
+  | .Other v => .other (bytesOf v.val)
+
+def denoteAction : grant_eval.chain.Action → Action
+  | .Invoke contract function args =>
+    .invoke (bytesOf contract.val) (bytesOf function.val)
+      (args.val.map denoteVal)
+  | .CreateContract wasmHash =>
+    .createContract (bytesOf wasmHash.val)
+
+def denoteCaveat : grant_eval.chain.Caveat → Caveat
+  | .ContractIn contracts =>
+    .contractIn (contracts.val.map fun c => bytesOf c.val)
+  | .FunctionIn functions =>
+    .functionIn (functions.val.map fun f => bytesOf f.val)
+  | .ArgI128AtMost index n => .argI128AtMost index.val n.bv
+  | .ArgEq index val => .argEq index.val (denoteVal val)
+\end{lstlisting}
+and $\mathit{denoteGrant}(g)$ is the grant of $g$'s denoted caveats. Each case
+maps a constructor to the constructor of the same name, and byte strings by a
+proven-injective map (\lean{bytesOf\_inj}). The equivalence theorem for chain
+reads, verbatim:
+\begin{lstlisting}[language=Lean]
+theorem extracted_allows (g : Slice grant_eval.chain.Caveat)
+    (a : grant_eval.chain.Action) :
+  grant_eval.chain.allows g a
+    = ok ((denoteGrant g).allows (denoteAction a))
+\end{lstlisting}
+The same holds for files, network and signing, and for \code{allows\_all} over
+a slice of actions\claim{equiv-chain}\claim{equiv-files}\claim{equiv-network}\claim{equiv-signing}.
+Aeneas's \code{Result} is an interaction tree, and its \code{loop} combinator,
+which every translated \code{while} calls, is defined in its library by
+\code{partial\_fixpoint}. Termination of the translated functions is therefore
+not a property of their definitions but a theorem: the right-hand side is
+\code{ok}, which excludes both a failure (a panic, an overflow, an
+out-of-bounds index) and divergence\claim{rust-total}. The proofs rest on two
+loop lemmas, one for the ``any'' and one for the ``all'' shape, proven by
+induction on the elements left, and on lemmas for byte-string comparison and
+the path-prefix loop.
+
+Two properties of the translation widen what the theorems cover. Aeneas gives
+\code{usize} the width \code{System.Platform.numBits}, which proofs know only
+to be 32 or 64, so the theorems hold for the 32-bit \code{wasm32v1-none}
+builds although Charon ran on a 64-bit host. And Aeneas models arithmetic as
+failing on overflow; the theorems show none occurs, and the workspace builds
+with \code{overflow-checks = true} in its release and contract profiles, so
+trapping and wrapping builds agree.
+
+\subsection{The four theorems}
+
+\begin{mainthm}[Totality and cost]\label{thm:total}
+For every vocabulary, grant and action, the translated \code{allows} and
+\code{allows\_all} return a result (above). For the step-counting Lean
+evaluator of \S\ref{sec:cost}, with caveats $cs$, an action $a$ and a batch
+$as$:
+\begin{align*}
+\mathit{steps}(cs, a) &\le 2\,\bigl(|cs| + \textstyle\sum_{c\in cs} |c|\bigr)\,(|a| + 1),\\
+\mathit{steps}(cs, as) &\le 2\,\bigl(|cs| + \textstyle\sum_{c\in cs} |c| + 1\bigr)\,\textstyle\sum_{a\in as}(|a| + 1),
+\end{align*}
+and the counted evaluator returns the model's verdict.
+\end{mainthm}
+\leannames{\lean{V\.allows\_cost\_bound}, \lean{V\.allowsAll\_cost\_bound},
+\lean{V\.allowsCounted\_fst} for each vocabulary
+$V$\claim{cost-bound}\claim{cost-bound-batch}\claim{counted-agrees}.}
+\noindent The bound is about a hand-written counted copy of the model, not the
+translation: no theorem relates its steps to the extracted code, whose byte
+comparison checks lengths first where the counted one walks pairwise. Its
+product form is also loose. Each caveat's work is a membership scan bounded by
+the caveat, an argument index bounded by the action, or a comparison bounded
+by the shorter operand, so a sum of the form
+$O(\sum|c| + |cs|\,(|a|+1))$ should bound it; that is stated, not proven. On
+the measured points the bound exceeds the model's actual steps by up to a
+factor of 33,000\claim{bound-looseness}, and priced at the measured 99.4
+instructions per step it exceeds Soroban's per-transaction limit, so it says
+the check terminates in polynomial time, not that it fits in a transaction.
+\S\ref{sec:eval} measures what the deployed code does\claim{deployed-cost};
+that its work is proportional to the step count on every input is not
+proven\claim{deployed-cost-general}.
+
+\begin{mainthm}[Attenuation]\label{thm:atten}
+$(g.\mathit{attenuate}\ c).\mathit{narrower}\ g$, and likewise for any list of
+added caveats.
+\end{mainthm}
+\leannames{\lean{attenuate\_narrows},
+\lean{attenuateAll\_narrows}\claim{attenuation}.}
+
+\begin{mainthm}[Chaining]\label{thm:chain}
+Narrowness is transitive; every grant reached from a root by any number of
+attenuation steps is narrower than the root; and a narrower grant accepts a
+batch only if its ancestor does.
+\end{mainthm}
+\leannames{\lean{narrower\_trans}\claim{chaining},
+\lean{Delegates\.narrower} and \lean{delegate\_narrows}\claim{delegation-chain},
+\lean{allowsAll\_of\_narrower}\claim{batch-narrower}.}
+\noindent In the model, Theorems~\ref{thm:atten} and~\ref{thm:chain} are
+immediate consequences of conjunction, with one-line proofs. What the
+equivalence adds is their carry-over to Rust caveat slices: a slice reached
+from a root slice by pushing caveats accepts, alone or across a batch, only
+what the root accepts (\lean{V\.extracted\_delegates\_narrower},
+\lean{V\.extracted\_allowsAll\_of\_delegates})\claim{rust-delegation}. This is
+the case both boundaries implement, since a child grant's stored caveats are
+its parent's followed by the added ones.
+
+\begin{mainthm}[Budget safety]\label{thm:budget}
+For the translated \code{budget} module and every ledger $s$ with denotation
+$L$: \code{spend} returns the model's outcome and ledger; a successful spend at
+$i$ adds the amount to every node $a$ with $L.\mathit{Within}\ i\ a$ and
+changes no other node; a failed spend returns $s$ unchanged; an
+\code{Overdrawn a} error names a node on $i$'s chain that cannot take the
+amount; and, for a Lean-defined caller that applies spends, refills and
+appends in sequence from a ledger with nothing spent, the total successfully
+spent at or under any node is at most that node's allowance at the end of the
+sequence.
+\end{mainthm}
+\leannames{\lean{Budget\.extracted\_spend}\claim{budget-equiv},
+\lean{extracted\_spend\_ok\_charges}\claim{budget-charges},
+\lean{extracted\_spend\_ok\_unchanged}\claim{budget-unchanged},
+\lean{extracted\_spend\_error}\claim{budget-failure},
+\lean{extracted\_spend\_overdrawn}\claim{budget-overdrawn},
+\lean{extracted\_spentUnder\_le\_allowance}\claim{budget-total},
+all in \file{Equiv/Budget.lean}.}
+\noindent The last statement, verbatim:
+\begin{lstlisting}[language=Lean]
+theorem extracted_spentUnder_le_allowance
+    (v : alloc.vec.Vec budget.Node) (ops : List RustOp)
+    (hcap : v.length + ops.length ≤ Usize.max)
+    (h0 : ∀ n ∈ v.val, n.spent.val = 0) :
+  ∃ v' log, runExtracted v ops = ok (v', log) ∧
+    ∀ (a : Nat) (n : budget.Node), v'.val[a]? = some n →
+      spentUnder (denoteLedger v'.val)
+          (log.map fun e => (e.1.val, e.2.val)) a
+        ≤ n.allowance.val
+\end{lstlisting}
+It has no hypothesis on the allowances, so it holds however much children
+oversubscribe their parent; the allowance it bounds by is the final one, since
+refills raise it. It covers runs that grow the tree: each logged spend is
+measured against the final tree, and the proof shows an append changes no
+existing parent link, so a spend lies under $a$ in the final tree exactly when
+it charged $a$. \code{runExtracted} is a Lean definition that calls the
+extracted \code{spend}, \code{refill} and \code{append} in sequence on one
+ledger, as a Rust caller holding a \code{Vec} would; it is not extracted code.
+The grant signer calls the budget functions differently, on a ledger of one
+grant's lineage per authorization; \file{Signer.lean} follows those calls and
+proves the same bound for every sequence of them (\S\ref{sec:soroban}).
+
+Two side results discharge the Rust-specific risks. The charging loop's
+unchecked \code{spent += amount} never overflows and visits exactly the chain
+the check accepted (\lean{Budget\.charge\_loop\_eq})\claim{budget-no-overflow}:
+the walk found $\mathit{spent} + \mathit{amount} \le \mathit{allowance} \le
+2^{128}-1$ at each node, and each node is visited once. Amounts are unbounded
+naturals in the model and \code{u128} in Rust; a refill fails past
+$2^{128}-1$ as \code{checked\_add} does, and a spend whose sum overflows also
+exceeds the allowance, so the two agree with no wrapped or saturated case.
+\code{append} calls \code{Vec::push}, which Aeneas models as failing only when
+a vector holds \code{usize::MAX} elements, so the append and run theorems
+assume the ledger stays below that\claim{ledger-size}.
+
+\subsection{The cost model}\label{sec:cost}
+
+Each vocabulary has a counted evaluator that returns the model's Boolean paired
+with a step count. A step is one primitive comparison (two bytes, two scalars,
+two \code{i128}s by signed order), one constructor test, or one visit to a list
+cell (a caveat, an action in a batch, a candidate in a membership list, an
+argument while indexing, a path component); reaching the end of a list costs
+nothing. Action and caveat sizes count the bytes and list cells a check can
+touch: a chain invocation's size is its contract and function lengths plus
+$\sum(|\mathit{arg}| + 1)$, a path's is $\sum(|\mathit{component}| + 1)$, and
+\code{argI128AtMost} has size 2 whatever its index. The constant is 2 in every
+vocabulary. The batch bound needs the $+1$ in its grant factor: visiting an
+action's cell costs one step whatever the grant, so the empty grant checks a
+batch of $n$ actions in exactly $n$ steps, which a factor of
+$|cs| + \sum |c| = 0$ would deny. The model counts a call's fixed overhead
+(entering the function, decoding the grant) as zero.
+
+\subsection{What the build checks}
+
+\code{lake build} checks every theorem above. CI rejects \code{partial},
+\code{unsafe}, \code{sorry}, \code{admit}, \code{native\_decide},
+\code{implemented\_by}, \code{extern} and \code{axiom} anywhere in the
+package's Lean sources, the translation included\claim{no-unchecked-declarations};
+Aeneas's library, which defines \code{loop} by \code{partial\_fixpoint} and
+declares axioms of its own, is outside that check. \file{Axioms.lean} records
+each theorem's \code{\#print axioms} output under \code{\#guard\_msgs}: every
+theorem depends on at most \code{propext}, \code{Quot.sound} and
+\code{Classical.choice}, and none on an axiom of Aeneas's
+library\claim{axioms-builtin}. CI runs the Lean build and the extraction check
+on every change to the evaluator or the proofs. Table~\ref{tab:loc} gives the
+sizes.
+
+\begin{table}[t]
+\caption{Sizes of the evaluator and its proofs (non-blank lines; Rust also
+without \code{//} comment lines), counted by the build.}\label{tab:loc}
+\small
+\begin{tabular}{@{}lr@{}}
+\toprule
+\textbf{Component} & \textbf{Lines} \\
+\midrule
+Evaluator, \file{crates/grant-eval/src} (Rust) & \LocGrantEval \\
+Readable model: \file{Grant.lean}, \file{Vocab/} & \LocModel \\
+Budget model and its theorems, \file{Budget.lean} & \LocBudget \\
+Cost model and bounds, \file{Cost/} & \LocCost \\
+Equivalence proofs, \file{Equiv/} & \LocEquiv \\
+Generated translation, \file{Extracted/} & \LocExtracted \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The evaluator's own tests complement the proofs at the level the proofs
+trust: they check agreement with a plain-Rust reading of the semantics and
+attenuation on every grant of up to three caveats from a small universe per
+vocabulary\claim{eval-exhaustive}, and every sequence of up to four spends and
+refills on an oversubscribed forest against a reference\claim{budget-exhaustive}.
+These run the compiled code that the proofs reach only through the trusted
+translation.

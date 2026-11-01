@@ -1,0 +1,122 @@
+\section{The Agent Boundary}\label{sec:host}
+
+An agent's tool calls reach the file system, the network and the key keeper
+through the agent host (\file{crates/agent-host}), which checks each call
+against the agent's grant before acting on it. The host is an in-process
+library, not a sandbox for the agent: nothing in it confines the agent's
+process, which is why its being the agent's only path to those resources is
+an assumption about the deployment\claim{sole-path}, and its \code{call}
+takes the caller's agent id as given, so a deployment must bind each agent's
+tool-call channel to its id\claim{agent-identity}. Process sandboxes such as
+nono~\cite{nono} or a verified runtime such as WaVe~\cite{wave} are what
+confine an agent; the host decides what a confined agent's requests may do.
+
+The host has two interfaces. The admin interface issues a root agent with a
+grant and revokes an agent together with every agent under
+it\claim{host-revocation}. The agent interface takes five tool calls:
+\code{read\_file}, \code{write\_file}, \code{fetch}, \code{sign} and
+\code{delegate}. None reads or edits a grant\claim{host-no-grant-tool};
+\code{delegate} starts a sub-agent whose grant is the caller's caveats
+followed by the added ones, so every child allows a subset of its
+parent\claim{host-delegation}.
+
+\subsection{The evaluator as a component}
+
+The verdict comes from \file{crates/grant-component}: \code{grant-eval}
+compiled for \code{wasm32v1-none}, the target the grant signer uses, and
+wrapped as a WebAssembly component behind a WIT interface with one interface
+per vocabulary, each exporting \code{allows} and \code{allows-all}. The
+component imports nothing and keeps no state between calls, so it can compute
+only on the grant and action the host passes in. The host builds the component
+at compile time, instantiates it in Wasmtime with an empty linker, and passes
+the grant and the action on every call. Since WIT has no 128-bit integer, a
+chain \code{i128} crosses the boundary as a pair of 64-bit halves. Tests check
+that the component returns the native evaluator's verdict on every grant of up
+to three caveats from a small universe per vocabulary, and for chain on every
+authorization tree of up to two contexts\claim{component-agrees}; that
+Wasmtime and the bindings carry values across faithfully is
+trusted\claim{runtime-trusted}.
+
+The evaluator is proven total and pure, so the component does not defend
+against the evaluator's logic. It does two other things. It runs the build the
+chain runs: the same source for the same \code{wasm32v1-none} target, so the
+host's verdicts come from the artifact class the grant signer deploys, not
+from a separate native build. And it confines that build, which is the output
+of an unverified toolchain, to computing a verdict: a component that imports
+nothing can touch no file, socket or key whatever its compiled code does. The
+price is the boundary crossing measured in \S\ref{sec:eval}.
+
+\subsection{Building actions}
+
+The wiring that turns a tool call into an action is the trusted part of the
+host, kept to three modules.
+
+\paragraph{Files.} A requested path must be absolute. Each existing prefix is
+canonicalized with \code{realpath}, which follows symlinks, applies \code{..}
+to the directory a symlink led to, and returns the names stored on disk;
+components past the last existing one are appended as given. Grant prefixes
+are resolved the same way when a grant is issued or delegated. On a
+case-insensitive file system the check therefore sees the stored name, and a
+differently cased path is allowed exactly when the stored path
+is\claim{host-case}. The host checks the canonical path, opens the file with
+\code{O\_NOFOLLOW} on its last component, and checks the path of the opened
+descriptor again (\code{F\_GETPATH} on macOS, \code{/proc/self/fd} on Linux)
+before any data moves through that descriptor, so a component swapped for a
+symlink between check and open is caught\claim{host-swap}. A new file is
+created under its directory's checked descriptor with
+\code{O\_CREAT|O\_EXCL|O\_NOFOLLOW}. Neither \code{..} nor a symlink reaches
+outside the grant\claim{host-dotdot}\claim{host-symlink}. Three cases are not
+covered. A file renamed or relinked by another process after the descriptor's
+path was checked is read or written all the same, since the descriptor follows
+the inode, not the path. A hard link inside the grant to a file outside it is
+allowed, since the vocabulary names paths, not files. And an error while
+resolving is reported before the check, so it can reveal that something
+exists at a path the grant does not cover. The agent's own tool calls create
+neither renames nor links.
+
+\paragraph{Network.} The action is the host name the agent requested, as the
+URL parser normalizes it (lower-case ASCII, IDNA names in \code{xn--} form), with
+its port and scheme. After the check, the host's client resolves the name and
+connects directly; the agent never supplies an address, and what a name
+resolves to is trusted\claim{os-wiring}. A denied host, port or scheme is
+refused before any connection\claim{host-network-denied}. The client follows
+no redirects itself: each \code{Location} is resolved against the current URL
+and checked as a new action before the next request, up to five hops, so a
+redirect to a disallowed host is refused without contacting
+it\claim{host-redirect}. The vocabulary binds names, not addresses: an
+allowed name that resolves, or is rebound, to a loopback, link-local or cloud
+metadata address is reached, and the HTTP method and path are not part of the
+action. A caveat on the resolved address's class, or refusing private ranges
+unless named, would close most of the first.
+
+\paragraph{Signing.} The agent names a key id, a network passphrase and a
+payload, and holds no key. A grant carries a chain caveat list beside its
+signing list, parsed and mapped by the relay's code. The host checks the
+signing action (key, network, payload kind) first; for a transaction or an
+authorization entry it then decodes the payload and checks every context the
+signature authorizes against the chain grant with \code{allows\_all}, and
+only then calls the key keeper, so a denied request never reaches
+it\claim{host-signing-before-keeper}. For a transaction the contexts are its
+host function and every context of every authorization entry it carries; for
+an authorization preimage, the account's own or a delegated signer's, they
+are every context of its invocation tree\claim{host-signing-chain}. The host
+signs only what the chain vocabulary describes: an envelope with exactly one
+\code{InvokeHostFunction} operation, and no fee bump, second operation,
+other operation or contract-code upload\claim{host-signing-refuses}. The
+keeper is given the encoding of the decoded value the host checked, so the
+bytes signed are the bytes checked\claim{host-signs-checked}. Each payload
+kind is also bound to its network: a transaction is signed as its hash on the
+named network; a preimage is signed only after the host checks that its
+network id is the hash of the named passphrase\claim{host-delegated-preimage};
+and a message is signed under SEP-53's prefix ``\code{Stellar Signed
+Message:\textbackslash n}''~\cite{sep53}, which keeps a message signature from
+being a transaction or authorization-entry signature. A message signature is
+not bound to any network, so for messages a \code{networkIn} caveat restricts
+only the label the agent supplies.
+
+No caveat covers a transaction's fee, sequence number, time bounds, memo or
+source account, an authorization entry's nonce or expiration ledger, or which
+account a key id stands for, so an agent allowed to sign transactions can have
+its key pay any fee for an allowed call. An empty chain list allows every
+contract call, as an empty grant does, so a grant that allows
+\code{transaction} or \code{authEntry} signatures should carry chain caveats.

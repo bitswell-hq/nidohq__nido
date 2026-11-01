@@ -9,8 +9,10 @@
 #   - each entry has exactly id, statement, status, and (unless unproven)
 #     evidence; ids are unique and match [a-z][a-z0-9-]*;
 #   - status is proven | tested | measured | assumed | unproven, and the
-#     evidence has the shape that status requires:
+#     evidence has the shape that status requires, as one mapping or a
+#     non-empty list of them (each one checked):
 #       proven    { lean: <theorem name>, file: <path> }  the file declares it
+#                 (the name or a dotted suffix of it, as namespaces allow)
 #       tested    { test: <test name>,    file: <path> }  the name is in the file
 #       measured  { file: <path> }                        the file exists
 #       assumed   { assumption: <text> }
@@ -69,7 +71,8 @@ for my $i (0 .. $#$claims) {
 
     my $status = $c->{status} // '';
     my $ev = $c->{evidence};
-    my $ev_empty = !defined $ev || (!ref $ev && $ev eq '') || (ref $ev eq 'HASH' && !%$ev);
+    my $ev_empty = !defined $ev || (!ref $ev && $ev eq '') || (ref $ev eq 'HASH' && !%$ev)
+        || (ref $ev eq 'ARRAY' && !@$ev);
     if ($status eq 'unproven') {
         fail "$where: an unproven claim names no evidence" unless $ev_empty;
         next;
@@ -80,7 +83,17 @@ for my $i (0 .. $#$claims) {
         next;
     }
     if ($ev_empty) { fail "$where: a $status claim must name evidence"; next }
-    unless (ref $ev eq 'HASH') { fail "$where: evidence must be a mapping"; next }
+    my @items = ref $ev eq 'ARRAY' ? @$ev : ($ev);
+    unless (@items) { fail "$where: a $status claim must name evidence"; next }
+    for my $item (@items) {
+        unless (ref $item eq 'HASH') { fail "$where: evidence must be a mapping or a list of mappings"; next }
+        check_evidence($where, $status, $want, $item);
+    }
+}
+
+# One piece of evidence of a claim with this status.
+sub check_evidence {
+    my ($where, $status, $want, $ev) = @_;
     my %allowed = map { $_ => 1 } @$want;
     for my $k (sort keys %$ev) {
         fail "$where: evidence field '$k' does not belong to a $status claim" unless $allowed{$k};
@@ -91,25 +104,28 @@ for my $i (0 .. $#$claims) {
         fail "$where: $status evidence needs '$k'";
         $missing = 1;
     }
-    next if $missing || !defined $ev->{file};
+    return if $missing || !defined $ev->{file};
 
     my $path = $ev->{file};
     if (File::Spec->file_name_is_absolute($path) || $path =~ m{(^|/)\.\.(/|$)}) {
         fail "$where: evidence file '$path' must be a path inside the repository";
-        next;
+        return;
     }
     my $abs = File::Spec->catfile($repo, $path);
-    unless (-f $abs) { fail "$where: evidence file '$path' does not exist"; next }
-    next if $status eq 'measured';
+    unless (-f $abs) { fail "$where: evidence file '$path' does not exist"; return }
+    return if $status eq 'measured';
 
-    open my $fh, '<', $abs or do { fail "$where: cannot read '$path': $!"; next };
+    open my $fh, '<', $abs or do { fail "$where: cannot read '$path': $!"; return };
     my $text = do { local $/; <$fh> };
     close $fh;
     if ($status eq 'proven') {
-        # A Lean name may be qualified (Ns.thm); the file declares its last component.
-        my $leaf = (split /\./, $ev->{lean})[-1];
+        # A Lean name may be qualified (Ns.Sub.thm). Inside namespaces the file
+        # declares a dotted suffix of it (Sub.thm or thm); accept any suffix.
+        my @parts = split /\./, $ev->{lean};
+        my $leaf = $parts[-1];
+        my $names = join '|', map { quotemeta join('.', @parts[$_ .. $#parts]) } 0 .. $#parts;
         fail "$where: '$path' declares no theorem or lemma '$leaf'"
-            unless $text =~ /^\s*(?:@\[[^\]]*\]\s*)?(?:(?:private|protected)\s+)?(?:theorem|lemma)\s+\Q$leaf\E(?![\w'.!?])/m;
+            unless $text =~ /^\s*(?:@\[[^\]]*\]\s*)?(?:(?:private|protected)\s+)?(?:theorem|lemma)\s+(?:$names)(?![\w'.!?])/m;
     } else {
         my $name = $ev->{test};
         fail "$where: test '$name' does not appear in '$path'"

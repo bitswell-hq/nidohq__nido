@@ -1,0 +1,9 @@
+claims:
+  - id: x
+    statement: S.
+    status: proven
+    evidence:
+      - lean: Fixture.email_sound
+        file: formal/Fixture.lean
+      - lean: Fixture.email
+        file: formal/Fixture.lean

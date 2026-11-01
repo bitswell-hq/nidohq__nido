@@ -1,0 +1,24 @@
+% An agent's call through the account: the account delegates authentication
+% to the grant signer, which checks every context of the authorization.
+% Shared by the paper and the slides.
+\begin{tikzpicture}[
+    node distance=6mm and 8mm,
+    ctx/.style={box, fill=black!4, text width=44mm},
+    party/.style={box, text width=28mm, minimum height=9mm},
+  ]
+  % The authorization tree the agent signs.
+  \node[ctx] (root) {\code{router.forward(...)}\\\textcolor{proofgreen}{\code{contractIn [router]}: holds}};
+  \node[ctx, below=4mm of root] (sub) {\code{token.transfer(acct, bob, 10)}\\\textcolor{red!70!black}{\code{contractIn [router]}: fails}};
+  \draw[flow] (root) -- node[lbl, right] {nested} (sub);
+  \node[draw, dashed, rounded corners=2pt, inner sep=3pt, fit=(root)(sub),
+        label={[lbl]above:authorization tree (one entry)}] (tree) {};
+
+  \node[party, right=12mm of tree.north east, anchor=north west] (acct) {\textbf{Perch account}\\\code{\_\_check\_auth}: guards, rule check};
+  \node[party, below=of acct] (gs) {\textbf{grant signer}\\\code{\_\_check\_auth}};
+  \node[party, below=of gs, draw=boundary, thick] (ev) {\code{chain::allows\_all}\\(grant-eval, wasm)};
+
+  \draw[flow] (tree.east |- acct.west) -- node[lbl, above] {host} (acct.west);
+  \draw[flow] (acct) -- node[lbl, right, align=left] {\code{delegate\_account\_auth}\\payload + every context} (gs);
+  \draw[flow] (gs) -- node[lbl, right] {2 actions} (ev);
+  \node[lbl, below=2mm of ev, text=red!70!black] {false: \code{NotAllowed}, the transaction fails};
+\end{tikzpicture}

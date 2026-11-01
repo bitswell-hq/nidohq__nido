@@ -35,6 +35,7 @@ sub breakable {
 
 sub evidence {
     my $ev = shift;
+    return join('; ', map { evidence($_) } @$ev) if ref $ev eq 'ARRAY';
     return '' unless ref $ev eq 'HASH';
     return tex($ev->{assumption}) if defined $ev->{assumption};
     my $name = $ev->{lean} // $ev->{test};

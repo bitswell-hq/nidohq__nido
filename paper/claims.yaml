@@ -1,0 +1,957 @@
+# Claim ledger for the attenuating-grants paper and slides.
+#
+# One entry per claim the documents make. \claim{id} renders the status tag
+# and \claimstatement{id} the statement, so both documents word a claim the
+# same way. The checker (research/email-recovery/check-claims.pl, run by
+# tools/build.sh) enforces the format; README.md describes it.
+#
+# status: proven | tested | measured | assumed | unproven
+# evidence, by status (paths relative to the repository root):
+#   proven    { lean: <theorem name>, file: <.lean path> }
+#   tested    { test: <test name>,    file: <test file path> }
+#   measured  { file: <file recording the measurement> }
+#   assumed   { assumption: <the stated assumption> }
+#   unproven  (none)
+#
+# Statements are plain ASCII text: claims-to-tex.pl escapes TeX specials, so
+# no math or code markup.
+
+claims:
+  # ---------------------------------------------------------------------------
+  # Theorem 1: totality and cost (formal/README.md, "Theorems")
+  - id: rust-total
+    statement: >-
+      For every grant and action in every vocabulary, the Lean translation of
+      the Rust evaluator's allows and allows_all returns a result: it never
+      fails (a panic, an overflow or an out-of-bounds index) and never
+      diverges.
+    status: proven
+    evidence:
+      - lean: Chain.extracted_allows
+        file: formal/AttenuatingGrants/Equiv/Chain.lean
+      - lean: Chain.extracted_allowsAll
+        file: formal/AttenuatingGrants/Equiv/Chain.lean
+      - lean: Files.extracted_allows
+        file: formal/AttenuatingGrants/Equiv/Files.lean
+      - lean: Files.extracted_allowsAll
+        file: formal/AttenuatingGrants/Equiv/Files.lean
+      - lean: Network.extracted_allows
+        file: formal/AttenuatingGrants/Equiv/Network.lean
+      - lean: Network.extracted_allowsAll
+        file: formal/AttenuatingGrants/Equiv/Network.lean
+      - lean: Signing.extracted_allows
+        file: formal/AttenuatingGrants/Equiv/Signing.lean
+      - lean: Signing.extracted_allowsAll
+        file: formal/AttenuatingGrants/Equiv/Signing.lean
+
+  - id: no-unchecked-declarations
+    statement: >-
+      The package's Lean sources, the generated translation included, contain
+      no partial, unsafe, sorry, admit, native_decide, implemented_by, extern
+      or axiom declaration.
+    status: tested
+    evidence:
+      test: Reject unchecked declarations
+      file: .github/workflows/formal.yml
+
+  - id: axioms-builtin
+    statement: >-
+      Every theorem the paper names depends on at most Lean's built-in axioms
+      propext, Quot.sound and Classical.choice; the Lean build fails if any of
+      them gains a dependency.
+    status: tested
+    evidence:
+      test: guard_msgs
+      file: formal/AttenuatingGrants/Axioms.lean
+
+  - id: extraction-fresh
+    statement: >-
+      CI re-runs Charon and Aeneas on the evaluator crate and fails if the
+      translation differs from the committed one.
+    status: tested
+    evidence:
+      test: Re-run Charon and Aeneas and compare
+      file: .github/workflows/formal.yml
+
+  - id: counted-agrees
+    statement: >-
+      In every vocabulary, the step-counting evaluator returns the same
+      verdict as the model's grant check.
+    status: proven
+    evidence:
+      - lean: Chain.allowsCounted_fst
+        file: formal/AttenuatingGrants/Cost/Chain.lean
+      - lean: Files.allowsCounted_fst
+        file: formal/AttenuatingGrants/Cost/Files.lean
+      - lean: Network.allowsCounted_fst
+        file: formal/AttenuatingGrants/Cost/Network.lean
+      - lean: Signing.allowsCounted_fst
+        file: formal/AttenuatingGrants/Cost/Signing.lean
+
+  - id: cost-bound
+    statement: >-
+      In every vocabulary, the step-counting Lean evaluator checks one action
+      a against caveats cs in at most 2 x (number of caveats + total caveat
+      size) x (size of a + 1) steps.
+    status: proven
+    evidence:
+      - lean: Chain.allows_cost_bound
+        file: formal/AttenuatingGrants/Cost/Chain.lean
+      - lean: Files.allows_cost_bound
+        file: formal/AttenuatingGrants/Cost/Files.lean
+      - lean: Network.allows_cost_bound
+        file: formal/AttenuatingGrants/Cost/Network.lean
+      - lean: Signing.allows_cost_bound
+        file: formal/AttenuatingGrants/Cost/Signing.lean
+
+  - id: cost-bound-batch
+    statement: >-
+      In every vocabulary, the step-counting Lean evaluator checks a batch of
+      actions in at most 2 x (number of caveats + total caveat size + 1) x
+      (sum over the actions of size + 1) steps.
+    status: proven
+    evidence:
+      - lean: Chain.allowsAll_cost_bound
+        file: formal/AttenuatingGrants/Cost/Chain.lean
+      - lean: Files.allowsAll_cost_bound
+        file: formal/AttenuatingGrants/Cost/Files.lean
+      - lean: Network.allowsAll_cost_bound
+        file: formal/AttenuatingGrants/Cost/Network.lean
+      - lean: Signing.allowsAll_cost_bound
+        file: formal/AttenuatingGrants/Cost/Signing.lean
+
+  - id: deployed-cost
+    statement: >-
+      On the 28 measured pairs of a passing and a failing check, the grant
+      signer's evaluator work (the difference in Soroban CPU instructions) is
+      96 to 164 instructions per Lean step, 99.4 by least squares through the
+      origin (R squared 0.986), and the contract, the native evaluator and the
+      Lean model agree on every verdict.
+    status: measured
+    evidence:
+      file: evaluation/results/cost-bound.json
+
+  - id: deployed-cost-general
+    statement: >-
+      The deployed evaluator's work is proportional to the Lean step count on
+      every input.
+    status: unproven
+
+  - id: bound-looseness
+    statement: >-
+      Priced at 99.4 instructions per step, the proven bound is more than 12
+      times the whole measured check above the zero-caveat cost on every
+      measured point, and at a 16 KiB compared argument the bound is
+      543,146,436 steps where the model takes 16,458.
+    status: measured
+    evidence:
+      file: evaluation/results/cost-bound.csv
+
+  # ---------------------------------------------------------------------------
+  # Theorems 2 and 3: attenuation and chaining
+  - id: attenuation
+    statement: >-
+      Adding a caveat to a grant yields a narrower grant: every action the
+      attenuated grant allows, its parent allows.
+    status: proven
+    evidence:
+      lean: attenuate_narrows
+      file: formal/AttenuatingGrants/Grant.lean
+
+  - id: chaining
+    statement: >-
+      Narrowness is transitive.
+    status: proven
+    evidence:
+      lean: narrower_trans
+      file: formal/AttenuatingGrants/Grant.lean
+
+  - id: delegation-chain
+    statement: >-
+      Every grant reached from a root by any number of attenuation steps is
+      narrower than the root.
+    status: proven
+    evidence:
+      lean: delegate_narrows
+      file: formal/AttenuatingGrants/Grant.lean
+
+  - id: batch-narrower
+    statement: >-
+      A narrower grant accepts a batch of actions, such as every context of an
+      authorization tree, only if its ancestor accepts the batch.
+    status: proven
+    evidence:
+      lean: allowsAll_of_narrower
+      file: formal/AttenuatingGrants/Grant.lean
+
+  # ---------------------------------------------------------------------------
+  # Equivalence of the translated Rust with the model
+  - id: equiv-chain
+    statement: >-
+      The translated Rust chain evaluator returns the model's verdict on the
+      denoted grant and action, for every input.
+    status: proven
+    evidence:
+      lean: Chain.extracted_allows
+      file: formal/AttenuatingGrants/Equiv/Chain.lean
+
+  - id: equiv-files
+    statement: >-
+      The translated Rust files evaluator returns the model's verdict on the
+      denoted grant and action, for every input.
+    status: proven
+    evidence:
+      lean: Files.extracted_allows
+      file: formal/AttenuatingGrants/Equiv/Files.lean
+
+  - id: equiv-network
+    statement: >-
+      The translated Rust network evaluator returns the model's verdict on the
+      denoted grant and action, for every input.
+    status: proven
+    evidence:
+      lean: Network.extracted_allows
+      file: formal/AttenuatingGrants/Equiv/Network.lean
+
+  - id: equiv-signing
+    statement: >-
+      The translated Rust signing evaluator returns the model's verdict on the
+      denoted grant and action, for every input.
+    status: proven
+    evidence:
+      lean: Signing.extracted_allows
+      file: formal/AttenuatingGrants/Equiv/Signing.lean
+
+  - id: rust-delegation
+    statement: >-
+      On the Lean translation of the Rust evaluator, in every vocabulary, a
+      caveat list reached from a root by appending caveats accepts a batch of
+      actions only if the root accepts it.
+    status: proven
+    evidence:
+      - lean: Chain.extracted_allowsAll_of_delegates
+        file: formal/AttenuatingGrants/Equiv/Chain.lean
+      - lean: Files.extracted_allowsAll_of_delegates
+        file: formal/AttenuatingGrants/Equiv/Files.lean
+      - lean: Network.extracted_allowsAll_of_delegates
+        file: formal/AttenuatingGrants/Equiv/Network.lean
+      - lean: Signing.extracted_allowsAll_of_delegates
+        file: formal/AttenuatingGrants/Equiv/Signing.lean
+
+  - id: create-contract-denied
+    statement: >-
+      The translated Rust chain evaluator denies contract creation under every
+      grant with at least one caveat.
+    status: proven
+    evidence:
+      lean: Chain.extracted_denies_createContract
+      file: formal/AttenuatingGrants/Equiv/Chain.lean
+
+  - id: arg-kind
+    statement: >-
+      An argument-equality caveat holds only for an argument of its value's
+      constructor, so an argument of one type never satisfies a caveat
+      written for another.
+    status: proven
+    evidence:
+      lean: Chain.argEq_kind
+      file: formal/AttenuatingGrants/Vocab/Chain.lean
+
+  - id: other-not-bytes
+    statement: >-
+      In the translated Rust evaluator, an argument of an unmodeled type never
+      equals a bytes value, whatever its XDR encoding.
+    status: proven
+    evidence:
+      lean: Chain.extracted_val_eq_other_bytes
+      file: formal/AttenuatingGrants/Equiv/Chain.lean
+
+  - id: path-components
+    statement: >-
+      A pathUnder caveat holds exactly when its prefix is a prefix of the path
+      as a list of components, so the path home/a is not a prefix of home/ab.
+    status: proven
+    evidence:
+      - lean: Files.pathUnder_iff
+        file: formal/AttenuatingGrants/Vocab/Files.lean
+      - lean: Files.home_a_not_under_home_ab
+        file: formal/AttenuatingGrants/Vocab/Files.lean
+
+  # ---------------------------------------------------------------------------
+  # Theorem 4: budget safety
+  - id: budget-equiv
+    statement: >-
+      The translated Rust spend returns the model's outcome and ledger on
+      every ledger.
+    status: proven
+    evidence:
+      lean: Budget.extracted_spend
+      file: formal/AttenuatingGrants/Equiv/Budget.lean
+
+  - id: budget-charges
+    statement: >-
+      A successful Rust spend adds the amount to the spender and to every
+      ancestor of the spender.
+    status: proven
+    evidence:
+      lean: Budget.extracted_spend_ok_charges
+      file: formal/AttenuatingGrants/Equiv/Budget.lean
+
+  - id: budget-unchanged
+    statement: >-
+      A successful Rust spend changes no node outside the spender's chain to
+      the root.
+    status: proven
+    evidence:
+      lean: Budget.extracted_spend_ok_unchanged
+      file: formal/AttenuatingGrants/Equiv/Budget.lean
+
+  - id: budget-failure
+    statement: >-
+      A failed Rust spend returns the ledger unchanged.
+    status: proven
+    evidence:
+      lean: Budget.extracted_spend_error
+      file: formal/AttenuatingGrants/Equiv/Budget.lean
+
+  - id: budget-overdrawn
+    statement: >-
+      An overdrawn error names a node on the spender's chain to the root that
+      cannot take the amount.
+    status: proven
+    evidence:
+      lean: Budget.extracted_spend_overdrawn
+      file: formal/AttenuatingGrants/Equiv/Budget.lean
+
+  - id: budget-total
+    statement: >-
+      For the Lean translation of the budget functions driven by a Lean-
+      defined caller, from a ledger with nothing spent, after any sequence of
+      spends, refills and appends that keeps it below usize::MAX nodes, the
+      total successfully spent at or under any node is at most that node's
+      allowance at the end of the sequence, however much its children's
+      allowances oversubscribe it.
+    status: proven
+    evidence:
+      lean: Budget.extracted_spentUnder_le_allowance
+      file: formal/AttenuatingGrants/Equiv/Budget.lean
+
+  - id: budget-no-overflow
+    statement: >-
+      The charging loop's unchecked addition never overflows, and the loop
+      visits exactly the chain the check accepted.
+    status: proven
+    evidence:
+      lean: Budget.charge_loop_eq
+      file: formal/AttenuatingGrants/Equiv/Budget.lean
+
+  - id: ledger-size
+    statement: >-
+      A budget ledger holds fewer than usize::MAX nodes.
+    status: assumed
+    evidence:
+      assumption: >-
+        Aeneas models Vec::push as failing only at usize::MAX elements; a real
+        allocation fails, and aborts, long before.
+
+  # ---------------------------------------------------------------------------
+  # Tested properties of the evaluator crate
+  - id: eval-exhaustive
+    statement: >-
+      The Rust evaluator agrees with a plain-Rust reading of the semantics,
+      and adding caveats narrows it, on every grant of up to three caveats
+      from a small universe per vocabulary.
+    status: tested
+    evidence:
+      test: exhaustive_attenuation_and_reference_agreement
+      file: crates/grant-eval/tests/chain.rs
+
+  - id: budget-exhaustive
+    statement: >-
+      Every sequence of up to four spends and refills from a universe of ten,
+      on a five-node oversubscribed forest, agrees with a plain-Rust
+      reference, and each failure leaves the ledger identical.
+    status: tested
+    evidence:
+      test: exhaustive_runs_on_an_oversubscribed_tree
+      file: crates/grant-eval/tests/budget.rs
+
+  # ---------------------------------------------------------------------------
+  # Soroban boundary: the grant signer
+  - id: cap71-contexts
+    statement: >-
+      Under CAP-0071, the Soroban host calls a contract delegate's
+      __check_auth with the delegating account's signature payload and every
+      context of the account's authorization.
+    status: tested
+    evidence:
+      test: c2_delegate_sees_the_delegating_accounts_payload_and_contexts
+      file: vendor/perch/crates/integration-tests/tests/cap71_semantics.rs
+
+  - id: signer-hidden-call
+    statement: >-
+      A disallowed token transfer nested inside an allowed call refuses the
+      whole authorization.
+    status: tested
+    evidence:
+      test: hidden_nested_call_is_denied
+      file: crates/integration-tests/tests/it/grant_signer.rs
+
+  - id: signer-admin
+    statement: >-
+      An agent cannot issue, revoke, rotate or refill grants, its own
+      included.
+    status: tested
+    evidence:
+      test: agent_cannot_call_the_grant_signers_admin_functions
+      file: crates/integration-tests/tests/it/grant_signer.rs
+
+  - id: signer-account
+    statement: >-
+      An agent cannot change the account's rules or policies or call the
+      account's admin functions, even under a document that wrongly scopes an
+      agent rule to the account.
+    status: tested
+    evidence:
+      test: agent_cannot_change_the_accounts_rules_or_call_its_admin_functions
+      file: crates/integration-tests/tests/it/grant_signer.rs
+
+  - id: signer-delegate-other
+    statement: >-
+      An agent cannot delegate from an ancestor's grant or from a grant it
+      does not hold.
+    status: tested
+    evidence:
+      test: agent_cannot_edit_its_grant_by_delegating_from_another
+      file: crates/integration-tests/tests/it/grant_signer.rs
+
+  - id: signer-deploy
+    statement: >-
+      The grant signer refuses every contract creation, under every grant, the
+      empty one included, and in both roles of its __check_auth.
+    status: tested
+    evidence:
+      test: contract_deployment_is_denied
+      file: crates/integration-tests/tests/it/grant_signer.rs
+
+  - id: signer-own-address
+    statement: >-
+      As the check of its own address, the grant signer refuses calls on the
+      account, unmetered calls on the budget asset and calls on itself other
+      than the holder's own delegation, and a holder's signature in that role
+      authorizes nothing for the account.
+    status: tested
+    evidence:
+      test: the_grant_signers_own_address_acts_only_for_itself_within_the_grant
+      file: crates/integration-tests/tests/it/grant_signer.rs
+
+  - id: signer-narrows
+    statement: >-
+      A delegated grant on chain allows only what its parent allows, and a
+      holder cannot widen it.
+    status: tested
+    evidence:
+      test: delegation_narrows_and_cannot_widen
+      file: crates/integration-tests/tests/it/grant_signer.rs
+
+  - id: signer-oversubscribed
+    statement: >-
+      Oversubscribed sibling grants cannot together spend more than their
+      parent's allowance, and a spend refused at an overdrawn ancestor changes
+      no stored state.
+    status: tested
+    evidence:
+      test: oversubscribed_siblings_are_safe_and_an_overdrawn_ancestor_changes_nothing
+      file: crates/integration-tests/tests/it/grant_signer.rs
+
+  - id: signer-all-charged
+    statement: >-
+      Every transfer of the budget asset in one authorization is charged.
+    status: tested
+    evidence:
+      test: every_transfer_in_one_authorization_is_charged
+      file: crates/integration-tests/tests/it/grant_signer.rs
+
+  - id: signer-metered
+    statement: >-
+      On the budget asset an agent's grant allows only metered transfers:
+      approve, burn and a transfer of a negative amount are refused.
+    status: tested
+    evidence:
+      test: the_budget_asset_accepts_only_metered_transfers
+      file: crates/integration-tests/tests/it/grant_signer.rs
+
+  - id: signer-revocation
+    statement: >-
+      Revoking a grant revokes every grant delegated from it.
+    status: tested
+    evidence:
+      test: revocation_cascades
+      file: crates/integration-tests/tests/it/grant_signer.rs
+
+  - id: signer-rotation
+    statement: >-
+      After the account rotates a grant's holder key, the old key no longer
+      signs for the grant and the new one does.
+    status: tested
+    evidence:
+      test: key_rotation_is_an_admin_action
+      file: crates/integration-tests/tests/it/grant_signer.rs
+
+  - id: signer-relay-mapping
+    statement: >-
+      The grant signer and the relay map Soroban arguments to evaluator
+      actions alike, on every argument type.
+    status: tested
+    evidence:
+      test: the_account_and_the_relay_map_actions_alike
+      file: crates/integration-tests/tests/it/grant_signer.rs
+
+  - id: soroban-check-cost
+    statement: >-
+      The grant signer's whole __check_auth on one context costs 972,392 CPU
+      instructions with no caveat, 1,024,459 with 1, 1,735,302 with 16 and
+      4,003,738 with 64 caveats, and each further context about 97,000
+      instructions under 4 caveats, under soroban-env-host 27.0.1 metering.
+    status: measured
+    evidence:
+      file: evaluation/results/soroban-costs.json
+
+  - id: soroban-tx-cost
+    statement: >-
+      Whole agent transactions through the account cost 2.17M to 2.69M CPU
+      instructions for one context and up to 5.04M for four nested contexts,
+      against a per-transaction limit of 400M.
+    status: measured
+    evidence:
+      file: evaluation/results/soroban-workloads.json
+
+  - id: attack-suite-soroban
+    statement: >-
+      In Soroban simulation under enforcing authorization, all 45 escalation
+      attempts (16 self-escalation, 8 nested-call smuggling, 18 delegation
+      workarounds, 3 allowance oversubscription) are refused, each with the
+      account, grants and balances unchanged, and the 9 allowed controls of
+      the same shape pass.
+    status: measured
+    evidence:
+      file: evaluation/results/soroban-attacks.json
+
+  - id: positional-caveats
+    statement: >-
+      An argument caveat reads the same argument position of every context,
+      whatever its contract and function.
+    status: proven
+    evidence:
+      - lean: Chain.argI128AtMost_iff
+        file: formal/AttenuatingGrants/Vocab/Chain.lean
+      - lean: Chain.argEq_iff
+        file: formal/AttenuatingGrants/Vocab/Chain.lean
+
+  - id: no-standing-allowance
+    statement: >-
+      No contract a grant allows can move the account's assets without the
+      account's authorization, through a standing token allowance the owner
+      gave it or funds the account deposited with it.
+    status: assumed
+    evidence:
+      assumption: >-
+        A deployment property the owner keeps: such a contract's effects need
+        no context of the account's authorization, so no caveat or budget sees
+        them.
+
+  - id: xdr-injective
+    statement: >-
+      The mapping from Soroban arguments to evaluator values keeps distinct
+      arguments distinct.
+    status: unproven
+
+  - id: lineage-ledger
+    statement: >-
+      On a ledger whose parents precede their children, spending at the
+      signing grant on the ledger of its lineage alone has the whole ledger's
+      outcome at that grant, an error naming the same grant, and afterwards
+      the whole ledger's lineage, and the grant signer's spend loop over the
+      extracted spend computes it.
+    status: proven
+    evidence:
+      - lean: Ledger.spend_lineage
+        file: formal/AttenuatingGrants/Signer.lean
+      - lean: Ledger.spendAll_lineage
+        file: formal/AttenuatingGrants/Signer.lean
+      - lean: Budget.extracted_spendAll_lineage
+        file: formal/AttenuatingGrants/Equiv/Signer.lean
+
+  - id: wiring-budget-calls
+    statement: >-
+      The grant signer's code is the Lean definitions of its budget path: its
+      stored grants are the ledger, and its lineage, lineage ledger, spend
+      loop and store loop are IsLineage, chain, spendAllExtracted and
+      writeBack.
+    status: unproven
+
+  - id: budget-batch-as-run
+    statement: >-
+      Every sequence of the grant signer's calls, as Signer.lean models its
+      storage, lineage ledger, all-or-nothing spends and store loop, is a run
+      of the model's operations on the ledger of every grant.
+    status: proven
+    evidence:
+      - lean: Ledger.writeBack_spendAll
+        file: formal/AttenuatingGrants/Signer.lean
+      - lean: Ledger.spendAll_run
+        file: formal/AttenuatingGrants/Signer.lean
+      - lean: Signer.Run.exists_run
+        file: formal/AttenuatingGrants/Signer.lean
+
+  - id: signer-budget-total
+    statement: >-
+      For every sequence of the grant signer's calls from no grants, as
+      Signer.lean models them, the total spent at or under any grant is at
+      most its allowance, however much its children's allowances oversubscribe
+      it.
+    status: proven
+    evidence:
+      - lean: Signer.spentUnder_le_allowance
+        file: formal/AttenuatingGrants/Signer.lean
+      - lean: Signer.withinAllowance
+        file: formal/AttenuatingGrants/Signer.lean
+
+  - id: document-requirements
+    statement: >-
+      The account's policy document reaches holder keys only through the
+      grant signer and names its own account's grant signer instance.
+    status: assumed
+    evidence:
+      assumption: >-
+        Stated as requirements on the account's document; met by the
+        documents the tests apply; nothing on chain checks them.
+
+  # ---------------------------------------------------------------------------
+  # Agent boundary: the host and the component
+  - id: component-agrees
+    statement: >-
+      The Wasm component returns the native evaluator's verdict on every grant
+      of up to three caveats from a small universe per vocabulary.
+    status: tested
+    evidence:
+      test: chain_agrees_with_native
+      file: crates/agent-host/tests/component.rs
+
+  - id: host-dotdot
+    statement: >-
+      A path with .. cannot reach a file outside the grant.
+    status: tested
+    evidence:
+      test: dot_dot_cannot_escape
+      file: crates/agent-host/tests/files.rs
+
+  - id: host-symlink
+    statement: >-
+      A symlink cannot reach a file outside the grant.
+    status: tested
+    evidence:
+      test: symlinks_cannot_escape
+      file: crates/agent-host/tests/files.rs
+
+  - id: host-case
+    statement: >-
+      A differently cased path on a case-insensitive file system cannot reach
+      a file outside the grant.
+    status: tested
+    evidence:
+      test: case_variants_cannot_escape
+      file: crates/agent-host/tests/files.rs
+
+  - id: host-swap
+    statement: >-
+      A path component swapped for a symlink between the check and the open
+      is caught by checking the opened descriptor's path.
+    status: tested
+    evidence:
+      test: a_swap_after_the_check_is_caught_on_the_opened_descriptor
+      file: crates/agent-host/tests/files.rs
+
+  - id: host-network-denied
+    statement: >-
+      A host, port or scheme the grant does not allow is denied before any
+      connection is made.
+    status: tested
+    evidence:
+      test: denied_host_port_or_scheme_never_connects
+      file: crates/agent-host/tests/network.rs
+
+  - id: host-redirect
+    statement: >-
+      A redirect to a host the grant does not allow is denied, and the target
+      is never contacted.
+    status: tested
+    evidence:
+      test: a_redirect_to_a_disallowed_host_is_denied
+      file: crates/agent-host/tests/network.rs
+
+  - id: host-signing-before-keeper
+    statement: >-
+      A signing request with a key the grant does not allow is denied before
+      the key keeper is called.
+    status: tested
+    evidence:
+      test: a_disallowed_key_is_denied_before_the_keeper_is_called
+      file: crates/agent-host/tests/signing.rs
+
+  - id: host-signing-chain
+    statement: >-
+      Before the keeper signs a transaction or an authorization entry, the
+      host checks every context the signature authorizes against the agent's
+      chain grant: a transaction's host function and every context of every
+      authorization entry it carries, or every context of a preimage's
+      invocation tree, the delegated signer's included.
+    status: tested
+    evidence:
+      - test: a_transaction_calling_a_contract_outside_the_chain_grant_is_denied
+        file: crates/agent-host/tests/signing.rs
+      - test: a_transaction_over_the_amount_bound_is_denied
+        file: crates/agent-host/tests/signing.rs
+      - test: a_disallowed_call_inside_a_transactions_authorization_tree_is_denied
+        file: crates/agent-host/tests/signing.rs
+      - test: a_disallowed_call_in_any_authorization_entry_of_the_transaction_is_denied
+        file: crates/agent-host/tests/signing.rs
+      - test: a_disallowed_call_inside_an_auth_entrys_tree_is_denied
+        file: crates/agent-host/tests/signing.rs
+      - test: a_disallowed_call_inside_a_delegated_signers_auth_entry_is_denied
+        file: crates/agent-host/tests/signing.rs
+      - test: a_sub_agent_cannot_sign_calls_its_parent_may_not_make
+        file: crates/agent-host/tests/signing.rs
+
+  - id: host-signing-refuses
+    statement: >-
+      The host refuses to sign what the chain vocabulary cannot describe: a
+      fee-bump envelope, a transaction with a second operation or with an
+      operation other than one InvokeHostFunction, and a contract-code upload.
+    status: tested
+    evidence:
+      - test: a_fee_bump_envelope_is_refused
+        file: crates/agent-host/tests/signing.rs
+      - test: a_transaction_with_a_second_operation_is_refused
+        file: crates/agent-host/tests/signing.rs
+      - test: a_transaction_with_an_operation_the_chain_vocabulary_cannot_express_is_refused
+        file: crates/agent-host/tests/signing.rs
+      - test: a_transaction_uploading_contract_code_is_refused
+        file: crates/agent-host/tests/signing.rs
+
+  - id: host-signs-checked
+    statement: >-
+      The keeper signs the encoding of the value the host checked.
+    status: tested
+    evidence:
+      test: the_keeper_signs_the_transaction_that_was_checked
+      file: crates/agent-host/tests/signing.rs
+
+  - id: host-delegation
+    statement: >-
+      In the host, every sub-agent's grant allows a subset of what its
+      parent's allows, over every pair of caveat lists from a small universe.
+    status: tested
+    evidence:
+      test: every_child_allows_a_subset_of_its_parent
+      file: crates/agent-host/tests/delegation.rs
+
+  - id: host-no-grant-tool
+    statement: >-
+      No agent tool call reads or edits a grant.
+    status: tested
+    evidence:
+      test: there_is_no_tool_call_for_grants
+      file: crates/agent-host/tests/delegation.rs
+
+  - id: host-revocation
+    statement: >-
+      Revoking an agent in the host revokes every agent under it.
+    status: tested
+    evidence:
+      test: revoking_an_agent_revokes_its_sub_agents
+      file: crates/agent-host/tests/delegation.rs
+
+  - id: host-check-time
+    statement: >-
+      In one recorded run on an Apple M5 Max, the median check through the
+      Wasm component takes 0.30 to 1.01 microseconds, 15 to 47 times native
+      grant-eval and 3.0 to 3.3 times the same host-side check without
+      WebAssembly, and compiling and instantiating the component takes 22.0
+      ms.
+    status: measured
+    evidence:
+      file: evaluation/results/agent-host-bench.json
+
+  - id: host-tool-call-time
+    statement: >-
+      In the same run, median tool calls through the whole host take 0.68
+      microseconds for a fetch denied by the check, 37 to 47 microseconds for
+      a read resolved and checked, about 10 microseconds for a signature, and
+      160 microseconds for an allowed fetch from a local server.
+    status: measured
+    evidence:
+      file: evaluation/results/agent-host-throughput.json
+
+  - id: host-delegated-preimage
+    statement: >-
+      The host signs a delegated signer's authorization preimage
+      (SorobanAuthorizationWithAddress) after the same network-id check as
+      the account's own.
+    status: tested
+    evidence:
+      test: a_delegated_signers_auth_entry_is_signed_over_the_preimage_hash
+      file: crates/agent-host/tests/signing.rs
+
+  - id: attack-suite-host
+    statement: >-
+      At the agent host, all 31 escalation attempts (10 self-escalation, 21
+      delegation workarounds through paths, URLs and signing requests) are
+      refused, each with the file tree, the second server's request count,
+      the keeper's signature log and every agent's verdicts unchanged, and the
+      3 allowed controls pass.
+    status: measured
+    evidence:
+      file: evaluation/results/agent-host-attacks.json
+
+  - id: agent-identity
+    statement: >-
+      A deployment binds each agent's tool-call channel to the agent id the
+      host issued it.
+    status: assumed
+    evidence:
+      assumption: >-
+        The host is an in-process library whose call takes the caller's agent
+        id as given; it does not confine or authenticate the agent process.
+
+  - id: sole-path
+    statement: >-
+      The agent host is the agent's only path to the file system, the network
+      and signing keys.
+    status: assumed
+    evidence:
+      assumption: >-
+        A deployment property: the agent process has no other file, network
+        or key access than the host's tool calls.
+
+  - id: os-wiring
+    statement: >-
+      The operating system's realpath, its open-descriptor path (F_GETPATH on
+      macOS, /proc/self/fd on Linux) and DNS resolution behave as documented.
+    status: assumed
+    evidence:
+      assumption: >-
+        The host trusts these system calls and the resolver; tests exercise
+        them, nothing proves them.
+
+  # ---------------------------------------------------------------------------
+  # The relay and custody signing
+  - id: relay-nested
+    statement: >-
+      The relay never has the custody key sign a request whose authorization
+      tree nests a call the agent's chain grant denies.
+    status: tested
+    evidence:
+      test: a_disallowed_nested_call_is_never_signed
+      file: crates/grant-relay/tests/relay.rs
+
+  - id: relay-recorded
+    statement: >-
+      The relay never has the custody key sign a request whose recording
+      simulation asks for a call the chain grant denies.
+    status: tested
+    evidence:
+      test: a_disallowed_call_the_simulation_records_is_never_signed
+      file: crates/grant-relay/tests/relay.rs
+
+  - id: relay-channel-auth
+    statement: >-
+      The relay refuses a call that would need the channel account's own
+      authorization.
+    status: tested
+    evidence:
+      test: a_call_that_needs_the_channel_accounts_authorization_is_never_signed
+      file: crates/grant-relay/tests/relay.rs
+
+  - id: relay-local-network
+    statement: >-
+      On a local Stellar network with the Dfns mock as key keeper, the relay
+      confirms an allowed transfer and an allowed nested call, never signs a
+      transfer over its cap or a nested transfer the grant denies, refuses a
+      tampered entry at simulation with no sequence number used, and serves
+      two requests at once on two channels.
+    status: tested
+    evidence:
+      test: relays_allowed_calls_to_confirmation_and_never_signs_denied_ones
+      file: crates/grant-relay/tests/local_network.rs
+
+  - id: relay-frontend
+    statement: >-
+      Nido's unchanged TypeScript relay client relays through the grant relay
+      to confirmation.
+    status: tested
+    evidence:
+      test: the_typescript_client_relays_to_confirmation
+      file: crates/grant-relay/tests/frontend_client.rs
+
+  - id: trees-cover
+    statement: >-
+      The supplied and recorded authorization trees together cover every
+      context the transaction's signatures authorize.
+    status: unproven
+
+  - id: testnet-channel
+    statement: >-
+      On Stellar testnet, channel-sourced classic, Soroban and fee-bump
+      transactions signed only by the custody key, held by the Dfns mock,
+      were accepted, and the same transactions signed by the zeroed master
+      key or an unrelated key were refused with txBAD_AUTH.
+    status: measured
+    evidence:
+      file: evaluation/testnet-channel/run.json
+
+  - id: dfns-transaction-source
+    statement: >-
+      Dfns's Transaction signature kind signs a Stellar transaction whose
+      source account is not the signing key's own address.
+    status: unproven
+
+  - id: dfns-hash
+    statement: >-
+      Dfns signs the 32 bytes of a Hash request directly as the Ed25519
+      message, as a Stellar signature requires.
+    status: unproven
+
+  - id: keeper-trusted
+    statement: >-
+      The key keeper keeps keys from agents and signs only the requests the
+      host or the relay passes to it.
+    status: assumed
+    evidence:
+      assumption: >-
+        The keeper signs whatever reaches it; the grant check in front of it
+        is the gate.
+
+  # ---------------------------------------------------------------------------
+  # Trusted toolchain
+  - id: toolchain-trusted
+    statement: >-
+      rustc compiles the evaluator faithfully for the host and for
+      wasm32v1-none; Charon and Aeneas translate it faithfully; and Aeneas's
+      Lean library (its interaction-tree Result, its loop defined by
+      partial_fixpoint and its models of the Rust items the translation calls)
+      and Lean's kernel are sound.
+    status: assumed
+    evidence:
+      assumption: >-
+        The proofs are about the Lean translation; the translation and the
+        compiler are trusted, not proven.
+
+  - id: runtime-trusted
+    statement: >-
+      Wasmtime, wit-bindgen and wit-component run the component as compiled
+      and pass values across its boundary unchanged.
+    status: assumed
+    evidence:
+      assumption: >-
+        Checked by agreement tests against the native evaluator, not proven.

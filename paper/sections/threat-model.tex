@@ -1,0 +1,62 @@
+\section{Threat Model}\label{sec:threat}
+
+\paragraph{Principals.} The \emph{owner} holds the account's admin key (in Nido,
+a passkey) and through it the admin document: the owner issues root grants,
+revokes them, rotates holder keys and refills budgets. An \emph{agent} holds a
+grant, identified at the Soroban boundary by an ed25519 holder key and at the
+agent host and the relay by the identity the host or relay assigned it. The
+agent host, the relay and the key keeper are operated for the owner.
+
+\paragraph{Adversary.} The adversary is an agent the owner already authorized,
+or anything that controls one, such as injected instructions in the data the
+agent reads. It may choose any tool call, any transaction and any
+authorization tree; sign anything with its holder key; delegate to sub-agents
+it controls; and call any contract its grant reaches. Its goal is authority
+beyond its grant:
+\begin{enumerate}
+\item \textbf{Self-escalation}: edit its own grant, directly or through the
+  admin functions, the account's rules, or its key.
+\item \textbf{Hidden calls}: make a call its grant allows which, inside the
+  same Soroban authorization tree, makes a call its grant does not allow. The
+  tree holds the calls that need the account's authorization; a call's effects
+  that need none are outside it (below).
+\item \textbf{Delegation workarounds}: escape its limits by deploying a
+  contract, creating an account, handing authority to another address
+  (an \code{approve} followed by \code{transfer\_from}), delegating from an
+  ancestor's grant, or spending through siblings whose allowances together
+  exceed their parent's.
+\end{enumerate}
+
+\paragraph{Goal.} At the Soroban boundary, every context that needs the
+account's authorization on an agent's behalf is allowed by that agent's grant,
+and the total spent of the budget asset at or under any grant stays within its
+allowance. At the agent host, every file and network action the host performs
+for an agent is allowed by the agent's grant, and every signature by its
+signing caveats and, for a transaction or authorization entry, by its chain
+caveats on every context the signature authorizes. At the relay, every context of
+a relayed call is allowed by the agent's chain grant before the custody key
+signs. Only the admin document changes a grant.
+
+\paragraph{Assumptions.} The agent host is the agent's only path to files,
+the network and keys\claim{sole-path}, and a deployment binds each agent's
+tool-call channel to the agent id the host issued it\claim{agent-identity}. No
+contract a grant allows can move the account's assets without the account's
+authorization, through a standing token allowance or funds the account
+deposited with it\claim{no-standing-allowance}; such effects need no context
+of the account's authorization, so no caveat or budget sees them. The account's
+document routes holder keys only through the grant signer and names its own
+instance\claim{document-requirements}. The key keeper signs only what the host
+or relay passes it\claim{keeper-trusted}. The Soroban host behaves as
+specified, ed25519 signatures cannot be forged, and SHA-256 is collision
+resistant. The compilers, translators and runtimes in \S\ref{sec:tcb} are
+trusted.
+
+\paragraph{Out of scope.} Information flow: an agent allowed to read a file
+and to reach a host can send the file's contents there. The owner's choice of
+grants: a grant that is too broad is enforced as written. Compromise of the
+owner's admin key, the host, the relay or the key keeper. Confinement of the
+agent process itself, which a process sandbox does and the host does not
+(\S\ref{sec:host}). The repository's other relay, \file{infra/relayer}, which
+fee-sponsors any contract call with valid on-chain authorization and runs no
+grant check; accounts that use a grant signer are still checked on chain
+whichever relay submits. Denial of service and side channels.

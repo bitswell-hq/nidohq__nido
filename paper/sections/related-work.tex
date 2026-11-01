@@ -1,0 +1,140 @@
+\section{Related Work}\label{sec:related}
+
+\paragraph{Capabilities and attenuation.} Dennis and Van Horn describe a
+computation's authority as a list of capabilities, where a process ``may grant
+some of its capabilities to the inferior sphere'' but cannot pass one ``not
+implied by a capability present in the higher sphere''~\cite{dennis}. Miller's
+principle of least authority and attenuation by interposition~\cite{miller},
+SPKI's intersection of authorization tags along a certificate
+chain~\cite{spki} and Capsicum's rule that a derived capability's rights
+``must be a subset of the original rights''~\cite{capsicum} are the same
+monotonicity that Theorems~\ref{thm:atten} and~\ref{thm:chain} state for
+grants. Machine-checked versions of it are older and deeper than ours: seL4's
+integrity proof covers its capability-based access control and holds ``via
+refinement for the C implementation of the kernel''~\cite{sel4Integrity}, and
+CHERI's proofs establish ``a reachable-capability monotonicity property'' of
+the instruction set~\cite{cheriProofs}. Our monotonicity theorems are
+immediate in the model; what is new is enforcing one verified evaluator's
+verdicts at an agent host and inside a smart account's authorization. The
+relay is a deputy holding the custody key for many agents; it avoids the
+confused-deputy problem~\cite{confusedDeputy} by checking the requesting
+agent's grant, not its own authority.
+
+\paragraph{Caveat tokens.} Macaroons embed caveats, ``predicates that restrict
+the macaroon's authority'', and let any holder derive a narrower credential by
+adding one, with chained HMACs giving ``the inability for adversaries to remove
+caveats''~\cite{macaroons}. Biscuit expresses checks in Datalog and uses
+public-key signatures, so a holder ``cannot remove existing blocks without
+invalidating the signature''~\cite{biscuit}. UCAN requires that ``each direct
+delegation MUST either directly restate or attenuate (diminish) its
+capabilities''~\cite{ucan}, and its delegation policies constrain an
+invocation's arguments while leaving stateful conditions ``out of scope of the
+UCAN Policy language''~\cite{ucanDelegation}. ZCAP capabilities ``inherit the
+restrictions from all caveat properties of their parents''~\cite{zcapld}.
+These are bearer credentials whose attenuation is enforced cryptographically;
+what a caveat means is left to the verifier's code. Grants are held by the
+enforcer and used by a holder key, the evaluator that gives caveats their
+meaning is proven to compute the model, and budgets add the stateful
+condition these token languages leave out: spending charged up the delegation
+tree.
+
+\paragraph{Smart-account delegation and session keys.} Account
+abstraction lets ``each account to supply its own validation
+logic''~\cite{erc4337}, and modular accounts add validator and hook
+modules~\cite{erc7579}. ERC-7710 standardizes redeeming a delegation through
+a delegation manager, leaving ``the structure of the
+\code{\_permissionContexts}'' to each manager and recommending audits; it
+names granting ``bounded permissions to AI agents'' as a
+motivation~\cite{erc7710}. ERC-7715 lets an application request permissions
+from a wallet, which ``MAY attenuate(reduce or increase)'' them~\cite{erc7715}.
+MetaMask's delegation framework enforces caveats with enforcer contracts whose
+hooks run ``from leaf to root delegation'' on redemption; a re-delegation can
+add caveats, and ``to understand what the delegation can do, it is necessary to
+analyze all the enforcers being used in the entire delegation
+chain''~\cite{metamaskDelegation}. Its enforcers include per-delegation and
+periodic transfer limits, and it is assured by audits; we found no formal
+verification. Smart Sessions attaches policies with argument conditions and
+ERC-20 spending limits to session keys~\cite{smartSessions}, and Zodiac Roles
+evaluates condition trees over calldata with refillable
+allowances~\cite{zodiacRoles}. On Stellar, OpenZeppelin's smart accounts check
+context rules with policy contracts whose \code{enforce} ``both validates
+conditions and applies state changes''~\cite{ozStellarAccounts}, and an agent
+wallet example caps an agent's spending per period on one
+token~\cite{ozAgentWallet}. Google's Agent Payments Protocol binds an agent's
+payment to the user's intent with signed mandates, whose constraints ``allow
+the verifier to verify that the Checkout and Payment match the User's
+intent''~\cite{ap2}. These systems express richer conditions than our closed
+caveat set, and several have the periodic or refillable budgets we lack. In
+each, a caveat's meaning is the code of its enforcer or policy contract,
+assured by audit and analysed chain by chain; here one evaluator gives every
+caveat its meaning at every boundary, and attenuation, chaining and budget
+safety are theorems about that evaluator's translation. The grant signer also
+relies on Soroban handing a delegated signer every context of the account's
+authorization~\cite{cap7101}, which a policy attached to one rule does not
+see.
+
+\paragraph{Custody policy engines.} Dfns evaluates amount and recipient rules
+on plain value transfers only~\cite{dfnsPolicies}. Other engines decode
+contract calls. Fordefi's policy conditions can specify ``the method's
+parameters and their values''~\cite{fordefiPolicies}, with byte-string, array
+and tuple parameters since May 2026~\cite{fordefiChangelog}; Turnkey's policy
+language reads ``the parsed Ethereum transaction payload'' and, once a
+contract's interface is uploaded, its function calls and
+arguments~\cite{turnkeyPolicies,turnkeyContracts}; and Fireblocks' policy rules
+match contract methods~\cite{fireblocksPolicyApi}, and its own comparison
+claims ``method-level allow and deny by ABI function'' and transaction
+simulation~\cite{fireblocksPolicy}. The engines whose documentation we read
+describe rules over EVM-style calls; we found none that evaluates a Soroban
+authorization tree. Grants differ from all four in three ways: holders
+delegate by attenuation, the evaluator is verified, and the same policy is
+enforced again on chain by the account itself, so the custody key is not the
+only check.
+
+\paragraph{Verified policy evaluation and Rust verification.} Cedar's authors
+proved properties of a Lean model of the language and ``used extensive
+differential random testing to ensure that the implementation matches the
+model''~\cite{cedar}; they describe formally verifying ``the equivalence of the
+deployed code and model'' as the alternative they did not take~\cite{cedarHow}.
+Zelkova encodes AWS access policies into SMT to analyse them~\cite{zelkova}.
+Our policy language is far smaller than Cedar's, and in exchange the deployed
+Rust's translation is proven equal to the model through Charon and
+Aeneas~\cite{charon,aeneas}. Rust can also be verified in place: Verus with
+SMT and specifications written in Rust~\cite{verus}, Creusot through
+Why3~\cite{creusot}, Prusti through Viper~\cite{prusti}, and hax by
+translating to several provers' languages~\cite{hax}. We chose a functional
+translation to Lean for two reasons: the readable model and the translation
+live in one language, so the equivalence is an ordinary Lean theorem, and the
+proofs use Lean's library and kernel rather than an SMT solver's.
+
+\paragraph{WebAssembly sandboxing.} WebAssembly was designed with a formal
+semantics~\cite{wasm}, mechanized in Isabelle~\cite{wasmcert}. vWasm and rWasm
+compile Wasm into provably sandboxed code~\cite{bosamiya}, RLBox sandboxes
+libraries inside Firefox with Wasm~\cite{rlbox}, and WaVe is a verified WASI
+runtime ensuring that each file a sandbox accesses lies within its root
+directory and that sockets reach only allow-listed addresses~\cite{wave}.
+These isolate a module from resources it was not given. The agent host instead
+gives an agent's tool calls a per-call check against a delegable grant, and
+runs the checking evaluator itself as a component that imports
+nothing~\cite{componentModelDocs}; it trusts Wasmtime~\cite{wasmtime} rather
+than verifying the runtime, and confines no agent.
+
+\paragraph{Agent security.} CaMeL tracks data flow through an agent's program
+and enforces capability policies, written as Python functions, when tools are
+called~\cite{camel}. FIDES ``propagates labels in messages, actions, tool calls
+and results'' and executes consequential actions only when a policy over those
+labels allows~\cite{fides}; both address the information flow that grants
+leave out. Progent expresses privilege as ``symbolic rules over tool names and
+arguments'' in JSON Schema and uses an SMT solver to decide whether a policy
+update narrows or expands the agent's actions~\cite{progent}, and AgentSpec
+lets users write rules with ``triggers, predicates, and enforcement
+mechanisms'' evaluated at runtime~\cite{agentspec}; CaMeL and Progent evaluate
+on AgentDojo~\cite{agentdojo}. A theory of what such gates can enforce shows
+that ``deterministic pre-execution gates enforce exactly the nonempty
+register-representable safety policies''~\cite{whatCanBeEnforced}; a grant
+check is such a gate. nono
+confines agent processes at the kernel with path, process and network rules
+down to the HTTP method and path~\cite{nono}. Grants share Progent's monotonic
+narrowing and nono's placement in front of the agent's resources, but take
+their checks down to argument values, carry them past the agent's process into
+the smart account that executes the transaction, and prove the evaluator that
+decides them.

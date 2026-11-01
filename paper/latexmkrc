@@ -1,0 +1,7 @@
+# latexmk settings shared by the paper and the slides (tools/build.sh).
+$pdf_mode = 1;
+$bibtex_use = 2;
+$max_repeat = 6;
+$silent = 1;
+# Keep latexmk's undefined-reference and citation check fatal.
+$warnings_as_errors = 1;

@@ -1,0 +1,22 @@
+% From the deployed Rust to the readable model. Solid green: proven in Lean;
+% dashed orange: trusted. Shared by the paper and the slides.
+\begin{tikzpicture}[
+    stage/.style={box, minimum height=11mm, text width=30mm},
+    dep/.style={box, minimum height=9mm, text width=30mm, fill=boundary!6},
+  ]
+  \node[stage] (rust) at (0,0) {\textbf{Rust evaluator}\\\file{crates/grant-eval}};
+  \node[stage] (lean) at (4.6,0) {\textbf{Lean translation}\\\file{Extracted/GrantEval.lean}};
+  \node[stage] (model) at (9.2,0) {\textbf{Readable model}\\\file{Grant.lean}, \file{Vocab/},\\\file{Budget.lean}};
+  \node[stage] (thms) at (13.8,0) {\textbf{Theorems 1--4}\\on the model; all but the\\step bound carry over\\to the translation};
+
+  \draw[flow, trusted] (rust) -- node[lbl, above] {Charon,} node[lbl, below] {Aeneas} (lean);
+  \draw[flow, proven] (lean) -- node[lbl, above] {\file{Equiv/}:} node[lbl, below] {equal} (model);
+  \draw[flow, proven] (model) -- node[lbl, above] {proven} (thms);
+
+  \node[dep] (signer) at (4.6,-2.4) {grant signer: Soroban\\\code{wasm32v1-none}};
+  \node[dep] (comp) at (9.2,-2.4) {component in the agent host:\\\code{wasm32v1-none}, Wasmtime};
+  \node[dep] (relay) at (13.8,-2.4) {relay\\native build};
+  \draw[trusted] (rust) -- node[lbl, left] {rustc} (0,-3.6) -- (13.8,-3.6);
+  \foreach \n/\x in {signer/4.6, comp/9.2, relay/13.8}
+    \draw[flow, trusted] (\x,-3.6) -- (\n.south);
+\end{tikzpicture}

@@ -1,0 +1,235 @@
+\section{Evaluation}\label{sec:eval}
+
+We ask four questions. Do the boundaries refuse the escalations of
+\S\ref{sec:threat} without changing state? Does the deployed evaluator's cost
+follow the proven step count? What does enforcement cost at each boundary?
+Does custody signing over channel accounts work on a public network?
+
+\paragraph{Method.} Every number below comes from a recorded run, and each
+claim tag names the result file it is read from; this paper ran no new
+experiments. The Soroban runs execute every contract from its wasm in
+\code{soroban-env-host} 27.0.1 under enforcing authorization: Perch's account,
+\code{WebAuthn} verifier, document compiler and interpreter as deployed on
+testnet, Nido's factory and grant signer, and a test dApp. Each agent call is
+one \code{AddressWithDelegates} entry carrying the holder's signature, so every
+account's \code{\_\_check\_auth} runs. Soroban CPU instructions and memory are
+the host's metered costs, the same on every machine and every run, and they
+are the costs of a network running that host version; no network was measured.
+Agent-host times are wall clock, from one recorded run on an Apple M5 Max
+under macOS 26.5.2 with the build profile, scheduling class, power source and
+load recorded; Table~\ref{tab:host-cost} gives the method. The testnet result
+is a recorded run of a program that creates its own accounts and keys.
+
+\subsection{Refusals}
+
+The attack suite gives every attempt to the agent the owner authorized, and
+snapshots state before and after it: at the Soroban boundary the balances of
+the account, the recipients, the attacker and the dApp instances in both
+assets, every grant (holder key, caveats, allowance, spent, revoked), and the
+account's revision, document hash and pending upgrade; at the host the file
+tree's hashes and symlink targets, a second server's request count, the key
+keeper's signature log and every agent's verdict on two probe files. A refusal
+passes only if the snapshots are equal. Controls are allowed calls of the same
+shape as the attack next to them.
+
+\begin{table}[t]
+\caption{Attack suite: attempts, refusals with state unchanged, and allowed
+controls.}\label{tab:attacks}
+\small
+\setlength\tabcolsep{4pt}
+\begin{tabular}{@{}llrrr@{}}
+\toprule
+\textbf{Boundary} & \textbf{Category} & \textbf{Attempts} & \textbf{Refused} & \textbf{Controls} \\
+\midrule
+Soroban & self-escalation & 16 & 16 & 0 \\
+ & nested-call smuggling & 8 & 8 & 1 \\
+ & delegation workarounds & 18 & 18 & 6 \\
+ & oversubscription & 3 & 3 & 2 \\
+Host & self-escalation & 10 & 10 & 0 \\
+ & delegation workarounds & 21 & 21 & 3 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+In Soroban simulation all 45 attempts are refused with state unchanged and
+the 9 controls pass\claim{attack-suite-soroban}; at the host all 31 are, and
+its 3 controls pass\claim{attack-suite-host} (Table~\ref{tab:attacks}). The
+Soroban attempts include the grant signer's admin functions through the
+account and as the grant signer itself; the account's \code{apply\_doc},
+\code{execute} and \code{schedule\_upgrade}; documents that wrongly scope an
+agent rule to the account or to the grant signer; transfers to the attacker
+nested two to five calls deep behind an allowed call, or left out of the
+signed tree; contract deployment; \code{approve} and \code{burn} of the
+budget asset; arguments of another type with the same bytes (a muxed
+recipient, a \code{u64} amount, a \code{u32} for the bytes of its XDR, a
+string for a symbol); revoked and rotated-out keys; a replayed entry; and
+siblings and a grandchild spending past an ancestor's allowance. Refusals come
+from three places: the account (no rule covers the call), the grant signer
+(\code{NotHolder}, \code{AccountCall}, \code{ContractCreation},
+\code{UnmeteredCall}, \code{NotAllowed}, \code{Overdrawn}, \code{Revoked}, a
+failed holder signature), and the host (no entry covers the call, a used nonce, a
+re-entry). The host attempts are tool calls that issue or edit grants,
+sub-agents using a wider grant than their parent's, revoked agents, paths that
+name the work directory and reach outside it, URLs that name the allowed host
+and reach another (another port or scheme, an address literal, a trailing
+dot, userinfo, redirects), and signing requests for another key, network or
+payload kind. These are simulation and host results; the attack suite has not
+been run through a local Stellar network or through the relay.
+
+The suite found two things. A muxed address (\code{M\ldots}) of a recipient
+pinned by \code{argEq} is refused although it names the same account's key,
+since values compare exactly. And it found a defect in the host's wiring: the
+host signed only the account's own authorization preimage, not the
+delegated-signer preimage a grant-signer holder signs, so an agent whose holder
+key the keeper held could not authorize through its grant signer. The host
+now signs both after the same network check\claim{host-delegated-preimage}. The
+defect failed closed, and it sat in the unverified wiring, where
+Table~\ref{tab:tcb} puts the remaining risk.
+
+\paragraph{Workloads.} Two scripted agent sessions with sub-agents run in the
+simulation, each call one transaction through the account: \emph{payments},
+with a per-call cap of 100 and an allowance of 400, and a payroll sub-agent
+pinned to one payee; and \emph{defi-router}, whose calls nest the account's
+transfers up to four contexts deep. Every call has the expected outcome, and
+every refused one leaves state unchanged. The router session shows the
+positional limit of \S\ref{sec:grants}: its calls carry amounts at different
+argument positions, so it bounds amounts by its allowance alone.
+
+\subsection{The cost-bound cross-check}
+
+Theorem~\ref{thm:total}'s bound is about a counted model. To test whether the
+deployed evaluator follows the model's step count, the harness measures the
+grant signer's \code{\_\_check\_auth} on five sweeps, each varying one thing:
+the number of caveats; the length of a byte-string argument, compared by an
+\code{argEq} and not compared; the number of contexts; and the length of a
+\code{contractIn} list. Every point is measured twice on the same stored
+grant: passing, with every caveat holding, and failing, with the first caveat
+failing on the first context, so the evaluator stops at once. Loading the
+grant, verifying the signature and mapping contexts to actions cost the same
+in both, so the difference is the evaluator's own work. For every point the
+harness writes the grant and actions in the evaluator's form, and the Lean
+package evaluates its own counted evaluator and bound on them.
+
+The contract, the native evaluator and the Lean model agree on every verdict.
+Over the 28 pairs, the evaluator's work is 96 to 164 CPU instructions per Lean
+step, and a least-squares fit through the origin of the instruction
+difference on the step difference gives 99.4 instructions per step with
+$R^2 = 0.986$\claim{deployed-cost}. The fit is through the origin over
+differences, so it prices evaluator work only; the mapping of contexts to
+actions, which grows with argument size, is outside it: with an argument that
+no caveat compares, the whole check grows from 1.072M to 1.255M instructions
+between 0 and 16 KiB while the model's steps stay at 68. Priced at that
+constant, the bound covers the whole check above the zero-caveat cost on every
+point, by a factor of more than 12, and the margin widens as arguments,
+contexts and lists grow, since the bound grows with the product of grant and
+action sizes and the measured cost with their sum\claim{bound-looseness}. That
+the evaluator's work is proportional to the step count on every input remains
+unproven\claim{deployed-cost-general}.
+
+\subsection{Cost on chain}
+
+Table~\ref{tab:signer-cost} gives the grant signer's whole
+\code{\_\_check\_auth} on one context, from the caveats sweep: instantiating
+the contract, loading the grant, checking the signature, mapping and
+evaluating. The zero-caveat check costs 972,392 instructions, which the cost
+model counts as zero. Under 4 caveats each further context costs about 97,000
+instructions\claim{soroban-check-cost}. Whole agent transactions through the
+account cost 2.17M to 2.69M instructions with one context and 5.04M with four
+nested contexts, against a limit of 400M per
+transaction\claim{soroban-tx-cost}.
+
+\begin{table}[t]
+\caption{Grant signer \code{\_\_check\_auth} on one context, every caveat
+holding (CPU instructions and memory bytes).}\label{tab:signer-cost}
+\small
+\begin{tabular}{@{}rrrr@{}}
+\toprule
+\textbf{Caveats} & \textbf{CPU} & \textbf{Memory} & \textbf{Lean steps} \\
+\midrule
+0 & 972{,}392 & 416{,}582 & 1 \\
+1 & 1{,}024{,}459 & 420{,}766 & 60 \\
+4 & 1{,}168{,}746 & 434{,}627 & 188 \\
+16 & 1{,}735{,}302 & 489{,}255 & 700 \\
+64 & 4{,}003{,}738 & 706{,}951 & 2{,}748 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Cost in the host}
+
+Table~\ref{tab:host-cost} times one check three ways: native
+\code{grant-eval} on values built once; the host-side check without
+WebAssembly, converting the host's WIT values natively and evaluating; and
+the component through Wasmtime. Each case is a three-caveat grant and an
+action it allows; the chain case checks a three-context tree. The component
+check takes 0.30 to 1.01\,\textmu s, 15 to 47 times native and about 3 times
+the host-side check without WebAssembly, so the price of running the deployed
+build in a component is about a factor of 3 over checking natively in the
+host; compiling and instantiating the component takes 22.0\,ms, once per
+host\claim{host-check-time}. A whole tool call costs more than its check: a
+denied fetch 0.68\,\textmu s, a read resolved and checked 37 to
+47\,\textmu s, a signature about 10\,\textmu s, and an allowed fetch from a
+local server 160\,\textmu s\claim{host-tool-call-time}. The load average was
+about 5.5 during the run, and macOS cannot pin a thread to a core, so these
+are the medians of one run, not a bound.
+
+\begin{table}[t]
+\caption{Per-check time (ns): medians with 95\% confidence intervals over 101
+interleaved rounds, after a 200\,ms warm-up per operation, timed in batches of
+at least 2\,ms; ratios within a round.}\label{tab:host-cost}
+\small
+\setlength\tabcolsep{4pt}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+\textbf{Case} & \textbf{Native} & \textbf{No Wasm} & \textbf{Component} & \textbf{Ratio} \\
+\midrule
+files & 12.5 & 182.5 & 579.9 & 46.5$\times$ \\
+ & {\scriptsize 12.4--12.6} & {\scriptsize 180.7--183.6} & {\scriptsize 579.1--581.2} & \\
+network & 7.6 & 90.4 & 298.6 & 39.6$\times$ \\
+ & {\scriptsize 7.5--7.6} & {\scriptsize 89.9--90.7} & {\scriptsize 298.0--299.2} & \\
+signing & 15.9 & 127.7 & 391.5 & 24.6$\times$ \\
+ & {\scriptsize 15.8--16.0} & {\scriptsize 126.8--128.3} & {\scriptsize 390.8--392.3} & \\
+chain (3 ctx) & 67.9 & 341.6 & 1{,}006.7 & 14.9$\times$ \\
+ & {\scriptsize 67.4--68.2} & {\scriptsize 341.0--342.8} & {\scriptsize 1{,}003.8--1{,}009.2} & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{The relay}
+
+The relay was run end to end on a local Stellar network
+(\file{stellar/quickstart}, core and RPC v29, protocol 28) with the Dfns client
+signing through the Dfns mock. It confirmed an allowed transfer and an allowed
+call whose tree nests an allowed transfer; it never had the custody key sign a
+transfer over its cap or a call whose nested transfer the grant denies; it
+refused a tampered entry at simulation without using a sequence number; and
+it served two requests at once on two channels\claim{relay-local-network}.
+Nido's unchanged TypeScript client relayed to confirmation through
+it\claim{relay-frontend}. These are functional tests; the relay has no cost,
+throughput or attack-suite measurement.
+
+\subsection{Custody signing over channel accounts}
+
+On Stellar testnet (protocol 29), three fresh accounts were given the custody
+key as their only weighted signer (master weight 0, thresholds 1). For both
+Dfns payload kinds that sign a Stellar transaction, \code{Hash} and
+\code{Transaction}, a classic payment, a Soroban \code{InvokeHostFunction}
+and a fee bump of a Soroban call, each sourced from a channel and signed only
+by the custody key, were accepted; Horizon's records show every signature
+verifying under the custody key. The same payment signed by the channel's
+zeroed master key or by an unrelated key, a Soroban transfer signed by an
+unrelated key, and a fee bump whose outer signature was the fee source's
+zeroed master key were all refused with \code{txBAD\_AUTH} and used no
+sequence number\claim{testnet-channel}. The custody key was held by the Dfns
+mock, so this shows what the network accepts, not what Dfns will
+sign (\S\ref{sec:relay}).
+
+\paragraph{Not measured.} The local Stellar network for the grant signer and
+the attack suite; the relay's cost, throughput and attack suite; throughput
+against the size of the channel-account swarm; sibling spends submitted at
+once through the swarm; and the host's signature authorizing a call through
+a grant signer on chain. For concurrent sibling spends the protocol gives an
+argument, not a measurement: two transactions whose footprints write the same
+ledger entry conflict, and the result must be ``as if'' they were applied in
+sequence~\cite{cap63}, so the later one in the protocol's order reads the
+earlier one's charge to their common ancestors.
