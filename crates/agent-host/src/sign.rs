@@ -73,6 +73,18 @@ pub enum RequestPayload {
     Message(String),
 }
 
+impl RequestPayload {
+    /// The payload kind the signing grant checks.
+    #[must_use]
+    pub fn kind(&self) -> Payload {
+        match self {
+            Self::Transaction(_) => Payload::Transaction,
+            Self::AuthEntry(_) => Payload::AuthEntry,
+            Self::Message(_) => Payload::Message,
+        }
+    }
+}
+
 /// A request turned into its signing action, the chain actions it
 /// authorizes, and the keeper call it makes.
 #[derive(Debug)]

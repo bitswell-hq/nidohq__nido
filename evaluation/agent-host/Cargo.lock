@@ -23,6 +23,7 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "grant-eval",
+ "grant-relay",
  "hex",
  "nido-key-keeper",
  "rustix",
@@ -648,6 +649,24 @@ dependencies = [
 [[package]]
 name = "grant-eval"
 version = "0.1.0"
+
+[[package]]
+name = "grant-relay"
+version = "0.1.0"
+dependencies = [
+ "ed25519-dalek",
+ "getrandom",
+ "grant-eval",
+ "hex",
+ "nido-key-keeper",
+ "serde",
+ "serde_json",
+ "sha2",
+ "stellar-strkey",
+ "stellar-xdr",
+ "tiny_http",
+ "ureq",
+]
 
 [[package]]
 name = "hashbrown"
@@ -1301,6 +1320,7 @@ version = "27.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "05ff843326969bdf1ef673dcdba94c08f4a3c8f1e58d6e6ef39b1bd4f749179a"
 dependencies = [
+ "base64 0.22.1",
  "crate-git-revision",
  "escape-bytes",
  "ethnum",

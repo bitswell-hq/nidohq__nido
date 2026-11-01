@@ -194,6 +194,7 @@ fn research_grant(sb: &Sandbox, api: &Server) -> Grants {
             SigningCaveat::NetworkIn(vec![STANDALONE.into()]),
             SigningCaveat::PayloadIn(vec![Payload::Message, Payload::AuthEntry]),
         ],
+        chain: Vec::new(),
     }
 }
 
@@ -203,6 +204,7 @@ fn summarizer_add() -> Grants {
         files: vec![FileCaveat::ModeIn(vec![Mode::Read])],
         network: vec![NetworkCaveat::HostIn(vec![])],
         signing: vec![SigningCaveat::PayloadIn(vec![Payload::Message])],
+        chain: Vec::new(),
     }
 }
 
@@ -517,6 +519,7 @@ fn run_attacks(sb: &Sandbox, api: &Server, other: &Server) -> Result<Vec<AttackR
             Payload::AuthEntry,
             Payload::Message,
         ])],
+        chain: Vec::new(),
     };
     let wide_child = match a
         .host

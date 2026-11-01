@@ -263,11 +263,13 @@ impl<K: KeyKeeper> Host<K> {
     }
 
     fn sign(&mut self, grant: &Lowered, request: &sign::Request) -> Result<Output, CallError> {
-        let prepared = sign::prepare(request).map_err(CallError::Failed)?;
+        // The signing action is the request's key, network and payload kind,
+        // checked before the payload is decoded.
+        let kind = request.payload.kind();
         let action = wit::signing::Action {
-            key: prepared.key.as_str().as_bytes().to_vec(),
-            network: prepared.network.as_bytes().to_vec(),
-            payload: grant::lower_payload(prepared.kind),
+            key: request.key.as_bytes().to_vec(),
+            network: request.network.as_bytes().to_vec(),
+            payload: grant::lower_payload(kind),
         };
         let allowed = self
             .evaluator
@@ -277,11 +279,12 @@ impl<K: KeyKeeper> Host<K> {
             return Err(CallError::Denied {
                 vocabulary: Vocabulary::Signing,
                 action: format!(
-                    "{:?} signature by {} on {:?}",
-                    prepared.kind, prepared.key, prepared.network
+                    "{kind:?} signature by {} on {:?}",
+                    request.key, request.network
                 ),
             });
         }
+        let prepared = sign::prepare(request).map_err(CallError::Failed)?;
         let chain = |evaluator: &mut Evaluator, actions: &[wit::chain::Action]| {
             evaluator
                 .chain_all(&grant.chain, actions)

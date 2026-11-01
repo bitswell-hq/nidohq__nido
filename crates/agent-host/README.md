@@ -126,9 +126,9 @@ trusted part of this crate, kept to three modules.
 
 The agent names a key, a network passphrase and a payload. The host checks
 the signing action (key id, passphrase, payload kind) against the signing
-grant and, for a transaction or an authorization entry, every context the
-signature authorizes against the chain grant with `allows_all`. Only then
-does it call the `KeyKeeper`. The agent holds no key. A denied or refused
+grant before it decodes the payload. For a transaction or an authorization
+entry it then checks every context the signature authorizes against the
+chain grant with `allows_all`. Only then does it call the `KeyKeeper`. The agent holds no key. A denied or refused
 request never reaches the keeper.
 
 | Payload | Agent supplies | Chain actions checked | Keeper signs |
