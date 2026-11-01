@@ -1,4 +1,5 @@
-import { NATIVE_SAC_ID, NETWORK_NAME } from "../network.js";
+import { nidoKey } from "@nidohq/passkey-sdk";
+import { EXPLORER_NETWORK, NATIVE_SAC_ID, NETWORK_NAME } from "../network.js";
 import { sanitizeDecimals } from "./balances.js";
 import { sanitizeIconUrl } from "./icons.js";
 import type { AssetCandidate } from "./types.js";
@@ -16,7 +17,7 @@ import type { AssetCandidate } from "./types.js";
  * probe needs (issue #71).
  */
 export const CURATED_LIST_URL =
-  `https://api.stellar.expert/explorer/${NETWORK_NAME}/asset-list/top50`;
+  `https://api.stellar.expert/explorer/${EXPLORER_NETWORK}/asset-list/top50`;
 export const SOROSWAP_LIST_URL = "https://api.soroswap.finance/api/tokens";
 
 const isContractId = (s: unknown): s is string =>
@@ -60,9 +61,9 @@ export function pluckSoroswapNetwork(doc: unknown): unknown {
   return doc.find((n) => (n as { network?: unknown })?.network === NETWORK_NAME) ?? null;
 }
 
-const LISTS: { url: string; cacheKey: string; pluck: (doc: unknown) => unknown }[] = [
-  { url: CURATED_LIST_URL, cacheKey: "nido:assets:curated", pluck: (doc) => doc },
-  { url: SOROSWAP_LIST_URL, cacheKey: "nido:assets:curated:soroswap", pluck: pluckSoroswapNetwork },
+const LISTS: { url: string; cacheKey: () => string; pluck: (doc: unknown) => unknown }[] = [
+  { url: CURATED_LIST_URL, cacheKey: () => nidoKey("assets:curated"), pluck: (doc) => doc },
+  { url: SOROSWAP_LIST_URL, cacheKey: () => nidoKey("assets:curated:soroswap"), pluck: pluckSoroswapNetwork },
 ];
 
 async function fetchList(list: (typeof LISTS)[number]): Promise<AssetCandidate[]> {
@@ -73,7 +74,7 @@ async function fetchList(list: (typeof LISTS)[number]): Promise<AssetCandidate[]
     const parsed = parseAssetList(list.pluck(doc));
     if (parsed.length > 0) {
       try {
-        localStorage.setItem(list.cacheKey, JSON.stringify(doc));
+        localStorage.setItem(list.cacheKey(), JSON.stringify(doc));
       } catch {
         /* storage full/blocked — caching is best-effort */
       }
@@ -81,7 +82,7 @@ async function fetchList(list: (typeof LISTS)[number]): Promise<AssetCandidate[]
     return parsed;
   } catch {
     try {
-      const cached = localStorage.getItem(list.cacheKey);
+      const cached = localStorage.getItem(list.cacheKey());
       if (cached) return parseAssetList(list.pluck(JSON.parse(cached)));
     } catch {
       /* corrupt cache — treat as absent */

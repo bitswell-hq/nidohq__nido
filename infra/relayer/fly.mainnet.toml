@@ -1,0 +1,88 @@
+# Mainnet relayer. Sibling config to fly.toml (testnet, app "nido"), same
+# Dockerfile/Caddyfile/plugin code — only the app identity, network, Redis
+# target, and money-handling limits differ. Deploy with:
+#   flyctl deploy infra/relayer --config infra/relayer/fly.mainnet.toml --remote-only --ha=false
+#
+# The app itself must exist before the first deploy — `fly deploy` does not
+# create one from a --config file. One-time setup:
+#   fly apps create nido-mainnet
+# (see docs/RUNBOOKS.md for the rest of the first-deploy checklist: funding
+# the fee-payer/treasury/channel accounts with real XLM, and setting a real
+# API_KEY secret — none of that is in this file).
+#
+# NOT YET DEPLOYED. FEE_LIMIT and FUNDER_TOPUP_STROOPS below are the literal
+# string "<PLACEHOLDER>" rather than a borrowed testnet number, so deploying
+# this file unedited fails loud (the relayer errors on a non-numeric value)
+# instead of silently going live with a testnet-sized limit. Pick real
+# values for real money before ever running this — the testnet FEE_LIMIT
+# (1000 XLM/24h) is sized as "a recoverable drain of free faucet money";
+# that reasoning does not carry over. grep -rn '<PLACEHOLDER>' to find every
+# value like this across the repo before the mainnet cutover.
+app = "nido-mainnet"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+  [build.args]
+    # Bakes in config/config.mainnet.json instead of config/config.json as
+    # /app/config/config.json — see the Dockerfile's own comment on the
+    # CONFIG_FILE arg for why these can't share one file.
+    CONFIG_FILE = "config.mainnet.json"
+
+[env]
+  APP_PORT = "8090"
+  # Prometheus metrics on :8081 (/metrics + /debug/metrics/scrape). Scraped by
+  # Fly's managed Prometheus over 6PN via [metrics] below; NOT added to
+  # [http_service] so it stays private (only :8080 is public). Feeds the alerts
+  # in RUNBOOKS §5 (health, fee-limit ≥80%, tx error rate).
+  METRICS_ENABLED = "true"
+  REPOSITORY_STORAGE_TYPE = "redis"
+  REDIS_KEY_PREFIX = "nido-mainnet-relayer"
+  # Redis is self-hosted as a separate Fly app (infra/relayer-redis's
+  # fly.mainnet.toml, app "nido-mainnet-redis") — a distinct instance from
+  # testnet's, not a shared one, so a testnet incident can't touch mainnet job
+  # state or vice versa. Reached over private 6PN networking.
+  #
+  # Unlike testnet's, this Redis requires a password (see
+  # infra/relayer-redis/fly.mainnet.toml's own comment for why) — so
+  # REDIS_URL is NOT a plain env var here. Set it as a Fly secret instead:
+  #   fly secrets set -a nido-mainnet \
+  #     REDIS_URL="redis://:<REDIS_PASSWORD value>@nido-mainnet-redis.internal:6379"
+  REDIS_POOL_MAX_SIZE = "10"
+  TRANSACTION_EXPIRATION_HOURS = "6"
+  STELLAR_NETWORK = "mainnet"
+  FUND_RELAYER_ID = "channels-fee-payer"
+  RATE_LIMIT_REQUESTS_PER_SECOND = "20"
+  RATE_LIMIT_BURST_SIZE = "60"
+  # See the file-level comment above — real XLM now, not testnet faucet money.
+  # 100 XLM/day: a circuit breaker sized for "recoverable worst-case drain"
+  # during a bounded one-time demo, not a usage estimate — raise + redeploy
+  # live if real traffic needs more headroom.
+  FEE_LIMIT = "1000000000"
+  FEE_RESET_PERIOD_SECONDS = "86400"
+  # Same as testnet's value — this is a functional minimum (account reserve
+  # + margin for a Soroban smart account), not a risk knob, so it isn't
+  # trimmed down just because it's real money now.
+  FUNDER_TOPUP_STROOPS = "50000000"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "30s"
+    method = "GET"
+    path = "/api/v1/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+
+[metrics]
+  port = 8081
+  path = "/debug/metrics/scrape"

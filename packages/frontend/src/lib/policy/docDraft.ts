@@ -2,9 +2,10 @@
 // (sibling of policyDraft.ts, which backs the raw add_context_rule mode).
 //
 // Doc mode emits a perch PolicyDoc — for the showcase, the canned v1
-// template: one scoped session key (a delegated signer restricted to one
-// contract's named functions, with an expiry) optionally composed with a
-// cumulative spending cap. The pure layer validates the form draft, builds
+// template: one scoped session key (a delegated or passkey signer restricted
+// to one contract's named functions, with an expiry) optionally composed with
+// a cumulative spending cap and, for a transfer-only rule, the one address it
+// may pay. The pure layer validates the form draft, builds
 // the document via the SDK, and decides which apply route the transaction
 // takes; the component does the RPC + signing.
 
@@ -12,7 +13,6 @@ import {
   buildPolicyDoc,
   parsePolicyDoc,
   perch,
-  scopedSessionKeyDoc,
   type FlatDocLimits,
   type PolicyDoc,
 } from '@nidohq/passkey-sdk';
@@ -57,6 +57,9 @@ export interface SessionDocDraft {
   notAfterLedger: number | null;
   /** Cumulative cap, or null for none. */
   cap: { stroops: string; periodLedgers: number } | null;
+  /** The only address `transfer` may pay (an `address-eq` on its argument
+   *  1); only with functions exactly `transfer`. Absent = any address. */
+  recipient?: string;
 }
 
 /** Parse the functions input to a doc function list. Empty input means the
@@ -134,6 +137,16 @@ export function validateSessionDocDraft(
     }
   }
 
+  if (draft.recipient !== undefined) {
+    if (!isStellarAddress(draft.recipient.trim())) {
+      errors.push('Recipient is not a valid C- or G-address.');
+    }
+    const fns = parseFunctionsInput(draft.functionsInput);
+    if (fns?.length !== 1 || fns[0] !== 'transfer') {
+      errors.push('A recipient restriction needs the functions to be exactly transfer.');
+    }
+  }
+
   if (draft.notAfterLedger !== null) {
     if (!Number.isInteger(draft.notAfterLedger) || draft.notAfterLedger <= 0) {
       errors.push('Expiry ledger must be a positive integer.');
@@ -156,41 +169,23 @@ export function validateSessionDocDraft(
   return { ok: errors.length === 0, errors };
 }
 
-/** Build the template document from a validated draft. Delegated signers
- *  route through the SDK's canned scopedSessionKeyDoc; passkey signers (the
- *  legacy delegate flow's dApp-origin session passkey) compose the same
- *  one-rule shape via buildPolicyDoc with an external signer declaration.
+/** Build the template document from a validated draft: one rule for the
+ *  session signer (a delegated address, or a passkey declared as an
+ *  external signer), with its functions, expiry, cap and recipient.
  *  Precondition: `validateSessionDocDraft(draft, limits).ok`. */
 export function draftToDoc(draft: SessionDocDraft, networkPassphrase: string): PolicyDoc {
   const functions = parseFunctionsInput(draft.functionsInput);
-  if (draft.signer.kind === 'delegated') {
-    return scopedSessionKeyDoc({
-      sessionAddress: draft.signer.address.trim(),
-      targetContract: draft.targetContract.trim(),
-      ...(functions !== undefined ? { functions } : {}),
-      ...(draft.notAfterLedger !== null ? { notAfterLedger: draft.notAfterLedger } : {}),
-      ...(draft.cap !== null
-        ? {
-            cap: {
-              limitStroops: BigInt(draft.cap.stroops),
-              periodLedgers: draft.cap.periodLedgers,
-            },
-          }
-        : {}),
-      network: networkPassphrase,
-      name: draft.name.trim(),
-      signerId: 'session',
-    });
-  }
   return buildPolicyDoc({
     network: networkPassphrase,
     signers: [
-      {
-        id: 'session',
-        kind: 'passkey',
-        verifier: draft.signer.verifier.trim(),
-        publicKey: draft.signer.publicKeyHex.trim().toLowerCase(),
-      },
+      draft.signer.kind === 'delegated'
+        ? { id: 'session', kind: 'delegated', address: draft.signer.address.trim() }
+        : {
+            id: 'session',
+            kind: 'passkey',
+            verifier: draft.signer.verifier.trim(),
+            publicKey: draft.signer.publicKeyHex.trim().toLowerCase(),
+          },
     ],
     permissions: [
       {
@@ -198,6 +193,10 @@ export function draftToDoc(draft: SessionDocDraft, networkPassphrase: string): P
         on: { contract: draft.targetContract.trim() },
         by: ['session'],
         ...(functions !== undefined ? { functions } : {}),
+        // SEP-41 transfer(from, to, amount): `to` is argument 1.
+        ...(draft.recipient !== undefined
+          ? { args: [{ index: 1, pred: { type: 'address-eq' as const, address: draft.recipient.trim() } }] }
+          : {}),
         ...(draft.notAfterLedger !== null ? { until: draft.notAfterLedger } : {}),
         ...(draft.cap !== null
           ? { cap: { limit: draft.cap.stroops, 'period-ledgers': draft.cap.periodLedgers } }
@@ -259,10 +258,23 @@ export function upsertSessionRule(
   draft: SessionDocDraft,
   networkPassphrase: string,
 ): { doc: PolicyDoc; signerId: string } {
-  const template = draftToDoc(draft, networkPassphrase);
   assertSameNetwork(current, networkPassphrase);
+  const { signers, rules, signerId } = mergeSessionRule(current.signers, current.rules, draft, networkPassphrase);
+  const doc = rebuildDoc(current, signers, rules, networkPassphrase);
+  // rebuildDoc may have applied the legacy owner→admin rename under us.
+  return { doc, signerId: signerId === 'owner' && !doc.signers.some((s) => s.id === 'owner') ? 'admin' : signerId };
+}
 
-  const { signers: merged, signerId } = mergeSignerDecl(current.signers, template.signers[0]);
+/** Merge `draft`'s session rule and its signer into a signer and rule list,
+ *  without rebuilding the document (see {@link upsertSessionRule}). */
+function mergeSessionRule(
+  signers: readonly WireSigner[],
+  rules: readonly WireRule[],
+  draft: SessionDocDraft,
+  networkPassphrase: string,
+): { signers: WireSigner[]; rules: WireRule[]; signerId: string } {
+  const template = draftToDoc(draft, networkPassphrase);
+  const { signers: merged, signerId } = mergeSignerDecl(signers, template.signers[0]);
   const rule = {
     ...template.rules[0],
     principals: { type: 'all' as const, signers: [signerId] },
@@ -273,20 +285,47 @@ export function upsertSessionRule(
   // (the account's `admin`/anti-brick rule, or any other non-session rule) by
   // reusing its name. The new session rule is always contract-scoped; refuse
   // when an existing rule with the same name is NOT.
-  const existing = current.rules.find((r) => r.name === rule.name);
+  const existing = rules.find((r) => r.name === rule.name);
   if (existing && existing.scope.type !== 'contract') {
     throw new Error(
       `A core account rule named "${rule.name}" already exists; a session grant ` +
         `cannot replace it. Choose a different label.`,
     );
   }
-  const rules = existing
-    ? current.rules.map((r) => (r.name === rule.name ? rule : r))
-    : [...current.rules, rule];
+  return {
+    signers: merged,
+    rules: existing ? rules.map((r) => (r.name === rule.name ? rule : r)) : [...rules, rule],
+    signerId,
+  };
+}
 
-  const doc = rebuildDoc(current, merged, rules, networkPassphrase);
-  // rebuildDoc may have applied the legacy owner→admin rename under us.
-  return { doc, signerId: signerId === 'owner' && !doc.signers.some((s) => s.id === 'owner') ? 'admin' : signerId };
+/**
+ * {@link upsertSessionRule} for each draft in order: one document carrying
+ * every rule, so one `apply_doc` installs them all. Drafts naming the same
+ * key share its signer declaration. The rules and signers are merged first
+ * and the document rebuilt (pruned, migrated, validated) once. Throws when
+ * two drafts name the same rule (the later would silently replace the
+ * earlier).
+ *
+ * Precondition: `validateSessionDocDraft(draft, limits).ok` for each draft.
+ */
+export function upsertSessionRules(
+  current: PolicyDoc,
+  drafts: readonly SessionDocDraft[],
+  networkPassphrase: string,
+): PolicyDoc {
+  const names = drafts.map((d) => d.name.trim());
+  const repeated = names.find((n, i) => names.indexOf(n) !== i);
+  if (repeated !== undefined) {
+    throw new Error(`policy doc: two session grants name the rule "${repeated}"`);
+  }
+  assertSameNetwork(current, networkPassphrase);
+  let signers: WireSigner[] = [...current.signers];
+  let rules: WireRule[] = [...current.rules];
+  for (const draft of drafts) {
+    ({ signers, rules } = mergeSessionRule(signers, rules, draft, networkPassphrase));
+  }
+  return rebuildDoc(current, signers, rules, networkPassphrase);
 }
 
 // --- Shared doc-merge helpers ----------------------------------------------
