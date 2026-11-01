@@ -35,9 +35,9 @@ network ids, path components) are byte strings compared by exact bytewise
 equality. The evaluator does no normalization.
 
 The generic functions are `grant_eval::allows` and `grant_eval::allows_all`
-over any caveat type implementing `Check<A>`. Each vocabulary module exports
-its `Action` and `Caveat` types, a monomorphic `holds(caveat, action)`, and
-`allows` / `allows_all` over `&[Caveat]`.
+(defined in `src/eval.rs`) over any caveat type implementing `Check<A>`.
+Each vocabulary module exports its `Action` and `Caveat` types, a monomorphic
+`holds(caveat, action)`, and `allows` / `allows_all` over `&[Caveat]`.
 
 ### `chain`
 
@@ -102,15 +102,25 @@ the translation is a total function:
     cannot overflow;
   - `index as usize` widens a `u32`, lossless on every target with at least
     32-bit pointers (a compile-time assertion in `chain.rs` checks this).
+- No function calls a function of the same name in another module by its bare
+  path. Aeneas names each item relative to the crate, and Lean resolves a
+  bare `allows` inside `def chain.allows` to `chain.allows` itself, so the
+  generic `allows` and `allows_all` live in `src/eval.rs` (re-exported at the
+  crate root) and the vocabulary wrappers' calls translate to `eval.allows`
+  and `eval.allows_all`.
 
-`charon cargo --preset=aeneas`, run from this directory, translates every item
-in the crate.
+`formal/scripts/extract.sh` runs `charon cargo --preset=aeneas
+--error-on-warnings` in this directory and Aeneas on the result; every item
+translates, and the generated Lean builds against Aeneas's Lean library with
+no `axiom` or `opaque` declaration.
 
 ## Trusted base
 
 Trusted, not proven: `rustc`, the Soroban SDK, the Charon and Aeneas
-translation, and the host wiring that builds actions. The wiring stays small
-and auditable:
+translation together with Aeneas's Lean library (its models of the `core` and
+`alloc` items the evaluator calls: slices, `Vec`, indexing, `get`, `len`,
+checked `usize` addition, `u32 as usize`), and the host wiring that builds
+actions. The wiring stays small and auditable:
 
 - File paths reach the evaluator canonical: `..`, symlinks and
   case-insensitive file systems are resolved by the host.
@@ -132,13 +142,31 @@ plain-Rust reading of the semantics, exhaustively over every grant of up to
 three caveats drawn from a small universe per vocabulary. The checks run
 against every action in that vocabulary's set.
 
-Stated, not proven: that the code agrees with the Lean model, and the
-attenuation property beyond the tested universes. The Aeneas translation and
-the Lean equivalence proof are open.
+Proven in `formal/` about the Charon + Aeneas translation of this crate
+(`formal/AttenuatingGrants/Extracted/`), for each vocabulary:
+
+- `allows` and `allows_all` return a result for every input: no panic,
+  overflow, out-of-bounds index or divergence;
+- the result is the readable model's `Grant.allows` / `Grant.allowsAll` on
+  the denoted grant and actions (`V.extracted_allows`,
+  `V.extracted_allowsAll`);
+- pushing a caveat onto a caveat slice can only narrow what it allows, and a
+  slice reached from a root by any number of pushes allows, alone or across a
+  batch of actions, only what the root allows (`V.extracted_narrower_push`,
+  `V.extracted_delegates_narrower`, `V.extracted_allowsAll_of_delegates`).
+
+`formal/README.md` lists the theorems and the pinned tool versions. These are
+statements about the translation; that it has this code's semantics, and that
+rustc compiles the code faithfully, is the trusted base above.
 
 ## Commands
 
 ```sh
 cargo test -p grant-eval
 cargo build -p grant-eval --target wasm32v1-none --release
+just extract-lean            # regenerate the Lean translation (needs Nix)
+just extract-lean --check    # compare it with the committed one
 ```
+
+After any change to this crate, regenerate the translation and re-run
+`lake build` in `formal/`; CI fails if the committed translation is stale.

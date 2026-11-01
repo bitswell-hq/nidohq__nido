@@ -34,40 +34,7 @@ pub mod network;
 pub mod signing;
 
 mod bytes;
+mod eval;
 
 pub use bytes::{bytes_eq, bytes_in};
-
-/// A caveat over actions of type `A`: a predicate a grant requires to hold.
-pub trait Check<A> {
-    /// Whether this caveat holds for `action`.
-    fn holds(&self, action: &A) -> bool;
-}
-
-/// Whether `grant` allows `action`: every caveat in `grant` holds for it.
-#[must_use]
-pub fn allows<A, C: Check<A>>(grant: &[C], action: &A) -> bool {
-    let mut i = 0;
-    while i < grant.len() {
-        if !grant[i].holds(action) {
-            return false;
-        }
-        i += 1;
-    }
-    true
-}
-
-/// Whether `grant` allows every action in `actions`.
-///
-/// A Soroban authorization tree is checked by passing every context in the
-/// tree, so one disallowed nested call denies the whole tree.
-#[must_use]
-pub fn allows_all<A, C: Check<A>>(grant: &[C], actions: &[A]) -> bool {
-    let mut i = 0;
-    while i < actions.len() {
-        if !allows(grant, &actions[i]) {
-            return false;
-        }
-        i += 1;
-    }
-    true
-}
+pub use eval::{allows, allows_all, Check};
