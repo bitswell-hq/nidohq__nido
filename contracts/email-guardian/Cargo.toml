@@ -1,0 +1,21 @@
+[package]
+name = "nido-email-guardian"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+# `lib` as well as `cdylib`: the integration tests link the crate for its
+# types and client while deploying the contract from its wasm.
+[lib]
+crate-type = ["lib", "cdylib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = { workspace = true }
+# The statement layout constants, the address payload helper, the BN254
+# field helpers, and the `ProofVerifierInterface` client the guardian calls.
+perch-recovery-interface = { workspace = true }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }

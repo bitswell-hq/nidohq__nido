@@ -29,6 +29,9 @@ perch-zk-pool = { workspace = true }
 perch-zk-prover = { workspace = true }
 perch-zk-primitives = { workspace = true }
 perch-ir = { workspace = true }
+# The email guardian's types and client; the contract itself runs from its
+# wasm (`EMAIL_GUARDIAN_WASM`).
+nido-email-guardian = { path = "../../contracts/email-guardian" }
 
 # Crypto
 p256 = { version = "0.13", features = ["ecdsa"] }

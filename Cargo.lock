@@ -1120,6 +1120,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "nido-email-guardian"
+version = "0.1.0"
+dependencies = [
+ "perch-recovery-interface",
+ "soroban-sdk",
+]
+
+[[package]]
 name = "nido-factory"
 version = "0.1.0"
 dependencies = [
@@ -1135,6 +1143,7 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "hex",
+ "nido-email-guardian",
  "nido-preauth-sweep-policy",
  "p256",
  "perch-account",
