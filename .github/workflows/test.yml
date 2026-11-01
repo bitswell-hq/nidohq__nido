@@ -101,6 +101,41 @@ jobs:
       - name: Cross-check the DKIM registry hashing against Noir
         run: just dkim-registry-vectors
 
+  agent-host:
+    name: Agent host (${{ matrix.os }})
+    # crates/agent-host is its own workspace (its README says why), so the
+    # contracts job's `cargo test --workspace` does not reach it. macOS runs
+    # the case-insensitive file system cases (APFS folds case by default).
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # The same pinned toolchain as the contracts job; build.rs compiles the
+      # evaluator component for wasm32v1-none.
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@1.96.0
+        with:
+          targets: wasm32v1-none
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry + target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/agent-host -> target
+
+      - name: cargo fmt --check
+        run: cargo fmt --manifest-path crates/agent-host/Cargo.toml --all -- --check
+
+      - name: cargo clippy (pedantic)
+        run: cargo clippy --manifest-path crates/agent-host/Cargo.toml --all --tests -- -Dclippy::pedantic
+
+      - name: cargo test
+        run: cargo test --manifest-path crates/agent-host/Cargo.toml
+
   unit:
     name: Unit (TestAuthenticator)
     runs-on: ubuntu-latest
