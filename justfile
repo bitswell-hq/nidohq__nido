@@ -14,6 +14,15 @@ test:
 test-relay-local:
     cargo test -p grant-relay --test frontend_client --test local_network -- --ignored --nocapture
 
+# Run the evaluation: the Soroban simulation (costs, attacks, workloads), the
+# Lean step counts and bounds of the measured checks, and the agent host
+# (workload, attacks, per-check cost, throughput). Rewrites
+# evaluation/results/ and the result tables of evaluation/README.md. Needs
+# `just perch-infra`, `just build-contracts` and the formal package's Lean
+# dependencies (`cd formal && lake exe cache get`). See evaluation/README.md.
+eval:
+    evaluation/scripts/eval.sh
+
 # Build all crates (native)
 build:
     cargo build --workspace
@@ -119,10 +128,13 @@ check:
     cargo clippy --all --tests -- -Dclippy::pedantic
     cargo fmt --manifest-path crates/agent-host/Cargo.toml --all -- --check
     cargo clippy --manifest-path crates/agent-host/Cargo.toml --all --tests -- -Dclippy::pedantic
+    cargo fmt --manifest-path evaluation/agent-host/Cargo.toml --all -- --check
+    cargo clippy --manifest-path evaluation/agent-host/Cargo.toml --target-dir crates/agent-host/target --all --tests -- -Dclippy::pedantic
 
 fmt:
     cargo fmt --all
     cargo fmt --manifest-path crates/agent-host/Cargo.toml --all
+    cargo fmt --manifest-path evaluation/agent-host/Cargo.toml --all
 
 # formal/scripts/extract.sh pins Charon and Aeneas and needs Nix with flakes
 # (formal/README.md gives a Docker alternative). `--check` compares with the

@@ -1,0 +1,250 @@
+{
+  "fit": {
+    "instructions_per_step": 99.36606214531973,
+    "pairs": 28,
+    "r_squared": 0.9855744358610339,
+    "share_of_bound_max": 0.08341547368272482,
+    "sweeps": [
+      {
+        "instructions_per_step_max": 150.96774193548387,
+        "instructions_per_step_min": 123.48148148148148,
+        "share_of_bound_first": 0.028994615680851543,
+        "share_of_bound_last": 0.037425097812705484,
+        "share_of_bound_max": 0.04828127992171816,
+        "sweep": "caveats"
+      },
+      {
+        "instructions_per_step_max": 163.76470588235293,
+        "instructions_per_step_min": 96.2800875273523,
+        "share_of_bound_first": 0.08341547368272482,
+        "share_of_bound_last": 0.000038675774069621184,
+        "share_of_bound_max": 0.08341547368272482,
+        "sweep": "arg_bytes_compared"
+      },
+      {
+        "instructions_per_step_max": 150.96774193548387,
+        "instructions_per_step_min": 150.96774193548387,
+        "share_of_bound_first": 0.06287374190113657,
+        "share_of_bound_last": 0.0013078459130850242,
+        "share_of_bound_max": 0.06287374190113657,
+        "sweep": "arg_bytes_uncompared"
+      },
+      {
+        "instructions_per_step_max": 141.77881412391739,
+        "instructions_per_step_min": 132.41758241758242,
+        "share_of_bound_first": 0.03549397575511363,
+        "share_of_bound_last": 0.01861148285774858,
+        "share_of_bound_max": 0.03549397575511363,
+        "sweep": "contexts"
+      },
+      {
+        "instructions_per_step_max": 134.05128205128204,
+        "instructions_per_step_min": 123.48148148148148,
+        "share_of_bound_first": 0.03126633592768285,
+        "share_of_bound_last": 0.006019032212776658,
+        "share_of_bound_max": 0.03126633592768285,
+        "sweep": "contract_list"
+      }
+    ],
+    "verdicts_agree": true,
+    "zero_caveat_cpu": 974554
+  },
+  "pairs": [
+    {
+      "cpu_difference": 6668,
+      "id": "cost-01-caveats-pass",
+      "instructions_per_step": 123.48148148148148,
+      "step_difference": 54,
+      "sweep": "caveats"
+    },
+    {
+      "cpu_difference": 9360,
+      "id": "cost-02-caveats-pass",
+      "instructions_per_step": 150.96774193548387,
+      "step_difference": 62,
+      "sweep": "caveats"
+    },
+    {
+      "cpu_difference": 24100,
+      "id": "cost-03-caveats-pass",
+      "instructions_per_step": 132.41758241758242,
+      "step_difference": 182,
+      "sweep": "caveats"
+    },
+    {
+      "cpu_difference": 44224,
+      "id": "cost-04-caveats-pass",
+      "instructions_per_step": 139.0691823899371,
+      "step_difference": 318,
+      "sweep": "caveats"
+    },
+    {
+      "cpu_difference": 93828,
+      "id": "cost-05-caveats-pass",
+      "instructions_per_step": 135.19884726224785,
+      "step_difference": 694,
+      "sweep": "caveats"
+    },
+    {
+      "cpu_difference": 183680,
+      "id": "cost-06-caveats-pass",
+      "instructions_per_step": 136.8703427719821,
+      "step_difference": 1342,
+      "sweep": "caveats"
+    },
+    {
+      "cpu_difference": 372740,
+      "id": "cost-07-caveats-pass",
+      "instructions_per_step": 135.93727206418671,
+      "step_difference": 2742,
+      "sweep": "caveats"
+    },
+    {
+      "cpu_difference": 11136,
+      "id": "cost-08-arg_bytes_compared-pass",
+      "instructions_per_step": 163.76470588235293,
+      "step_difference": 68,
+      "sweep": "arg_bytes_compared"
+    },
+    {
+      "cpu_difference": 9360,
+      "id": "cost-09-arg_bytes_uncompared-pass",
+      "instructions_per_step": 150.96774193548387,
+      "step_difference": 62,
+      "sweep": "arg_bytes_uncompared"
+    },
+    {
+      "cpu_difference": 17280,
+      "id": "cost-10-arg_bytes_compared-pass",
+      "instructions_per_step": 130.9090909090909,
+      "step_difference": 132,
+      "sweep": "arg_bytes_compared"
+    },
+    {
+      "cpu_difference": 9360,
+      "id": "cost-11-arg_bytes_uncompared-pass",
+      "instructions_per_step": 150.96774193548387,
+      "step_difference": 62,
+      "sweep": "arg_bytes_uncompared"
+    },
+    {
+      "cpu_difference": 35712,
+      "id": "cost-12-arg_bytes_compared-pass",
+      "instructions_per_step": 110.22222222222223,
+      "step_difference": 324,
+      "sweep": "arg_bytes_compared"
+    },
+    {
+      "cpu_difference": 9360,
+      "id": "cost-13-arg_bytes_uncompared-pass",
+      "instructions_per_step": 150.96774193548387,
+      "step_difference": 62,
+      "sweep": "arg_bytes_uncompared"
+    },
+    {
+      "cpu_difference": 109440,
+      "id": "cost-14-arg_bytes_compared-pass",
+      "instructions_per_step": 100.21978021978022,
+      "step_difference": 1092,
+      "sweep": "arg_bytes_compared"
+    },
+    {
+      "cpu_difference": 9360,
+      "id": "cost-15-arg_bytes_uncompared-pass",
+      "instructions_per_step": 150.96774193548387,
+      "step_difference": 62,
+      "sweep": "arg_bytes_uncompared"
+    },
+    {
+      "cpu_difference": 404352,
+      "id": "cost-16-arg_bytes_compared-pass",
+      "instructions_per_step": 97.10662824207493,
+      "step_difference": 4164,
+      "sweep": "arg_bytes_compared"
+    },
+    {
+      "cpu_difference": 9360,
+      "id": "cost-17-arg_bytes_uncompared-pass",
+      "instructions_per_step": 150.96774193548387,
+      "step_difference": 62,
+      "sweep": "arg_bytes_uncompared"
+    },
+    {
+      "cpu_difference": 1584000,
+      "id": "cost-18-arg_bytes_compared-pass",
+      "instructions_per_step": 96.2800875273523,
+      "step_difference": 16452,
+      "sweep": "arg_bytes_compared"
+    },
+    {
+      "cpu_difference": 9360,
+      "id": "cost-19-arg_bytes_uncompared-pass",
+      "instructions_per_step": 150.96774193548387,
+      "step_difference": 62,
+      "sweep": "arg_bytes_uncompared"
+    },
+    {
+      "cpu_difference": 24100,
+      "id": "cost-20-contexts-pass",
+      "instructions_per_step": 132.41758241758242,
+      "step_difference": 182,
+      "sweep": "contexts"
+    },
+    {
+      "cpu_difference": 50868,
+      "id": "cost-21-contexts-pass",
+      "instructions_per_step": 137.48108108108107,
+      "step_difference": 370,
+      "sweep": "contexts"
+    },
+    {
+      "cpu_difference": 104404,
+      "id": "cost-22-contexts-pass",
+      "instructions_per_step": 139.95174262734585,
+      "step_difference": 746,
+      "sweep": "contexts"
+    },
+    {
+      "cpu_difference": 211476,
+      "id": "cost-23-contexts-pass",
+      "instructions_per_step": 141.17222963951937,
+      "step_difference": 1498,
+      "sweep": "contexts"
+    },
+    {
+      "cpu_difference": 425620,
+      "id": "cost-24-contexts-pass",
+      "instructions_per_step": 141.77881412391739,
+      "step_difference": 3002,
+      "sweep": "contexts"
+    },
+    {
+      "cpu_difference": 6668,
+      "id": "cost-25-contract_list-pass",
+      "instructions_per_step": 123.48148148148148,
+      "step_difference": 54,
+      "sweep": "contract_list"
+    },
+    {
+      "cpu_difference": 6380,
+      "id": "cost-26-contract_list-pass",
+      "instructions_per_step": 125.09803921568627,
+      "step_difference": 51,
+      "sweep": "contract_list"
+    },
+    {
+      "cpu_difference": 5228,
+      "id": "cost-27-contract_list-pass",
+      "instructions_per_step": 134.05128205128204,
+      "step_difference": 39,
+      "sweep": "contract_list"
+    },
+    {
+      "cpu_difference": 620,
+      "id": "cost-28-contract_list-pass",
+      "instructions_per_step": null,
+      "step_difference": -9,
+      "sweep": "contract_list"
+    }
+  ]
+}

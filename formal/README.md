@@ -487,8 +487,9 @@ Stated but unproven, or not yet stated:
 
 - **Cost of the deployed evaluator**: the bound is proven for the counted Lean
   evaluators. That the Rust evaluator's work is proportional to these step
-  counts is not proven; it is to be cross-checked against Soroban CPU
-  instruction counts.
+  counts is not proven. `evaluation/README.md` measures it: the Soroban CPU
+  instructions of the grant signer's check against the step counts and bound
+  of these evaluators on the same grants and actions.
 - **Translation and compilation**: that the Lean translation has the Rust
   code's semantics (Charon, Aeneas and Aeneas's Lean library) and that rustc
   compiles that code faithfully are trusted, not proven

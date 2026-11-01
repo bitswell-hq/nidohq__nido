@@ -1,0 +1,122 @@
+[
+  {
+    "step": 0,
+    "expected": "allowed",
+    "outcome": "allowed",
+    "as_expected": true,
+    "detail": "issued research",
+    "micros": 221
+  },
+  {
+    "step": 1,
+    "expected": "allowed",
+    "outcome": "allowed",
+    "as_expected": true,
+    "detail": "read 15 bytes",
+    "micros": 387
+  },
+  {
+    "step": 2,
+    "expected": "allowed",
+    "outcome": "allowed",
+    "as_expected": true,
+    "detail": "200 from http://localhost:$API_PORT/v1 (11 bytes)",
+    "micros": 6136
+  },
+  {
+    "step": 3,
+    "expected": "allowed",
+    "outcome": "allowed",
+    "as_expected": true,
+    "detail": "200 from http://localhost:$API_PORT/v1 (11 bytes)",
+    "micros": 5378
+  },
+  {
+    "step": 4,
+    "expected": "allowed",
+    "outcome": "allowed",
+    "as_expected": true,
+    "detail": "written",
+    "micros": 947
+  },
+  {
+    "step": 5,
+    "expected": "allowed",
+    "outcome": "allowed",
+    "as_expected": true,
+    "detail": "signature 0b8b1c536cfe93bfaee6cb21e32c8738d44c2f7f41d14720077f35b25e067075f699d4c1f172d02c2a65ed2938433e49a57b9cb381215ebd5c8cc074a6fc2d01",
+    "micros": 96
+  },
+  {
+    "step": 6,
+    "expected": "allowed",
+    "outcome": "allowed",
+    "as_expected": true,
+    "detail": "signature 4e0aeea0c935f12139df595b08ac0aea1234ea1b550c08eab5509990f962fe7a39fc1c4abc5793c09c2afc8d9fc852a536dd2e31423bd3acc3f9497ec575140c",
+    "micros": 190
+  },
+  {
+    "step": 7,
+    "expected": "allowed",
+    "outcome": "allowed",
+    "as_expected": true,
+    "detail": "started summarizer",
+    "micros": 10
+  },
+  {
+    "step": 8,
+    "expected": "allowed",
+    "outcome": "allowed",
+    "as_expected": true,
+    "detail": "read 8 bytes",
+    "micros": 444
+  },
+  {
+    "step": 9,
+    "expected": "denied",
+    "outcome": "denied",
+    "as_expected": true,
+    "detail": "Files grant denies $SANDBOX/work/out/summary.md",
+    "micros": 187
+  },
+  {
+    "step": 10,
+    "expected": "denied",
+    "outcome": "denied",
+    "as_expected": true,
+    "detail": "Network grant denies http://localhost:$API_PORT/v1",
+    "micros": 13
+  },
+  {
+    "step": 11,
+    "expected": "allowed",
+    "outcome": "allowed",
+    "as_expected": true,
+    "detail": "signature 8a441020a1aec76957d66375a9e7f86d15646d40b97f8161e2f36f11bff855cd91aef5a302c5a9617064812e392d8d28a13637a0425724489f9fe674a11f2402",
+    "micros": 62
+  },
+  {
+    "step": 12,
+    "expected": "denied",
+    "outcome": "denied",
+    "as_expected": true,
+    "detail": "Signing grant denies AuthEntry signature by research-key on \"Standalone Network ; February 2017\"",
+    "micros": 15
+  },
+  {
+    "step": 13,
+    "expected": "allowed",
+    "outcome": "allowed",
+    "as_expected": true,
+    "detail": "revoked research",
+    "micros": 0
+  },
+  {
+    "step": 14,
+    "expected": "denied",
+    "outcome": "denied",
+    "as_expected": true,
+    "detail": "agent revoked",
+    "micros": 0
+  }
+]

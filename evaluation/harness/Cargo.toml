@@ -1,0 +1,33 @@
+[package]
+name = "nido-evaluation"
+description = "The attenuating-grants evaluation: agent workloads, the attack suite and the cost, throughput and clean-failure measurements, in Soroban simulation and on a local Stellar network."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "nido-eval"
+path = "src/main.rs"
+
+[dependencies]
+# The Soroban host the simulation runs, and the factory-minted Perch account
+# stack it deploys from wasm (crates/integration-tests).
+soroban-sdk = { workspace = true, features = ["testutils", "hazmat-address", "alloc"] }
+stellar-accounts = { workspace = true }
+perch-account = { workspace = true }
+nido-integration-tests = { path = "../../crates/integration-tests" }
+# The grant signer's types and client; the contract runs from its wasm.
+nido-grant-signer = { path = "../../contracts/grant-signer" }
+grant-eval = { path = "../../crates/grant-eval" }
+grant-relay = { path = "../../crates/grant-relay" }
+nido-key-keeper = { path = "../../crates/key-keeper" }
+ed25519-dalek = "2.2"
+p256 = { version = "0.13", features = ["ecdsa"] }
+sha2 = "0.10"
+hex = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+stellar-strkey = "0.0.13"
+ureq = "3"
+getrandom = "0.2"

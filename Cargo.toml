@@ -8,6 +8,7 @@ members = [
     "crates/grant-relay",
     "crates/dns-attestation-mock",
     "contracts/*",
+    "evaluation/harness",
 ]
 # examples/* are self-contained stellar-scaffold projects with their own
 # workspace + toolchain; keep them out of this workspace's resolution.

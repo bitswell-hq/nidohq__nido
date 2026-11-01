@@ -1,0 +1,80 @@
+[
+  {
+    "iterations": 500000,
+    "instantiate_ms": 100.826,
+    "rows": [
+      {
+        "case": "files",
+        "native_ns": 41.311832,
+        "component_ns": 2410.3045
+      },
+      {
+        "case": "network",
+        "native_ns": 25.233416,
+        "component_ns": 1207.079084
+      },
+      {
+        "case": "signing",
+        "native_ns": 51.48475,
+        "component_ns": 1541.497082
+      },
+      {
+        "case": "chain (3 contexts)",
+        "native_ns": 219.319334,
+        "component_ns": 4198.9805
+      }
+    ]
+  },
+  {
+    "iterations": 500000,
+    "instantiate_ms": 92.295625,
+    "rows": [
+      {
+        "case": "files",
+        "native_ns": 40.7235,
+        "component_ns": 2331.087334
+      },
+      {
+        "case": "network",
+        "native_ns": 23.773168,
+        "component_ns": 1214.220084
+      },
+      {
+        "case": "signing",
+        "native_ns": 52.229834,
+        "component_ns": 1568.511668
+      },
+      {
+        "case": "chain (3 contexts)",
+        "native_ns": 224.986332,
+        "component_ns": 5333.04875
+      }
+    ]
+  },
+  {
+    "iterations": 500000,
+    "instantiate_ms": 87.474875,
+    "rows": [
+      {
+        "case": "files",
+        "native_ns": 40.388084,
+        "component_ns": 2296.9195
+      },
+      {
+        "case": "network",
+        "native_ns": 23.442834,
+        "component_ns": 1180.861
+      },
+      {
+        "case": "signing",
+        "native_ns": 51.490084,
+        "component_ns": 1580.347916
+      },
+      {
+        "case": "chain (3 contexts)",
+        "native_ns": 235.824834,
+        "component_ns": 4163.143334
+      }
+    ]
+  }
+]
