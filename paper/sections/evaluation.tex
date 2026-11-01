@@ -1,9 +1,12 @@
 \section{Evaluation}\label{sec:eval}
 
-We ask four questions. Do the boundaries refuse the escalations of
+We ask five questions. Do the boundaries refuse the escalations of
 \S\ref{sec:threat} without changing state? Does the deployed evaluator's cost
 follow the proven step count? What does enforcement cost at each boundary?
-Does custody signing over channel accounts work on a public network?
+On a Stellar network, with every call through the relay, does the chain
+refuse what the simulation refuses, and what do the relay's checks, its
+channels and concurrent spends add? Does custody signing over channel
+accounts work on a public network?
 
 \paragraph{Method.} Every number below comes from a recorded run, and each
 claim tag names the result file it is read from; this paper ran no new
@@ -13,8 +16,11 @@ experiments. The Soroban runs execute every contract from its wasm in
 testnet, Nido's factory and grant signer, and a test dApp. Each agent call is
 one \code{AddressWithDelegates} entry carrying the holder's signature, so every
 account's \code{\_\_check\_auth} runs. Soroban CPU instructions and memory are
-the host's metered costs, the same on every machine and every run, and they
-are the costs of a network running that host version; no network was measured.
+the host's metered costs, the same on every machine and every run. The
+local-network results are one recorded run of a single-node network
+(\file{stellar/quickstart}, stellar-core v29.0.0, Soroban RPC 29.0.1,
+protocol 28, a ledger every 1.0\,s) in Docker on the same machine as the
+relay and its clients (\S\ref{sec:eval-network}).
 Agent-host times are wall clock, from one recorded run on an Apple M5 Max
 under macOS 26.5.2 with the build profile, scheduling class, power source and
 load recorded; Table~\ref{tab:host-cost} gives the method. The testnet result
@@ -34,7 +40,8 @@ shape as the attack next to them.
 
 \begin{table}[t]
 \caption{Attack suite: attempts, refusals with state unchanged, and allowed
-controls.}\label{tab:attacks}
+controls. \emph{Soroban}: simulation; \emph{Network}: a local Stellar network
+through the relay, the same counts in both relay-grant modes.}\label{tab:attacks}
 \small
 \setlength\tabcolsep{4pt}
 \begin{tabular}{@{}llrrr@{}}
@@ -44,6 +51,10 @@ controls.}\label{tab:attacks}
 Soroban & self-escalation & 16 & 16 & 0 \\
  & nested-call smuggling & 8 & 8 & 1 \\
  & delegation workarounds & 18 & 18 & 6 \\
+ & oversubscription & 3 & 3 & 2 \\
+Network & self-escalation & 16 & 16 & 0 \\
+ & nested-call smuggling & 8 & 8 & 1 \\
+ & delegation workarounds & 17 & 17 & 5 \\
  & oversubscription & 3 & 3 & 2 \\
 Host & self-escalation & 10 & 10 & 0 \\
  & delegation workarounds & 21 & 21 & 3 \\
@@ -73,8 +84,8 @@ sub-agents using a wider grant than their parent's, revoked agents, paths that
 name the work directory and reach outside it, URLs that name the allowed host
 and reach another (another port or scheme, an address literal, a trailing
 dot, userinfo, redirects), and signing requests for another key, network or
-payload kind. These are simulation and host results; the attack suite has not
-been run through a local Stellar network or through the relay.
+payload kind. Section~\ref{sec:eval-network} runs the Soroban attempts again
+on a local Stellar network, through the relay.
 
 The suite found two things. A muxed address (\code{M\ldots}) of a recipient
 pinned by \code{argEq} is refused although it names the same account's key,
@@ -195,18 +206,115 @@ chain (3 ctx) & 67.9 & 341.6 & 1{,}006.7 & 14.9$\times$ \\
 \end{tabular}
 \end{table}
 
-\subsection{The relay}
+\subsection{The relay on a local network}\label{sec:eval-network}
 
-The relay was run end to end on a local Stellar network
-(\file{stellar/quickstart}, core and RPC v29, protocol 28) with the Dfns client
-signing through the Dfns mock. It confirmed an allowed transfer and an allowed
-call whose tree nests an allowed transfer; it never had the custody key sign a
-transfer over its cap or a call whose nested transfer the grant denies; it
-refused a tampered entry at simulation without using a sequence number; and
-it served two requests at once on two channels\claim{relay-local-network}.
-Nido's unchanged TypeScript client relayed to confirmation through
-it\claim{relay-frontend}. These are functional tests; the relay has no cost,
-throughput or attack-suite measurement.
+The account, the grant signer and the evaluation's contracts are deployed from
+wasm on a private single-node Stellar network, and the relay submits from
+eight channel accounts whose only signer is a custody key held by the local
+Dfns mock, signing through the Dfns client. The simulation's fixture runs on
+this network with the same attempts by the same agents. Every agent call goes
+to the relay as Nido's browser client sends it, and the owner's setup steps go
+straight to the chain. Each grant's holder is a relay agent, in two runs on
+fresh accounts: one with each relay grant mirroring the agent's on-chain grant,
+one with relay grants allowing every call, so that every call reaches the
+network's simulation and the grant signer. The state snapshot is the
+simulation's plus every channel's sequence number.
+
+\paragraph{Refusals.} In both runs, all 44 attempts the network can run are
+refused with state unchanged, and the 8 controls are confirmed on
+chain\claim{network-attack-suite} (Table~\ref{tab:attacks}). Two rows are not
+run: the grant signer's own verdict on a contract-creation context and on a
+payment to a pinned \code{G\ldots} recipient call its \code{\_\_check\_auth}
+directly, as only the simulation can. With mirrored grants, 19 attempts stop
+at the relay's own checks, before a channel is leased or the custody key
+signs, and the other 25 in its simulations\claim{network-relay-checks}: the
+relay has no budget, rule-selection or holder-signature vocabulary, so
+overdrafts, the account's missing rules and failed holder signatures are the
+chain's to refuse. With every call let through, each attempt is refused by the
+component and with the error that refuse it in the
+simulation\claim{network-as-simulation}, with one exception, which is also a
+functional limit of the relay. Soroban RPC's recording simulation, which the
+relay runs on every call, records authorization only for the root invocation,
+and the attack suite's deployer asks for the account's authorization in a call
+it makes. The host refuses the deployment in that simulation, before the
+account's check, so on the network the account's own refusal is not
+exercised, and a dApp that asks for an account's authorization only in a
+nested call cannot be used through the relay at all\claim{network-root-recording}.
+The cause is read from the host's message in the run.
+
+\paragraph{Workloads and cost.} All 17 workload calls meet their expectation
+in both runs\claim{network-workloads}. Their 18 confirmed transactions, 9 in
+each run, cost 1.09
+to 1.12 times the CPU instructions the simulation measures for the same
+calls\claim{network-cost-ratio}. The network runs stellar-core v29.0.0 and a
+Perch account built for it, the simulation \code{soroban-env-host} 27.0.1 and
+the testnet account's wasm; which of these accounts for the difference is not
+measured, and that the simulation's costs track the network's beyond these
+calls is unproven\claim{network-cost-general}.
+
+The run found a defect in the relay. It declared exactly the simulated
+resource fee, but the grant signer extends every grant it writes to the
+maximum time to live, so a write's rent grows with each ledger since the
+grant's last write. The payroll sub-agent's second payment landed a ledger
+after its simulation and failed on chain with
+\code{INSUFFICIENT\_REFUNDABLE\_FEE}, and its channel paid the fee and used a
+sequence number. The relay now declares the simulated minimum plus a margin of
+it, 20\% by default, within its fee cap, and the unused refundable part is
+refunded\claim{relay-fee-margin}. The cause was read from the failed
+transaction's diagnostic event and the grant signer's code, not isolated in a
+separate run. The defect failed closed: it cost a fee, not authority.
+
+\paragraph{Concurrent siblings.} Eight sub-agents, delegated 100 each with no
+caveats of their own from a root grant of 100, each send a transfer of 30 at
+the same instant through a relay with eight channels, in three rounds. Every
+relay simulation reads the ledger before any of the eight lands, so all eight
+pass the relay and are submitted; on chain, in every round, 3 are confirmed
+and 5 fail with the grant signer's \code{Overdrawn}, the root is charged 90 of
+100, and each sibling exactly its confirmed transfer\claim{network-race}.
+The ledger applies the transactions as if in sequence~\cite{cap63}, and the
+grant signer charges each transfer to its whole lineage at once, so the later
+ones read the earlier ones' charges to the root. The refused transactions
+still cost their channels the fee and a sequence number: a relay with no budget
+vocabulary cannot keep a race from costing fees, and only the grant signer
+keeps it from costing allowance.
+
+\begin{table}[t]
+\caption{Relay throughput: one agent's transfers, 15 per channel, by twice as
+many clients as channels, on a network closing a ledger every
+1.0\,s.}\label{tab:throughput}
+\small
+\begin{tabular}{@{}rrrr@{}}
+\toprule
+\textbf{Channels} & \textbf{Confirmed/s} & \textbf{Ledgers} & \textbf{Most per ledger} \\
+\midrule
+1 & 1.01 & 15 & 1 \\
+2 & 2.04 & 15 & 2 \\
+4 & 3.91 & 15 & 4 \\
+8 & 7.65 & 15 & 8 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Throughput and answer time.} Through relays with 1, 2, 4 and 8
+channels, one agent's transfers confirm at 1.01, 2.04, 3.91 and 7.65
+transactions per second (Table~\ref{tab:throughput})\claim{relay-throughput}.
+A channel is leased until its transaction settles, so it carries at most one
+transaction per ledger, and throughput is the number of channels over the
+ledger interval: at every pool size the transfers spread over the same 15
+ledgers, each holding one per channel. The relay answers a call its own checks
+refuse in a median 0.3\,ms, before any network request, and one its enforcing
+simulation refuses in a median 24.6\,ms\claim{relay-answer-time}. These times
+are one run of a single-node network, with the relay in its clients'
+process; that they hold beyond it is unproven\claim{network-times-general}.
+
+\paragraph{Functional tests.} The relay's own end-to-end test on the same
+local network confirms an allowed transfer and an allowed call whose tree
+nests an allowed transfer; it never has the custody key sign a transfer over
+its cap or a call whose nested transfer the grant denies; it refuses a
+tampered entry at simulation without using a sequence number; and it serves
+two requests at once on two channels\claim{relay-local-network}. Nido's
+unchanged TypeScript client relays to confirmation
+through it\claim{relay-frontend}.
 
 \subsection{Custody signing over channel accounts}
 
@@ -224,12 +332,13 @@ sequence number\claim{testnet-channel}. The custody key was held by the Dfns
 mock, so this shows what the network accepts, not what Dfns will
 sign (\S\ref{sec:relay}).
 
-\paragraph{Not measured.} The local Stellar network for the grant signer and
-the attack suite; the relay's cost, throughput and attack suite; throughput
-against the size of the channel-account swarm; sibling spends submitted at
-once through the swarm; and the host's signature authorizing a call through
-a grant signer on chain. For concurrent sibling spends the protocol gives an
-argument, not a measurement: two transactions whose footprints write the same
-ledger entry conflict, and the result must be ``as if'' they were applied in
-sequence~\cite{cap63}, so the later one in the protocol's order reads the
-earlier one's charge to their common ancestors.
+\paragraph{Not measured.} The relay on testnet or mainnet, with other traffic,
+ledger limits or ledgers slower than one second; real Dfns, since the custody
+key was held by the mock in every run; more than eight channels, or several
+agents sharing a pool; the cost sweeps on chain, since the network meters only
+submitted transactions and a refused call is never submitted; the grant
+signer's own verdict on the network for the two rows above; and the host's
+signature authorizing a call through a grant signer on chain. The snapshots
+read balances, grants, the account's configuration and channels' sequence
+numbers; that a refusal changes no other ledger entry, such as a channel's
+balance, is unproven\claim{snapshot-coverage}.

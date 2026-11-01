@@ -6,9 +6,12 @@ delegation tree, and the evaluator that decides it computes a readable model,
 \translationtrust. In the Soroban smart account the evaluator sees every
 context of the account's authorization through CAP-0071 delegated signing, at
 2.2M to 5.0M of a transaction's 400M instructions, and refuses every one of
-the attack suite's 45 attempts there without changing state; in the agent
-host it decides file, network and signing requests in about a microsecond per
-check. Its metered work follows the model's step count on every measured
+the attack suite's 45 attempts in simulation without changing state. On a
+local Stellar network, with every call sent through the relay, the chain
+refuses the 44 that run there whether or not the relay's own grant stops them
+first, and sub-agents racing to overdraw their root are charged within its
+allowance. In the agent host the evaluator decides file, network and signing
+requests in about a microsecond per check. Its metered work follows the model's step count on every measured
 point. What remains trusted is the translation, the compilers and the wiring that
 turns calls into actions, including the grant signer's storage taken as the
 Lean model of its budget path; the paper states the wiring's remaining gaps,

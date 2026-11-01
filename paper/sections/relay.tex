@@ -25,20 +25,39 @@ It then leases a channel account and runs two simulations. A recording
 simulation of the bare host function must succeed, must not ask for the
 channel's own authorization\claim{relay-channel-auth}, and every context it
 records must pass the chain grant\claim{relay-recorded}; an enforcing
-simulation with the supplied entries must succeed, and the fee must stay under
-a cap. The supplied trees are what the user's signatures authorize, and the
-recorded trees are what the execution asks for, so a call is relayed only when
+simulation with the supplied entries must succeed, and the fee, the simulated
+minimum plus a margin for rent that grows before the transaction lands, must
+stay under a cap\claim{relay-fee-margin}. The supplied trees are what the
+user's signatures authorize, and the recorded trees are what the execution asks for, so a call is relayed only when
 the grant allows every context in either. That the two together cover every
 context the signatures authorize rests on the host's matching of
 \code{require\_auth} to signed trees and is not proven\claim{trees-cover}. The
 chain grant does not see calls that ask for no authorization, calls a contract
 makes inside its own \code{\_\_check\_auth}, or the fee, which the cap bounds.
+Soroban RPC's recording simulation records authorization only for the root
+invocation, so the relay cannot submit a call whose first request for an
+account's authorization is made in a nested call\claim{network-root-recording}.
+
+\paragraph{Relay grants and chain grants.} The relay's grants are a
+configuration file with no link to the grant signer, so a deployment must
+rewrite it when the admin document issues, revokes or rotates grants on chain;
+that a deployment keeps the two in step is unproven\claim{relay-grants-in-step}.
+A relay grant wider than the chain's lets more calls reach the network's
+simulation and the grant signer, which still refuse them: with relay grants
+allowing every call, all 44 attempts the network runs are
+refused\claim{network-attack-suite}, each but one by the component that refuses
+it in the simulation\claim{network-as-simulation}. A relay grant narrower than
+the chain's refuses calls the account would allow.
 
 \paragraph{Channels and the key keeper.} Transactions go out from a pool of
 channel accounts, each with master weight 0 and the custody key as its only
 signer; the relay checks this for every channel at start. A request holds its
 channel until its transaction settles, so concurrent requests use distinct
-channels and the relay reads each channel's sequence number fresh. The key
+channels, the relay reads each channel's sequence number fresh, and each
+channel carries at most one transaction per ledger\claim{relay-throughput}.
+The relay has no budget, so concurrent spends that together overdraw an
+ancestor all pass it; the grant signer refuses the excess on chain, and the
+refused transactions cost their channels a fee\claim{network-race}. The key
 keeper signs the transaction hash with the custody key and the relay verifies
 the signature before attaching it. The keeper is an interface with three
 implementations: an in-process ed25519 keeper, a client for the Dfns Keys

@@ -88,15 +88,19 @@ workspace, so `cargo test --manifest-path crates/agent-host/Cargo.toml` runs
 its suites, and `just test` runs both), the grant signer's integration tests
 (`just build-contracts`, then `cargo test -p nido-integration-tests --test it
 grant_signer`), and the evaluation (`just eval`, which writes
-`evaluation/results/`; see `evaluation/README.md`).
+`evaluation/results/` but the local network's files, and `just eval-network`,
+which needs Docker and the Stellar CLI and writes `results/network*.json`; see
+`evaluation/README.md`).
 
 ## Current state
 
 The documents report the proofs, tests and the evaluation in
 `evaluation/results/` and ran no experiments of their own. The attack suite
-and the cost-bound cross-check ran in Soroban simulation and at the agent
-host; the local-network and relay measurements are not part of them, and the
-paper lists them as not measured.
+ran in Soroban simulation, at the agent host and, through the relay, on a
+local Stellar network; the cost-bound cross-check in Soroban simulation; the
+relay's throughput, a race of sibling spends and on-chain costs on the local
+network. What the evaluation leaves out (public networks, real Dfns, more than
+eight channels, the cost sweeps on chain) the paper lists as not measured.
 
 Line counts in the paper's tables are non-blank lines that do not start with
 `//` for Rust, and non-blank lines for Lean; `tools/build.sh` computes them.
