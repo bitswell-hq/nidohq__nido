@@ -1,8 +1,9 @@
 /**
  * Browser-side pieces of email recovery (`docs/email-recovery/spec.md`):
- * the per-attempt alert code, verification of the alert vault's Nitro
- * attestation, and sealed, passkey-authorized alert contacts. WebCrypto
- * only; runs in browsers and in Node 20+.
+ * the recovery circuit's inputs from a raw recovery email, the per-attempt
+ * alert code, verification of the alert vault's Nitro attestation, and
+ * sealed, passkey-authorized alert contacts. WebCrypto plus bb.js (for
+ * Poseidon2); runs in browsers and in Node 20+.
  */
 export {
   ALERT_CODE_DIGITS,
@@ -28,6 +29,24 @@ export {
   verifyAttestation,
 } from './attestation.js';
 export * as bytes from './bytes.js';
+export {
+  type DkimSignatureField,
+  DkimHeaderError,
+  type HeaderField,
+  type ParsedMessage,
+  alignedSignatures,
+  blockFieldValue,
+  dkimSignatures,
+  domainOf,
+  fromAddress,
+  parseMessage,
+  parseTagList,
+  relaxedField,
+  selectSignedFields,
+  signatureValue,
+  signedHeaderBlock,
+  withEmptyB,
+} from './dkimHeader.js';
 export {
   AUTHORIZATION_LABEL,
   type Authorization,
@@ -59,6 +78,48 @@ export {
   removalRequest,
   sealRequest,
 } from './enrollment.js';
+export {
+  ADDR_MAX,
+  DOMAIN_MAX,
+  DOM_BLIND,
+  DOM_COMMIT,
+  DOM_KEY,
+  DOM_LEAF,
+  DOM_PIN_SALT,
+  type EncodedRecoveryEmail,
+  FIELD_MODULUS,
+  HEADER_MAX,
+  type KeyPath,
+  LAUNCH_DOMAINS,
+  RECOVERY_PHRASE,
+  REGISTRY_DEPTH,
+  type RecoveryEmailInput,
+  type RecoveryWitness,
+  addressCommitment,
+  alignedSignedBlock,
+  barrettHint,
+  blindedDigest,
+  emptySubtrees,
+  encodeRecoveryEmail,
+  fieldHex,
+  initHashes,
+  keyHash,
+  limbs,
+  merkleRoot,
+  noirInputs,
+  p2,
+  pack,
+  pinSalt,
+  proverToml,
+  publicInputBytes,
+  randomAccountCode,
+  randomRho,
+  recoverySubject,
+  registryLeaf,
+  splitDigest,
+  treePath,
+  verifiesUnder,
+} from './recoveryInputs.js';
 export { HPKE_SUITE, type Sealed, hpkeSuite, open, rawPublicKeyFromSpki, seal, spkiFromRawPublicKey } from './hpke.js';
 export { contractIdFromStrkey, strkeyFromContractId } from './strkey.js';
 export { type Certificate, parseCertificate, validateChain } from './x509.js';

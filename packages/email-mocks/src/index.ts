@@ -22,6 +22,7 @@ export { type Delivered, type Envelope, InboundMx, SmtpReject, fromSmtpData, toS
 export { type KeyName, type TestKey, publicKeyBase64, testKey } from './keys.js';
 export { type Message, parseMessage, serializeMessage } from './message.js';
 export { PROVIDERS } from './providers/index.js';
+export { GMAIL_PREVIOUS_SELECTOR, GMAIL_SELECTOR, gmailPreviousSigner, gmailSigner, googleInternalSigner } from './providers/gmail.js';
 export type { ComposeInput, ProviderId, ProviderProfile, SignerProfile } from './providers/types.js';
 export { type AttackCase, type AttackInput, type Claim, type Verdict, SOURCES, buildAttacks, defaultAttackInput } from './attacks/index.js';
 export { type FixtureSet, type HonestFixture, fixtureSet, honestFixtures } from './fixtures.js';

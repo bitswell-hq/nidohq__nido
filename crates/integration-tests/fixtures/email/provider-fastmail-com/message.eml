@@ -1,0 +1,47 @@
+Received: from phl-compute-05.internal (phl-compute-05.internal [10.202.2.45])
+	by mailfout.phl.internal (Postfix) with ESMTP id 11F2BB7A66
+	for <recover@recovery.test>; Thu, 15 Oct 2026 05:30:00 -0400 (EDT)
+Received: from phl-imap-12 ([10.202.2.86])
+  by phl-compute-05.internal (MEProxy); Thu, 15 Oct 2026 05:30:00 -0400 (EDT)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=fastmail.com; h=
+	cc:content-transfer-encoding:content-type:content-type:date:date
+	:from:from:in-reply-to:message-id:mime-version:reply-to:subject
+	:subject:to:to; s=fm2; t=1792056600; x=1792143000; bh=5CXcKRQs2q
+	cNFxtSzVHKqX8kZk03YLfU9ulk2Wcmlss=; b=o48Y0Cz0TzzdEAduxVF9FiD6o9
+	wq+9CE2AKyM2q/eUtcVs3mgImkO48GN+kkn+zvSYP/8XXP7ONPanC34Vqc0ERd9f
+	7fOfcaD9qzUT4wJRqOFRkTFlStwLyqcEIWbk8h+6pH7heQyK18ZuaAJhgWYn1E9i
+	28yPkz8NuKvZFm6nGxc87hzBWItQ3CbfiIDOlJWQNLaGo4b/Bla9JiRWxeoNgPhp
+	gukYAqxY8GWBCHw8vRNeMmVZnsCiHWTf6Ku8c4jtXXouNP21ulJrhJLSjQmIaxNZ
+	JnamJfrwFfQa60FAKncVTN9RqpzCR1T5jgq4bDli/dBHIPuyquycRFsx4FMg==
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=
+	messagingengine.com; h=cc:content-transfer-encoding:content-type
+	:content-type:date:date:feedback-id:feedback-id:from:from
+	:in-reply-to:message-id:mime-version:reply-to:subject:subject:to
+	:to:x-me-proxy:x-me-sender:x-me-sender:x-sasl-enc; s=fm2; t=
+	1792056600; x=1792143000; bh=5CXcKRQs2qcNFxtSzVHKqX8kZk03YLfU9ul
+	k2Wcmlss=; b=CG2vxlozCwm0cO793Cl/hO901cad8c/cgj8z9LA1qzIEYVvfTqD
+	En1ZO1U0Zbe5ODeFgAuzZETgKF6as0Dw30rxW90X4E/21qa7bXHRWVCbJDqsswDB
+	kbSF0gJkx7xyC5gO1xNQ/ZGuigF7Xes5qK30acOsabEmePU00cSiWCP0pjKdSyrg
+	yZnchPDW5XgaPP8X3SxQ7kuEiVgGroYDOWNw3ILRbocvuTzvmerI0+knB8Expfun
+	5JLDh49KX6amYy21Ln8ZuCfexBJcAFjHZ70orbeJojNz6gVu4Zd7lyQBh+iITxNP
+	DRhvGKtGGIwPr2MqERl+pn/O6CuLSrDWwrQ==
+X-ME-Sender: <xms:P6BLK8Ja8ORKCjE4v78MpMval6bmuGx23Ch6IwSytlrflO1/ust2lo3o>
+X-ME-Proxy-Cause: tubpmdcvigbdhqfhjqngxnhlpbhudttzkewvafvplndrakcxxogpgeztqgommjhhdfvhby
+    eyfesaxthjxceazmskmxinzkvkynkgnxopytngaeudtiuthkznklwemfyereqdnyxbtzmf
+    tcwgwgiscbralhtxbfvtswwfmfsrxnawuhzndryquskiggwucmtvmjtchdxrgeifgmasqv
+    scgpphsvxnezpbqnxfoptqjkltrfmmxcikoifwhkjkphqmjbevwtaoouohckppypmlxpwt
+X-ME-Proxy: <xmx:EPSCQbx/kONRs/R0VdD99eFjemswF34UrIlDoCDL5sYyl8olzc8zE1eW>
+Feedback-ID: i44224737:Fastmail
+Received: by mailuser.phl.internal (Postfix, from userid 501)
+	id FFB35F432B; Thu, 15 Oct 2026 05:30:00 -0400 (EDT)
+X-Mailer: MessagingEngine.com Webmail Interface
+MIME-Version: 1.0
+Date: Thu, 15 Oct 2026 09:30:00 +0000
+From: "First Last" <first.last@fastmail.com>
+To: recover@recovery.test
+Message-Id: <ebb08c9c-4399-4bc2-843b-ec1d1e72b680@app.fastmail.com>
+Subject: APPROVE NIDO ACCOUNT RECOVERY 2dada0dee91a998cadcb77261ea5dfe35f622fc38d15197c47e76ef5db7d49ef
+Content-Type: text/plain
+Content-Transfer-Encoding: 7bit
+
+Approving the recovery of my account.

@@ -1,0 +1,86 @@
+[
+  {
+    "domain": "gmail.com",
+    "provider": "gmail",
+    "signer": "current",
+    "selector": "20260707",
+    "record": "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuXFU89b4e7w5Dy7TAG/OnV2e+cU/jjDTYDWMYK6yMn99SjIg98zPJXHa3vAGA+qLUA92Q9eaPjXD7v/UpRh7dA+BB8B+/9xaeo05s3jMsFefnDpwRejTsssSYOUff+lkiG7UxcPMgOPlhQRmKmfNK0hvYOadA608L+xLzPTvTnoy0gua1OTAsdn7UG1LL54DtlGUe1qTPFXO2n85kh7unDfjyJ1tXOM+iyfnjqcHOyZz89qyQ0KvfL5nJJTLdeIxMP6cs+WDNMcD9p4zC6EicDH84PpqNXeFYPaXjV1IhK1/MlxoKwiseMojH6VrIJLPQkqKBX1yN72G7fru9s0ecQIDAQAB"
+  },
+  {
+    "domain": "outlook.com",
+    "provider": "outlook",
+    "signer": "current",
+    "selector": "selector1",
+    "record": "v=DKIM1;k=rsa;p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4detena19QD5omqTxxjpc3VJ1hDE3zVf7UJ2QHcbEbd1/dpXlbLmkXE4ZQqpJZGLHZQKCb+7jbUFbtPTbLpNtfzrNLfq/ucGsX1ermOD0n0zcR8HFS/htwQIYUwxXZWXdnymaFJdor9j8zMHLsysqLXG8TPIR0i0oeYqNMhtG6SyXUqDc/mz3euJLck7ClncpzRKazd8KTH+0sMMQeYC3lJt4tcpIM9yAV9qRBfoWUK+85FhQjMPmvZro+XqGynFh5sVn0Lw9bFlAUrurn80/s9QC1Gayu38fp3Cr1mZm2HFPYKEUIFiq74YgnzpxgzLr9KogStK8YuQd9XWOuctgwIDAQAB;n=2048,1452627113,1468351913"
+  },
+  {
+    "domain": "hotmail.com",
+    "provider": "outlook",
+    "signer": "current",
+    "selector": "selector1",
+    "record": "v=DKIM1;k=rsa;p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4detena19QD5omqTxxjpc3VJ1hDE3zVf7UJ2QHcbEbd1/dpXlbLmkXE4ZQqpJZGLHZQKCb+7jbUFbtPTbLpNtfzrNLfq/ucGsX1ermOD0n0zcR8HFS/htwQIYUwxXZWXdnymaFJdor9j8zMHLsysqLXG8TPIR0i0oeYqNMhtG6SyXUqDc/mz3euJLck7ClncpzRKazd8KTH+0sMMQeYC3lJt4tcpIM9yAV9qRBfoWUK+85FhQjMPmvZro+XqGynFh5sVn0Lw9bFlAUrurn80/s9QC1Gayu38fp3Cr1mZm2HFPYKEUIFiq74YgnzpxgzLr9KogStK8YuQd9XWOuctgwIDAQAB;n=2048,1452627113,1468351913"
+  },
+  {
+    "domain": "icloud.com",
+    "provider": "icloud",
+    "signer": "current",
+    "selector": "1a1hai",
+    "record": "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArUEwP3NerzxCk3qQFYIPBR+9DNaDN8dXL62ijz8pmDCuFUkBUTdhGwmCXuAWnl+iJ5ibW8QwM7rPMxWaH0ZGeGc6mKoc0rObN9xhDPQn/xlyorcF6l6PSkDEA1YHtv4MgeUWRrVrRvir5ZBGyAnjod8H5L8d6hyCi3ETj6YfTsEJc8rOHyFHVj+i0fKC6N55dI8wihPD3uGpl9xfC2s9Cu4+aZj6xh69VGaNq1n22Tu6i7oyXeaZwg7KebgWzxgQx9849uUbNrB9wpNLR2F08qxHNPrz/Wg/E7H8Ng4+2KzsYySAAujE3KsvltMwO4kEiFTL1viKK4DtGb5wlgtzvQIDAQAB"
+  },
+  {
+    "domain": "yahoo.com",
+    "provider": "yahoo",
+    "signer": "current",
+    "selector": "s2048",
+    "record": "k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwmmBkJS/VdGQj6GAIpJdY1nPLxza2nZ2uic09UpxuxmvPOcBUBNdNjzmQA/4BduUeWW013woRY2TM1QjXkaLUdOG1mq6biaHyCGH1/SfOgTaqX2bG1qmUKs34m604EyUT4hj8GZl63xACibw6UeXJiiGAqJQlnzqdrUkCr0ZylbbbuzxCap4zQN+I4eKHIufqi0govXbnv7HnqLzQ7wraxWp3/G5qaST/jTsYkXQDjiPoBCmKbGvGvpTfmsHQWu8Xo5wy2Md9myPageIvTeaRWLCX7afBJyGbLhQbiyHK8mgfNvvc/AC4144RzDYjVf27hywZTm4Tx+c7EONv4fRFwIDAQAB;"
+  },
+  {
+    "domain": "proton.me",
+    "provider": "proton",
+    "signer": "current",
+    "selector": "protonmail2",
+    "record": "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuPG1VzJzGj/1IBGvz8EZpOnW6QChqjMuhJNF/gBhyvL7X5lvwEi/LrvR1/P0Stngls7NXm5gvzXn6p/xcdouNm4VflzCRTMmzyFpJFRBAEmVgc0way5vNESEtUoHRss6aiMcxaScQZLS4raUQSCW3tgKHBO+7Bu6rA32PIFz7V/olMoCojieriY/GlpdT2CXDT5jpPNgv7N/yEumAA5ykapIWBzXLlKrCpq1krPAhoTnVPTIiSnw2/8I+A2Vee1zQnxu3fqiYC4x//p/OXao5y5DErQ9DAqN/Vf8NZVnwf63El+Buo8ak+xMmeEG+5f2rX5jDsXHHIjlqh8KObWd0wIDAQAB"
+  },
+  {
+    "domain": "protonmail.com",
+    "provider": "proton",
+    "signer": "current",
+    "selector": "protonmail3",
+    "record": "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA2CesRoL/tT/TDPzlIvU0E4Sa8r8p5Z1+ldh9o7dWjpgCQccwnv8jG/1vMETD4lJg5wFENbZDwK3LL8VUi/Zf4lj8ypLhFeHvsbq71tMJaxV+Fa2Ki/CtLK78KeoeB876gGqxu0z6BnaZlOEiCAbzxqVyQ0kn3MPwZmQ6k0I9z7h+mjYzYzweK4qwFBZVUvzevOUH7JhMMdnX40EdpYLlGKXb0buKT4DQ+vdpzW+2d7yLZssO0hEjhgFUpeMKNwd5a2T/r3/W1ovhY5xWXMXATqHvyvYw7r0n8h5a6xT++oCiJ4891PTxS0Q2xUdkk7wqJUeLYO7c+/CLv4U5u8FiPQIDAQAB"
+  },
+  {
+    "domain": "fastmail.com",
+    "provider": "fastmail",
+    "signer": "current",
+    "selector": "fm2",
+    "record": "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA+iabsK4SbhhMEvZs7dSwcwSJH0OIjdDSpqfOlgdUvuFyxOfImKeGDi49/vL6MeU9h5r7eNVBefYj80qql9yRmE+EAZtwrqirbKWp1Yyy/1wBnifi+7OrsRiFS0qML6dqR0HDRe8llbp0P7/hfGrKBVIAPecA0X5BdrWtkyb7m7ELS0WI4yJt2Ny6MWrJ/tj9suTvhzs0fIQPreXAlWy/BtjlU9Pv+RzWMIOeSLvF6/M8wOstb/2PCBRQe0w6Y2NyxcsnFD7x3SorpLqHpK/AFPf+/U1B0AUIXz6DsW6STUWhMHxBurjtXRYidKVQIEMGoIg9aiOD21EJrJNtENj0bwIDAQAB"
+  },
+  {
+    "domain": "gmx.net",
+    "provider": "gmx",
+    "signer": "current",
+    "selector": "s31663417",
+    "record": "v=DKIM1; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArHOKVqiCuzctHkLzhj3z2R8SjgJhuvW62Wjy+xnM0JKyZshtKCUuvQ5o+IIdL3Ma8cvxsnpym5thNCoHfqHYB/UJreZekDsqYJXzT1Mb5QMmVzzLvMkaAqw7K26Pdkzd1Ajlk4THkluD719jaHJuKmzDfV3ldL1h+qeSUhJ/QmPSjPGQoKcLysOYWBtvqhHVcaXUqQnHSFRpqxVp3W2YXukpCVv/+/EZZFZsd6X60Ag+nLwjIyvPd7J4uby0M0KOkK59T5xslTWtPozy6fNmrm3huVHBAN1GfCFrqYAQBJGu5d9JGKkpAGgBt7ZefzRpGuSuUmd8TeR0qDDwmXsIYwIDAQAB"
+  },
+  {
+    "domain": "gmx.de",
+    "provider": "gmx",
+    "signer": "current",
+    "selector": "s31663417",
+    "record": "v=DKIM1; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArHOKVqiCuzctHkLzhj3z2R8SjgJhuvW62Wjy+xnM0JKyZshtKCUuvQ5o+IIdL3Ma8cvxsnpym5thNCoHfqHYB/UJreZekDsqYJXzT1Mb5QMmVzzLvMkaAqw7K26Pdkzd1Ajlk4THkluD719jaHJuKmzDfV3ldL1h+qeSUhJ/QmPSjPGQoKcLysOYWBtvqhHVcaXUqQnHSFRpqxVp3W2YXukpCVv/+/EZZFZsd6X60Ag+nLwjIyvPd7J4uby0M0KOkK59T5xslTWtPozy6fNmrm3huVHBAN1GfCFrqYAQBJGu5d9JGKkpAGgBt7ZefzRpGuSuUmd8TeR0qDDwmXsIYwIDAQAB"
+  },
+  {
+    "domain": "web.de",
+    "provider": "gmx",
+    "signer": "current",
+    "selector": "s29768273",
+    "record": "v=DKIM1; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA2oxplkXfWaX1v3yOiO6EQ/CkE3kItSqD7LtZQTYdRDX/PkbR0g5HZPHsWIw8FzhZ/J8jiJSWSUfMIrv0XJBOAUGPytSFTQlXxmA0ybkGbWDwfRBO5HypfT/CJKZ0cnklLbJ4n4wRHsmMva38PjtWBxfrYcuw15zPdKvr5vIoranXDGP/NdZO1fRrGqrx4sQCXHzkCYpJlTBkYiy86MuFsprqtW2TDbFmF7p+m6WEh11s9Y70XrSSQ6OBBYYikr+A7umfE6id1gFgnT54JjAfxL+0oi7Iy8eX7gLsuNVWPnILjEz2qQ7iJdJpagHbmQgUxA7PFdGPSr0zKOaoXJzU7QIDAQAB"
+  },
+  {
+    "domain": "gmail.com",
+    "provider": "gmail",
+    "signer": "gmail-previous",
+    "selector": "20251104",
+    "record": "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAiU2SGkZgcfDSxYWqhOk615cRJDD+Fa1HOlaLrNVHANoeExG2qoalMtrydFoeqD1CyczekQA9LQFLFRHE9A5p4znp4Qf9KOvKdxcLAeLPIAMrl6IP4KJKPaeoI2NqDGsKpCuJDG6O8Hi6lM0FAeQ3LUUvPKqBq/CQWyVW0L+SE8XxjWJcOp4MU90bLmtCFPCQTGNojPwAjmO19E4jDe2lJJMTypGVYQahD9ygkIijnUMmTK8g5ulf0wkNdRBqGwJoyDqh1VuClC90BMyn7ZR6GLf2zzf6fseoS4yIGtVlnP/cE1WVbd8QDFaF7cnlLgUDSxFdblnsKWOFTqmbzD8unQIDAQAB"
+  }
+]

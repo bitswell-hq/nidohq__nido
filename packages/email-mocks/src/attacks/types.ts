@@ -41,7 +41,9 @@ export interface AttackInput {
   victim: string;
   /** An address the attacker controls at a launch provider. */
   attacker: string;
-  /** The honest recovery Subject: a fixed phrase and `recoveryValue`, in the spec's format. */
+  /** The Subject's fixed phrase, without the space before the value. */
+  phrase: string;
+  /** The honest recovery Subject: `phrase`, one space, and `recoveryValue`. */
   subject: string;
   /** The value inside `subject` that a proof binds. */
   recoveryValue: string;

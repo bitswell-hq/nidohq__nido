@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "circuits/email-recovery/**"
+      - "contracts/email-verifier/vk/**"
       - "contracts/dkim-registry/vectors/**"
       - "vendor/perch"
       - ".github/workflows/email-recovery-circuits.yml"
@@ -11,6 +12,7 @@ on:
     branches: [main]
     paths:
       - "circuits/email-recovery/**"
+      - "contracts/email-verifier/vk/**"
       - "contracts/dkim-registry/vectors/**"
       - "vendor/perch"
       - ".github/workflows/email-recovery-circuits.yml"
@@ -49,3 +51,13 @@ jobs:
       - name: Run the tests
         working-directory: circuits/email-recovery
         run: '"$NARGO" test --workspace'
+
+      # The committed artifact (what noir_js and the browser prover run) and
+      # the verifier's compiled-in key must be what the pinned toolchain
+      # produces from the source, and the committed inputs must execute.
+      - name: Check the recovery circuit's artifact, key and inputs
+        run: |
+          (cd circuits/email-recovery && "$NARGO" compile --package recovery && "$NARGO" execute --package recovery)
+          node circuits/email-recovery/scripts/recovery-artifact.mjs --check
+          "$BB" write_vk --scheme ultra_honk --oracle_hash keccak -b circuits/email-recovery/target/recovery.json -o "$RUNNER_TEMP/vk"
+          cmp "$RUNNER_TEMP/vk/vk" contracts/email-verifier/vk/email_recovery.vk

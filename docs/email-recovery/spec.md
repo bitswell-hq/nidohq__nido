@@ -376,7 +376,9 @@ RFC 4648 base32 without padding, shown in groups of four.
 
 The circuit has exactly four public inputs, BN254 field elements in this
 order. The guardian hands them to the verifier as one 128-byte blob, each
-input 32 bytes big-endian (`PUBLIC_INPUTS_LEN = 128`) **[built, tested]**:
+input 32 bytes big-endian (`PUBLIC_INPUTS_LEN = 128`). The circuit
+(`circuits/email-recovery/recovery`) declares exactly these, in this order
+**[built, tested]**:
 
 | # | Input | Built by the guardian from | Opened in the circuit by |
 | --- | --- | --- | --- |
@@ -396,12 +398,16 @@ argument as Perch §13.3).
 
 ### 6.2 Private inputs and obligations
 
-Private inputs: the signed header bytes `H` and their length (bounded by the
-circuit's `HEADER_MAX`, which must admit every launch provider's signed
-header block), the positions of the `From` address, the Subject token, and
-the `d=` value within `H`, the signature `s`, the modulus `n` (§7.1),
-`rho`, `account_code`, the leaf domain bytes, the leaf index, and the
-Merkle siblings.
+Private inputs: the signed header bytes `H` and their length (at most
+`HEADER_MAX` = 1536 bytes, §6.3), the signature `s`, the modulus `n`
+(§7.1) with noir-bignum's Barrett parameter (read only by unconstrained
+code, so it is a prover hint, not part of the key hash), `rho`,
+`account_code`, the leaf index, and the 16 Merkle siblings. The positions
+of the `From` address, the Subject value, and the DKIM-Signature tags within
+`H` are prover hints the circuit computes in unconstrained code and then
+checks. The leaf domain is not a separate input: it is the lowercase `d=`
+value the circuit reads from `H`, so C4's second equality holds by
+construction.
 
 | Id | Obligation |
 | --- | --- |
@@ -412,8 +418,61 @@ Merkle siblings.
 | C5 | `H` contains exactly one `subject` field, its value is exactly `APPROVE NIDO ACCOUNT RECOVERY ` followed by 64 lowercase hexadecimal characters, and those characters are `hex(P2(DOM_BLIND, digest_hi, digest_lo, rho))`. |
 | C6 | `key_hash = P2(DOM_KEY, limbs(n))` (§7.1), `leaf = P2(DOM_LEAF, len(domain), pack(domain, 62), key_hash)` (§7.2), and the Merkle path from `leaf` at the given index reaches `key_root` (§7.2). |
 
-**[specified]** (the circuit, built with Perch's pinned nargo and bb so the
-proof is the zero-knowledge UltraHonk flavor Perch's verifier accepts).
+**[built, tested]**: `circuits/email-recovery/lib/src/recovery.nr`
+(`verify_recovery_email`, composing the components of
+`circuits/email-recovery/lib`), compiled to 251,561 UltraHonk gates
+(padded to 2^18) with Perch's pinned nargo 1.0.0-beta.9 and proven with bb
+0.87.0 in the zero-knowledge flavor with the keccak transcript, which
+Perch's verifier accepts. The tests:
+
+| Tests | What they show |
+| --- | --- |
+| `circuits/email-recovery/tests/src/recovery_tests.nr` (19) | The honest witness at any leaf index is accepted; a commitment to another address, to a case variant of it, or under another code, another digest limb, swapped limbs, another `rho`, a root without the key, the key under another domain, another key for the domain, a wrong or 16-bit-overflowing leaf index, the leaf as root, and a signature under another key are each refused at their obligation |
+| the rest of `circuits/email-recovery/tests/` (104) | Each component, and one negative test per publicly documented soundness issue class of open-source email circuits (`circuits/email-recovery/SECURITY.md`) |
+| `packages/email-recovery/test/recoveryInputs.test.ts` | The committed circuit (`circuits/email-recovery/artifacts/recovery.json`, run with noir_js) accepts an honest recovery email from each domain the provider mocks sign for, and a 124-byte address with a 500-byte display name at each launch domain; the encoder's signed header block equals the octets every mock provider's key signed |
+| `packages/email-recovery/test/attacks.test.ts` (56 cases) | Every adversarial email of `packages/email-mocks` with the strongest witness for its claim: each case a standard DKIM verifier passes but whose claim must not be provable is refused at a named assertion (§6.4) |
+| `crates/integration-tests/tests/it/email_proofs.rs` | A real proof of each launch domain's recovery email verifies on chain and counts as one vote (§8.6) |
+
+### 6.3 Header bound
+
+`HEADER_MAX` = 1536 bytes. Measured on the provider mocks' formats
+(`circuits/email-recovery/README.md`, "Header bound"), every launch
+domain's recovery email fits, and with the longest address (124 bytes) it
+still fits with a display name of up to 536 bytes (WEB.DE), 539 and 540
+(GMX), 779 to 797 (Proton, Fastmail, Gmail), 842 (iCloud), 886 (Outlook.com
+and Hotmail), and 965 (Yahoo). GMX and WEB.DE sign the address twice, which
+is why a 1024-byte bound would have left them only 24 to 28 bytes for a
+display name at that length. The circuit at 1536 bytes stays at 2^18, the
+padded size it has at 1024 bytes, so the bound changes neither the
+verification key's size nor the on-chain verification cost
+(`circuits/email-recovery/MEASUREMENTS.md`) **[measured]**. The
+DKIM-Signature field is bounded at 512 bytes and 16 tags; the largest launch
+format uses 355 bytes and 11 tags.
+
+### 6.4 Attack suite
+
+`packages/email-recovery/test/attacks.test.ts` gives every adversarial
+email of `packages/email-mocks` (`buildAttacks`, with this Subject format)
+the witness most favourable to its claim: a signature a standard verifier
+accepts under the key DNS publishes for its `d=` and selector; the octets
+that signature covers; the registry tree of the launch keys, or, for a key
+no registry would hold, a tree planted with that key; and the public inputs
+the claimed account's guardian would build. It pins each outcome
+**[built, tested]**:
+
+- every case a standard DKIM verifier passes but whose claim must not be
+  provable is refused: display-name, angle-addr, comment, quoted-local-part
+  and folded `From` spoofing; unsigned `From` or `Subject` fields above or
+  below the signed one; a second, invalid signature under the claimed `d=`
+  above a valid one by another domain; misaligned `d=`; an RSA-1024 key;
+  `l=` with appended text; encoded-word, folded-value and split-phrase
+  Subjects; the recovery value in the display name or body; and replay for
+  another statement or account;
+- every case no signature of verifies is refused too, except a body
+  replaced after signing: the header signature is the provider's own and the
+  proof does not bind the body (§4.4);
+- a Subject folded at a space, or with runs of whitespace, is accepted,
+  because relaxed canonicalization restores the exact phrase.
 
 ## 7. DKIM key identity, registry, and pin
 
@@ -871,8 +930,19 @@ contract that embeds Perch's vendored UltraHonk verifier
 with the email circuit's verification key compiled in, exactly as Perch's
 adapter embeds its own (`vendor/perch/crates/perch-zk-adapter`), and also
 exposes `circuit_id() = sha256(vk)` (`VerifierIdentity`,
-`contracts/email-guardian/src/verifier.rs`). **[specified]** (on-chain
-verification work, once the circuit's key exists).
+`contracts/email-guardian/src/verifier.rs`).
+
+That contract is `contracts/email-verifier` (crate `nido-email-verifier`)
+**[built, tested]**: it embeds `UltraHonkZkVerifier` from the same Perch
+commit as the other Perch crates and the circuit's 1,760-byte key
+(`contracts/email-verifier/vk/email_recovery.vk`, `bb write_vk --scheme
+ultra_honk --oracle_hash keccak`), exposes `verify_proof`, `circuit_id`,
+`vk` and `version`, refuses a proof that is not 16,224 bytes or public
+inputs that are not 128 bytes (`ProofParseError`), and links a 128 KiB wasm
+stack, as Perch's adapter does. Its tests (`src/test.rs`) verify every
+committed proof, including one made by bb.js, and refuse each public input
+changed, a non-canonical input, changed proof bytes, a real proof of
+Perch's own circuit, and wrong lengths.
 
 ### 8.5 Other entry points, storage, and errors
 
@@ -894,7 +964,27 @@ pin's acceptance window, and parsing of all five statement shapes produced
 by Perch's own encoder. It uses a test-only verifier (accepts a "proof"
 exactly when it is a SHA-256 tag of the public inputs it receives) and a
 test-only registry; the guardian's code path is the production one. The
-integration tests (§9.3, §7.6) use the registry contract from its wasm.
+integration tests (§7.6, §8.6, §9.3) use the real verifier and the registry
+contract from their wasm, and every approval in them carries a real proof.
+
+### 8.6 Real proofs on chain
+
+`crates/integration-tests/src/email_proof.rs` gives every integration test
+approval a real proof: the provider mock signs the recovery email for the
+statement the real controller built, `packages/email-recovery` encodes it,
+Perch's pinned bb proves it, and the proof is committed with its email
+(`crates/integration-tests/fixtures/email/<name>/`); a test whose statement,
+inbox, key path or circuit drifts fails with the command that regenerates
+them (`just gen-email-proofs`). The registry admits each launch domain's
+TEST-ONLY key through the attested path, fed by the DNS attester mock with
+the mock DNS's records (`fixtures/email/keys.json`) **[built, tested]**:
+
+| Test | What it shows |
+| --- | --- |
+| `email_proofs.rs::<domain>_approval_counts_one_vote` (11) | For each launch domain: the verifier accepts the proof for the guardian's public inputs and refuses it with each one changed; `submit_guardian` carrying it counts one vote; the resources of §12 |
+| `email_proofs.rs::long_address_at_web_de_counts_one_vote` | The same for a 124-byte address with a 299-byte display name at WEB.DE |
+| `email_proofs.rs::the_fixture_keys_and_hashing_match_the_circuit` | The provider keys cover the registry's allowlist, and the harness's native `C` is the circuit's and the encoder's (one vector pinned in all three) |
+| `contracts/email-verifier/src/test.rs` | As §8.4 |
 
 ## 9. One-factor safety and policy rules
 
@@ -972,8 +1062,9 @@ different wallet could build one Nido would refuse.
 
 `crates/integration-tests/tests/it/email_guardian.rs` pins the on-chain part
 on Nido's stack (Perch's controller and account from their deployed wasm,
-the guardian and the key registry from their wasm, the registry fed by the
-DNS attester mock) **[built, tested]**:
+the guardian, the verifier and the key registry from their wasm, the
+registry fed by the DNS attester mock, and a real proof in every approval,
+§8.6) **[built, tested]**:
 
 | Test | What it shows |
 | --- | --- |
@@ -983,6 +1074,7 @@ DNS attester mock) **[built, tested]**:
 | `an_email_approval_cannot_be_replayed_into_another_account` | Even with two guardians sharing one `C`, account A's approval does not count for account B |
 | `email_approvals_alone_never_complete_a_recovery` | With a 2-of-2 quorum the email vote never authorizes; as the only guardian (quorum 1, `Loss`) it authorizes, but completion waits for the delay, the owner can cancel, and a new attempt needs a new email |
 | `email_approval_counts_toward_a_protected_reconfiguration` | Through `approve_change`, the email vote is one vote of a `Protected` reconfiguration quorum |
+| `a_root_the_registry_does_not_accept_is_refused` | A proof's key root replaced by a root the registry never produced, or by the empty tree's, is refused (`UnknownRoot`) before the proof is checked |
 
 ## 10. Alerts
 
@@ -1392,8 +1484,8 @@ model's agreement with the contracts is tested, not proven
 
 | Property | Circuit obligations | Contract obligations (guardian) | Perch obligations | Assumptions | Status |
 | --- | --- | --- | --- | --- | --- |
-| 1 Soundness | C1, C2, C3, C4, C5, C6 | §8.3 checks 1 to 12; §8.2 wiring check; registry: §7.3 rules 1 to 5 and the same tree hashing as C6 (§7.2, §7.6 cross-check) | Statement construction from controller state (Perch §4) | A1, A2, A3 (collision), A4 (soundness), A5, A7 | Proven from the circuit relation with A4, A5, A7 as hypotheses and A3's breaks named (`EmailRecovery.soundness`); A1 assumed; guardian checks and registry rules tested; registry hashing tested against Noir; circuit specified |
-| 2 Privacy | Public inputs are exactly §6.1; nothing else is exposed | Stores `C` and a salted pin root, never an address or key hash; emits nothing | — | A3 (random function), A4 (zero-knowledge), A6 | Noninterference proven (`EmailRecovery.privacy_noninterference`); indistinguishability rests on A3, A4, A6, assumed; guardian storage tested; circuit specified |
+| 1 Soundness | C1, C2, C3, C4, C5, C6 | §8.3 checks 1 to 12; §8.2 wiring check; registry: §7.3 rules 1 to 5 and the same tree hashing as C6 (§7.2, §7.6 cross-check) | Statement construction from controller state (Perch §4) | A1, A2, A3 (collision), A4 (soundness), A5, A7 | Proven from the circuit relation with A4, A5, A7 as hypotheses and A3's breaks named (`EmailRecovery.soundness`); A1 assumed; guardian checks and registry rules tested; registry hashing tested against Noir; circuit built, C1 to C6 tested (§6.2, §6.4), not proven; real proofs verified on chain (§8.6) |
+| 2 Privacy | Public inputs are exactly §6.1; nothing else is exposed | Stores `C` and a salted pin root, never an address or key hash; emits nothing | — | A3 (random function), A4 (zero-knowledge), A6 | Noninterference proven (`EmailRecovery.privacy_noninterference`); indistinguishability rests on A3, A4, A6, assumed; guardian storage tested; the circuit's public inputs are exactly §6.1 (built, tested) |
 | 3 Replay | C5 binds `d` | Checks 1, 2, 5, 6, 8, 12 | One vote per guardian per attempt and domain, or per change digest (Perch §6.3 T2, §5); attempt ids never reused (T1); epochs only grow (§3.3) | A2, A3, A4 | Proven with A2's break named (`EmailRecovery.Perch.email_vote_replay`); tested (unit and integration) |
 | 4 One-factor safety | — | The guardian is one address | Quorum (T4), delay (T5), cancellation (T6, T7) | — | Proven over all controller traces (`EmailRecovery.Perch.one_factor_safety`) and for the wallet policy (`one_factor_under_wallet_policy`); on-chain part tested; wallet policy tested (§9.3) |
 
@@ -1408,8 +1500,12 @@ own cost, not a provider's or a network's.
 | --- | --- | --- |
 | Guardian wasm, optimized | 32,547 bytes | `just build-contracts` output for `nido_email_guardian.wasm` (local build; the CLI version recorded in the wasm metadata can change it by a few bytes) **[measured]** |
 | Registry wasm, optimized | 67,337 bytes | `just build-contracts` output for `nido_dkim_registry.wasm` (same caveat) **[measured]** |
-| One `submit_guardian` with an email approval, whole invocation | 2,118,851 instructions; 905,658 bytes of memory; 13 entries read; 2 entries and 1,208 bytes written | `email_approval_plumbing_cost`, `cost_estimate().resources()` **[measured]** |
-| The guardian's authorization entry (16,224-byte proof) | 16,784 bytes of XDR | same test **[measured]** |
+| Verifier wasm, optimized | 44,684 bytes | `just build-contracts` output for `nido_email_verifier.wasm` (same caveat) **[measured]** |
+| Recovery circuit | 251,561 UltraHonk gates (117,491 ACIR opcodes), padded to 2^18; at a 1024-byte header bound 189,503, also 2^18 | `circuits/email-recovery/scripts/measure.sh` (`bb gates`), `circuits/email-recovery/MEASUREMENTS.md` **[measured]** |
+| Proving one recovery email, native (`bb prove --zk`, 18 cores) | 674 ms witness, 969 ms proving, 878 MiB peak; at 1024 bytes 534 ms, 840 ms, 832 MiB | same, median of 3, shared machine (load average 5 to 8) **[measured]** |
+| Proving one recovery email, bb.js 0.87.0 in Node | one thread: 13.6 s, 1,386 MiB peak; 18 threads: 3.3 s, 1,716 MiB; at 1024 bytes 12.0 s and 2.9 s | same **[measured]** |
+| One `submit_guardian` with an email approval and a real proof, whole invocation on the test host | 121,789,699 to 121,861,611 instructions (30.5% of 400,000,000); 5.6 MB of memory; 14 entries read; 2 entries and 1,208 bytes written; resource fee without rent 94,412 to 94,463 stroops, across the 12 fixtures | `email_proofs.rs` (every launch domain and the 124-byte address), `cost_estimate()`; table in `research/email-recovery/eval/onchain.md` (`measure-onchain.py`) **[measured]** |
+| The same call as a signed transaction | 131,009,914 to 131,089,485 instructions; footprint 12 read-only and 2 read-write entries; 18,148-byte envelope with a 16,784-byte authorization entry around the 16,224-byte proof; resource fee without rent 178,082 to 178,138 stroops | `nido_integration_tests::transaction::measure` in the same tests **[measured]** |
 | `is_accepted_root`, accepted or refused | 565,446 / 568,058 instructions; 286,222 bytes of memory; 2 entries read; nothing written; no events; fee without rent 396 / 398 stroops | `dkim_registry_costs` **[measured]** |
 | `propose_add` (computes the key hash over the 2048-bit modulus) | 9,348,283 instructions; 533,605 bytes of memory; 6 entries read; 3 entries and 1,588 bytes written; 744 event bytes; fee without rent 23,723 stroops | same test **[measured]** |
 | `approve` | 666,915 instructions; 300,965 bytes of memory; 5 entries read; 2 entries and 492 bytes written; 208 event bytes; fee without rent 10,030 stroops | same test **[measured]** |
@@ -1426,10 +1522,18 @@ own cost, not a provider's or a network's.
 | Web Push body (RFC 8291, one record) | 661 bytes | same **[measured on mocks]** |
 | Lettermint request body of an alert | 685 bytes | same **[measured on mocks]** |
 
-The `submit_guardian` figure is a plumbing figure: Perch's controller and
-account, the guardian, and the registry run as wasm, but the verifier is
-the test-only stand-in, which does no cryptography. It contains no proof
-verification. The registry figures are the whole invocation of each entry
+The `submit_guardian` figures include the proof verification: Perch's
+controller and account, the guardian, the registry, and the verifier all
+run as wasm, with each launch domain's committed proof. The test host's
+reading is `cost_estimate()` of the invocation; the host enforces the
+SDK's mainnet resource limits on every invocation, so the call fits them.
+The transaction reading re-executes the call in a fresh host over a snapshot
+of the test ledger with the signed authorization entry enforced, records the
+footprint, builds the signed envelope, and prices it with
+`compute_transaction_resource_fee`, transaction size included; its
+instruction count is about 7.6% higher than the test host's, which the SDK
+documents does not model some production work. Rent is left out of both.
+The registry figures are the whole invocation of each entry
 point from the registry's wasm (no entry was read from disk, so ledger
 bytes read are 0 in every row), with the 3-of-5, 2-of-3 configuration of
 `crates/integration-tests/src/email.rs`; `dkim_registry_costs` also asserts
@@ -1442,11 +1546,12 @@ maximum TTL (10,000,000 ledgers in this test ledger) and on how recently an
 entry was last extended, and the SDK prices rent above the network's rate on
 purpose. Fees on testnet are not measured here.
 
-Real verification cost is measured once the circuit and its verifier exist.
-Fee estimation through RPC simulation needs care: Soroban's
-recording-mode simulation does not run custom accounts' `__check_auth`
-(`vendor/perch/AGENTS.md`), so a simulated `submit_guardian` omits the
-guardian's checks and the proof verification.
+Fee estimation through RPC simulation needs care: simulation that records
+authorization does not run custom accounts' `__check_auth`
+(`vendor/perch/AGENTS.md`), so a `submit_guardian` simulated without the
+guardian's signed authorization entry omits the guardian's checks and the
+proof verification. The transaction figures above enforce the entry and so
+include both. Network fees and latency on testnet are not measured here.
 
 In production, alert latency adds the watcher's polling interval and the
 providers' own delivery to these figures.
@@ -1489,11 +1594,13 @@ providers' own delivery to these figures.
      during its timelock or cut off a leaked key without a third approval.
    - *Who.* The five members, the three attester operators, and the
      resolvers each attester queries are not named.
-6. **Provider details.** The exact domain allowlist per launch provider
-   (for example whether secondary domains sign with their own `d=`), the
-   `HEADER_MAX` bound, and whether each provider's stored or received copy
-   keeps its `DKIM-Signature` are to be confirmed with provider-format
-   fixtures in the circuit work.
+6. **Provider details.** The circuit and the provider mocks agree on every
+   launch domain's format, and `HEADER_MAX` (§6.3) is sized on those
+   formats. Not yet confirmed against real provider mail: the exact domain
+   allowlist per launch provider (for example whether secondary domains sign
+   with their own `d=`), each provider's signed header block for very long
+   addresses and display names, and whether each provider's stored or
+   received copy keeps its `DKIM-Signature`.
 7. **`RECOVERY_INBOX`.** The fixed recipient address and how its mail
    reaches the browser (sealed inbound or `.eml` import) are not fixed here.
 8. **Verification code derivation.** v1 (§10.1) keys the code with

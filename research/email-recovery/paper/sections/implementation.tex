@@ -2,20 +2,44 @@
 
 The implementation has five parts: the recovery statement format and the
 email-guardian contract on Perch's existing recovery; a Noir circuit, proved
-with UltraHonk, with header and body constraints for the launch providers;
-the browser prover and the recovery flow; the DKIM key registry contract with
+with UltraHonk, with header constraints for the launch providers; the
+browser prover and the recovery flow; the DKIM key registry contract with
 its timelock and attestation feed; and mocks of every third party (mail
 providers signing with test keys in each provider's format, inbound mail, DNS
 attestations, the sending service, the enclave and its custodians, and Web
 Push).
+
+\paragraph{The circuit.}
+The recovery circuit takes the DKIM-signed header block as a private input of
+at most 1536 bytes, together with the RSA-2048 signature and modulus, the
+account code, the blinding value of the Subject and the key's Merkle path.
+It checks the signature over exactly those bytes, parses the
+\texttt{From} address and the \texttt{Subject} under fixed grammars, and
+opens its four public inputs: the address commitment, the two halves of the
+statement digest and the key-tree root. It is proved in UltraHonk's
+zero-knowledge flavour with the Keccak transcript, the toolchain Perch's
+on-chain verifier pins, and has 251{,}561 gates, padded to $2^{18}$. The
+1536-byte bound admits every launch provider's header with the longest
+address the design allows (124 bytes) and a display name of at least 500
+bytes. \claimstatement{circuit-accepts-launch-providers}\claim{circuit-accepts-launch-providers}
+\claimstatement{circuit-binds-public-inputs}\claim{circuit-binds-public-inputs}
 
 The circuit must enforce what open-source email circuits have been found to
 miss. Public audits of zkEmail's Circom and Noir
 libraries~\cite{audit-zksecurity-2024,audit-yacademy,audit-veridise-2024,audit-consensys-2024}
 report, among others, header-field extraction fooled by a header in simple
 canonicalisation, and the first characters of a claimed header value left
-unchecked for CRLF.
-The circuit's constraints and the tests that pin each fix are described here
-once built.
+unchecked for CRLF. Each publicly documented issue class has a negative test
+naming its source, and an attack suite runs every adversarial email of the
+provider mocks through the compiled circuit with the witness most favourable
+to the attacker's claim.
+\claimstatement{circuit-refuses-attacks}\claim{circuit-refuses-attacks}
 
-\pending{the circuit, contracts and browser prover are not yet built.}
+\paragraph{On-chain verification.}
+The email guardian hands the proof to a verifier contract that embeds
+Perch's UltraHonk verifier with the circuit's verification key, and builds
+the public inputs itself from its configuration, the authorised digest and a
+key root it accepts.
+\claimstatement{onchain-email-vote}\claim{onchain-email-vote}
+
+\pending{the browser prover and the recovery flow are not yet built.}

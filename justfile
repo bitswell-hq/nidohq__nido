@@ -62,6 +62,44 @@ gen-zk-fixtures:
     (cd vendor/perch/circuits && "$NARGO" compile --workspace)
     NIDO_ZK_PROVE=1 cargo test -p nido-integration-tests --test it -- --test-threads=1
 
+# Installs Perch's pinned nargo/bb
+# under target/zk-toolchain/, compiles circuits/email-recovery/recovery,
+# writes circuits/email-recovery/artifacts/recovery.json and the verifier's
+# key (contracts/email-verifier/vk/email_recovery.vk), rebuilds the
+# contracts with it, writes the provider keys the registry admits
+# (fixtures/email/keys.json, from @nidohq/email-mocks), and runs the email
+# suites in prove mode: each approval's statement comes from the real
+# controller, @nidohq/email-mocks signs the recovery email, the
+# @nidohq/email-recovery encoder writes the circuit's inputs, bb proves them,
+# and the test then verifies the proof through the deployed verifier. The
+# Gmail fixture's inputs become the Prover.toml of the recovery package and
+# of its 1024-byte comparison build (bench/recovery_1024), which
+# scripts/measure.sh proves, and bb.js (the browser's prover) proves the
+# Gmail fixture again from its message.eml (proof.bbjs). Proofs
+# are randomized; the emails and each fixture.json must not change:
+# `git diff -- crates/integration-tests/fixtures/email` shows only proof
+# bytes.
+# Regenerate the email circuit's artifact and key, and the email proof fixtures
+gen-email-proofs:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    eval "$(circuits/email-recovery/scripts/toolchain.sh)"
+    circuits/email-recovery/scripts/check-toolchain.sh
+    (cd circuits/email-recovery && "$NARGO" compile --package recovery)
+    node circuits/email-recovery/scripts/recovery-artifact.mjs
+    mkdir -p target/email-vk
+    "$BB" write_vk --scheme ultra_honk --oracle_hash keccak -b circuits/email-recovery/target/recovery.json -o target/email-vk
+    cp target/email-vk/vk contracts/email-verifier/vk/email_recovery.vk
+    just build-contracts
+    npm run build -w @nidohq/email-mocks -w @nidohq/email-recovery
+    node packages/email-recovery/scripts/email-fixture.mjs keys > crates/integration-tests/fixtures/email/keys.json
+    NIDO_EMAIL_PROVE=1 cargo test -p nido-integration-tests --test it email -- --test-threads=1
+    gmail=crates/integration-tests/fixtures/email/provider-gmail-com
+    node packages/email-recovery/scripts/email-fixture.mjs toml "$gmail" > circuits/email-recovery/recovery/Prover.toml
+    node packages/email-recovery/scripts/email-fixture.mjs toml "$gmail" 1024 > circuits/email-recovery/bench/recovery_1024/Prover.toml
+    node packages/email-recovery/scripts/measure-bbjs.mjs "$gmail" 1 --proof-out target/email-bbjs
+    cp target/email-bbjs/proof crates/integration-tests/fixtures/email/provider-gmail-com/proof.bbjs
+
 # Check the DKIM key registry's hashing against Noir: regenerate the Noir
 # inputs from the fixture key records (crates/dns-attestation-mock/testdata/),
 # then run contracts/dkim-registry/vectors/ with Perch's pinned nargo, which

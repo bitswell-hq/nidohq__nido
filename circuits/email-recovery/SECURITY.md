@@ -169,7 +169,13 @@ compiler's heuristic under-constrained-value check, and both are expected:
 
 **Proven:** nothing formally.
 
-**Tested** (`nargo test --workspace`, 104 tests): honest headers in the
+**Tested** (`nargo test --workspace`, 123 tests): the recovery relation
+(`tests/src/recovery_tests.nr`): the honest witness at any leaf index, and
+a commitment to another address, to a case variant of it or under another
+account code, another digest, swapped digest limbs, another `rho`, a root
+without the key, the key under another domain, another key for the domain,
+a wrong leaf index, an index of 16 or more bits, the leaf as the root, and a
+signature under another key, each refused at its obligation; honest headers in the
 shapes of Gmail and Outlook.com signatures, with the address, domain,
 Subject value, key hash, body hash and timestamp each compared with the
 signed values; the Subject opening to the statement digest; every class in
@@ -187,9 +193,23 @@ host's Poseidon2 (`tests/src/registry_parity.nr`, against the values
 sha256 library's block reconstruction, of Barretenberg's SHA-256
 compression and Poseidon2 gadgets, and of nargo 1.0.0-beta.9 beyond the
 advisories above. The test vectors come from test keys and a minimal
-generator; matching each launch provider's real signing format is the job
-of the provider fixtures in `packages/email-mocks`.
+generator; matching each launch provider's signing format is the job of the
+provider fixtures in `packages/email-mocks`.
 
-**Open:** no external audit; no fuzzing; `HEADER_MAX` is not yet confirmed
-against every launch provider (spec §13 item 6); the top-level recovery
-circuit that composes these components is not built.
+**Tested against the provider mocks** (`packages/email-recovery`, through
+the committed circuit with noir_js): an honest recovery email from each of
+the 13 domains the mocks sign for, and one with a 124-byte address and a
+500-byte display name at each launch domain, is accepted
+(`test/recoveryInputs.test.ts`), and every adversarial email of
+`packages/email-mocks` gets its pinned outcome (`test/attacks.test.ts`, 56
+cases): each case a standard DKIM verifier passes but whose claim must not be
+provable is refused at a named assertion, including the four whose signing
+key the registry would never hold, which are refused even with a key tree
+planted with that key; each case no signature of verifies is refused too,
+except a body swapped after signing, which the header-only proof does not
+bind (spec §4.4). Real proofs of each launch domain's email verify on chain
+(`crates/integration-tests/tests/it/email_proofs.rs`).
+
+**Open:** no external audit; no fuzzing; `HEADER_MAX` is confirmed against
+the provider mocks' formats, not against real provider mail (spec §13 item
+6, `README.md` "Header bound").

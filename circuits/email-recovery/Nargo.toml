@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "lib",
+    "recovery",
     "tests",
     "tools/blinded_value",
     "bench/rsa_2048",
@@ -13,5 +14,6 @@ members = [
     "bench/body_hash_4096",
     "bench/spec_hashes",
     "bench/dkim_header_1024",
+    "bench/recovery_1024",
 ]
 default-member = "lib"

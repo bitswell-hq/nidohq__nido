@@ -1,0 +1,40 @@
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=gmx.de;
+	s=s31663417; t=1792056600; x=1792661400; i=first.last@gmx.de;
+	bh=5CXcKRQs2qcNFxtSzVHKqX8kZk03YLfU9ulk2Wcmlss=;
+	h=X-UI-Sender-Class:MIME-Version:Message-ID:From:To:Subject:
+	 Content-Type:Date:cc:content-transfer-encoding:content-type:date:
+	 from:message-id:mime-version:reply-to:subject:to;
+	b=a5Q7rrqTxpNYJLVY+khA6Jhx1xwYjLXYQCu5WnQzSKHJyAVCHFB6CwKzZiaVbb50
+	 RVjvB0UbrewYxBFVwStH9SryMAeqxN6eNDrejNQB7Q344FeXYKR+6pIALiwhGE1M5
+	 wfakyDX9O6gfeSQCI/RNOnETJ6LBUfpTVTmlymZhyHlB1//VxgfoodYFcEC29Ztu4
+	 r117UxQwwBa2lXzwSMUmUf+YHlUKQh13lx9EcmrMJw74GbxB7muRiPtOnMFRRNiRF
+	 jXnZNgig8l81B7OtCcHkfRWVyoaAY+yYk+5bMZo+czgxmUt1YDKuWPEyqE1Y4KRFT
+	 U5mWX7YFy+1kJpvoMQ==
+X-UI-Sender-Class: 724b4f7f-cbec-4199-ad4e-598c01a50d3a
+Received: from [192.0.2.11] ([192.0.2.11]) by
+ trinity-msg-rest-gmx-gmx-live-f3caae6583-1hhd5
+ (via HTTP); Thu, 15 Oct 2026 09:30:00 +0000
+MIME-Version: 1.0
+Message-ID: <trinity-3b47de15-0def-47e6-86bd-5885cb226a49-1792056600000@trinity-msg-rest-gmx-gmx-live-f3caae6583-1hhd5>
+From: first.last@gmx.de
+To: recover@recovery.test
+Subject: APPROVE NIDO ACCOUNT RECOVERY 15689150bdb93471279ba1feb3719739f36bed4e4e2dddf8e6685a4fdf6dd379
+Content-Type: text/plain; charset=UTF-8
+Date: Thu, 15 Oct 2026 09:30:00 +0000
+X-UI-CLIENT-META-MAIL-DROP: W10=
+X-Provags-ID: V03:K1:NynPUc8FvZS/8Kse+LZVB3x1NQtBDDyVzjN62auFmqZPjZw/cMwfw4YORARwNNfdPS1k0S
+ tRR6ZdfEFeJnzWeGtXZ8bNQ6z9kZcaBnfQU1dmVQihv969Nxks
+UI-OutboundReport: notjunk:1;M01:P0:p06FRan5xyC8F4/tMmDHgzR+TEslCm0zyIWQ3daH1D2KfDnWKxvBBMIyTRwaG4YWQ8HLhxlkInE+
+ sxARSh0/ICw1d+7j7XNJzv3hdWXv54YA3DRkXetfAQ1iTjE7GVyed1EVhz2shDdYUj7d6rTZt/nO
+ c1hf9Pww5E8UO9Ep5nmwFO5PLbm28T51wTzY+mRVMjEnkGnkkbr9oRvMBL0JQJneditHWcMCfQM1
+ wJWr6Z2Py0IwRf8d7mxcRodyrRcWOsOp83O27g1BQrFrCzdjo/QBj/uQN69zPPGx9HEW7dYcvHLS
+ glSz+8aamA5COwSAg3VVpr8yzzi0UqmD2yVQ0lxyIpXv6NAeQbyO1aLRVIdI5armdczdJGbwYnsC
+ LI3whKeGQYrOaNVUSAhLkNA1QFN1GXl6m/kj08vP5N49UURZg4XNGJXVqSQ4msmiFAJ5i/YAsfmU
+ SUL+wM23XeDmF3tRjVZsUzlE9lfotUJjuRwG7hfKWeW4/1AolAESP5XRwsuuJwIqB7zlqFQKgVIR
+ toQyGmYoV4CE1NYRAM0g9fvtic23b9lc4RjkHjpLIFEq1O2FeYXIlfj78Qh1jUnWarCi8KcQkybA
+ I1f8D8geI9vyhS4oXihID41fReaDPy7fiR7mEBM7oPRCWYViK9nEoIbj+A1vLNlF4d8fQ6dWpKQ9
+ 2UkzJ3sRQbFZjVnvR0+sHQo962sQxAq99cZq+K4zfTWTW7jFSDH80luX72B9xpQpEPVtYz2Am7Ib
+ +ZHzXXY6MprUf0S2OrryA5Npu1sC1CbnUZW+qWZiyjEsXb04mcG73gl080WwAC147DUVCzUnQmAj
+ vD5r5X62+2knfkGMQOObno98aS9NNz5pgwsfM+5ZbfRyt8NIFtY34LHchU+dYrob
+
+Approving the recovery of my account.

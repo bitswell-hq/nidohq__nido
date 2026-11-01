@@ -81,7 +81,9 @@ npm run fixtures -w @nidohq/email-mocks -- ./email-fixtures
 
 ## Adversarial cases
 
-`buildAttacks()` (`src/attacks/`) returns each case as an email, the claim a
+`buildAttacks(input)` (`src/attacks/`) takes the Subject's fixed phrase and
+the values a proof would bind (`AttackInput`; `defaultAttackInput()` uses a
+placeholder phrase), and returns each case as an email, the claim a
 forged or replayed proof would make (sender address, recovery value,
 account), the expected result of a standard DKIM verifier for each
 signature, a one-line description, and, where the issue class is publicly
