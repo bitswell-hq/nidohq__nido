@@ -1,0 +1,30 @@
+% One evaluator at every boundary an agent's actions cross. Shared by the
+% paper and the slides.
+\begin{tikzpicture}[
+    node distance=4mm and 8mm,
+    bnd/.style={box, draw=boundary, thick, text width=38mm, minimum height=13mm},
+    res/.style={box, text width=27mm, minimum height=9mm},
+  ]
+  \node[box, minimum height=12mm, text width=16mm] (agent) {\textbf{Agent}\\and its\\sub-agents};
+
+  \node[bnd, right=30mm of agent] (relay) {\textbf{Relay}\\chain and signing grants\\[1pt]{\scriptsize\color{boundary} evaluator: native build}};
+  \node[bnd, above=of relay] (host) {\textbf{Agent host}\\files, network, signing\\[1pt]{\scriptsize\color{boundary} evaluator: Wasm component}};
+  \node[bnd, below=of relay] (acct) {\textbf{Smart account}\\grant signer (CAP-0071)\\[1pt]{\scriptsize\color{boundary} evaluator: Soroban contract}};
+
+  \node[res, right=of host] (hres) {file system, HTTP,\\key keeper};
+  \node[res, right=of relay] (rres) {custody key keeper,\\channel accounts};
+  \node[res, right=of acct] (ares) {contracts the\\account calls};
+
+  \coordinate (split) at ([xshift=6mm]agent.east);
+  \draw[semithick] (agent.east) -- (split);
+  \draw[flow] (split) |- node[lbl, pos=0.75, above] {tool calls} (host.west);
+  \draw[flow] (split) -- node[lbl, pos=0.6, above] {\code{/relay}} (relay.west);
+  \draw[flow] (split) |- node[lbl, pos=0.75, below] {holder signature} (acct.west);
+  \draw[flow] (host) -- (hres);
+  \draw[flow] (relay) -- (rres);
+  \draw[flow] (acct) -- (ares);
+  \draw[flow, dashed] (rres) -- node[lbl, right] {submits} (ares);
+
+  \node[box, above=6mm of host, text width=80mm] (owner) {\textbf{Owner's admin document}: issue, revoke, rotate and refill\\grants at every boundary; agents never hold it};
+  \draw[flow, dashed] (owner) -- (host);
+\end{tikzpicture}

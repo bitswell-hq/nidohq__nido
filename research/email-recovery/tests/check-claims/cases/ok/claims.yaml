@@ -24,3 +24,17 @@ claims:
   - id: a-unproven
     statement: Open thing.
     status: unproven
+  - id: a-proven-list
+    statement: Proven by two theorems.
+    status: proven
+    evidence:
+      - lean: Fixture.email_sound
+        file: formal/Fixture.lean
+      - lean: Fixture.email_sound
+        file: formal/Fixture.lean
+  - id: a-proven-dotted
+    statement: Proven by a theorem declared with a dotted name.
+    status: proven
+    evidence:
+      lean: Outer.Ns.dotted_thm
+      file: formal/Fixture.lean

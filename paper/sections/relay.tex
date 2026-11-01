@@ -1,0 +1,62 @@
+\section{The Relay and Custody Signing}\label{sec:relay}
+
+Agents that hold no keys submit Soroban calls through a relay
+(\file{crates/grant-relay}) that speaks the protocol Nido's browser client
+already uses: the client posts a host function and its signed authorization
+entries to \code{/relay} and polls for the result, so a deployment changes only
+the client's relay URL\claim{relay-frontend}. The relay runs the native build
+of the same evaluator. Its grant bounds what the custody key will sign, pay
+for and submit; authority over an account is still decided on chain, by the
+account's own \code{\_\_check\_auth} and, for agents, its grant signer. The
+repository's other relay, \file{infra/relayer}, wraps a third-party
+fee-sponsoring plugin with no grant check and is outside this design: it
+relays any contract call whose on-chain authorization is valid, which for an
+account with a grant signer still means the grant signer's check. Each agent has a chain grant over the contexts of the
+call's authorization trees and a signing grant over the custody signature.
+Before any key is used, the relay requires, in order: that the API key names
+an agent; that no supplied entry uses the transaction source's credentials;
+that \code{chain::allows\_all} holds over the host function and every context
+of every supplied tree; and that the signing grant allows the custody key, the
+network and the \code{transaction} payload kind. These checks need no network,
+so a denial leases nothing and never reaches the key
+keeper\claim{relay-nested}.
+
+It then leases a channel account and runs two simulations. A recording
+simulation of the bare host function must succeed, must not ask for the
+channel's own authorization\claim{relay-channel-auth}, and every context it
+records must pass the chain grant\claim{relay-recorded}; an enforcing
+simulation with the supplied entries must succeed, and the fee must stay under
+a cap. The supplied trees are what the user's signatures authorize, and the
+recorded trees are what the execution asks for, so a call is relayed only when
+the grant allows every context in either. That the two together cover every
+context the signatures authorize rests on the host's matching of
+\code{require\_auth} to signed trees and is not proven\claim{trees-cover}. The
+chain grant does not see calls that ask for no authorization, calls a contract
+makes inside its own \code{\_\_check\_auth}, or the fee, which the cap bounds.
+
+\paragraph{Channels and the key keeper.} Transactions go out from a pool of
+channel accounts, each with master weight 0 and the custody key as its only
+signer; the relay checks this for every channel at start. A request holds its
+channel until its transaction settles, so concurrent requests use distinct
+channels and the relay reads each channel's sequence number fresh. The key
+keeper signs the transaction hash with the custody key and the relay verifies
+the signature before attaching it. The keeper is an interface with three
+implementations: an in-process ed25519 keeper, a client for the Dfns Keys
+API's Generate Signature endpoint with Dfns's user-action signing flow, and a
+local mock of that endpoint that follows Dfns's OpenAPI document. Dfns's own
+policies remain a check behind the grant, but they see only a 32-byte hash,
+which their amount and recipient rules cannot evaluate~\cite{dfnsSigningPolicies}.
+
+\paragraph{Channel accounts on testnet.} A channel's source account is not the
+custody key's own address, so the arrangement depends on the network accepting
+a transaction whose only signature is a signer's that is not the source. On
+Stellar testnet, with the custody key held by the Dfns mock, channel-sourced
+classic payments, Soroban invocations and fee bumps signed only by the custody
+key were accepted, and the same transactions signed by a channel's zeroed
+master key or by an unrelated key were refused with
+\code{txBAD\_AUTH}\claim{testnet-channel}. Whether real Dfns signs such
+transactions is open: its reference does not say whether the
+\code{Transaction} signature kind checks the envelope's source account against
+the key's own address\claim{dfns-transaction-source}, or whether a
+\code{Hash} request on an ed25519 key signs the 32 bytes directly as the
+message\claim{dfns-hash}.

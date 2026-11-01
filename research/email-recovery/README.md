@@ -67,13 +67,15 @@ Every claim the paper or the slides make has one entry in `claims.yaml`:
 
 | Status | Evidence | What the checker verifies |
 | --- | --- | --- |
-| `proven` | `{ lean: <theorem>, file: <.lean path> }` | the file exists and declares `theorem` or `lemma` with that name (its last component, for a qualified name) |
+| `proven` | `{ lean: <theorem>, file: <.lean path> }` | the file exists and declares `theorem` or `lemma` with that name or a dotted suffix of it (its last component, or `Ns.thm` inside namespaces) |
 | `tested` | `{ test: <test name>, file: <path> }` | the file exists and contains the test name as a whole word |
 | `measured` | `{ file: <path> }` | the measurement file exists |
 | `assumed` | `{ assumption: <text> }` | the assumption is stated |
 | `unproven` | none | no evidence is given |
 
-Paths are relative to the repository root and may not leave it.
+Paths are relative to the repository root and may not leave it. A claim
+resting on several artifacts (one theorem per vocabulary, say) gives a list of
+evidence mappings of its status's shape, and the checker verifies each one.
 
 In LaTeX, `\claim{id}` prints the claim's status as a coloured tag such as
 **[unproven]**, and `\claimstatement{id}` prints its statement, so both

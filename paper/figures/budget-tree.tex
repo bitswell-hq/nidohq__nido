@@ -1,0 +1,31 @@
+% The oversubscribed-allowance examples at the end of
+% formal/AttenuatingGrants/Budget.lean, which Lean checks by evaluation.
+% Both runs start from the same three-node ledger with nothing spent.
+% Shared by the paper and the slides.
+\begin{tikzpicture}[
+    node distance=6mm and 4mm,
+    gnode/.style={box, minimum width=15mm, minimum height=7mm},
+    added/.style={gnode, dashed},
+    refused/.style={text=red!70!black},
+  ]
+  \node[gnode] (root) {node 0\\allowance 10};
+  \node[gnode, below left=of root, xshift=6mm] (c1) {node 1\\allowance 8};
+  \node[gnode, below right=of root, xshift=-6mm] (c2) {node 2\\allowance 8};
+  \node[added, below=of c1] (c3) {node 3\\allowance 20};
+  \draw[flow] (c1) -- (root);
+  \draw[flow] (c2) -- (root);
+  \draw[flow, dashed] (c3) -- node[lbl, left] {delegated} (c1);
+  \node[lbl, align=left, anchor=north west] (a) at ([xshift=5mm, yshift=4mm]c2.north east) {%
+    \textbf{Run A}\\
+    node 1 spends 8: ok\\
+    node 2 spends 3: \textcolor{red!70!black}{overdrawn 0}\\
+    node 2 spends 2: ok\\
+    spent: 10, 8, 2};
+  \node[lbl, align=left, anchor=north west] at ([yshift=-2mm]a.south west) {%
+    \textbf{Run B}\\
+    node 3 spends 1: \textcolor{red!70!black}{refused} (no node 3)\\
+    node 1 delegates 20: node 3\\
+    node 3 spends 9: \textcolor{red!70!black}{refused}\\
+    node 3 spends 8: ok\\
+    spent: 8, 8, 0, 8};
+\end{tikzpicture}

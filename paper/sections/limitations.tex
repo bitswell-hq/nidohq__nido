@@ -1,0 +1,73 @@
+\section{Limitations and Open Questions}\label{sec:limits}
+
+\paragraph{Access, not information flow.} A grant decides which actions an
+agent may take. It does not track what the agent learns from an allowed action
+or where that data goes next through other allowed actions: an agent allowed
+to read a file and to reach a host can send the file's contents to that host.
+Access control does not by itself enforce information-flow
+policies~\cite{sabelfeld}; systems that track data flow through an agent's
+tool calls~\cite{camel,fides} address a different question.
+
+\paragraph{What the proofs cover.} The proofs are \translationtrust. The step
+bound is proven for a counted model and is loose (\S\ref{sec:proofs}); the
+measured cost follows the model's step count on the measured points, not
+provably on every input\claim{deployed-cost-general}. The run-level budget
+bound is proven for the grant signer's calls as \file{Signer.lean} models
+them; that the contract's code is that model is
+trusted\claim{wiring-budget-calls}.
+
+\paragraph{The wiring is trusted, and has known gaps.} That the argument
+mapping keeps distinct arguments distinct\claim{xdr-injective} and that the
+relay's supplied and recorded trees cover every authorized
+context\claim{trees-cover} are tested or argued, not proven. The host's path
+resolution, URL parsing, redirect handling and payload decoding, and the
+operating system calls beneath them, are tested only. Table~\ref{tab:gaps}
+lists the gaps the paper states: under an empty grant the grant signer's own
+address can authorize any call on another contract; a holder's signature
+does not cover the grant id, so a key should hold one grant; no caveat binds
+a signed transaction's fee, sequence number, time bounds or memo; network
+caveats bind names, not the addresses they resolve to, and not the HTTP
+method or path; and a file renamed after its descriptor was checked, or
+hard-linked into the grant, is reached. The account's document must meet two
+requirements nothing on chain checks\claim{document-requirements}; the grant
+signer cannot check that the document names it, since it cannot see which
+account delegated to it.
+
+\paragraph{Scope of the hidden-call guarantee.} The grant signer sees the
+contexts that need the account's authorization. Effects that need none, such
+as a \code{transfer\_from} against a standing allowance or funds a contract
+already holds for the account, are invisible to every caveat and budget, and
+the paper assumes no allowed contract has such a
+position\claim{no-standing-allowance}. The relay likewise cannot see calls
+that ask for no authorization or calls a contract makes inside its own
+\code{\_\_check\_auth}, and bounds the fee by a cap rather than a caveat.
+
+\paragraph{Expressiveness.} Caveats are a closed set: membership of a field
+in a list, an upper bound on one \code{i128} argument, and equality of one
+argument. Each applies to every context of a tree alike, so a grant over two
+contracts and two functions allows their cross product, and an argument
+caveat reads the same position of every context (\S\ref{sec:grants}). There
+is no caveat scoped to one contract and function, no lower bound, no expiry
+and no caveat across two arguments. Allowances are cumulative and never reset:
+the periodic and refillable allowances of session-key systems and Zodiac
+Roles~\cite{zodiacRoles,smartSessions} have no counterpart, and would need a
+time model in the budget code and its proofs. Budgets are enforced only at the
+Soroban boundary, and each root grant meters one asset; transfers of other
+assets are bounded only by caveats.
+
+\paragraph{Keys and storage.} Holder keys at the Soroban boundary are ed25519
+only. Grants live in persistent contract storage, extended to the network
+maximum on every write; an archived grant fails authorization until it is
+restored, which fails closed.
+
+\paragraph{Evaluation.} The attack suite ran in Soroban simulation and at the
+host, not on a local network and not through the relay; the relay has
+functional tests only, with no cost, throughput or attack-suite measurement.
+Host timings are the medians of one run on one machine.
+
+\paragraph{Dfns.} Whether real Dfns's \code{Transaction} kind signs a
+transaction whose source is a channel account\claim{dfns-transaction-source},
+and whether its \code{Hash} kind signs 32 bytes directly as an ed25519
+message\claim{dfns-hash}, are not stated by its reference and were not tried
+against the service. The relay signs through \code{Hash}, which the testnet
+run shows the network accepts when the signature is right.

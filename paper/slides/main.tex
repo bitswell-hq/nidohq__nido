@@ -1,0 +1,431 @@
+\documentclass[aspectratio=169,11pt]{beamer}
+\usetheme{default}
+\usecolortheme{default}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}[frame number]
+\setbeamerfont{footnote}{size=\tiny}
+\setbeamertemplate{bibliography item}{\insertbiblabel}
+
+\usepackage{grants}
+\usepackage{booktabs}
+\usepackage{tabularx}
+
+\title{One Policy, Two Boundaries}
+\subtitle{Verified Capability Enforcement for Agents\\Across WebAssembly and Smart Accounts}
+\author{Anonymous Author(s)}
+\date{}
+
+% Smaller listings on slides.
+\lstset{basicstyle=\ttfamily\scriptsize}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+\begin{frame}{Agents hold real authority}
+  \begin{itemize}
+    \item An agent that pays invoices or trades for a user must read files,
+      reach services and \alert{sign transactions}.
+    \item \textbf{Custody policy engines}: Dfns applies amount and recipient
+      rules to plain transfers only; for a contract call they ``fail closed and
+      trigger''~\cite{dfnsPolicies,dfnsSigningPolicies}. Others decode EVM
+      contract calls~\cite{fordefiPolicies,turnkeyContracts}; we found none
+      that evaluates a Soroban authorization tree.
+    \item \textbf{Process sandboxes} confine paths, processes and network
+      destinations, and match command arguments as text~\cite{nono}; they do
+      not see the amount and recipient inside a transaction a remote key
+      signs.
+  \end{itemize}
+  \bigskip
+  \textbf{Wanted:} ``this agent may call \code{transfer} on token $C$ for at
+  most $n$, to $R$'', enforced wherever the agent acts.
+\end{frame}
+
+\begin{frame}{Threat model}
+  The adversary is an agent the owner already authorized, trying to widen its
+  own authority.
+  \begin{enumerate}
+    \item \textbf{Self-escalation}: edit its own grant, through admin
+      functions, the account's rules or its key.
+    \item \textbf{Hidden calls}: an allowed call that makes a disallowed one
+      inside the same Soroban authorization tree.
+    \item \textbf{Delegation workarounds}: deploy a contract, \code{approve}
+      another address, delegate from an ancestor, spend through siblings.
+  \end{enumerate}
+  \medskip
+  \small Assumed: the host is the agent's only path to
+  resources\claim{sole-path} and binds its channel to its
+  id\claim{agent-identity}; no allowed contract holds a standing allowance or
+  the account's funds\claim{no-standing-allowance}.
+  \par Out of scope: information flow, the owner's choice of grants, confining
+  the agent process, compromise of the host, relay, key keeper or admin key.
+\end{frame}
+
+\begin{frame}[fragile]{Grants}
+  \begin{columns}[T]
+    \begin{column}{0.55\linewidth}
+\begin{lstlisting}[language=Lean]
+structure Grant (α : Type) where
+  caveats : List (α → Bool)
+
+def Grant.allows (g : Grant α) (a : α) : Bool :=
+  g.caveats.all (· a)
+
+def Grant.narrower (g h : Grant α) : Prop :=
+  ∀ a, g.allows a = true → h.allows a = true
+
+def Grant.attenuate (g : Grant α) (c : α → Bool) :=
+  { caveats := c :: g.caveats }
+\end{lstlisting}
+    \end{column}
+    \begin{column}{0.42\linewidth}
+      \small
+      \begin{itemize}
+        \item Allowed iff \emph{every} caveat holds.
+        \item A holder can only act, or \code{delegate(add)}: the child's
+          caveats are the parent's followed by \code{add}.
+        \item Issue, revoke, rotate, refill: the \textbf{admin document},
+          which agents never hold.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Four vocabularies, one evaluator}
+  \small
+  \begin{tabularx}{\linewidth}{@{}l>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
+    \toprule
+    & \textbf{Action} & \textbf{Caveats} \\
+    \midrule
+    Chain & invoke contract function args, or createContract
+      & contractIn, functionIn, argI128AtMost $i$ $n$, argEq $i$ $v$ \\
+    Files & path as components, mode & pathUnder, modeIn \\
+    Network & host, port, scheme & hostIn, portIn, schemeIn \\
+    Signing & key, network, payload kind & keyIn, networkIn, payloadIn \\
+    \bottomrule
+  \end{tabularx}
+  \medskip
+  \begin{itemize}
+    \item \code{/home/a} is never a prefix of \code{/home/ab}\claim{path-components};
+      any chain caveat denies contract creation\claim{create-contract-denied};
+      an argument of one type never matches a caveat for
+      another\claim{arg-kind}.
+    \item Caveats apply to every context of a tree alike: an argument caveat
+      reads the same position in each\claim{positional-caveats}, so nested
+      calls with amounts at different positions cannot each be capped.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Budgets on the delegation tree}
+  \begin{columns}[c]
+    \begin{column}{0.6\linewidth}
+      \centering
+      \resizebox{\linewidth}{!}{\input{budget-tree}}
+    \end{column}
+    \begin{column}{0.38\linewidth}
+      \small
+      \begin{itemize}
+        \item A spend charges the spender \emph{and every ancestor}, or fails
+          and changes nothing.
+        \item Children may oversubscribe their parent.
+        \item The failure names a node to refill, up the chain to a human.
+        \item Enforced on chain by the grant signer, for one asset per root.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{One evaluator at every boundary}
+  \centering
+  \resizebox{!}{0.8\textheight}{\input{architecture}}
+\end{frame}
+
+\begin{frame}{The proof runs from the deployed Rust}
+  \centering
+  \resizebox{\linewidth}{!}{\input{pipeline}}
+  \par\medskip\small\raggedright
+  \begin{itemize}
+    \item Restricted Rust: plain data, single \code{while} loops, no panicking
+      operation on the evaluation path.
+    \item CI re-runs Charon and Aeneas and diffs the
+      translation\claim{extraction-fresh}; no \code{sorry}, \code{axiom} or
+      \code{partial} in the package\claim{no-unchecked-declarations}; only
+      Lean's built-in axioms\claim{axioms-builtin}.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Equivalence: the translation computes the model}
+\begin{lstlisting}[language=Lean]
+theorem extracted_allows (g : Slice grant_eval.chain.Caveat)
+    (a : grant_eval.chain.Action) :
+  grant_eval.chain.allows g a = ok ((denoteGrant g).allows (denoteAction a))
+\end{lstlisting}
+  \begin{itemize}
+    \item One per vocabulary, and for \code{allows\_all}: chain\claim{equiv-chain},
+      files\claim{equiv-files}, network\claim{equiv-network},
+      signing\claim{equiv-signing}; the same for the budget
+      functions\claim{budget-equiv}.
+    \item The right-hand side is \code{ok}: the translation never fails or
+      diverges\claim{rust-total}. Aeneas's \code{loop} is a
+      \code{partial\_fixpoint}, so termination is this theorem.
+    \item All of it \translationtrust; the proofs cover 32-bit \code{usize}.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Four theorems, about the translation}
+  \small
+  \begin{enumerate}
+    \item \textbf{Totality and cost.} The translation always returns. A
+      counted \emph{model} takes at most $2(|cs| + \sum|c|)(|a| +
+      1)$\claim{cost-bound} steps, per batch $2(|cs| + \sum|c| + 1)\sum(|a| +
+      1)$\claim{cost-bound-batch}, with the model's verdict\claim{counted-agrees}.
+    \item \textbf{Attenuation.} Adding a caveat narrows\claim{attenuation}.
+    \item \textbf{Chaining.} Narrowness is transitive\claim{chaining}; any
+      delegation chain stays inside its root\claim{delegation-chain}, for
+      whole trees\claim{batch-narrower}, on Rust caveat
+      slices\claim{rust-delegation}.
+    \item \textbf{Budget safety.} A spend charges every
+      ancestor\claim{budget-charges} and nothing
+      else\claim{budget-unchanged}, or fails changing
+      nothing\claim{budget-failure}; spent under any node stays within its
+      final allowance, oversubscribed or not, for a Lean caller\claim{budget-total}
+      and for the grant signer's calls\claim{signer-budget-total}; no
+      overflow in the charging loop\claim{budget-no-overflow}.
+  \end{enumerate}
+  \medskip
+  2 and 3 are immediate in the model; the work is their carry-over and 4.
+\end{frame}
+
+\begin{frame}{Soroban: a delegated signer that sees every context}
+  \begin{columns}[c]
+    \begin{column}{0.52\linewidth}
+      \centering
+      \resizebox{\linewidth}{!}{\input{soroban-flow}}
+    \end{column}
+    \begin{column}{0.46\linewidth}
+      \small
+      \begin{itemize}
+        \item The account's document names the grant signer as the signer of
+          agent rules; no change to Perch or OpenZeppelin.
+        \item CAP-0071: the host hands the delegate the account's payload and
+          every context of the account's
+          authorization~\cite{cap7101}\claim{cap71-contexts}.
+        \item One disallowed nested call refuses the whole
+          tree\claim{signer-hidden-call}.
+        \item Effects that need no authorization from the account are outside
+          the tree.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Escalation attempts on chain}
+  \small
+  \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{0.36\linewidth}>{\raggedright\arraybackslash}X@{}}
+    \toprule
+    \textbf{Attempt} & \textbf{Refused by} \\
+    \midrule
+    Issue, revoke, rotate, refill & only the account's admin rule\claim{signer-admin} \\
+    Change the account's rules & no agent rule; calls on the account refused\claim{signer-account} \\
+    Delegate from another grant & parent must be the signing grant\claim{signer-delegate-other} \\
+    Widen by delegating & parent's caveats kept\claim{signer-narrows} \\
+    Deploy a contract & creation fails every caveat\claim{signer-deploy} \\
+    \code{approve} or \code{burn} the budget asset & only metered transfers\claim{signer-metered} \\
+    Overspend through siblings & every ancestor charged\claim{signer-oversubscribed}\ \claim{signer-all-charged} \\
+    After revocation or rotation & lineage and key checked\claim{signer-revocation}\ \claim{signer-rotation} \\
+    \bottomrule
+  \end{tabularx}
+  \medskip
+  \par Contract creation is refused under every grant, in both roles; the
+  grant signer's own address acts only for itself\claim{signer-own-address}.
+  Budget safety holds for the signer's lineage path\claim{lineage-ledger}\
+  \claim{budget-batch-as-run}\ \claim{signer-budget-total}. Gaps: the
+  holder's signature does not cover the grant id; under an empty grant the
+  signer's address can authorize calls on other contracts.
+\end{frame}
+
+\begin{frame}{The agent host}
+  \small
+  \begin{itemize}
+    \item The evaluator as a Wasm component that imports nothing: the chain's
+      build target, confined to computing a verdict; agreement with native
+      tested\claim{component-agrees}. The host is a library, not a sandbox.
+    \item No tool call reads or edits a grant\claim{host-no-grant-tool};
+      sub-agents get subsets\claim{host-delegation}; revocation
+      cascades\claim{host-revocation}.
+    \item \textbf{Files}: \code{realpath}, check, open with
+      \code{O\_NOFOLLOW}, check the opened descriptor's path: no escape by
+      \code{..}\claim{host-dotdot}, symlink\claim{host-symlink},
+      case\claim{host-case} or a swap\claim{host-swap}. Not renames after the
+      check, or hard links.
+    \item \textbf{Network}: the requested name; every redirect is a new
+      action\claim{host-redirect}. Names, not resolved addresses.
+    \item \textbf{Signing}: key, network and payload kind, then every
+      context a transaction or authorization entry authorizes against the
+      chain grant\claim{host-signing-chain}, before the
+      keeper\claim{host-signing-before-keeper}; fee bumps and other operations
+      refused\claim{host-signing-refuses}; the bytes signed are the bytes
+      checked\claim{host-signs-checked}.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{The relay and custody signing}
+  \small
+  \begin{itemize}
+    \item Nido's \code{/relay} protocol, unchanged
+      client\claim{relay-frontend}; chain grant over every supplied and
+      recorded context before the custody key signs\claim{relay-nested}\
+      \claim{relay-recorded}\ \claim{relay-channel-auth}. It bounds what the
+      custody key signs and pays for; the account still decides on chain.
+    \item Channel accounts: master weight 0, the custody key as only signer.
+      Testnet: channel-sourced payments, Soroban calls and fee bumps signed
+      only by the custody key accepted; zeroed master or unrelated keys
+      refused\claim{testnet-channel}.
+    \item Open: does real Dfns sign them\claim{dfns-transaction-source}\
+      \claim{dfns-hash}? The custody key lived in a Dfns mock.
+    \item End to end on a local network\claim{relay-local-network}; coverage
+      of every authorized context rests on the host\claim{trees-cover}. The
+      ungated \file{infra/relayer} is out of scope.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Attack suite: every attempt refused, state unchanged}
+  \small
+  \begin{tabular}{@{}llrrr@{}}
+    \toprule
+    \textbf{Boundary} & \textbf{Category} & \textbf{Attempts} & \textbf{Refused} & \textbf{Controls} \\
+    \midrule
+    Soroban simulation & self-escalation & 16 & 16 & 0 \\
+     & nested-call smuggling & 8 & 8 & 1 \\
+     & delegation workarounds & 18 & 18 & 6 \\
+     & oversubscription & 3 & 3 & 2 \\
+    Agent host & self-escalation & 10 & 10 & 0 \\
+     & delegation workarounds & 21 & 21 & 3 \\
+    \bottomrule
+  \end{tabular}
+  \medskip
+  \begin{itemize}
+    \item Soroban\claim{attack-suite-soroban} and host\claim{attack-suite-host}:
+      state snapshots before and after (balances, grants, account
+      configuration; file tree, request counts, signature log) are equal.
+    \item Found a fail-closed defect in the host's wiring (delegated
+      preimages), now fixed\claim{host-delegated-preimage}.
+    \item Not yet on a local network, and not through the relay.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Cost: the evaluator follows the model's steps}
+  \small
+  \begin{columns}[T]
+    \begin{column}{0.5\linewidth}
+      \textbf{Soroban} \code{\_\_check\_auth}, one context\claim{soroban-check-cost}\\[2pt]
+      \begin{tabular}{@{}rrr@{}}
+        \toprule
+        caveats & CPU instr. & Lean steps \\
+        \midrule
+        0 & 0.97M & 1 \\
+        4 & 1.17M & 188 \\
+        16 & 1.74M & 700 \\
+        64 & 4.00M & 2,748 \\
+        \bottomrule
+      \end{tabular}\\[4pt]
+      Evaluator work: 99.4 instructions per Lean step, $R^2 = 0.986$, 28
+      pairs\claim{deployed-cost}; the bound is loose\claim{bound-looseness}.
+      Whole transactions: 2.2M to 5.0M of 400M\claim{soroban-tx-cost}.
+    \end{column}
+    \begin{column}{0.48\linewidth}
+      \textbf{Agent host}, median per check\claim{host-check-time}\\[2pt]
+      \begin{tabular}{@{}lrr@{}}
+        \toprule
+        case & component & /native \\
+        \midrule
+        files & 0.58\,\textmu s & 46.5$\times$ \\
+        network & 0.30\,\textmu s & 39.6$\times$ \\
+        signing & 0.39\,\textmu s & 24.6$\times$ \\
+        chain (3 ctx) & 1.01\,\textmu s & 14.9$\times$ \\
+        \bottomrule
+      \end{tabular}\\[4pt]
+      About 3$\times$ the same check without Wasm; instantiation 22\,ms;
+      whole tool calls\claim{host-tool-call-time}.
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Proven, tested, trusted}
+  \small
+  \begin{itemize}
+    \item \textcolor{claim-proven}{\textbf{Proven}}: the evaluator's
+      translation equals the model; Theorems 1--4 as stated.
+    \item \textcolor{claim-tested}{\textbf{Tested}}: the wiring. Exhaustive
+      small-universe agreement\claim{eval-exhaustive}\
+      \claim{budget-exhaustive}; the signer and the relay map arguments
+      alike\claim{signer-relay-mapping}.
+    \item \textcolor{claim-unproven}{\textbf{Unproven}}: argument mapping
+      injective\claim{xdr-injective}; the signer's code as its Lean budget
+      path\claim{wiring-budget-calls}; proportional cost on every
+      input\claim{deployed-cost-general}.
+    \item \textcolor{claim-assumed}{\textbf{Trusted}}: rustc, Charon, Aeneas,
+      Lean\claim{toolchain-trusted}; Wasmtime\claim{runtime-trusted}; OS
+      calls and DNS\claim{os-wiring}; the key keeper\claim{keeper-trusted};
+      the account document\claim{document-requirements}; ledgers below
+      \code{usize::MAX}\claim{ledger-size}.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Limitations}
+  \begin{itemize}
+    \item \textbf{Access, not information flow}: read a file and reach a host
+      means the file can reach the host~\cite{sabelfeld,camel}.
+    \item Closed caveat set, applied to every context alike: no per-function
+      caveats, lower bounds or expiry; allowances never reset.
+    \item No caveat binds a signed transaction's fee or sequence number;
+      network caveats bind names, not addresses.
+    \item Holder keys are ed25519 only; one key per grant; archived grants
+      fail closed until restored.
+    \item No relay cost, throughput or attack measurement yet.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Related work}
+  \small
+  \begin{itemize}
+    \item \textbf{Capabilities, caveat tokens}: macaroons, Biscuit, UCAN,
+      ZCAP~\cite{macaroons,biscuit,ucan,zcapld}: attenuation is
+      cryptographic; a caveat's meaning is the verifier's code.
+    \item \textbf{Smart-account delegation}: ERC-7710, MetaMask enforcers,
+      Smart Sessions, Zodiac Roles, OpenZeppelin
+      policies~\cite{erc7710,metamaskDelegation,smartSessions,zodiacRoles,ozStellarAccounts}:
+      richer conditions, each enforcer its own audited contract.
+    \item \textbf{Verified capabilities and policy}: seL4 and CHERI prove
+      monotonicity for a kernel and an ISA~\cite{sel4Integrity,cheriProofs};
+      Cedar proves its model and tests the Rust against it~\cite{cedar,cedarHow};
+      here the Rust's translation is proven equal to the model.
+    \item \textbf{Agent security}: CaMeL and FIDES track data flow; Progent
+      and AgentSpec check tool calls against rules~\cite{camel,fides,progent,agentspec}.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Summary}
+  \begin{itemize}
+    \item One grant language, four vocabularies, budgets on the delegation
+      tree.
+    \item One evaluator at the Soroban account and the agent host, proven
+      equal to its model \translationtrust.
+    \item CAP-0071 delegated signing gives the evaluator every context of the
+      account's authorization: no hidden call that needs the account's
+      authorization.
+    \item 76 escalation attempts refused, state unchanged; metered work
+      follows the model's step count.
+    \item Each claim tagged: proven, tested, measured, assumed or unproven.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[allowframebreaks]{References}
+  \tiny
+  \bibliographystyle{plain}
+  \bibliography{references}
+\end{frame}
+
+\end{document}

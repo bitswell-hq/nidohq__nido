@@ -1,0 +1,84 @@
+% Notation, code listings and figure styles shared by the paper and the
+% slides. The claim tags (\claim, \claimstatement, \ClaimTable) come from the
+% claim ledger's style file, research/email-recovery/shared/claims.sty.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{grants}[2026/11/01 attenuating grants: shared notation]
+\RequirePackage{claims}
+\RequirePackage{xcolor}
+\RequirePackage{listings}
+\RequirePackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,calc,backgrounds}
+
+% Code and declaration names. A line may break after an underscore or a dot,
+% so long Rust and Lean identifiers fit a column.
+\DeclareRobustCommand\code[1]{{\def\_{\textunderscore\allowbreak}\texttt{#1}}}
+\DeclareRobustCommand\lean[1]{{\def\_{\textunderscore\allowbreak}%
+  \def\.{.\allowbreak}\texttt{#1}}}
+\newcommand\file[1]{\nolinkurl{#1}}
+% What the proofs are about, in the same words wherever the paper says it.
+\newcommand\translationtrust{for the Lean translation of the Rust, trusting
+  Charon, Aeneas and rustc}
+
+% The Lean names behind a theorem, set ragged right after its statement.
+\newcommand\leannames[1]{\par\noindent{\raggedright Lean: #1\par}}
+
+% A result the systematic evaluation under evaluation/ will supply. Printed
+% as a visible box, so a draft cannot pass for a finished result.
+\definecolor{pending}{HTML}{B35806}
+\newcommand\pending[1]{%
+  \par\smallskip\noindent
+  \fcolorbox{pending}{pending!8}{\parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule\relax}{%
+    \sffamily\footnotesize\textcolor{pending}{\textbf{TODO (pending evaluation)}}\enspace #1}}%
+  \par\smallskip}
+
+% Listings. Lean's Unicode symbols are typeset through `literate', since
+% listings reads input byte by byte.
+\lstdefinelanguage{Lean}{
+  morekeywords={structure,where,def,theorem,inductive,match,with,fun,if,then,
+    else,let,in,Prop,Type,Bool,List,Nat,Option,true,false,by},
+  sensitive=true,
+  morecomment=[l]{--},
+  morestring=[b]",
+}
+\lstdefinelanguage{Rust}{
+  morekeywords={fn,let,mut,pub,enum,struct,impl,for,in,if,else,match,return,
+    while,loop,use,const,trait,Self,self,true,false,Some,None,Ok,Err,as},
+  sensitive=true,
+  morecomment=[l]{//},
+  morestring=[b]",
+}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\bfseries,
+  commentstyle=\itshape\color{black!60},
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  aboveskip=4pt,
+  belowskip=4pt,
+  xleftmargin=0.5em,
+  extendedchars=true,
+  inputencoding=utf8,
+  literate=
+    {α}{{$\alpha$}}1 {→}{{$\to$}}1 {∀}{{$\forall$}}1 {·}{{$\cdot$}}1
+    {≤}{{$\le$}}1 {∈}{{$\in$}}1 {¬}{{$\neg$}}1 {∧}{{$\wedge$}}1
+    {↔}{{$\leftrightarrow$}}1 {⟨}{{$\langle$}}1 {⟩}{{$\rangle$}}1
+    {Σ}{{$\Sigma$}}1 {×}{{$\times$}}1 {∃}{{$\exists$}}1,
+}
+
+% Figure styles.
+\definecolor{proofgreen}{HTML}{1B7837}
+\definecolor{trustorange}{HTML}{B35806}
+\definecolor{boundary}{HTML}{2166AC}
+\tikzset{
+  box/.style={draw, rounded corners=2pt, align=center, inner sep=3pt,
+    font=\sffamily\footnotesize},
+  flow/.style={-{Stealth[length=1.6mm]}, semithick},
+  lbl/.style={font=\sffamily\scriptsize, align=center},
+  proven/.style={draw=proofgreen, very thick},
+  trusted/.style={draw=trustorange, dashed, thick},
+}
+% Line counts, generated from the repository by tools/build.sh.
+\InputIfFileExists{loc.tex}{}{\PackageError{grants}{loc.tex not found}{Build
+  with make -C paper, which generates it.}}
+\endinput

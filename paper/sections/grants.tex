@@ -1,0 +1,151 @@
+\section{Grants}\label{sec:grants}
+
+\subsection{The model}
+
+A grant over an action type $\alpha$ is a list of caveats, each a predicate on
+$\alpha$. Figure~\ref{fig:model} is the readable Lean specification
+(\file{formal/AttenuatingGrants/Grant.lean}), quoted from the repository. An
+action is allowed when every caveat holds, so the empty grant allows every
+action. A batch of actions, which is how every context of a Soroban
+authorization tree is checked, is allowed when every action in it is. One
+grant is narrower than another when every action the first allows, the second
+allows too, and attenuation adds caveats.
+
+\begin{figure}[t]
+\begin{lstlisting}[language=Lean]
+structure Grant (α : Type) where
+  caveats : List (α → Bool)
+
+def Grant.allows (g : Grant α) (a : α) : Bool :=
+  g.caveats.all (· a)
+
+def Grant.allowsAll (g : Grant α) (actions : List α) : Bool :=
+  actions.all g.allows
+
+def Grant.narrower (g h : Grant α) : Prop :=
+  ∀ a, g.allows a = true → h.allows a = true
+
+def Grant.attenuate (g : Grant α) (c : α → Bool) : Grant α :=
+  { caveats := c :: g.caveats }
+\end{lstlisting}
+\caption{The readable grant model.}\label{fig:model}
+\Description{Lean definitions of Grant, allows, allowsAll, narrower and attenuate.}
+\end{figure}
+
+\paragraph{Two documents.} The grant signer and the agent host split the
+operations on grants between two interfaces. The \emph{admin document}
+issues a root grant, revokes a grant (and with it every grant delegated from
+it), rotates a holder's key and refills a budget. The \emph{agent interface}
+acts under a grant and delegates: \code{delegate(add)} creates a child grant
+whose caveats are the caller's followed by \code{add}, so the child allows
+only what the caller allows, whatever \code{add} says. No agent operation
+reads or edits a grant. At the relay, grants are a configuration file that
+the admin side writes; agents only send requests.
+
+\subsection{Four vocabularies}
+
+Four action vocabularies plug into the model (Table~\ref{tab:vocab}). Each
+defines an action type, a caveat type and a denotation from caveats to
+predicates. Identifiers (contract ids, function names, wasm hashes, hosts,
+key ids, network ids, path components) are byte strings compared by exact
+equality. The evaluator normalizes nothing: lower-casing hosts and resolving
+\code{..}, symlinks and case happen in the host before an action exists
+(\S\ref{sec:host}).
+
+\begin{table}[t]
+\caption{The four action vocabularies.}\label{tab:vocab}
+\small
+\begin{tabularx}{\linewidth}{@{}l>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
+\toprule
+& \textbf{Action} & \textbf{Caveats} \\
+\midrule
+Chain & \code{invoke} contract function args, or \code{createContract} wasmHash
+  & \code{contractIn}, \code{functionIn}, \code{argI128AtMost} $i$ $n$, \code{argEq} $i$ $v$ \\
+Files & path (a list of components), mode $\in\{$read, write, execute$\}$
+  & \code{pathUnder} prefix, \code{modeIn} \\
+Network & host, port, scheme $\in\{$http, https$\}$
+  & \code{hostIn}, \code{portIn}, \code{schemeIn} \\
+Signing & key, network, payload $\in\{$transaction, authEntry, message$\}$
+  & \code{keyIn}, \code{networkIn}, \code{payloadIn} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{Chain.} Arguments follow Soroban's values: \code{i128},
+\code{u64}, \code{bool}, \code{bytes}, \code{address} and \code{symbol} are
+modelled, and an argument of any other type is \code{other} carrying its full
+XDR encoding, whose leading discriminant names its type. Values of different
+constructors are never equal, so an \code{argEq} caveat holds only for an
+argument of its value's constructor\claim{arg-kind}, and an unmodelled
+argument never matches a \code{bytes} caveat, whatever its
+encoding\claim{other-not-bytes}. Every chain caveat is false on
+\code{createContract}, so any chain grant with at least one caveat denies
+contract deployment\claim{create-contract-denied}.
+
+\paragraph{Caveats apply to every context alike.} A chain grant is checked
+against every context of an authorization tree, and each caveat reads the same
+fields of each context: \code{argI128AtMost i n} and \code{argEq i v} read
+argument $i$ of every context, whatever its contract and
+function\claim{positional-caveats}. Two consequences follow. A grant with
+\code{contractIn [R, T]} and \code{functionIn [swap, transfer]} allows the
+cross product, \code{R.transfer} and \code{T.swap} included. And a tree whose
+calls carry amounts at different positions cannot have each amount capped: a
+router's \code{forward} takes its amount as argument 3 and the token
+\code{transfer} it nests as argument 2, so one \code{argI128AtMost} caps the
+wrong argument of one of them. The evaluation's router workload therefore
+bounds amounts by its allowance alone (\S\ref{sec:eval}). A caveat that
+applies only to contexts of one contract and function would close this; the
+generic model takes any predicate, so Theorems~\ref{thm:atten}
+and~\ref{thm:chain} would be unchanged, but the vocabulary does not have one.
+
+\paragraph{Files.} Paths are lists of components, so a grant under
+\code{/home/a} never covers \code{/home/ab}\claim{path-components}. A
+read-only grant is \code{modeIn [read]}.
+
+\paragraph{Network and signing.} A network action is the host name the agent
+requested, its port and its scheme; a signing action is a key id, a network
+passphrase and a payload kind. Each caveat is membership of one field in a
+list.
+
+\subsection{Budgets}\label{sec:budgets}
+
+A grant may carry an allowance of one asset. Budgets are enforced at the
+Soroban boundary, where the grant signer meters transfers of one Stellar Asset
+Contract per root grant; the agent host and the relay do not meter.
+Allowances live on the delegation tree: the ledger holds one node per grant with a parent link, an
+allowance and \code{spent}, the total of every successful spend at or under
+the node. A spend at node $i$ walks from $i$ to its root and fails at the
+first node whose \code{spent} plus the amount would exceed its allowance;
+otherwise it charges every node on the walk. Either the spend succeeds and is
+charged to the spender and every ancestor, or it fails and changes nothing.
+
+Allowances may oversubscribe: children's allowances may sum to more than their
+parent's, and delegation accepts any allowance. Because every ancestor is
+charged in the same step, spending under a node still never exceeds that
+node's allowance. The model's walk stops at the first node, counting from the
+spender, that cannot take the amount, and a failed spend names it; that node
+is where a refill request goes, up the delegation chain to the human who holds
+the admin document. The proven statement about the name is weaker: it is a
+node on the spender's chain that cannot take the amount (Theorem~\ref{thm:budget}).
+Refilling and issuing a new root are admin operations; an agent can only
+append a child node by delegating. Allowances are cumulative and never reset.
+
+Figure~\ref{fig:budget} shows two runs from a root of 10 with two children of
+8 each and nothing spent. In the first, after node~1 spends 8, node~2's spend
+of 3 fails at the root, which has 2 left, and its spend of 2 succeeds. In the
+second, node~1 delegates an allowance of 20, more than its own 8, to a new
+node~3, whose spend of 9 is refused and whose spend of 8 succeeds, charging
+node~3, node~1 and the root.
+
+\begin{figure}[t]
+\centering
+\input{budget-tree}
+\caption{Oversubscribed allowances. The \lean{example}s at the end of
+\file{Budget.lean} check by evaluation the first refusal's error, and each
+run's final ledger and log of successful spends; ``spent'' lists each node's
+spent after the run, from node~0. A refused spend changes no
+node.}\label{fig:budget}
+\Description{A delegation tree: root with allowance 10, two children with
+allowance 8 each, and a node with allowance 20 delegated under the first
+child, with two runs of spends and their outcomes.}
+\end{figure}

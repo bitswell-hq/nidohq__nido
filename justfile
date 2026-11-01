@@ -151,6 +151,13 @@ build-contracts:
 email-recovery-docs:
     bash research/email-recovery/build.sh
 
+# Runs latexmk inside a TeX Live image pinned by digest, so it needs Docker.
+# Fails on undefined references or citations and on any claim-ledger
+# inconsistency. See paper/README.md.
+# Build the attenuating-grants paper and slides into paper/build/
+paper:
+    make -C paper
+
 # Needs elan, which fetches the Lean release lean-toolchain pins.
 # See research/email-recovery/formal/README.md.
 # Build and check the email-recovery Lean model and proofs

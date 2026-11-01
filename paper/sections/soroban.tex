@@ -1,0 +1,209 @@
+\section{The Soroban Boundary}\label{sec:soroban}
+
+On chain, an agent's grant lives in a \emph{grant signer}
+(\file{contracts/grant-signer}): a contract deployed once per account, holding
+for each grant its chain caveats, its holder's ed25519 key, its parent, its
+budget node and a revoked flag. The account is the Perch account Nido's
+factory mints, unchanged.
+
+\subsection{A delegated signer, not a policy}
+
+A policy contract attached to an agent's context rule is the usual way to add a
+check to an OpenZeppelin smart account~\cite{ozStellarAccounts}. It would be
+the wrong place here, for two reasons. Perch accounts are document-only, and
+their document schema has no member that names another policy contract. More
+importantly, a policy is asked only about the contexts the submitter routed to
+its rule; every other context's rule would have to be shown unsatisfiable by an
+agent. The document schema does declare delegated signers, which the account
+authenticates through CAP-0071's \code{delegate\_account\_auth}, and the host
+then calls the delegate's \code{\_\_check\_auth} with the account's payload
+and its whole context list\claim{cap71-contexts}. So the account's document
+names the grant signer as a signer and makes it the only signer of the rules
+agents act through:
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
+"signers": [
+  {"id": "owner", "verifier": "<WebAuthn verifier>",
+   "key": "<passkey>"},
+  {"id": "grants", "address": "<grant signer>"}],
+"rules": [
+  {"name": "admin", "scope": {"type": "self-admin"},
+   "principals": {"type": "all", "signers": ["owner"]}},
+  {"name": "a-token",
+   "scope": {"type": "contract", "address": "<token>"},
+   "principals": {"type": "all", "signers": ["grants"]}}]
+\end{lstlisting}
+The grant signer sees every context of the authorization, including contexts
+the submitter routed to other rules, so the guarantee does not depend on rule
+selection, which a delegate's signature does not bind. The payload a holder
+signs is the host's payload for the account's entry, which names the account,
+so a holder's signature authorizes for that one account. Adding agents to an
+account is a document change and one deployment; nothing in Perch or
+OpenZeppelin changes.
+
+\subsection{Checking an authorization}
+
+Figure~\ref{fig:soroban} follows one agent authorization. The account's
+\code{\_\_check\_auth} runs Perch's guards and then OpenZeppelin's rule
+check, which authenticates the rule's signer, the grant signer, by
+\code{delegate\_account\_auth}. The grant signer's \code{\_\_check\_auth}
+receives the payload, a signature naming the grant and carrying the holder's
+ed25519 signature, and every context, and refuses at the first failure:
+\begin{enumerate}
+\item load the signing grant and its ancestors, refusing if any is revoked;
+\item verify the holder's signature over the payload;
+\item refuse a contract creation; a context that calls the grant signer
+  itself, unless it is the holder's own delegation; a context that calls the
+  account; or a call on the budget asset other than \code{transfer} with a
+  non-negative amount;
+\item map every other context to a chain action and require
+  \code{chain::allows\_all} over the grant's caveats;
+\item charge each budget-asset transfer to the grant and every ancestor with
+  \code{budget::spend}, refusing if any node would be overdrawn, and only then
+  store the new \code{spent} values.
+\end{enumerate}
+A refusal fails the account's authorization, and with it the transaction, so
+no state changes. The holder's ed25519 signature covers the host's payload,
+not the grant id carried beside it, so a key that holds two grants produces
+signatures usable under either; one key per grant avoids this.
+
+\paragraph{What the grant signer sees.} The contexts it checks are those that
+need the account's authorization. A call's effects that need none are outside
+the tree and outside every caveat and budget: a \code{transfer\_from} against
+an allowance the owner gave a contract earlier, a contract that already holds
+or controls the account's funds, or any allowed call whose side effects never
+call \code{require\_auth} for the account. The guarantee against hidden calls
+holds for calls that need the account's authorization, and the assumption that
+no allowed contract has such a standing position (\S\ref{sec:threat}) carries
+the rest\claim{no-standing-allowance}.
+
+\begin{figure}[t]
+\centering
+\resizebox{\linewidth}{!}{\input{soroban-flow}}
+\caption{An agent's call through the account. The host passes every context of
+the account's authorization to the grant signer, which checks them all with
+the evaluator; one disallowed context refuses the whole tree.}
+\label{fig:soroban}
+\Description{An authorization tree in which an allowed router call nests a
+token transfer; both contexts reach the grant signer, which runs allows_all.}
+\end{figure}
+
+\paragraph{Delegation, and the grant signer's second role.}
+\code{delegate(parent, key, caveats, allowance)} stores a child grant whose
+caveats are the parent's followed by the given ones, with a budget record
+under the parent's. It requires the grant signer's own authorization, so the
+host calls the grant signer's \code{\_\_check\_auth} in two roles, with the
+same three arguments: as the account's delegate, with the account's payload
+and contexts, and as the check of the grant signer's own address, whenever a
+call needs that address's authorization (its own \code{delegate}, a call on
+another contract that asks for it, a deployment with it as deployer). The
+host lets a contract's \code{require\_auth} of itself call its own
+\code{\_\_check\_auth} and refuses any other re-entry. The checks are the
+same in both roles: contract creation is refused under every grant, the
+empty one included\claim{signer-deploy}, since in the second role no account
+document stands behind the check; a call on the account, an unmetered call
+on the budget asset and a call on the grant signer other than the holder's
+own delegation are refused; and the caveats bound every other call. A
+signature in the second role authorizes nothing for the account, which
+accepts the grant signer only through
+\code{delegate\_account\_auth}\claim{signer-own-address}. One consequence is
+stated rather than enforced: under an empty grant a holder can authorize any
+call on another contract as the grant signer's address, which holds nothing
+the deployment gives it, so nothing should be sent to it.
+
+\subsection{Threat coverage}
+
+Table~\ref{tab:soroban-threats} maps each attempt in \S\ref{sec:threat} to
+what refuses it. Each refusal is asserted in an integration test by the
+contract that refused and its error, on a factory-minted Perch account under
+enforcing authorization, where the host runs every \code{\_\_check\_auth}.
+
+\begin{table*}[t]
+\caption{Escalation attempts at the Soroban boundary and what refuses them.}
+\label{tab:soroban-threats}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{0.27\linewidth}>{\raggedright\arraybackslash}X l@{}}
+\toprule
+\textbf{Attempt} & \textbf{What refuses it} & \textbf{Status} \\
+\midrule
+Issue, revoke, rotate or refill a grant, its own included &
+  These need the account's authorization, which only the owner's admin rule
+  gives; no agent rule is scoped to the grant signer, and asked directly the
+  grant signer refuses every call on itself but the holder's own delegation. &
+  \claim{signer-admin} \\
+Change the account's rules or policies, or call its admin functions &
+  No agent rule is scoped to the account; a document that wrongly scopes one
+  still meets the grant signer's refusal of calls on the account. &
+  \claim{signer-account} \\
+Delegate from an ancestor's grant, or one it does not hold &
+  The grant signer accepts a delegation only with the signing grant as parent. &
+  \claim{signer-delegate-other} \\
+Widen a grant by delegating &
+  A child's caveats are its parent's followed by more. &
+  \claim{signer-narrows}\ \claim{rust-delegation} \\
+Hide a disallowed call inside an allowed one &
+  Every context of the account's authorization is checked; a nested call the
+  signed tree leaves out fails its \code{require\_auth} in the host. Effects
+  that need no authorization from the account are outside the tree. &
+  \claim{signer-hidden-call}\ \claim{batch-narrower} \\
+Deploy a contract &
+  The grant signer refuses every contract creation, under every grant and in
+  both roles; through the account, a Perch document has no creation scope,
+  so the account refuses it first. &
+  \claim{signer-deploy}\ \claim{create-contract-denied} \\
+Hand off the budget asset (\code{approve}, \code{burn}) &
+  Only metered transfers of the budget asset pass. &
+  \claim{signer-metered} \\
+Overspend through siblings or several transfers &
+  Every transfer in the authorization is charged to the spender and every
+  ancestor; the first overdrawn node refuses and nothing is stored. &
+  \claim{signer-oversubscribed}\ \claim{signer-all-charged}\ \claim{budget-total} \\
+Keep acting after revocation, or with a rotated-out key &
+  Revocation of any ancestor refuses; rotation replaces the key. &
+  \claim{signer-revocation}\ \claim{signer-rotation} \\
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+\subsection{The wiring}
+
+The evaluator is verified; what connects it to Soroban is not.
+\file{src/actions.rs} turns each context and stored caveat into evaluator
+values with the same encoding the relay uses: a contract by its strkey, a
+function by its symbol's bytes, an address argument by its strkey,
+\code{i128}, \code{u64}, \code{bool}, \code{Bytes} and \code{Symbol}
+arguments by value, and any other argument as \code{other} with its full XDR.
+A test checks that the grant signer and the relay map every argument type
+alike\claim{signer-relay-mapping}; that the mapping keeps distinct arguments
+distinct rests on XDR encoding and strkeys being injective and is not
+proven\claim{xdr-injective}.
+
+\paragraph{The budget link.} The grant signer never holds the ledger of
+every grant whole. Its storage holds one grant per id, whose parent,
+allowance and \code{spent} are that grant's node; \code{issue} and
+\code{delegate} store a grant at the next id with nothing spent, which is the
+model's \code{append}; \code{refill} calls \code{budget::refill} on a ledger
+of the one grant; and each \code{\_\_check\_auth} builds a ledger of only the
+signing grant's lineage, root first with each node's parent the one before
+it, calls \code{budget::spend} on it once per budget-asset transfer, stopping
+at the first failure, and only if every spend succeeded writes the changed
+\code{spent} values back. \file{formal/AttenuatingGrants/Signer.lean} follows
+these steps. Spending on the lineage ledger has the whole ledger's outcome at
+the signing grant, an error naming the same grant, and afterwards the whole
+ledger's lineage, and the spend loop over the extracted \code{spend} computes
+it\claim{lineage-ledger}. One authorization's spends are all or nothing, so
+every sequence of the grant signer's calls is a run of the model on the
+ledger of every grant\claim{budget-batch-as-run}, and Theorem~\ref{thm:budget}'s
+bound holds for it: the total spent at or under any grant never exceeds that
+grant's allowance, with no hypothesis on the
+allowances\claim{signer-budget-total}. What remains trusted is that the
+contract's few lines of storage, lineage and loops are those
+definitions\claim{wiring-budget-calls}. The tests check the outcome:
+oversubscribed siblings cannot together pass their parent, and a refused
+spend stores nothing\claim{signer-oversubscribed}.
+
+Two requirements on the account's document are stated and met by the
+documents the tests apply, but nothing on chain checks them: a holder key must
+reach the account only through the grant signer, since registering it as a
+signer by another route lets it authorize without its grant; and the document
+must name its own account's grant signer, since the grant signer cannot see
+which account delegated to it\claim{document-requirements}.

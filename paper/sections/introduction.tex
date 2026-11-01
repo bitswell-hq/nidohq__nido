@@ -1,0 +1,105 @@
+\section{Introduction}\label{sec:intro}
+
+An agent that pays invoices, renews cloud resources or trades for a user needs
+authority that is real and bounded. It must be able to read the files it works
+on, reach the services it uses and sign transactions, but only those the user
+meant. For an agent acting through a Soroban smart account, the controls in
+use check that authority at the wrong grain.
+
+\emph{Custody policy engines} guard the signing key. Dfns, for example,
+evaluates rules such as transaction amount limits and recipient allow-lists
+before it signs~\cite{dfnsPolicies}. Those rules ``only evaluate plain value
+transfers'': when the amount or recipient cannot be inferred, as for a contract
+call or a raw signature request, they ``fail closed and
+trigger''~\cite{dfnsPolicies}, and the engine does not ``introspect raw
+serialized signature payloads''~\cite{dfnsSigningPolicies}. Other engines
+decode contract calls and write rules over methods and arguments
+(\S\ref{sec:related}), but the ones whose documentation we read describe
+EVM-style calls, and we found none that evaluates a Soroban authorization
+tree, in which one signed call nests the calls it makes for the account.
+
+\emph{Process sandboxes} guard the machine. nono confines an agent process with
+Landlock on Linux and Seatbelt on macOS: it restricts file system paths,
+process execution and network destinations, down to a domain, a URL path or an
+HTTP method and path, and it matches command arguments against exact, prefix or
+contains patterns~\cite{nono}. It does not read what a call carries, such as
+the amount and recipient inside a transaction that a remote key signs, and the
+smart account that finally executes the transaction cannot see the sandbox's
+rules at all.
+
+We write an agent's authority as a \emph{grant}: a list of caveats, each a
+predicate over actions, where an action is allowed only if every caveat holds.
+A grant's holder can do two things with it: act within it, and hand a sub-agent
+a copy with more caveats added. Issuing, revoking, rotating a holder's key and
+refilling a budget are the operations of a separate \emph{admin document} that
+agents never hold. One evaluator decides every check, at two boundaries:
+\begin{itemize}
+\item In the \textbf{Soroban smart account}, the evaluator runs inside a
+  delegated signer. Through CAP-0071 delegated signing~\cite{cap71,cap7101} the
+  host hands it every context of the account's authorization, so a call the
+  account authorizes cannot hide a disallowed one in its authorization tree.
+\item In the \textbf{agent's host}, the same evaluator, compiled to the same
+  WebAssembly target, runs as a component behind the host that performs the
+  agent's file, network and signing requests. Before its key keeper signs a
+  transaction or an authorization entry, the host checks every context the
+  signature authorizes against the agent's chain grant (\S\ref{sec:host}).
+\end{itemize}
+A relay that submits transactions for agents holding no keys runs the same
+chain check before a custody key signs and pays for them. Figure~\ref{fig:arch}
+shows the three deployments.
+
+\begin{figure*}[t]
+\centering
+\resizebox{0.8\textwidth}{!}{\input{architecture}}
+\caption{One evaluator at every boundary an agent's actions cross. Each
+boundary checks the agent's grant with the same evaluator before acting; the
+admin document that changes grants is the owner's alone.}
+\label{fig:arch}
+\Description{An agent sends tool calls to the agent host, relay requests to
+the relay, and holder signatures to the smart account; each boundary runs the
+grant evaluator before reaching files, the network and the key keeper, the
+custody key and channel accounts, or the contracts the account calls.}
+\end{figure*}
+
+The adversary is an agent the user already authorized, trying to widen its own
+authority (\S\ref{sec:threat}): by editing its grant, by hiding a disallowed
+call inside an allowed one, or by working around delegation through deployed
+contracts, approvals or a sibling's allowance.
+
+\paragraph{Contributions.}
+\begin{enumerate}
+\item A grant model with four action vocabularies (chain calls, files,
+  network, signing) that share one evaluator, delegation by attenuation only,
+  and budgets as allowances charged up the delegation tree, which stay safe
+  when children's allowances oversubscribe their parent's
+  (\S\ref{sec:grants}).
+\item A proof from the deployed Rust back to a readable Lean model
+  (\S\ref{sec:proofs}). Charon and Aeneas translate the evaluator to
+  Lean~\cite{charon,aeneas,lean4}, and we prove that the translation computes
+  the model for every input in every vocabulary and for the budget functions.
+  Totality, attenuation, chaining and budget safety therefore hold
+  \translationtrust. Attenuation and chaining are immediate in the model; what
+  the proof adds is their carry-over to the code and the budget invariant
+  under oversubscription. A step bound is proven for a counted model of the
+  evaluator, not for the code.
+\item Two enforcement boundaries built on one evaluator, with no change to the
+  smart account or to OpenZeppelin's account library: a CAP-0071 delegated
+  signer for Soroban (\S\ref{sec:soroban}) and a WebAssembly component behind
+  an agent host (\S\ref{sec:host}), plus a relay that checks before a custody
+  key signs (\S\ref{sec:relay}).
+\item A separation of what is proven from what is tested, measured, assumed
+  or unproven, with the trusted wiring and its known gaps stated
+  (\S\ref{sec:tcb}), and an evaluation (\S\ref{sec:eval}): an attack suite of
+  76 escalation attempts in Soroban simulation and at the host, all refused
+  with state unchanged, and a cross-check of the proven step bound against
+  metered Soroban costs.
+\end{enumerate}
+
+\paragraph{Claim status.} A tag after a claim gives its status, recorded in a
+claim ledger that the build checks against the repository: \claimtag{proven}
+by named Lean theorems, \claimtag{tested} by a named test,
+\claimtag{measured} by a recorded result file, \claimtag{assumed} as a stated
+assumption, or \claimtag{unproven}. Appendix~\ref{app:claims} lists every
+claim with its evidence. Grants control access, not information flow: a grant
+decides which actions an agent may take, not where the data it reads goes next
+through other allowed actions (\S\ref{sec:limits}).

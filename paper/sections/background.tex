@@ -1,0 +1,55 @@
+\section{Background}\label{sec:background}
+
+\paragraph{Soroban authorization.} A Soroban contract asks an address to
+authorize the current call with \code{require\_auth}, which requires ``address
+to have authorized call of the current contract function with all the
+arguments it has been called with''~\cite{cap46auth}. A transaction carries
+authorization entries. Each holds credentials and ``a single tree of contract
+calls'' (\code{SorobanAuthorizedInvocation})~\cite{cap46auth}, and the host
+matches every \code{require\_auth} during execution to a node of a signed
+tree, so a nested call that the signed tree leaves out fails. A contract that
+implements \code{\_\_check\_auth} is a custom account. When an authorization
+names it, the host calls its \code{\_\_check\_auth} with a signature payload,
+the signature, and ``a list of the contract invocations that are being
+authorized by these signatures''~\cite{stellarAuthDocs}. Each such
+\emph{context} is either a contract call (contract, function, arguments) or a
+contract-creation host function; a \code{\_\_check\_auth} that returns an
+error or traps fails the authorization~\cite{cap46auth}.
+
+\paragraph{Delegated signing (CAP-0071).} Protocol 27 adds the host function
+\code{delegate\_account\_auth}, which delegates ``the authentication logic from
+an \code{Address}es \code{\_\_check\_auth} function to a different address'',
+and credentials that carry the delegates' signatures inside the account's own
+entry~\cite{cap71,cap7101}. The delegate's signature payload and authorization
+context ``are equivalent to the signature payload and the context of the
+`top-level' address''~\cite{cap7101}. So a contract delegate's
+\code{\_\_check\_auth} receives the delegating account's payload and every
+context of the account's authorization\claim{cap71-contexts}.
+
+\paragraph{Smart accounts.} Nido's accounts are Perch accounts built on
+OpenZeppelin's Stellar smart-account library, which ``organizes authorization
+as a composition of three core elements: context rules, signers, and
+policies''~\cite{ozStellarAccounts}. A context rule scopes a set of signers
+and policy contracts to a kind of context, and the submitter selects one rule
+per context. A Perch account takes all of its authorization data from one
+policy document, whose only write path is the account's \code{apply\_doc}
+function; a document can declare a signer as an address, which the account
+authenticates through \code{delegate\_account\_auth}.
+
+\paragraph{WebAssembly components.} WebAssembly modules execute in a linear
+memory ``disjoint from code space, the execution stack, and the engine's data
+structures''~\cite{wasm}. The component model types a module's imports and
+exports in WIT, and ``the only ways a component can interact with anything
+outside itself are by having its exports called, or by calling its
+imports''~\cite{componentModelDocs,componentModel}. Wasmtime runs
+components~\cite{wasmtime}.
+
+\paragraph{Charon and Aeneas.} Charon extracts a Rust crate into LLBC, a clean
+intermediate language~\cite{charon}. Aeneas translates LLBC into a pure
+functional program in a proof assistant's language, Lean among
+them~\cite{aeneas,lean4}. A translated function returns in an error monad:
+\code{ok v} for a value, or a failure for a panic, an arithmetic overflow or an
+out-of-bounds index, or divergence. A theorem that a translated function
+returns \code{ok} for every input therefore says the Rust function neither
+fails nor diverges, under the trust in the translation stated in
+\S\ref{sec:tcb}.

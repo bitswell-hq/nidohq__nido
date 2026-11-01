@@ -1,0 +1,88 @@
+% The class options come from tools/build.sh: sigconf,anonymous,review for
+% the review version (the default), sigconf otherwise.
+\providecommand\PaperClassOptions{sigconf,anonymous,review}
+\expandafter\documentclass\expandafter[\PaperClassOptions]{acmart}
+
+\usepackage{grants}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{multirow}
+\usepackage{xltabular}
+
+% Two narrow columns full of code identifiers: let TeX stretch a line a
+% little rather than overrun the margin.
+\setlength\emergencystretch{1.5em}
+
+\setcopyright{none}
+\settopmatter{printacmref=false}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+\acmConference{}{}{}
+\acmYear{}
+\acmDOI{}
+\acmISBN{}
+
+% Theorems 1--4, numbered on their own so the paper and the slides agree.
+\AtEndPreamble{\theoremstyle{acmplain}\newtheorem{mainthm}{Theorem}}
+
+\begin{document}
+
+\title{One Policy, Two Boundaries: Verified Capability Enforcement for Agents Across WebAssembly and Smart Accounts}
+
+\author{Nido contributors}
+\affiliation{%
+  \institution{Nido}
+  \country{}}
+
+\begin{abstract}
+AI agents now hold real authority: they read and write files, call web
+services and sign blockchain transactions. The controls in use check that
+authority at the wrong grain for Soroban smart accounts. A custody policy
+engine such as Dfns applies its amount and recipient rules only to plain
+transfers, and a process sandbox confines paths, processes and hosts but sees
+a call's arguments, at most, as text. We write an agent's authority as a
+\emph{grant}: a list of caveats over actions, which its holder can only
+extend before handing a copy to a sub-agent, while issuing, revoking, key
+rotation and budget refills stay in an admin document that agents never hold.
+One evaluator, written in a restricted subset of Rust, decides grants at two
+boundaries. In the Soroban smart account it runs as a CAP-0071 delegated
+signer, which the host hands every context of the account's authorization, so
+a call the account authorizes cannot hide a disallowed one in its tree. In the
+agent's host it runs as a WebAssembly component in front of files, the network
+and a key keeper. We prove that the evaluator's Charon and Aeneas translation
+to Lean computes a readable model in four action vocabularies and for budgets,
+so totality, attenuation, delegation chaining and budget safety under
+oversubscribed allowances hold \translationtrust; a step bound is proven for a
+counted model and checked against metered costs. In Soroban simulation all 45
+escalation attempts are refused with state unchanged, as are all 31 at the
+host; the evaluator's metered work tracks the model's step count at about 99
+CPU instructions per step; and an agent transaction costs 2.2M to 5.0M of
+Soroban's 400M per-transaction instructions. Every claim carries its status:
+proven, tested, measured, assumed or unproven.
+\end{abstract}
+
+\keywords{capabilities, attenuation, AI agents, smart accounts, Soroban,
+WebAssembly, formal verification, Lean, Aeneas}
+
+\maketitle
+
+\input{sections/introduction}
+\input{sections/background}
+\input{sections/threat-model}
+\input{sections/grants}
+\input{sections/proofs}
+\input{sections/soroban}
+\input{sections/host}
+\input{sections/relay}
+\input{sections/trusted-base}
+\input{sections/evaluation}
+\input{sections/limitations}
+\input{sections/related-work}
+\input{sections/conclusion}
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\appendix
+\input{sections/claims-appendix}
+
+\end{document}
