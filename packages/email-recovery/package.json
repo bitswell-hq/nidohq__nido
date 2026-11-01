@@ -26,6 +26,7 @@
   "dependencies": {
     "@aztec/bb.js": "0.87.0",
     "@hpke/core": "^1.9.0",
+    "@noble/hashes": "^2.2.0",
     "@noir-lang/noir_js": "1.0.0-beta.9",
     "cborg": "^6.2.1"
   },

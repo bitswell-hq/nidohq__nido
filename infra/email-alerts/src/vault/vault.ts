@@ -26,6 +26,7 @@ import {
 import type { AlertClass, PerchEventName } from '../events.js';
 import { alertText, confirmationText, contactChangeNotice, type AlertText } from './content.js';
 import { type CustodianEndpoint, type Nsm, genesis, restore } from './custody.js';
+import { InboundBox, type InboundResult } from './inbound.js';
 import { alertLookup, type VaultKeys } from './keys.js';
 import {
   type AccountRecord,
@@ -37,7 +38,7 @@ import {
   unsealRecord,
 } from './records.js';
 import { type SendingConfig, sendEmail } from './send.js';
-import { type RelyingParty, checkAuthorization } from './webauthn.js';
+import { type RelyingParty, checkAuthorization, relyingPartyFor } from './webauthn.js';
 import { pushMessage } from './webpush.js';
 
 const { equal, toHex, fromHex, toBase64Url } = bytes;
@@ -106,6 +107,7 @@ export class Vault {
   private readonly records = new Map<string, AccountRecord>();
   private deliveries: Deliveries = {};
   private readonly nonces = new Map<string, number>();
+  private readonly inboundBox: InboundBox;
 
   private constructor(
     private readonly cfg: VaultConfig,
@@ -113,7 +115,22 @@ export class Vault {
     readonly keys: VaultKeys,
     private readonly fetchImpl: typeof fetch,
     private readonly now: () => number,
-  ) {}
+  ) {
+    this.inboundBox = new InboundBox(keys.hpke, now);
+  }
+
+  /** A browser's sealed registration for the email its Subject value names (spec §4.6). */
+  inbound(envelope: Uint8Array): Promise<InboundResult> {
+    return this.inboundBox.register(envelope);
+  }
+
+  /**
+   * Mail the MX received for `RECOVERY_INBOX` (inside the enclave): the
+   * sealed copies to store, by inbox id.
+   */
+  mail(raw: Uint8Array): Promise<Record<string, Uint8Array>> {
+    return this.inboundBox.deliver(raw);
+  }
 
   /**
    * Start the vault: create `K` (no `vaultId`) or recover it from the
@@ -227,7 +244,7 @@ export class Vault {
       nonce: req.nonce!,
     });
     try {
-      await checkAuthorization(req.authorization, challenge, chain.signers, this.cfg.rp);
+      await checkAuthorization(req.authorization, challenge, chain.signers, relyingPartyFor(this.cfg.rp, req.account));
     } catch (e) {
       throw new ContactRefused((e as Error).message);
     }

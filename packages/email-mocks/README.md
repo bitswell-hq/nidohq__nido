@@ -23,6 +23,7 @@ independent DKIM verifier.
 | DKIM signer | RFC 6376 relaxed and simple canonicalization (section 3.4), `bh=` over the canonical body, bottom-up `h=` selection with oversigning (section 5.4.2), rsa-sha256 (RFC 8301), optional `l=` | `src/canon.ts`, `src/dkim.ts`, `src/layout.ts` |
 | DNS | `TXT` at `<selector>._domainkey.<domain>` in each provider's published record format, split into 255-octet character-strings; the rotated-out selectors providers leave with `p=` blanked (Gmail `20230601`/`20221208`/`20210112`, Fastmail `fm1`/`fm3`); a resolver with the `dns.promises.resolve` signature | `src/dns.ts`, `launchDns()` |
 | Key rotation | Gmail's live and previous selectors both published; the previous one then blanked in place | `src/rotation.ts` |
+| DNS over HTTPS | A resolver's JSON API (`application/dns-json`, the format Cloudflare and Google publish) over the DNS mock: quoted character-strings per TXT answer, `Status` 3 for an unknown name, `Access-Control-Allow-Origin: *` | `src/doh.ts` |
 | Inbound MX | The receiving MX for the fixed recovery address: accepts only that recipient, refuses bare CR/LF and lines over 998 octets, undoes SMTP dot-stuffing, prepends `Return-Path` and `Received` (RFC 5321 section 4.4), and hands on every submitted octet unchanged | `src/inbound.ts` |
 
 ### Alert-service mocks

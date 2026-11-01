@@ -156,6 +156,15 @@ const CLOCK_SKEW_MS = 60_000;
  * Verifies `bytes` as a Nitro attestation document under `opts`; throws on
  * any failure.
  */
+/**
+ * The image measurement an attestation document claims, read before it is
+ * verified: which measurement to look up in the enclave-image registry
+ * (spec §10.4) before passing it to `verifyAttestation`, which checks it.
+ */
+export async function claimedMeasurement(bytes: Uint8Array): Promise<string> {
+  return toHex(await enclaveMeasurement(parseAttestationPayload(coseSign1(bytes).payload).pcrs));
+}
+
 export async function verifyAttestation(bytes: Uint8Array, opts: VerifyOptions): Promise<VerifiedAttestation> {
   const now = opts.now ?? new Date();
   const cose = coseSign1(bytes);

@@ -15,6 +15,17 @@ Two components, with a hard line between them:
 The host never receives an address. It relays sealed wallet requests and
 public chain state to the vault, and stores what the vault seals.
 
+The vault also receives the mail sent to the recovery address (spec §4.6):
+a recovering browser registers the Subject value it will send, sealed to
+the vault's attested key (`POST /v1/inbound`); the vault seals each matching
+message to that browser's device key (`src/vault/inbound.ts`); the host keeps
+the sealed copy for the browser to fetch (`GET /v1/inbound/<id>`). Browsers
+on the wallet's origins may call the HTTP API (`allowOrigin`, CORS).
+
+A Nido passkey's relying party is its account's own subdomain; with
+`rp.accountApex` set, the vault checks each assertion against the rpId and
+origin of the account the request names (`relyingPartyFor`).
+
 ## What is built and what is mocked
 
 | Piece | Here | Production |
@@ -23,6 +34,7 @@ public chain state to the vault, and stores what the vault seals.
 | Vault: custody, sealed records, owner authorization, alert code, email and Web Push | Built | Same code, inside a Nitro enclave |
 | Nitro NSM and its attestation PKI | TEST-ONLY mock (`@nidohq/email-mocks`, AWS's published format) | `/dev/nsm`; not built here |
 | Host to vault channel | A separate Node process over IPC (`ProcessVault`) | vsock, with TLS to the outside terminating inside the enclave; not built here |
+| Recovery address MX | TEST-ONLY mock (`InboundMx` of `@nidohq/email-mocks`), handing the octets to the vault process (`ProcessVault.mail`) | An MX inside the enclave, SMTP TLS terminating there; not built here |
 | Key custodians | TEST-ONLY mocks | Three independent organizations; not named |
 | Lettermint, Scaleway TEM, push service, Stellar RPC | TEST-ONLY mocks of the published APIs | The real services |
 | Enclave-image registry | Soroban contract `contracts/enclave-image-registry`, run on the integration-test host | Not deployed |
@@ -53,3 +65,4 @@ run.
 | `test/custody.test.ts` | Genesis and restore through the custodians; two of three shares suffice, one does not, a wrong share is detected; custodians refuse an unapproved image, an image still inside its timelock, a revoked image, and a debug-mode enclave |
 | `test/crypto.test.ts` | Web Push encryption reproduces RFC 8291's example byte for byte; VAPID accepted by the push-service mock |
 | `test/e2e.test.ts` | The whole path above with the vault in its own process, and that no message, HTTP body, log line or stored byte of the host, and nothing the RPC, the custodians or the push service received, contains the address |
+| `test/inbound.test.ts` | The sealed inbound path: a recovery email sealed to the registering browser and opened only by it, a second registration of the same value refused, mail for an unregistered value and expired registrations dropped, a bounded number of messages, foreign or malformed envelopes refused; the host routes with CORS, holding only sealed copies; the account-subdomain relying party |

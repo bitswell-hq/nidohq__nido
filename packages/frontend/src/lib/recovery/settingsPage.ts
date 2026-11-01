@@ -40,6 +40,9 @@ import {
 } from './model.js';
 import { NETWORK_PASSPHRASE } from '../network.js';
 import { busy, card, collectCondition, el, errorText, guardianLinks, kitInput, short } from './ui.js';
+import { emailRecoveryDeployment } from './emailConfig.js';
+import { PRIVACY_CLAIM } from './emailModel.js';
+import { findEmailGuardian } from './emailRecovery.js';
 import { kitFile, newRecoveryKit, proveWithKit } from './zk.js';
 
 /** Timing presets. "Quick" exists for testnet walkthroughs. */
@@ -75,6 +78,19 @@ export async function mountRecoverySettings(root: HTMLElement, account: string |
   root.append(statusCard(state));
   if (state.gate?.authorized_attempt != null) root.append(attemptCard(account, state));
   root.append(configureCard(account, state));
+  if (emailRecoveryDeployment()) root.append(await emailCard(state));
+}
+
+/** Email as one recovery helper: set it up, or say it is one. */
+async function emailCard(state: RecoveryState): Promise<HTMLElement> {
+  const listed = state.summary ? await findEmailGuardian(state.summary.guardians).catch(() => undefined) : undefined;
+  return card(
+    'Email recovery',
+    listed
+      ? `<p style="margin:0;font-size:13.5px;">Your email inbox is one of your recovery helpers (<code class="mono">${esc(short(listed.address))}</code>).</p>`
+      : `<p style="margin:0;font-size:13.5px;">Make your email inbox one of your helpers: if you lose your passkey, one email from it counts as one approval. ${esc(PRIVACY_CLAIM)}</p>
+         <a class="btn soft sm" href="/security/recovery/email/">Set up email recovery</a>`,
+  );
 }
 
 function statusCard(state: RecoveryState): HTMLElement {
@@ -323,7 +339,7 @@ function configureCard(account: string, state: RecoveryState): HTMLElement {
 }
 
 /** Apply `next`, first collecting a `protected` account's condition. */
-async function apply(account: string, state: RecoveryState, next: PolicyDoc, status: HTMLElement): Promise<void> {
+export async function apply(account: string, state: RecoveryState, next: PolicyDoc, status: HTMLElement): Promise<void> {
   const needs = changeNeeds(state.doc, next);
   let validUntil = 0;
   if (needs) {

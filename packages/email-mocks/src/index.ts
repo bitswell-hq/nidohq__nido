@@ -9,6 +9,7 @@
 export { type Canon, type HeaderField, canonBody, canonHeader } from './canon.js';
 export { DKIM_FIELD, type SignInput, type Signed, bodyHash, parseTags, selectSignedHeaders, signMessage } from './dkim.js';
 export { MockDns, keyRecord, keyRecordName } from './dns.js';
+export { dohHandler, dohJson } from './doh.js';
 export {
   DEFAULT_DATE,
   type GenerateOptions,

@@ -65,7 +65,9 @@ export function installTestAuthenticator(config: TestAuthConfig): void {
     if (!allow || !allow.length) throw new Error('TestAuthenticator: get() needs allowCredentials');
     const id = new Uint8Array(allow[0].id);
     const challenge = new Uint8Array(options.publicKey.challenge);
-    return makeAssertionCredential(seed, id, challenge);
+    // Like a browser: this page's origin, and the request's rpId (default: this host).
+    const rp = { origin: location.origin, rpId: options.publicKey.rpId ?? location.hostname };
+    return makeAssertionCredential(seed, id, challenge, rp);
   };
 
   const proto =

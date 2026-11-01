@@ -25,6 +25,8 @@ export interface HostState {
   latestLedger: number;
   /** The vault's sealed blobs (base64): records under their lookup, and the delivery log. */
   sealed: { records: Record<string, string>; deliveries?: string };
+  /** Inbound mail the vault sealed to a browser's device key (base64), by inbox id, with when it was stored. */
+  inbound?: Record<string, { at: number; messages: string[] }>;
 }
 
 /** A dispatch request with bytes as hex and bigints as strings, for JSON. */

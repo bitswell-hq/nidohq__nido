@@ -17,9 +17,20 @@ export interface SyntheticAssertion {
   signature: Uint8Array;         // 64 bytes (r || s), low-S
 }
 
+/** Where the assertion claims to come from: the origin in `clientDataJSON`,
+ *  and the relying party whose `SHA-256(rpId)` leads `authenticatorData`, as a
+ *  browser writes them. The on-chain verifier reads neither; an off-chain
+ *  relying party (the alert vault) checks both. Without it the origin is
+ *  `https://example.com` and the rpIdHash zero. */
+export interface SyntheticRelyingParty {
+  origin: string;
+  rpId: string;
+}
+
 export async function buildSyntheticAssertion(
   privateKeyD: Uint8Array,
   payload32: Uint8Array,
+  relyingParty?: SyntheticRelyingParty,
 ): Promise<SyntheticAssertion> {
   if (payload32.byteLength !== 32) {
     throw new Error('buildSyntheticAssertion: payload must be 32 bytes');
@@ -27,11 +38,15 @@ export async function buildSyntheticAssertion(
 
   const challenge = bytesToB64u(payload32);
   const clientDataJSON = new TextEncoder().encode(
-    `{"type":"webauthn.get","challenge":"${challenge}","origin":"https://example.com","crossOrigin":false}`,
+    `{"type":"webauthn.get","challenge":"${challenge}","origin":${JSON.stringify(relyingParty?.origin ?? 'https://example.com')},"crossOrigin":false}`,
   );
-  // authenticatorData: 32-byte rpIdHash (zero — verifier skips this check) +
-  // 1 flags byte (UP|UV|BE|BS = 0x1D) + 4 zero counter bytes = 37 bytes.
+  // authenticatorData: 32-byte rpIdHash (zero unless a relying party is given —
+  // the on-chain verifier skips this check) + 1 flags byte (UP|UV|BE|BS = 0x1D)
+  // + 4 zero counter bytes = 37 bytes.
   const authenticatorData = new Uint8Array(37);
+  if (relyingParty) {
+    authenticatorData.set(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(relyingParty.rpId))));
+  }
   authenticatorData[32] = 0x1d;
 
   const cdHash = new Uint8Array(

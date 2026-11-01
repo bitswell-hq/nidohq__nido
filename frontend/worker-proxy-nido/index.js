@@ -13,6 +13,22 @@ const RESERVED_DAPP_SUBDOMAINS = {
 // bare `nido` project subdomain was taken).
 const PAGES = "nido-1am.pages.dev";
 
+// The recovery routes are cross-origin isolated so the email prover can run
+// Barretenberg on threads (SharedArrayBuffer); see the comment on the same
+// rules in packages/frontend/public/_headers. Not /security/guardian/, whose
+// classic-wallet signers open popups that same-origin COOP would cut off.
+// Keep in sync with packages/frontend/public/_headers.
+export function isolatedPath(pathname) {
+  return /^\/security\/(recover|recovery)(\/|$)/.test(pathname);
+}
+
+// A cross-origin isolated page may only start a dedicated worker whose script
+// itself sends COEP, so the build's assets (the prover's worker and bb.js's
+// own workers among them) send it too.
+export function embedderPolicyPath(pathname) {
+  return isolatedPath(pathname) || pathname.startsWith("/_astro/");
+}
+
 function previewSubdomain(sub) {
   const match = sub.match(/^(.*)--(?:pr-)?(\d+)$/);
   return match ? { raw: match[1], pr: match[2] } : { raw: sub, pr: null };
@@ -80,23 +96,30 @@ export default {
     // (soroban-testnet/horizon-testnet/friendbot). At mainnet, swap to
     // soroban.stellar.org + horizon.stellar.org and REMOVE friendbot, in lockstep
     // with the frontend network config AND packages/frontend/public/_headers.
+    // The recovery provers (bb.js) compile WebAssembly ('wasm-unsafe-eval'),
+    // load their wasm from a data: URL, and read Barretenberg's CRS from
+    // crs.aztec.network; the wallet reads DKIM key records through
+    // cloudflare-dns.com's DNS-over-HTTPS JSON API.
     // TODO(CSP enforce): after a clean report stream in prod, promote to
     // `Content-Security-Policy` (drop `-Report-Only`). See docs/MAINNET_READINESS.md.
     response.headers.set(
       "Content-Security-Policy-Report-Only",
       [
         "default-src 'self'",
-        "script-src 'self'",
+        "script-src 'self' 'wasm-unsafe-eval'",
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "img-src 'self' data:",
         "font-src 'self' data: https://fonts.gstatic.com",
-        "connect-src 'self' https://*.nido.fyi https://nido.fly.dev https://soroban-testnet.stellar.org https://horizon-testnet.stellar.org https://friendbot.stellar.org https://api.refractor.space https://api.soroswap.finance",
+        "connect-src 'self' data: https://*.nido.fyi https://nido.fly.dev https://soroban-testnet.stellar.org https://horizon-testnet.stellar.org https://friendbot.stellar.org https://api.refractor.space https://api.soroswap.finance https://crs.aztec.network https://cloudflare-dns.com",
         "object-src 'none'",
         "base-uri 'self'",
         "frame-ancestors 'none'",
         "form-action 'self'",
       ].join("; "),
     );
+    const path = new URL(request.url).pathname;
+    if (isolatedPath(path)) response.headers.set("Cross-Origin-Opener-Policy", "same-origin");
+    if (embedderPolicyPath(path)) response.headers.set("Cross-Origin-Embedder-Policy", "require-corp");
     return response;
   },
 };

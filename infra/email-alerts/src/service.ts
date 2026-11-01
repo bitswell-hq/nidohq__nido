@@ -38,7 +38,12 @@ export interface ServiceConfig {
   pageLimit?: number;
   retryBaseMs?: number;
   now?: () => number;
+  /** Wallet origins allowed to call the HTTP API from a browser (CORS). */
+  allowOrigin?: (origin: string) => boolean;
 }
+
+/** How long the host keeps a sealed inbound message for the browser to fetch. */
+export const INBOUND_KEEP_MS = 24 * 3600_000;
 
 export interface PollReport {
   /** The cursor reached the latest ledger and the page was not full. */
@@ -320,15 +325,60 @@ export class AlertService {
     });
   }
 
-  /** `GET /v1/attestation?nonce=`, `POST /v1/nonce`, `POST /v1/contact`, `GET /v1/health`. */
+  /** Relay a browser's sealed inbound registration to the vault (spec §4.6). */
+  inbound(envelope: Uint8Array) {
+    return this.lock.run(() => this.vault.inbound(envelope));
+  }
+
+  /** Keep what the vault sealed for inbound mail, by inbox id, until the browser fetches it. */
+  storeInbound(sealed: Record<string, Uint8Array>): void {
+    const now = this.now();
+    const inbound = (this.state.inbound ??= {});
+    for (const [id, at] of Object.entries(inbound)) if (at.at + INBOUND_KEEP_MS < now) delete inbound[id];
+    for (const [id, blob] of Object.entries(sealed)) {
+      const slot = (inbound[id] ??= { at: now, messages: [] });
+      slot.messages.push(toBase64Url(blob));
+    }
+    saveState(this.cfg.statePath, this.state);
+  }
+
+  /**
+   * `GET /v1/attestation?nonce=`, `POST /v1/nonce`, `POST /v1/contact`,
+   * `POST /v1/inbound`, `GET /v1/inbound/<id>`, `GET /v1/health`. Browsers
+   * on an allowed origin may call it (CORS).
+   */
   async listen(port = 0): Promise<string> {
     this.server = createServer(async (req, res) => {
+      const origin = req.headers.origin;
+      const cors: Record<string, string> =
+        origin && this.cfg.allowOrigin?.(origin) ? { 'access-control-allow-origin': origin, vary: 'Origin' } : {};
       const reply = (status: number, body: unknown) => {
-        res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+        res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store', ...cors });
         res.end(JSON.stringify(body));
       };
       try {
         const url = new URL(req.url ?? '/', 'http://host');
+        if (req.method === 'OPTIONS') {
+          res.writeHead(204, {
+            ...cors,
+            'access-control-allow-methods': 'GET, POST',
+            'access-control-allow-headers': 'content-type',
+            'access-control-max-age': '600',
+          });
+          return res.end();
+        }
+        if (req.method === 'POST' && url.pathname === '/v1/inbound') {
+          const chunks: Buffer[] = [];
+          for await (const c of req) chunks.push(c as Buffer);
+          if (Buffer.concat(chunks).length > 4096) return reply(413, { error: 'request too large' });
+          const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { envelope?: string };
+          const result = await this.inbound(fromBase64Url(String(body.envelope ?? '')));
+          return reply(result.ok ? 200 : 409, result);
+        }
+        const inboxPath = /^\/v1\/inbound\/([0-9a-f]{32})$/.exec(url.pathname);
+        if (req.method === 'GET' && inboxPath) {
+          return reply(200, { messages: this.state.inbound?.[inboxPath[1]!]?.messages ?? [] });
+        }
         if (req.method === 'GET' && url.pathname === '/v1/attestation') {
           const nonce = fromBase64Url(url.searchParams.get('nonce') ?? '');
           return reply(200, { attestation: toBase64Url(await this.attestation(nonce)) });

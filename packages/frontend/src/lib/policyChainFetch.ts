@@ -3,7 +3,6 @@ import {
   Contract,
   TransactionBuilder,
   Account,
-  Networks,
   Address,
   nativeToScVal,
   scValToNative,
@@ -12,10 +11,9 @@ import {
 import type { ChainRule, ChainSigner, PolicyState } from '@nidohq/passkey-sdk';
 import { fetchRegistryAddress as sdkFetchRegistryAddress, perch } from '@nidohq/passkey-sdk';
 import { Client as SpendingLimitPolicyClient } from '@nidohq/spending-limit-policy';
+import { NETWORK_PASSPHRASE, RPC_URL } from './network.js';
 import { perchDeployment } from './recovery/deployment.js';
 
-const RPC_URL = 'https://soroban-testnet.stellar.org';
-const NETWORK_PASSPHRASE = Networks.TESTNET;
 // Unverified registry on testnet — the one that holds bare-name → contract-id
 // mappings. The verified registry (CAMLHK…) doesn't dispatch prefixed names
 // natively; the CLI does that client-side. We target unverified directly so

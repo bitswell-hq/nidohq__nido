@@ -45,8 +45,9 @@ export async function makeAssertionCredential(
   seed: Uint8Array,
   credentialId: Uint8Array,
   challenge32: Uint8Array,
+  relyingParty?: { origin: string; rpId: string },
 ) {
-  const a = await makeAssertion(seed, credentialId, challenge32);
+  const a = await makeAssertion(seed, credentialId, challenge32, relyingParty);
   return {
     id: b64u(credentialId),
     rawId: toArrayBuffer(credentialId),

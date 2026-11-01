@@ -262,6 +262,57 @@ The circuit's `From` parser implements this grammar **[built, tested]**
 (`circuits/email-recovery/lib/src/from_address.nr`; tests in
 `circuits/email-recovery/tests/`).
 
+### 4.6 Getting the email to the browser
+
+The signed octets must reach the browser that proves them. Two paths, the
+same for the recovery email and the enrollment email (§5.4):
+
+**Sealed inbound (default).** `RECOVERY_INBOX`'s MX runs inside the alert
+vault's enclave (§10.5), so the message is readable there and nowhere else:
+
+1. Before showing the email to send, the browser draws a 32-octet seed and a
+   16-octet inbox id `i`, derives a device key pair from the seed (RFC 9180
+   `DeriveKeyPair`, the vault's HPKE suite), verifies the vault's
+   attestation (§10.5), and posts
+   `HPKE-seal(vault key, info = "nido/email-recovery/v1/inbound-request",
+   CBOR{v: 1, value, id: i, device_key})` to the host (`POST /v1/inbound`).
+   `value` is the 32 octets whose hex ends the Subject: `T` for a recovery
+   email (§4.2), `E` for an enrollment email (§5.4). The seed and `i` stay in
+   the browser.
+2. The vault keeps the registration in enclave memory for 24 hours. The
+   first registration of a value holds it: a later one for the same value is
+   refused, so whoever learns `T` from the Subject (the mail provider) after
+   the browser registered cannot have the message sealed to another key.
+3. When mail for `RECOVERY_INBOX` arrives, the vault reads every `Subject`
+   field that ends with either phrase and a 64-character value. For each
+   registered value it seals the raw message (the octets the MX received,
+   trace fields included) to that registration's device key
+   (`info = "nido/email-recovery/v1/inbound-message"`, associated data `i`),
+   at most four messages per registration, hands the sealed copies to the
+   host, and keeps nothing. The circuit, not this routing, decides which
+   `Subject` is signed (§4.3).
+4. The host stores the sealed copies under `i` for 24 hours and serves them
+   (`GET /v1/inbound/<i>`); the browser opens them with its device key.
+
+The host sees `i`, sizes and times, never `T`, `E`, the address or the
+message. In a deployment, SMTP's TLS terminates inside the enclave (not
+built, as for the alert vault's own channel, §10.5); a sending MTA that does
+not use STARTTLS would expose the message to the host, which MTA-STS on the
+recovery domain makes a sender refuse. **[built, tested]**: the browser half
+is `packages/email-recovery/src/inbound.ts`, the vault half
+`infra/email-alerts/src/vault/inbound.ts` with the host routes in
+`src/service.ts`; `infra/email-alerts/test/inbound.test.ts` seals a Gmail
+mock's recovery email to the registering browser and to no one else,
+refuses a second registration of the same value, a message for an
+unregistered value, and envelopes not sealed to the vault, and shows the
+host's state never holds the address. The enclave, its MX and the TLS
+termination are TEST-ONLY mocks here.
+
+**`.eml` import.** The user downloads the sent message from their Sent
+folder and the browser reads the file. Nobody new sees the message. Whether
+every launch provider's Sent copy keeps its `DKIM-Signature` is open
+(§13 question 6).
+
 ## 5. Enrollment
 
 ### 5.1 `account_code`
@@ -320,8 +371,40 @@ email locally:
 The wallet then computes `C` (§5.3) and the pin root (§7.4) and deploys the
 guardian (§8.2). Nothing on chain verifies the enrollment email: the owner
 enrolling their own recovery is the only party relying on it, and a wrong
-`C` disables only that owner's email factor. **[specified]** (browser
-enrollment flow).
+`C` disables only that owner's email factor.
+
+The check applies the recovery circuit's own rules to the enrollment email
+(§4.3 rules 2 to 7, the §4.5 grammar, `HEADER_MAX`), so an inbox whose
+recovery email could never be proven is refused at enrollment rather than
+discovered at recovery **[built, tested]**
+(`checkEnrollmentEmail` in `packages/email-recovery/src/enrollmentEmail.ts`;
+`test/enrollmentEmail.test.ts`: an honest Gmail enrollment email is
+accepted and `C` is its signed address's commitment; another account,
+another `rho_e`, the recovery phrase, a key that did not sign it, and a
+domain outside the allowlist are refused; the grammar cases of §4.5).
+
+**The wallet's enrollment flow** (`/security/recovery/email/`,
+`packages/frontend/src/lib/recovery/emailEnrollPage.ts`), while the owner
+holds the account's passkey **[built, tested]**:
+
+1. Draw `account_code` (§5.1) and save a backup (§5.6).
+2. Show the enrollment email (a `mailto:` link and the exact To and
+   Subject), receive it back (§4.6), and check it as above, with the key from
+   the key list or, after a notice, DNS (§7.7).
+3. Register the alert contact with its Web Push subscription and confirm it
+   with the emailed code (§10.3); the wallet's service worker
+   (`packages/frontend/public/sw.js`) shows the pushes.
+4. Deploy the guardian with `C` and the pin (§7.4), paid by the wallet's
+   submitter account (§13 question 10), then read back its wasm hash and
+   `config()` and compare every field with what it intended (§5.5).
+5. Apply a document whose recovery member lists the guardian as
+   `{ kind: 'email', ... }` with `secondAlertChannel: 'web-push'`, through
+   `recoverySpec` (§9.3), under `Protected` after collecting the current
+   condition.
+
+Progress lives in the tab's `sessionStorage`, so leaving for the mail app
+keeps it; `account_code` is there until enrollment ends and is sent nowhere.
+The end-to-end test (§12) drives every step.
 
 ### 5.5 Listing the guardian
 
@@ -368,7 +451,16 @@ ciphertext = AES-256-GCM(key, nonce, plaintext = account_code, aad = "nido/email
 **(b) Recovery kit / password manager:** the 16 bytes as 26 characters of
 RFC 4648 base32 without padding, shown in groups of four.
 
-**[specified]** (wallet enrollment flow).
+**[built, tested]**: `packages/email-recovery/src/backup.ts` (the Argon2id
+of `@noble/hashes`, checked against RFC 9106 §5.3's test vector; the EFF
+large wordlist with its published SHA-256 in `src/effWordlist.ts`);
+`test/enrollmentEmail.test.ts` opens a block only with its passphrase
+(case and spacing forgiven) and account, finds it inside a whole email
+body, and round-trips and refuses mistyped kit codes. Which backups a
+wallet offers is open (§13 question 4); the wallet offers both from one
+component (`packages/frontend/src/lib/recovery/emailBackup.ts`), so the
+choice changes there alone. At recovery the user enters the kit code, or the
+block and its passphrase.
 
 ## 6. Circuit public inputs and obligations
 
@@ -473,6 +565,66 @@ the claimed account's guardian would build. It pins each outcome
   proof does not bind the body (§4.4);
 - a Subject folded at a space, or with runs of whitespace, is accepted,
   because relaxed canonicalization restores the exact phrase.
+
+### 6.5 The browser prover
+
+The proof is made in the user's browser by `RecoveryProver`
+(`packages/email-recovery/src/prover/`), with noir_js 1.0.0-beta.9 for the
+witness and Barretenberg 0.87.0 (bb.js) for the zero-knowledge UltraHonk
+proof in the keccak flavor (§6.2) **[built, tested]**:
+
+- **A Web Worker per proof.** The page posts one request (the email and the
+  witness inputs of `encodeRecoveryEmail`); the worker answers with progress
+  events in stage order (`download`, `witness`, `proving`, `verifying`, each
+  with the elapsed time, and octets loaded during `download`) and one `done`
+  or `error` naming the stage and whether the input, an asset, the prover or
+  the verification failed. The worker is terminated afterwards, which hands
+  Barretenberg's memory back to the browser.
+- **Threads.** Barretenberg runs on `navigator.hardwareConcurrency` threads
+  (at most 32) when the page is cross-origin isolated, on one thread
+  otherwise. The recovery routes are cross-origin isolated (below).
+- **What it downloads, once.** The circuit artifact (2,011,102 octets), its
+  verification key (1,760), and the prefix of Barretenberg's BN254 CRS the
+  2^18 circuit needs (262,145 G1 points, 16,777,280 octets, and the
+  128-octet G2 point): 18,790,270 octets, kept in the Cache API so a retry
+  reads them locally. The CRS comes from Barretenberg's host
+  (`crs.aztec.network`) and is checked against SHA-256 digests pinned in the
+  prover (`CRS_G1_SHA256`, `CRS_G2_SHA256`) before it is used or stored; the
+  verification key must hash to the circuit id. The prover's code (the
+  worker, bb.js with its wasm, noir_js with its wasm) is part of the page's
+  build.
+- **Local verification.** Before a proof is returned, its public inputs
+  must be the four the guardian will build (§6.1), and it must verify under
+  the verification key whose SHA-256 is the circuit id the guardian's
+  verifier reports (§8.4): the committed key, which equals the key bb.js
+  computes from the artifact.
+
+`packages/email-recovery/test/prover.test.ts` pins the request and event
+checks, the thread rule, stage order and timing, the cache (a retry
+downloads nothing; a corrupted entry or a wrong digest is refused; a range
+request answered in full is cut; a short body is refused), each error code
+at its stage, the client and worker over a `MessageChannel`, and one real
+proof of the Gmail fixture through the same code, which bb.js's own verifier
+accepts and refuses with one byte changed.
+
+**Recovery routes' headers.** `/security/recover*` and `/security/recovery*`
+are served with `Cross-Origin-Opener-Policy: same-origin` and
+`Cross-Origin-Embedder-Policy: require-corp`, and the build's assets
+(`/_astro/*`, which include the worker scripts) with COEP, because an
+isolated page may only start a worker whose script sends it. `require-corp`
+suffices: everything those pages load is same-origin, or answers CORS
+(`crs.aztec.network`, the Stellar RPC, the alert service), or sends
+`Cross-Origin-Resource-Policy: cross-origin` (Google Fonts). The guardian
+approval page is not isolated, because a classic Stellar wallet signs there
+through a popup that same-origin COOP would cut off. Both places the
+frontend sets headers (`packages/frontend/public/_headers` and
+`frontend/worker-proxy-nido/index.js`) carry the rules, and
+`tests/support/headers.test.ts` checks they agree. The wallet's iframe to
+the apex's storage bridge is already refused on every page by
+`X-Frame-Options: DENY`, isolated or not. The report-only CSP lists what the
+provers need once it is enforced: `'wasm-unsafe-eval'`, `data:` (bb.js reads
+its wasm from a `data:` URL), `crs.aztec.network`, and the DNS-over-HTTPS
+resolver of §7.7.
 
 ## 7. DKIM key identity, registry, and pin
 
@@ -814,6 +966,53 @@ contract's `noir_vectors` test asserts the same values for keys added
 through the contract's own proposals. `just dkim-registry-vectors` runs it
 with Perch's pinned nargo (1.0.0-beta.9), and CI runs that recipe **[built,
 tested]**.
+
+### 7.7 Finding the signing key: the key list, then DNS
+
+To check an enrollment email and to prove a recovery email, the wallet needs
+the RSA modulus that signed it. Asking for one key reveals the provider, so
+the wallet asks for all of them first:
+
+1. **The key list.** One static file on the wallet's origin
+   (`/dkim-keys.json`), the same for every user, lists every key the registry
+   knows for the launch domains: `{version: 1, network, registry, ledger,
+   keys: [{domain, selectors, modulus, keyHash, status}]}`, `status`
+   `active` (a leaf of the current tree) or `pending` (an approved addition
+   in its timelock). The wallet recomputes each `keyHash` from its modulus
+   and refuses the file if one differs (`parseKeyList`), tries the list's
+   keys for the email's `d=` (those its attesters saw under the email's
+   selector first) against the email's signature, and uses a key only when
+   the chain confirms it: its leaf is in the guardian's pin tree with the pin
+   live, or under a root the registry accepts, with the path the proof uses
+   (`chooseKeyPath`). Whoever serves the file therefore cannot substitute a
+   key: a key nobody registered or pinned yields no path, and at enrollment a
+   substituted key does not verify the email the provider signed.
+   `packages/email-recovery/scripts/dkim-key-list.mjs` writes the file from
+   the registry: it reads `key_proposed` and `dns_attested` events, asks the
+   registry about each key (`leaf`, `proposal`), keeps `active` and `pending`
+   keys, and merges its previous output, because an RPC keeps a bounded
+   history.
+2. **DNS, as a fallback.** Only when the list has no key that signed the
+   email (a key just rotated and not yet proposed), and only after telling
+   the user that the resolver will learn which mail provider they use, the
+   wallet reads `<selector>._domainkey.<domain>` through a configurable
+   DNS-over-HTTPS resolver's JSON API (`application/dns-json`, the format
+   Cloudflare and Google publish) and parses the key record (RFC 6376
+   §3.6.1: `p=` as `RSAPublicKey` or `SubjectPublicKeyInfo`, an empty `p=`
+   revoked, RSA-2048 with exponent 65537 only). At enrollment such a key is
+   what the pin holds; at recovery it is still used only through the pin or
+   the registry.
+
+No lookup goes through Nido's hosts. **[built, tested]**:
+`packages/email-recovery/src/dkimKey.ts` (`test/dkimKey.test.ts`: every
+launch key the provider mocks' DNS publishes, read back through the DoH JSON
+format of `@nidohq/email-mocks`'s `dohJson`, verifies its provider's mail;
+both DER forms read the same; revoked, non-RSA, short, duplicated and
+malformed records are refused; CNAME hops are skipped; a list whose hash
+does not match its modulus is refused), `packages/frontend/src/lib/recovery/emailRecovery.ts`
+(the chain checks), and the end-to-end test (§12), where the list holds the
+Gmail mock's key while its addition waits in the timelock and the pin
+carries it.
 
 ## 8. The email-guardian contract
 
@@ -1263,8 +1462,24 @@ so the check defends against third parties, not against the host.
 
 The wallet helpers are `packages/email-recovery/src/enrollment.ts`.
 `recoverySpec` refuses an email guardian without a declared second channel
-(§9.3 rule 2); the wallet UI that declares it after registering here, and
-the service worker that receives the pushes, are not built.
+(§9.3 rule 2). The wallet's enrollment flow (§5.4) registers the contact
+with a Web Push subscription for the vault's attested VAPID key, confirms it
+with the emailed code, and only then applies the document that declares
+`secondAlertChannel: 'web-push'`; the wallet's service worker
+(`packages/frontend/public/sw.js`) shows each push with its code and opens
+the wallet's own security page on a click, never a link from the payload;
+the web app manifest (`manifest.webmanifest`) makes the wallet installable,
+which iOS requires for Web Push **[built, tested]** (the end-to-end test of
+§12, with the push-service mock's subscription standing in for the
+browser's).
+
+**The relying party is the account's subdomain.** A Nido passkey's RP ID is
+its account's own subdomain (`<account>.<apex>`, the `C...` address in
+lowercase). With the wallet's apex configured, the vault requires the
+assertion's `rpIdHash` and origin to be those of the account the request
+names, so a passkey made for one account's subdomain cannot authorize
+another account's contact **[built, tested]** (`relyingPartyFor` in
+`infra/email-alerts/src/vault/webauthn.ts`; `test/inbound.test.ts`).
 
 ### 10.4 The enclave-image registry
 
@@ -1395,6 +1610,11 @@ no link to act on (`src/vault/content.ts`). The push payload is
 | Push service | The subscription endpoint and an encrypted payload |
 | Stellar RPC | Bulk `getEvents` queries by contract, and `installed_rules` reads of accounts that change contacts |
 | Anyone | The registry's approvals and activations |
+| The vault, for inbound mail (§4.6) | The recovery or enrollment email in transit, so the address; the Subject value it routes by |
+| The host, for inbound mail | Registration envelopes, inbox ids, sealed messages, their sizes and times, and the IP addresses that register and fetch them |
+| The wallet's static host (the key list, §7.7) | That someone fetched the same file every user fetches |
+| A DNS-over-HTTPS resolver, only after the user agrees (§7.7) | The user's IP address asking for one provider's key record: the provider, never the address |
+| The user's mail provider, for the approval email | The Subject phrase and `T` or `E`, which it cannot link to an account (§4.2), and that the recovery address received a Nido email |
 
 `infra/email-alerts/test/e2e.test.ts` checks the host, RPC, custodian, and
 push-service rows: with the vault in its own process, none of the messages
@@ -1504,6 +1724,12 @@ own cost, not a provider's or a network's.
 | Recovery circuit | 251,561 UltraHonk gates (117,491 ACIR opcodes), padded to 2^18; at a 1024-byte header bound 189,503, also 2^18 | `circuits/email-recovery/scripts/measure.sh` (`bb gates`), `circuits/email-recovery/MEASUREMENTS.md` **[measured]** |
 | Proving one recovery email, native (`bb prove --zk`, 18 cores) | 674 ms witness, 969 ms proving, 878 MiB peak; at 1024 bytes 534 ms, 840 ms, 832 MiB | same, median of 3, shared machine (load average 5 to 8) **[measured]** |
 | Proving one recovery email, bb.js 0.87.0 in Node | one thread: 13.6 s, 1,386 MiB peak; 18 threads: 3.3 s, 1,716 MiB; at 1024 bytes 12.0 s and 2.9 s | same **[measured]** |
+| Proving one recovery email in the browser: desktop | Chrome 151 (headless) on the same 18-core machine, the wallet's own prover worker on the recovery route's headers: one thread 8.5 s proving, 10.0 s from request to verified proof; 18 threads 1.5 s and 3.0 s; Barretenberg memory 738 / 805 MiB; peak renderer resident memory 1,459 / 2,574 MiB | `research/email-recovery/eval/browser-prover.md` (`measure-browser.mjs`), median of 3 warm runs **[measured]** |
+| The same under DevTools CPU throttling 4x and 6x | proving unchanged (8.5 to 8.6 s on one thread, 1.5 s on 18): Chrome applies `Emulation.setCPUThrottlingRate` to pages only and refuses it for workers, where all proving runs; the page's main-thread probe slowed 4.2x and 6.3x. A throttled desktop, and not a phone approximation | same **[measured]** |
+| The same on the desktop's efficiency cores | Chrome under macOS background QoS (`taskpolicy -c background`): one thread 35.9 s proving, 41.6 s total; four threads 12.0 s and 17.4 s; peak renderer resident memory 1,418 / 2,011 MiB. A desktop's slower cores, not a phone | same **[measured]** |
+| What a first proof downloads | 18,790,270 octets (the artifact, the key, and the CRS prefix), then nothing on a retry; the prover's code is part of the page's build | `browser-prover.md` (the cold runs), `test/prover.test.ts` **[measured]** |
+| Phones | **Not measured.** No phone was available. `/security/recover/bench/` runs the same benchmark on any device, with no account, and prints copyable JSON | — |
+| Enrollment and recovery end to end on a local network | Passes in 1.8 minutes: in Chromium, the owner's Nido turns on recovery, enrolls an inbox (the Gmail mock signs the enrollment email; the vault seals it back; the page checks it, registers the alert contact with Web Push, deploys the guardian with its pin, and lists it with a quorum of two); a new device opens a lost-key attempt, the vault seals the recovery email back, the page proves it in the browser and submits `submit_guardian`, the other helper approves, the alert email and push carry the code the page showed, and after the delay the page completes the recovery | `tests/e2e/local/email-recovery.local.spec.ts` (`just test-e2e-email-local`) on `stellar/quickstart --local` (core and RPC v29, protocol 28) with Perch's stack built for that network and Nido's contracts from source. Mocked (TEST-ONLY): the mail provider and MX, DNS, the sending services, the push service, the Nitro enclave and its custodians, and the enclave-image registry (a stand-in answering `is_active`, since its 14-day timelock cannot elapse locally); the test's passkeys are the repository's test authenticator. Not in CI **[built, tested]** |
 | One `submit_guardian` with an email approval and a real proof, whole invocation on the test host | 121,789,699 to 121,861,611 instructions (30.5% of 400,000,000); 5.6 MB of memory; 14 entries read; 2 entries and 1,208 bytes written; resource fee without rent 94,412 to 94,463 stroops, across the 12 fixtures | `email_proofs.rs` (every launch domain and the 124-byte address), `cost_estimate()`; table in `research/email-recovery/eval/onchain.md` (`measure-onchain.py`) **[measured]** |
 | The same call as a signed transaction | 131,009,914 to 131,089,485 instructions; footprint 12 read-only and 2 read-write entries; 18,148-byte envelope with a 16,784-byte authorization entry around the 16,224-byte proof; resource fee without rent 178,082 to 178,138 stroops | `nido_integration_tests::transaction::measure` in the same tests **[measured]** |
 | `is_accepted_root`, accepted or refused | 565,446 / 568,058 instructions; 286,222 bytes of memory; 2 entries read; nothing written; no events; fee without rent 396 / 398 stroops | `dkim_registry_costs` **[measured]** |
@@ -1567,17 +1793,24 @@ providers' own delivery to these figures.
    would let anyone holding the owner key and `account_code` pin a key of
    their own and approve without the inbox.
 2. **Pin lifetime.** The cap is 365 days (`MAX_PIN_LIFETIME_LEDGERS`).
-   Shorter caps narrow the revocation window of §7.4 at the cost of more
-   frequent guardian replacement; the wallet's default lifetime within the
-   cap is not fixed.
+   The wallet deploys guardians with a 30-day pin (518,400 ledgers,
+   `PIN_LIFETIME_LEDGERS` in `packages/frontend/src/lib/recovery/emailConfig.ts`,
+   one constant). Alternatives: 30 days, which covers the registry's 7-day
+   timelock with margin and keeps the revocation window of §7.4 short; 365
+   days, the cap, which keeps the enrolled key usable through the pin longest
+   if the registry drops or delays it and leaves a revoked key usable through
+   the pin longest; about 10 days, which covers the timelock with less margin
+   and narrows the window further. Shorter pins mean the registry path must
+   carry recoveries sooner after enrollment.
 3. **Default allowed actions.** v1 deploys all five actions. Alternatives:
    initiation and cancellation only, or initiation only, with §9.3 rule 4
    preventing a lock-out.
 4. **`account_code` backup.** v1 offers the passphrase-encrypted copy in the
-   enrollment email and a recovery kit. Alternatives: the code in plain text
-   in the enrollment email (best recoverability; the provider can compute
-   `C` and link the inbox to the account), or a recovery kit only (no copy
-   at the provider; lost if the kit is lost).
+   enrollment email and a recovery kit, both from one wallet component
+   (§5.6). Alternatives: the code in plain text in the enrollment email (best
+   recoverability; the provider can compute `C` and link the inbox to the
+   account), or a recovery kit only (no copy at the provider; lost if the
+   kit is lost).
 5. **Registry parameters.** The registry is built with the defaults of §7.6;
    each is a constructor parameter.
    - *Grace period.* Built with 17,280 ledgers (24 hours), capped at
@@ -1601,8 +1834,11 @@ providers' own delivery to these figures.
    with their own `d=`), each provider's signed header block for very long
    addresses and display names, and whether each provider's stored or
    received copy keeps its `DKIM-Signature`.
-7. **`RECOVERY_INBOX`.** The fixed recipient address and how its mail
-   reaches the browser (sealed inbound or `.eml` import) are not fixed here.
+7. **`RECOVERY_INBOX`.** How its mail reaches the browser is §4.6 (sealed
+   inbound by default, `.eml` import as the alternative). Open: the address
+   itself (a deployment parameter; the tests use `recover@recovery.test`),
+   the production MX inside the enclave with TLS terminating there, and the
+   recovery domain's MTA-STS policy.
 8. **Verification code derivation.** v1 (§10.1) keys the code with
    `k_code`, derived from `account_code` and registered sealed with the
    vault. Alternatives: a key from the owner passkey's PRF output, which
@@ -1616,15 +1852,17 @@ providers' own delivery to these figures.
    wallet only (§5.4). A guardian constructor that verifies a proof of the
    enrollment email would make `C` verifiable by third parties, at the cost
    of a second circuit.
-10. **Guardian deployment.** Whether guardians are deployed through a Nido
-    factory (fixing the wasm hash and the address derivation) or directly by
-    the wallet.
+10. **Guardian deployment.** The wallet deploys each guardian directly from
+    its submitter account and then checks the deployed wasm hash and
+    `config()` (§5.4 step 4). Open: whether to deploy through a Nido factory
+    instead (fixing the wasm hash and the address derivation on chain), and
+    who pays on mainnet, where no friendbot funds the submitter.
 11. **Wallet policy.** The rules of §9.3 are built in `recoverySpec` and
     tested (§9.3 lists the tests). They bind Nido's wallet only: the chain
-    accepts any configuration the owner applies. The second alert channel
-    is an input the wallet should set only after the alert service has
-    confirmed the contact with its Web Push subscription (§10.3); the wallet
-    UI that does so is not built.
+    accepts any configuration the owner applies. The wallet sets the second
+    alert channel only after the alert service has confirmed the contact
+    with its Web Push subscription (§5.4, §10.3); the alert service does not
+    tell the wallet later if that subscription lapses.
 12. **Address and domain bounds.** `ADDR_MAX = 124` and the 62-byte leaf
     domain cover the launch providers. Custom domains would need larger
     bounds, which change `C`'s packing and the leaf format (a new version).

@@ -2,6 +2,14 @@
 default:
     @just --list
 
+# The email recovery end-to-end test on a local Stellar network: Docker runs
+# stellar/quickstart, the script deploys Perch's stack and the email
+# contracts, starts the alert service and the third-party mocks, builds the
+# wallet for that network, and Playwright drives enrollment and recovery in
+# Chromium with the real in-browser proof. Needs `just perch-infra` once.
+test-e2e-email-local:
+    scripts/email-recovery-e2e.sh
+
 # Run all workspace tests. Needs the contract wasm (`just build-contracts`),
 # which the integration tests embed.
 test:

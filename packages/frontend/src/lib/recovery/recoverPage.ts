@@ -46,6 +46,16 @@ import {
 } from './model.js';
 import { busy, card, el, errorText, guardianLinks, kitInput } from './ui.js';
 import { kitFile, newRecoveryKit, proveWithKit } from './zk.js';
+import { emailRecoveryDeployment } from './emailConfig.js';
+import { delayCountdown, remainingFactors } from './emailModel.js';
+import { findEmailGuardian } from './emailRecovery.js';
+import { emailApprovalStep } from './emailStep.js';
+
+/** Reload to follow the chain, unless a step on the page is in use. */
+let held = false;
+function reloadLater(ms: number): void {
+  setTimeout(() => (held ? reloadLater(ms) : location.reload()), ms);
+}
 
 /** What survives a reload while friends approve: the new passkey and the
  *  attempt it belongs to. The new kit's secret is only ever in the file the
@@ -248,12 +258,36 @@ async function progressCard(
 
   if (state === 'Collecting') {
     const need = condition(s);
+    const email = emailRecoveryDeployment() ? await findEmailGuardian(s.guardians).catch(() => undefined) : undefined;
+    const friends = s.guardians.filter((g) => g !== email?.address);
     body.append(
       el('p', { style: 'margin:0;font-size:13.5px;' }, 'Waiting for approval. ' +
-        (need.guardians ? `${attempt.guardians.length} of ${need.guardians} friends approved. ` : '') +
+        (need.guardians ? `${attempt.guardians.length} of ${need.guardians} approvals recorded. ` : '') +
         (need.zk ? (attempt.zk_nullifier ? 'Recovery kit proof recorded.' : 'Prove it with your current recovery kit.') : '')),
     );
-    if (need.guardians) {
+    if (email) {
+      const remaining = remainingFactors({
+        quorum: need.guardians,
+        approvals: attempt.guardians,
+        guardians: s.guardians,
+        emailGuardian: email.address,
+        zkNeeded: need.zk,
+        zkRecorded: Boolean(attempt.zk_nullifier),
+      });
+      body.append(el('p', { style: 'margin:0;font-size:13px;', 'data-remaining': '' }, esc(remaining.text)));
+      if (!remaining.emailApproved) {
+        body.append(
+          emailApprovalStep({
+            account,
+            attemptId,
+            guardian: email,
+            hold: (h) => (held = h),
+            onApproved: () => location.reload(),
+          }),
+        );
+      }
+    }
+    if (need.guardians && friends.length) {
       const codes = pending.replacements.signers
         .map((r) => `<code class="mono" style="font-size:15px;">${esc(passkeyCheckCode(r.key))}</code>`)
         .join(' ');
@@ -262,7 +296,7 @@ async function progressCard(
           `Send each friend their link. Their page shows your new passkey’s check code; read them this one so they can compare every character: ${codes}`),
       );
       body.append(
-        guardianLinks(s.guardians, {
+        guardianLinks(friends, {
           kind: 'attempt',
           account,
           attemptId: attemptId.toString(),
@@ -290,7 +324,7 @@ async function progressCard(
       );
     }
     body.append(status);
-    setTimeout(() => location.reload(), 15_000);
+    reloadLater(15_000);
     return c;
   }
 
@@ -303,7 +337,13 @@ async function progressCard(
         `Approved. You can finish in about ${esc(ledgersToText(remaining))} ` +
         `(ledger ${attempt.executable_after}).` + (live.frozen ? ' The Nido is frozen until then.' : '')),
     );
-    setTimeout(() => location.reload(), Math.min(remaining * SECONDS_PER_LEDGER * 1_000, 60_000));
+    const countdown = el('p', { class: 'mono', style: 'margin:0;font-size:13px;', 'data-countdown': '' });
+    const readAt = Date.now();
+    const tick = () => (countdown.textContent = delayCountdown(attempt.executable_after, ledger, readAt, Date.now()).text);
+    tick();
+    setInterval(tick, 1_000);
+    body.append(countdown);
+    reloadLater(Math.min(remaining * SECONDS_PER_LEDGER * 1_000, 60_000));
     return c;
   }
   const finish = el('button', { class: 'btn primary', type: 'button' }, 'Finish recovery') as HTMLButtonElement;
