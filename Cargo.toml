@@ -5,6 +5,7 @@ members = [
     "crates/integration-tests",
     "crates/key-keeper",
     "crates/grant-relay",
+    "crates/dns-attestation-mock",
     "contracts/*",
 ]
 # examples/* are self-contained stellar-scaffold projects with their own
@@ -37,6 +38,10 @@ admin-sep = "0.27.0"
 stellar-accounts = { version = "0.7.1", git = "https://github.com/theahaco/stellar-contracts-OZ.git", rev = "33726766a1fd5e7e3d2977d79f64ee29e1ea3ca9", package = "stellar-accounts" }
 # soroban-sdk-tools 0.1.3 (crates.io) targets soroban-sdk 27.
 soroban-sdk-tools = "0.1.3"
+# Poseidon2 on the Soroban host (`poseidon2_permutation`), the version Perch's
+# pool and primitives use, so the DKIM key registry hashes exactly as Perch's
+# circuit and noir-lang/poseidon v0.2.0 do.
+soroban-poseidon = "27.0.0"
 
 # The Perch stack (stellar-registry/perch epic #99), as git dependencies on
 # Perch's main. Perch publishes no crates yet; versions replace the rev once it

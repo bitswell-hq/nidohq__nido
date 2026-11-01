@@ -32,6 +32,11 @@ perch-ir = { workspace = true }
 # The email guardian's types and client; the contract itself runs from its
 # wasm (`EMAIL_GUARDIAN_WASM`).
 nido-email-guardian = { path = "../../contracts/email-guardian" }
+# The DKIM key registry's types, client, and hashing (the contract runs from
+# its wasm, `DKIM_REGISTRY_WASM`), and the TEST-ONLY DNS attester mock that
+# feeds it.
+nido-dkim-registry = { path = "../../contracts/dkim-registry" }
+nido-dns-attestation-mock = { path = "../dns-attestation-mock" }
 
 # Crypto
 p256 = { version = "0.13", features = ["ecdsa"] }
@@ -49,3 +54,6 @@ serde_json = "1"
 # crate is not a `#[contract]`/cdylib, so linking the rlib causes no wasm-export
 # collision; the policy under test is still deployed from its wasm bytes.
 nido-preauth-sweep-policy = { path = "../../contracts/preauth-sweep-policy" }
+# Reads the registry wasm's imports and exports for the immutability test
+# (the version soroban-env-host already locks).
+wasmparser = "0.116"

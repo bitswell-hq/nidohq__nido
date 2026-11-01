@@ -94,6 +94,13 @@ jobs:
           just gen-zk-fixtures
           git diff --exit-code -- 'crates/integration-tests/fixtures/zk/*/fixture.json'
 
+      # The DKIM key registry's key hashes, leaves, and roots recomputed in
+      # Noir with the email circuit's Poseidon2 (noir-lang/poseidon v0.2.0),
+      # with Perch's pinned nargo; the contract's `noir_vectors` unit test
+      # asserts the same values from the host's Poseidon2.
+      - name: Cross-check the DKIM registry hashing against Noir
+        run: just dkim-registry-vectors
+
   unit:
     name: Unit (TestAuthenticator)
     runs-on: ubuntu-latest

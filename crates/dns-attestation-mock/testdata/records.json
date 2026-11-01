@@ -1,0 +1,112 @@
+{
+  "records": [
+    {
+      "name": "rsa2048-a",
+      "domain": "gmail.com",
+      "selector": "test-a",
+      "note": "v= first, k=rsa, SubjectPublicKeyInfo, split into 255-byte character-strings",
+      "strings": [
+        "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtMi470O/HKVvFtGlBCyKbUuEYfAZF6cM9Q8zQo1DMiTzhlkAEwusOd/0rs+dk3opi0Z95UIAPR1w0IFwbSB48bKOE6YkPbtv8GawERaBbSE30xv+Ug+82imDXppWJkEaq5PUK3pRj+Xu5nWjvfrS9Fov94+nEG0cloPzymq3XA7qqG5nOKYqqwIpUwEoS3Vnl",
+        "BuaX1u0uFGWaInNygYuO49UMMVAqPhTFoyzZTXVM5dl8Wmz6+E/WwZOasE4baYBNnEEGLp7TS9qCdV4Sq6nuZzApZuD3lO0FosFMLNddQ59uBACUZf80SCPxOHSV9VdUjDtmoxLLHlZDfBXol8SMwIDAQAB"
+      ]
+    },
+    {
+      "name": "rsa2048-b",
+      "domain": "outlook.com",
+      "selector": "test-b",
+      "note": "no v= or k= (both default), extra tags, whitespace inside p=",
+      "strings": [
+        "t=s; h=sha256; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwTJHCip+ploEHaIGQUzP +Mvg0IiWhaIi7rxZc2RgG7y0zQ5KylO3GfoxiCm//eViDOyDVkGEnraKoa+oHpbm I09XxyW/k4xuE6x4aGvFtABEWxObjWiHzqsQxWe1meb/FYNigugnq0oXYrOQmmVe sYEuoWeVVEugpdZHTNk+kuKfm/FRUJqKmB+VceQsgyd",
+        "kGu9V0d/tDOf8ZM+CEBNM bNz3gL9TJVXirCMdxxE/EeWR/6kYNJm0l7g+ZSQtr/sVTGTtRL/79FOyAz0C8jm1 ZsTAmdAc5H7/bagahYX8W7ynEukFKwMjZsM+NhzAn/J0SjKNDl5yMQJTmjufaR4O VQIDAQAB; n=test key"
+      ]
+    },
+    {
+      "name": "rsa2048-c",
+      "domain": "fastmail.com",
+      "selector": "test-c",
+      "note": "p= carries a bare RSAPublicKey (RFC 6376 section 3.6.1 as written)",
+      "strings": [
+        "v=DKIM1; k=rsa; p=MIIBCgKCAQEA4PkJVxpRHexXUzWYM3d8d1gyZEk2tdNjnZdOTt3CTBilmpZPGEkd8b9bnucGbimbI2yfjAK8+QpludeGxnuV03YlWH/7a7NZXjS/eBUX50Z8lJyHeFTlqFdohX3hMQhAZbKxd5827HT9yI40NmAAk5Ufn3xpwompBKT8KqkRVMncr+i7ye+eG5Ia29xAx8yhHdR/wv6Rr5oDD4b43/t/jtJKs+HYmNlKG",
+        "dmqnJbCPodBOpwZ9YBJnsVERxvceF4Fq29fi4aQR/sLe7lLonq+lg1mJdK5XcGNxjF2Rc9+A8Jl/SHahWalX7peE7aRhKwm7rLmy+JftWGerqRmvdoJFwIDAQAB"
+      ]
+    },
+    {
+      "name": "rsa2048-a-blanked",
+      "domain": "gmail.com",
+      "selector": "test-a",
+      "note": "the same selector after the provider blanked it: p= empty",
+      "strings": [
+        "v=DKIM1; k=rsa; p="
+      ]
+    },
+    {
+      "name": "rsa1024",
+      "domain": "yahoo.com",
+      "selector": "test-1024",
+      "note": "RSA-1024: parses, but the registry refuses it",
+      "strings": [
+        "v=DKIM1; k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDf/jTOjdINAe6us4Iz18y58kFUK5/9+YpLxT8XQlVj5Ws1EX+RWkG8KJtgiAXSnIuA1NoVNe83DHfXpV4lJ7l+iMX24XB3bQhJ2XuX5xPXl2pNDT4k0S4/l6WE02bF4XjojIkLFGmfWE03eFq4gs+Hkxm0IjCyrgokjR8gIxXwzwIDAQAB"
+      ]
+    },
+    {
+      "name": "rsa4096",
+      "domain": "yahoo.com",
+      "selector": "test-4096",
+      "note": "RSA-4096: parses, but the registry refuses it",
+      "strings": [
+        "v=DKIM1; k=rsa; p=MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAr9eAhIfd+EqYyyCX3rUII7rkMl31P05XEBfGjdtfC6/TjUUHZnPSP8KcWhm4vR2jlqapJ4izri1lVRs10A8jgT1m5C11KmuCxHhlunYnYmlQN4UxsFZQEcNpPC9oAMyONHRHWSlPAHXTiXY5vhyLcF6jqN+RAw8QlBKw+eT48RfMnvr22YOQmwT0Y+Oi7i0V8",
+        "aHuZ0kkRuceEjxwhaMph5Q47emzRI3yw3t8GxpQdM5ZVQXmTHp91cofEIorolTmWwsjpZ8TwZeag0lRfYCrLqTsUKH1kRWdziMTUGU57TPGZmFN/lOmpijGcsjI/hgwoPcAJ7wrOXDzFt5ml246bH0fUntEoBl6BCyrcGoI1/DHEPcdn8crezHnFmybRK/i1jL03LWYVNnxPcnYk3AZLz+IXYwqNDQyFz5TK0k46mj24cx61kLUWWRM78AvKdwc",
+        "sOB1kjbJW1EiEzxXUncYyoAas0YCYbcFw46slS8BZWyE8jrbM+zxs7JrbxypVBAjY9WLf5KuPpQq/tOXZxUrtDG9upMBvtDeaHdp+LZX7+EMFtlrqyN/TP8KeRbBpnsUvfG+HIqorEAY2NpR2cRLT/xtJIz7NRZuuLD1YESmHQ4Z+aKb5XPNOhJztw3V7IpVcEe8vuhJo5i92FBflIBKp3JvxWPP8BZBeFE4dyU7djsCAwEAAQ=="
+      ]
+    },
+    {
+      "name": "ed25519",
+      "domain": "proton.me",
+      "selector": "test-ed",
+      "note": "k=ed25519 (RFC 8463): not an RSA key",
+      "strings": [
+        "v=DKIM1; k=ed25519; p=d6j0olTL+vfIcYU6avXaZnkaRKmk6Y7cNgLKZPWUljM="
+      ]
+    },
+    {
+      "name": "wrong-version",
+      "domain": "gmail.com",
+      "selector": "test-v",
+      "note": "v= other than DKIM1 must be discarded",
+      "strings": [
+        "v=DKIM2; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtMi470O/HKVvFtGlBCyKbUuEYfAZF6cM9Q8zQo1DMiTzhlkAEwusOd/0rs+dk3opi0Z95UIAPR1w0IFwbSB48bKOE6YkPbtv8GawERaBbSE30xv+Ug+82imDXppWJkEaq5PUK3pRj+Xu5nWjvfrS9Fov94+nEG0cloPzymq3XA7qqG5nOKYqqwIpUwEoS3VnlBuaX1u0uFGWaInNygYuO49UMMVAqPhTFoyzZTXVM5dl8Wmz6+E/WwZOasE4baYBNnEEGLp7TS9qCdV4Sq6nuZzApZuD3lO0FosFMLNddQ59uBACUZf80SCPxOHSV9VdUjDtmoxLLHlZDfBXol8SMwIDAQAB"
+      ]
+    },
+    {
+      "name": "version-not-first",
+      "domain": "gmail.com",
+      "selector": "test-v",
+      "note": "v= must be the first tag",
+      "strings": [
+        "k=rsa; v=DKIM1; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtMi470O/HKVvFtGlBCyKbUuEYfAZF6cM9Q8zQo1DMiTzhlkAEwusOd/0rs+dk3opi0Z95UIAPR1w0IFwbSB48bKOE6YkPbtv8GawERaBbSE30xv+Ug+82imDXppWJkEaq5PUK3pRj+Xu5nWjvfrS9Fov94+nEG0cloPzymq3XA7qqG5nOKYqqwIpUwEoS3Vnl",
+        "BuaX1u0uFGWaInNygYuO49UMMVAqPhTFoyzZTXVM5dl8Wmz6+E/WwZOasE4baYBNnEEGLp7TS9qCdV4Sq6nuZzApZuD3lO0FosFMLNddQ59uBACUZf80SCPxOHSV9VdUjDtmoxLLHlZDfBXol8SMwIDAQAB"
+      ]
+    },
+    {
+      "name": "duplicate-tag",
+      "domain": "gmail.com",
+      "selector": "test-d",
+      "note": "a duplicate tag invalidates the tag-list",
+      "strings": [
+        "v=DKIM1; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtMi470O/HKVvFtGlBCyKbUuEYfAZF6cM9Q8zQo1DMiTzhlkAEwusOd/0rs+dk3opi0Z95UIAPR1w0IFwbSB48bKOE6YkPbtv8GawERaBbSE30xv+Ug+82imDXppWJkEaq5PUK3pRj+Xu5nWjvfrS9Fov94+nEG0cloPzymq3XA7qqG5nOKYqqwIpUwEoS3VnlBuaX1u0",
+        "uFGWaInNygYuO49UMMVAqPhTFoyzZTXVM5dl8Wmz6+E/WwZOasE4baYBNnEEGLp7TS9qCdV4Sq6nuZzApZuD3lO0FosFMLNddQ59uBACUZf80SCPxOHSV9VdUjDtmoxLLHlZDfBXol8SMwIDAQAB; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtMi470O/HKVvFtGlBCyKbUuEYfAZF6cM9Q8zQo1DMiTzhlkAEwusOd/0rs+",
+        "dk3opi0Z95UIAPR1w0IFwbSB48bKOE6YkPbtv8GawERaBbSE30xv+Ug+82imDXppWJkEaq5PUK3pRj+Xu5nWjvfrS9Fov94+nEG0cloPzymq3XA7qqG5nOKYqqwIpUwEoS3VnlBuaX1u0uFGWaInNygYuO49UMMVAqPhTFoyzZTXVM5dl8Wmz6+E/WwZOasE4baYBNnEEGLp7TS9qCdV4Sq6nuZzApZuD3lO0FosFMLNddQ59uBACUZf80SCPxO",
+        "HSV9VdUjDtmoxLLHlZDfBXol8SMwIDAQAB"
+      ]
+    },
+    {
+      "name": "no-p",
+      "domain": "gmail.com",
+      "selector": "test-p",
+      "note": "p= is required",
+      "strings": [
+        "v=DKIM1; k=rsa"
+      ]
+    }
+  ]
+}

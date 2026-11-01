@@ -28,6 +28,7 @@ jobs:
         # controller, ZK pool, and ZK adapter are Perch's (git dependencies)
         # and are audited in Perch's pipeline.
         contract:
+          - dkim-registry
           - email-guardian
           - factory
           - multisig-policy

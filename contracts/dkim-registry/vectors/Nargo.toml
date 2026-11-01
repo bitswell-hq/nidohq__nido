@@ -1,0 +1,9 @@
+[package]
+name = "dkim_registry_vectors"
+type = "lib"
+compiler_version = ">=1.0.0"
+
+[dependencies]
+# The Poseidon2 the email circuit uses (noir-lang/poseidon v0.2.0, vendored
+# by Perch); the registry's host hashing must agree with it.
+poseidon = { path = "../../../vendor/perch/circuits/vendor/poseidon" }

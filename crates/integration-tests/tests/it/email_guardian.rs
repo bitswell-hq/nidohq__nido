@@ -4,16 +4,21 @@
 //! wasm, all under enforcing authorization (`docs/email-recovery/spec.md`,
 //! "One-factor safety").
 //!
-//! The proof verifier and key registry are the test-only stand-ins of
+//! The key registry is the real contract from its wasm, fed by the DNS
+//! attester mock; the proof verifier is the test-only stand-in of
 //! [`nido_integration_tests::email`]: these tests pin how approvals are
-//! counted, bound, and refused, not the email circuit.
+//! counted, bound, and refused, and which key roots they may use, not the
+//! email circuit.
 //!
 //! An approval the guardian refuses fails the host's authorization check, so
 //! the controller call fails with a host error rather than a
 //! `RecoveryError`; the guardian's own error codes are pinned by its unit
 //! tests.
 
-use nido_email_guardian::{EmailApproval, EmailGuardianError, ALLOW_ALL};
+use nido_dkim_registry::hash::Hasher;
+use nido_dkim_registry::{root_of, DkimRegistryError, TIMELOCK_ATTESTED_LEDGERS};
+use nido_dns_attestation_mock::{fixture, key_hash, modulus_2048};
+use nido_email_guardian::{EmailApproval, EmailGuardianError, KeyPin, ALLOW_ALL};
 use nido_integration_tests::email::{field, EmailGuardian, EmailInfra};
 use nido_integration_tests::world::{
     err, world, Account, Mode, Passkey, Profile, Recovery, World, DELAY, EXPIRY,
@@ -44,12 +49,26 @@ fn enroll(
     quorum: u32,
     commitment: &BytesN<32>,
 ) -> Setup {
+    enroll_with_pin(w, infra, label, profile, friends, quorum, commitment, None)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn enroll_with_pin(
+    w: &World,
+    infra: &EmailInfra,
+    label: &str,
+    profile: Profile,
+    friends: usize,
+    quorum: u32,
+    commitment: &BytesN<32>,
+    pin: Option<KeyPin>,
+) -> Setup {
     let account = w.mint(
         label,
         Passkey::labelled(&format!("{label}/owner")),
         vec![("device", Passkey::labelled(&format!("{label}/device")))],
     );
-    let email = infra.guardian(w, &account, label, commitment, ALLOW_ALL);
+    let email = infra.guardian_with_pin(w, &account, label, commitment, ALLOW_ALL, pin);
     let friends: std::vec::Vec<Account> = (0..friends)
         .map(|i| {
             w.guardian(
@@ -430,9 +449,9 @@ fn email_approval_counts_toward_a_protected_reconfiguration() {
 }
 
 /// Resources of one `submit_guardian` carrying an email approval, with the
-/// test-only verifier and registry: a plumbing figure for the guardian's own
-/// checks, the controller, and the auth-entry size. Real proof verification
-/// is not in it.
+/// test-only verifier and the registry from its wasm: a plumbing figure for
+/// the guardian's own checks, the registry's root check, the controller, and
+/// the auth-entry size. Real proof verification is not in it.
 #[test]
 fn email_approval_plumbing_cost() {
     let w = world();
@@ -460,7 +479,7 @@ fn email_approval_plumbing_cost() {
     });
     let r = w.env.cost_estimate().resources();
     println!(
-        "{{\"case\":\"submit_guardian with an email approval (test-only verifier and registry)\",\"instructions\":{},\"mem_bytes\":{},\"read_entries\":{},\"write_entries\":{},\"write_bytes\":{},\"auth_entry_bytes\":{entry_bytes}}}",
+        "{{\"case\":\"submit_guardian with an email approval (test-only verifier, registry from its wasm)\",\"instructions\":{},\"mem_bytes\":{},\"read_entries\":{},\"write_entries\":{},\"write_bytes\":{},\"auth_entry_bytes\":{entry_bytes}}}",
         r.instructions,
         r.mem_bytes,
         r.memory_read_entries + r.disk_read_entries,
@@ -468,4 +487,148 @@ fn email_approval_plumbing_cost() {
         r.write_bytes,
     );
     assert_eq!(votes(&w, &s, attempt), vec![s.email.address.clone()]);
+}
+
+/// The key hash and leaf of fixture `name`'s key.
+fn fixture_key(w: &World, name: &str) -> (BytesN<32>, BytesN<32>) {
+    let record = fixture(name);
+    let n = modulus_2048(&record.parse().unwrap()).unwrap();
+    let kh = BytesN::from_array(&w.env, &key_hash(&n));
+    let leaf = Hasher::new(&w.env).leaf(record.domain.as_bytes(), &kh);
+    (kh, leaf)
+}
+
+/// A key the registry admits through the attested path: an approval proven
+/// against the root that will hold it is refused until the 72-hour timelock
+/// has passed and accepted from the ledger the addition executes in.
+#[test]
+fn a_key_added_through_the_attested_path_is_refused_before_72_hours_and_accepted_after() {
+    let w = world();
+    let infra = EmailInfra::new(&w);
+    let registry = infra.registry.client(&w);
+    let label = "email-new-key";
+    let s = enroll(
+        &w,
+        &infra,
+        label,
+        Profile::Loss,
+        1,
+        2,
+        &field(&w.env, "c/new-key"),
+    );
+
+    let (id, new_leaf) = infra.registry.propose_attested(&w, "rsa2048-b");
+    // The root a prover computes from the pending addition: the current leaf
+    // at index 0, the new one at index 1.
+    let (_, first_leaf) = fixture_key(&w, "rsa2048-a");
+    let next_root = root_of(&w.env, &[first_leaf, new_leaf]);
+    assert!(!registry.is_accepted_root(&next_root));
+
+    w.advance(TIMELOCK_ATTESTED_LEDGERS - 1);
+    assert_eq!(
+        registry.try_execute(&id),
+        Err(Ok(DkimRegistryError::TimelockActive))
+    );
+    let (attempt, _) = begin(&w, &s, label);
+    let statement = w.statement(&s.account, attempt, Initiate);
+    let approval = infra.approval_against(&w, &s.email, &statement, &next_root);
+    let unknown = EmailGuardianError::UnknownRoot;
+    refused(
+        &w, &infra, &s, &s.email, attempt, Initiate, &approval, unknown,
+    );
+
+    w.advance(1);
+    assert_eq!(registry.execute(&id), next_root);
+    infra
+        .try_submit(&w, &s.account, &s.email, attempt, Initiate, &approval)
+        .expect("accepted once the addition has executed");
+    assert_eq!(votes(&w, &s, attempt), vec![s.email.address.clone()]);
+    // The previous root is still in its grace period.
+    let earlier = infra.approval(&w, &s.email, &statement);
+    assert_eq!(
+        infra.check_auth(&w, &s.account, &s.email, attempt, Initiate, &earlier),
+        Ok(())
+    );
+}
+
+/// Revoking a key refuses every root containing it in the same ledger: an
+/// approval the guardian accepted a moment earlier is refused.
+#[test]
+fn a_revoked_keys_root_is_refused_at_once() {
+    let w = world();
+    let infra = EmailInfra::new(&w);
+    let label = "email-revoked-key";
+    let s = enroll(
+        &w,
+        &infra,
+        label,
+        Profile::Loss,
+        1,
+        2,
+        &field(&w.env, "c/revoked"),
+    );
+    let (attempt, _) = begin(&w, &s, label);
+    let approval = email_approval(&w, &infra, &s, attempt);
+    assert_eq!(
+        infra.check_auth(&w, &s.account, &s.email, attempt, Initiate, &approval),
+        Ok(())
+    );
+
+    let (kh, _) = fixture_key(&w, "rsa2048-a");
+    infra.registry.revoke(&w, "gmail.com", &kh);
+    assert!(!infra.registry.client(&w).is_accepted_root(&infra.root));
+    let unknown = EmailGuardianError::UnknownRoot;
+    refused(
+        &w, &infra, &s, &s.email, attempt, Initiate, &approval, unknown,
+    );
+    assert!(votes(&w, &s, attempt).is_empty());
+}
+
+/// The pin is the guardian's own: a pinned key the registry never admitted
+/// is accepted, revoking it in the registry does not close the pin, and the
+/// pin root is refused once the pin expires (spec §7.4).
+#[test]
+fn the_pin_path_works_independently_of_the_registry() {
+    let w = world();
+    let infra = EmailInfra::new(&w);
+    let label = "email-pinned";
+    // The enrollment email was signed by fixture rsa2048-c's key, which the
+    // registry has never seen.
+    let (kh, leaf) = fixture_key(&w, "rsa2048-c");
+    let code = field(&w.env, "nido-it/email/account-code");
+    let salt = Hasher::new(&w.env).pin_salt(&code);
+    let pin_root = root_of(&w.env, &[salt, leaf]);
+    let until = w.ledger() + 1_000;
+    let pin = KeyPin {
+        root: pin_root.clone(),
+        valid_until_ledger: until,
+    };
+    let s = enroll_with_pin(
+        &w,
+        &infra,
+        label,
+        Profile::Loss,
+        1,
+        2,
+        &field(&w.env, "c/pinned"),
+        Some(pin),
+    );
+    let registry = infra.registry.client(&w);
+    assert!(!registry.is_accepted_root(&pin_root));
+
+    let (attempt, _) = begin(&w, &s, label);
+    let statement = w.statement(&s.account, attempt, Initiate);
+    let approval = infra.approval_against(&w, &s.email, &statement, &pin_root);
+    infra.registry.revoke(&w, "fastmail.com", &kh);
+    infra
+        .try_submit(&w, &s.account, &s.email, attempt, Initiate, &approval)
+        .expect("the pin accepts a key the registry revoked");
+    assert_eq!(votes(&w, &s, attempt), vec![s.email.address.clone()]);
+
+    w.advance(until + 1 - w.ledger());
+    let (next, _) = begin(&w, &s, &format!("{label}/next"));
+    let statement = w.statement(&s.account, next, Initiate);
+    let late = infra.approval_against(&w, &s.email, &statement, &pin_root);
+    let unknown = EmailGuardianError::UnknownRoot;
+    refused(&w, &infra, &s, &s.email, next, Initiate, &late, unknown);
 }

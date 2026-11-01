@@ -61,6 +61,22 @@ gen-zk-fixtures:
     (cd vendor/perch/circuits && "$NARGO" compile --workspace)
     NIDO_ZK_PROVE=1 cargo test -p nido-integration-tests --test it -- --test-threads=1
 
+# Check the DKIM key registry's hashing against Noir: regenerate the Noir
+# inputs from the fixture key records (crates/dns-attestation-mock/testdata/),
+# then run contracts/dkim-registry/vectors/ with Perch's pinned nargo, which
+# recomputes every key hash, leaf, and root with noir-lang/poseidon v0.2.0
+# and asserts the values the contract's `noir_vectors` test asserts. Fails if
+# the regenerated inputs differ from the committed ones.
+dkim-registry-vectors:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    eval "$(bash vendor/perch/scripts/zk-toolchain.sh)"
+    dir=contracts/dkim-registry/vectors
+    cargo run -q -p nido-dns-attestation-mock -- noir-inputs > "$dir/src/inputs.nr"
+    "$NARGO" fmt --program-dir "$dir"
+    git diff --exit-code -- "$dir/src/inputs.nr"
+    "$NARGO" test --program-dir "$dir"
+
 # Build and optimize Nido's Soroban contracts. The factory's build.rs embeds
 # the Perch account wasm `just perch-infra` fetched.
 #
