@@ -1,0 +1,37 @@
+{
+  "name": "@nidohq/email-mocks",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Test-only mocks of DKIM-signing mail providers, their DNS key records, and inbound mail delivery",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "email-mocks": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "keys"
+  ],
+  "engines": {
+    "node": ">=20.18.1"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "test": "vitest run",
+    "fixtures": "tsc && node dist/cli.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "mailauth": "8.0.4",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.7"
+  }
+}
