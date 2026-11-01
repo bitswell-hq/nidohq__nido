@@ -1,0 +1,36 @@
+{
+  "name": "@nidohq/email-recovery",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Browser-side pieces of email recovery: the per-attempt alert code, attestation checks, and the sealed alert enrollment",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20.18.1"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@hpke/core": "^1.9.0",
+    "cborg": "^6.2.1"
+  },
+  "devDependencies": {
+    "@stellar/stellar-sdk": "^15.1.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.7"
+  }
+}

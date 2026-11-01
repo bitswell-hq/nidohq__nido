@@ -4,6 +4,7 @@
   "workspaces": [
     "packages/*",
     "packages/contract-bindings/*",
+    "infra/email-alerts",
     "examples/status-message-dapp",
     "examples/status-message-dapp/packages/*",
     "vendor/perch/packages/perch-zk"

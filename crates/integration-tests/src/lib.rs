@@ -29,6 +29,10 @@ pub const EMAIL_GUARDIAN_WASM: &[u8] =
 /// The DKIM key registry (`contracts/dkim-registry`).
 pub const DKIM_REGISTRY_WASM: &[u8] =
     include_bytes!("../../../target/wasm32v1-none/contract/nido_dkim_registry.wasm");
+/// The public record of enclave images the alert vault may run
+/// (`contracts/enclave-image-registry`).
+pub const ENCLAVE_IMAGE_REGISTRY_WASM: &[u8] =
+    include_bytes!("../../../target/wasm32v1-none/contract/nido_enclave_image_registry.wasm");
 
 /// The factory embeds the same Perch account wasm as [`PERCH_ACCOUNT_WASM`]
 /// (`contracts/factory/build.rs`), so uploading [`PERCH_ACCOUNT_WASM`] before

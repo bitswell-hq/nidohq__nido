@@ -1,0 +1,140 @@
+/**
+ * How the host talks to the vault. In production the vault is a Nitro
+ * enclave reached over vsock; here it is either an object in the same
+ * process (unit tests) or a separate Node process reached over IPC
+ * ([`ProcessVault`]), which keeps the address out of the host process
+ * entirely. Every message crossing the boundary is recorded in
+ * `transcript`, so tests can show what the host ever held.
+ */
+import { type ChildProcess, fork } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import type { ContactRequest } from '@nidohq/email-recovery';
+import type {
+  ChainView,
+  ContactResult,
+  DispatchRequest,
+  SealedState,
+  Vault,
+  VaultConfig,
+  Writes,
+} from './vault/vault.js';
+
+export interface BootInfo {
+  vaultId: Uint8Array;
+  hpkePublic: Uint8Array;
+  vapidPublic: Uint8Array;
+}
+
+/** Which NSM the vault process uses. Only the TEST-ONLY mock exists here. */
+export type NsmSpec = { kind: 'mock'; image: string; chain?: 'nitro' | 'rogue' };
+
+export interface VaultApi {
+  attest(nonce: Uint8Array): Promise<Uint8Array>;
+  nonce(): Promise<Uint8Array>;
+  contact(req: ContactRequest, chain: ChainView): Promise<{ result: ContactResult; writes: Writes }>;
+  dispatch(ev: DispatchRequest): Promise<{ status: 'done' | 'retry'; writes: Writes }>;
+  due(ledger: number): Promise<string[]>;
+  mature(views: Record<string, ChainView>): Promise<{ applied: string[]; dropped: string[]; postponed: string[]; writes: Writes }>;
+  close(): Promise<void>;
+}
+
+export class InProcessVault implements VaultApi {
+  constructor(readonly vault: Vault) {}
+  attest(nonce: Uint8Array) {
+    return this.vault.attest(nonce);
+  }
+  async nonce() {
+    return this.vault.issueNonce();
+  }
+  contact(req: ContactRequest, chain: ChainView) {
+    return this.vault.contact(req, chain);
+  }
+  dispatch(ev: DispatchRequest) {
+    return this.vault.dispatch(ev);
+  }
+  async due(ledger: number) {
+    return this.vault.due(ledger);
+  }
+  mature(views: Record<string, ChainView>) {
+    return this.vault.mature(views);
+  }
+  async close() {}
+}
+
+export interface TranscriptEntry {
+  direction: 'to-vault' | 'from-vault';
+  message: unknown;
+}
+
+/** The vault in its own process (`dist/vault/main.js`), over structured-clone IPC. */
+export class ProcessVault implements VaultApi {
+  readonly transcript: TranscriptEntry[] = [];
+  /** The vault process's own stdout and stderr (an enclave's console). */
+  readonly console: string[] = [];
+  private next = 0;
+  private readonly pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
+
+  private constructor(private readonly child: ChildProcess) {
+    child.on('message', (m: { id: number; result?: unknown; error?: string }) => {
+      this.transcript.push({ direction: 'from-vault', message: m });
+      const p = this.pending.get(m.id);
+      if (!p) return;
+      this.pending.delete(m.id);
+      if (m.error !== undefined) p.reject(new Error(m.error));
+      else p.resolve(m.result);
+    });
+    child.stdout?.on('data', (d: Buffer) => this.console.push(d.toString('utf8')));
+    child.stderr?.on('data', (d: Buffer) => this.console.push(d.toString('utf8')));
+    child.on('exit', (code, signal) => {
+      const why = `vault process exited (${signal ?? code}): ${this.console.join('').slice(-2000)}`;
+      for (const p of this.pending.values()) p.reject(new Error(why));
+      this.pending.clear();
+    });
+  }
+
+  static async start(opts: {
+    cfg: VaultConfig;
+    nsm: NsmSpec;
+    vaultId?: Uint8Array;
+    state?: SealedState;
+  }): Promise<{ vault: ProcessVault; boot: BootInfo }> {
+    const main = fileURLToPath(new URL('./vault/main.js', import.meta.url));
+    const child = fork(main, [], { execArgv: [], serialization: 'advanced', stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
+    const v = new ProcessVault(child);
+    const boot = (await v.request('boot', opts)) as BootInfo;
+    return { vault: v, boot };
+  }
+
+  private request(method: string, params: unknown): Promise<unknown> {
+    const id = ++this.next;
+    const message = { id, method, params };
+    this.transcript.push({ direction: 'to-vault', message });
+    return new Promise((resolve, reject) => {
+      this.pending.set(id, { resolve, reject });
+      this.child.send(message);
+    });
+  }
+
+  attest(nonce: Uint8Array) {
+    return this.request('attest', { nonce }) as Promise<Uint8Array>;
+  }
+  nonce() {
+    return this.request('nonce', {}) as Promise<Uint8Array>;
+  }
+  contact(req: ContactRequest, chain: ChainView) {
+    return this.request('contact', { req, chain }) as Promise<{ result: ContactResult; writes: Writes }>;
+  }
+  dispatch(ev: DispatchRequest) {
+    return this.request('dispatch', ev) as Promise<{ status: 'done' | 'retry'; writes: Writes }>;
+  }
+  due(ledger: number) {
+    return this.request('due', { ledger }) as Promise<string[]>;
+  }
+  mature(views: Record<string, ChainView>) {
+    return this.request('mature', { views }) as Promise<{ applied: string[]; dropped: string[]; postponed: string[]; writes: Writes }>;
+  }
+  async close() {
+    this.child.kill();
+    await new Promise((r) => (this.child.exitCode !== null ? r(undefined) : this.child.once('exit', r)));
+  }
+}

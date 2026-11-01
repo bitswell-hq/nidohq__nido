@@ -1,0 +1,29 @@
+{
+  "name": "@nidohq/email-alerts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Recovery alerts from Perch controller events, with the addresses held in a sealed vault",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "engines": {
+    "node": ">=20.18.1"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "tsc && vitest run"
+  },
+  "dependencies": {
+    "@hpke/core": "^1.9.0",
+    "@nidohq/email-recovery": "0.1.0",
+    "@stellar/stellar-sdk": "^15.1.0",
+    "cborg": "^6.2.1",
+    "shamir-secret-sharing": "^0.0.4"
+  },
+  "devDependencies": {
+    "@nidohq/email-mocks": "0.1.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.7"
+  }
+}
