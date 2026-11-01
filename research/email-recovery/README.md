@@ -30,8 +30,12 @@ Each build, in order:
    bibliography entry, fails the build.
 
 The CI workflow `.github/workflows/email-recovery-docs.yml` runs the same
-`build.sh` on pushes and pull requests that touch this directory and uploads
-both PDFs as the `email-recovery-pdfs` artifact.
+`build.sh` on every pull request and every push to `main` (with no path
+filter, since claim evidence lives anywhere in the repository). The check
+fails if either PDF fails to build. Each run uploads the PDFs as two workflow
+artifacts, `email-recovery-paper` and `email-recovery-slides`. On a push to
+`main` it also publishes both PDFs to the rolling prerelease
+`email-recovery-latest`, whose tag points at the commit they were built from.
 
 ## Layout
 

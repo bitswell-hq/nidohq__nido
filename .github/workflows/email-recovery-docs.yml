@@ -1,15 +1,20 @@
 name: Email-recovery paper and slides
 
+# No path filter: the claim checker reads evidence anywhere in the repository
+# (Lean theorems, test names, measurement files), so any change can break the
+# build.
 on:
   pull_request:
-    paths:
-      - "research/email-recovery/**"
-      - ".github/workflows/email-recovery-docs.yml"
   push:
-    paths:
-      - "research/email-recovery/**"
-      - ".github/workflows/email-recovery-docs.yml"
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PAPER_PDF: research/email-recovery/build/email-recovery-paper.pdf
+  SLIDES_PDF: research/email-recovery/build/email-recovery-slides.pdf
 
 jobs:
   build:
@@ -28,11 +33,84 @@ jobs:
       - name: Build paper and slides
         run: bash research/email-recovery/build.sh
 
-      - name: Upload PDFs
+      - name: Check both PDFs exist
+        run: |
+          for pdf in "$PAPER_PDF" "$SLIDES_PDF"; do
+            test -s "$pdf" || { echo "::error::missing or empty $pdf"; exit 1; }
+          done
+
+      - name: Upload paper
         uses: actions/upload-artifact@v4
         with:
-          name: email-recovery-pdfs
-          path: |
-            research/email-recovery/build/email-recovery-paper.pdf
-            research/email-recovery/build/email-recovery-slides.pdf
+          name: email-recovery-paper
+          path: ${{ env.PAPER_PDF }}
           if-no-files-found: error
+
+      - name: Upload slides
+        uses: actions/upload-artifact@v4
+        with:
+          name: email-recovery-slides
+          path: ${{ env.SLIDES_PDF }}
+          if-no-files-found: error
+
+      - name: Job summary
+        run: |
+          {
+            echo "### Email-recovery PDFs"
+            echo
+            echo "Built from commit \`$GITHUB_SHA\`."
+            echo
+            echo "- Artifact \`email-recovery-paper\`: \`email-recovery-paper.pdf\`"
+            echo "- Artifact \`email-recovery-slides\`: \`email-recovery-slides.pdf\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # A rolling prerelease holding the PDFs built from the latest main.
+  publish:
+    name: Publish PDFs to the email-recovery-latest prerelease
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: email-recovery-latest
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: email-recovery-latest
+    steps:
+      - name: Download paper
+        uses: actions/download-artifact@v4
+        with:
+          name: email-recovery-paper
+          path: pdfs
+
+      - name: Download slides
+        uses: actions/download-artifact@v4
+        with:
+          name: email-recovery-slides
+          path: pdfs
+
+      - name: Move the tag and replace the release assets
+        run: |
+          notes="PDFs built from commit $GITHUB_SHA on $(date -u +%Y-%m-%d)."
+          # Point the tag at the built commit (create it, or force-move it).
+          if gh api "repos/$GH_REPO/git/refs/tags/$TAG" >/dev/null 2>&1; then
+            gh api -X PATCH "repos/$GH_REPO/git/refs/tags/$TAG" \
+              -f sha="$GITHUB_SHA" -F force=true >/dev/null
+          else
+            gh api -X POST "repos/$GH_REPO/git/refs" \
+              -f ref="refs/tags/$TAG" -f sha="$GITHUB_SHA" >/dev/null
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --prerelease \
+              --title "Email-recovery paper and slides (latest main)" \
+              --notes "$notes"
+          else
+            gh release create "$TAG" --prerelease --verify-tag \
+              --title "Email-recovery paper and slides (latest main)" \
+              --notes "$notes"
+          fi
+          gh release upload "$TAG" --clobber \
+            pdfs/email-recovery-paper.pdf pdfs/email-recovery-slides.pdf
