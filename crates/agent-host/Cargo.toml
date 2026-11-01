@@ -1,0 +1,48 @@
+[package]
+name = "agent-host"
+description = "An agent host that checks every file, network and signing tool call against the agent's grant through the grant evaluator compiled to a WebAssembly component."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+doctest = false
+
+[[bin]]
+name = "agent-host"
+path = "src/bin/agent-host.rs"
+
+[dependencies]
+grant-eval = { path = "../grant-eval" }
+nido-key-keeper = { path = "../key-keeper" }
+wasmtime = { version = "49.0.5", default-features = false, features = ["cranelift", "component-model", "runtime", "std"] }
+rustix = { version = "1", features = ["fs"] }
+url = "2"
+ureq = { version = "3", default-features = false, features = ["rustls"] }
+stellar-xdr = { version = "27", default-features = false, features = ["std"] }
+sha2 = "0.10"
+hex = "0.4"
+base64 = "0.22"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[build-dependencies]
+wit-component = "0.258"
+
+[dev-dependencies]
+tiny_http = "0.12"
+ed25519-dalek = "2"
+
+# Its own workspace (the root Cargo.toml's `exclude` says why), with the root
+# workspace's settings repeated.
+[workspace]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+
+[profile.release]
+overflow-checks = true

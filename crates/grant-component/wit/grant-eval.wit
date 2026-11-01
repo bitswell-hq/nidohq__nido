@@ -1,0 +1,121 @@
+package nido:grant-eval@0.1.0;
+
+/// File system access by component path and mode.
+///
+/// A path is a list of components, so `["home", "a"]` is a prefix of
+/// `["home", "a", "x"]` and never of `["home", "ab"]`. Paths reach the
+/// evaluator canonical: the host resolves `..`, symlinks and case before
+/// building an action.
+interface files {
+    enum mode { read, write, execute }
+
+    record action {
+        path: list<list<u8>>,
+        mode: mode,
+    }
+
+    variant caveat {
+        /// This path is a component-wise prefix of the action's path.
+        path-under(list<list<u8>>),
+        /// The action's mode is one of these.
+        mode-in(list<mode>),
+    }
+
+    /// Whether every caveat in `grant` holds for `action`.
+    allows: func(grant: list<caveat>, action: action) -> bool;
+    /// Whether `grant` allows every action in `actions`.
+    allows-all: func(grant: list<caveat>, actions: list<action>) -> bool;
+}
+
+/// Outbound connections by the requested host name, port and scheme.
+interface network {
+    enum scheme { http, https }
+
+    record action {
+        host: list<u8>,
+        port: u16,
+        scheme: scheme,
+    }
+
+    variant caveat {
+        host-in(list<list<u8>>),
+        port-in(list<u16>),
+        scheme-in(list<scheme>),
+    }
+
+    allows: func(grant: list<caveat>, action: action) -> bool;
+    allows-all: func(grant: list<caveat>, actions: list<action>) -> bool;
+}
+
+/// Signatures by key, network and payload kind.
+interface signing {
+    enum payload { transaction, auth-entry, message }
+
+    record action {
+        key: list<u8>,
+        network: list<u8>,
+        payload: payload,
+    }
+
+    variant caveat {
+        key-in(list<list<u8>>),
+        network-in(list<list<u8>>),
+        payload-in(list<payload>),
+    }
+
+    allows: func(grant: list<caveat>, action: action) -> bool;
+    allows-all: func(grant: list<caveat>, actions: list<action>) -> bool;
+}
+
+/// The contexts of a Soroban authorization tree.
+interface chain {
+    /// A two's-complement 128-bit integer: `hi * 2^64 + lo`.
+    record int128 {
+        hi: s64,
+        lo: u64,
+    }
+
+    variant val {
+        int128(int128),
+        %u64(u64),
+        %bool(bool),
+        bytes(list<u8>),
+        address(list<u8>),
+        symbol(list<u8>),
+        /// An argument of a type the other cases do not model, as its full
+        /// `ScVal` XDR.
+        other(list<u8>),
+    }
+
+    record invocation {
+        contract: list<u8>,
+        function: list<u8>,
+        args: list<val>,
+    }
+
+    variant action {
+        invoke(invocation),
+        /// A contract-deploying host function, by wasm hash.
+        create-contract(list<u8>),
+    }
+
+    variant caveat {
+        contract-in(list<list<u8>>),
+        function-in(list<list<u8>>),
+        /// Argument index, inclusive bound.
+        arg-i128-at-most(tuple<u32, int128>),
+        /// Argument index, value.
+        arg-eq(tuple<u32, val>),
+    }
+
+    allows: func(grant: list<caveat>, action: action) -> bool;
+    allows-all: func(grant: list<caveat>, actions: list<action>) -> bool;
+}
+
+/// The grant evaluator as a component: pure functions, no imports.
+world evaluator {
+    export files;
+    export network;
+    export signing;
+    export chain;
+}

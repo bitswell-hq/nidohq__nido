@@ -6,6 +6,7 @@ default:
 # which the integration tests embed.
 test:
     cargo test --workspace
+    cargo test --manifest-path crates/agent-host/Cargo.toml
 
 # The grant relay's opt-in suites: Nido's TypeScript relay client against the
 # relay (needs Node 22.6+), and the relay end to end on a local Stellar network
@@ -116,9 +117,12 @@ build-ts:
 check:
     cargo fmt --all -- --check
     cargo clippy --all --tests -- -Dclippy::pedantic
+    cargo fmt --manifest-path crates/agent-host/Cargo.toml --all -- --check
+    cargo clippy --manifest-path crates/agent-host/Cargo.toml --all --tests -- -Dclippy::pedantic
 
 fmt:
     cargo fmt --all
+    cargo fmt --manifest-path crates/agent-host/Cargo.toml --all
 
 # formal/scripts/extract.sh pins Charon and Aeneas and needs Nix with flakes
 # (formal/README.md gives a Docker alternative). `--check` compares with the

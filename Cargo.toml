@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/grant-eval",
+    "crates/grant-component",
     "crates/integration-tests",
     "crates/key-keeper",
     "crates/grant-relay",
@@ -12,7 +13,10 @@ members = [
 # workspace + toolchain; keep them out of this workspace's resolution.
 # vendor/perch is the Perch submodule: its crates belong to Perch's own
 # workspace (Nido consumes them as git dependencies, below).
-exclude = ["examples", "vendor/perch"]
+# crates/agent-host is its own workspace: Wasmtime's Cranelift needs
+# `arbitrary` 1.4 and soroban-sdk's testutils pin `arbitrary` ~1.3, and one
+# lockfile holds one of them.
+exclude = ["examples", "vendor/perch", "crates/agent-host"]
 
 [workspace.package]
 version = "0.1.0"

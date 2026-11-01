@@ -1,0 +1,18 @@
+[package]
+name = "grant-component"
+description = "The grant evaluator as a WebAssembly component: grant-eval behind the WIT interface in wit/"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+doctest = false
+
+[dependencies]
+grant-eval = { path = "../grant-eval" }
+wit-bindgen = { version = "0.61.1", default-features = false, features = ["macros", "realloc"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+dlmalloc = { version = "0.2", features = ["global"] }
