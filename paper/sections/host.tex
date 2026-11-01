@@ -102,7 +102,12 @@ an authorization preimage, the account's own or a delegated signer's, they
 are every context of its invocation tree\claim{host-signing-chain}. The host
 signs only what the chain vocabulary describes: an envelope with exactly one
 \code{InvokeHostFunction} operation, and no fee bump, second operation,
-other operation or contract-code upload\claim{host-signing-refuses}. The
+other operation or contract-code upload. It never signs a contract
+deployment, as the host function or as any context of a signature's trees,
+under any grant, an empty chain list included\claim{host-signing-refuses}: as
+at the grant signer, no account document stands behind the check when the
+keeper holds a plain account's key, and deploying a contract is one way to
+escape a grant (\S\ref{sec:threat}). The
 keeper is given the encoding of the decoded value the host checked, so the
 bytes signed are the bytes checked\claim{host-signs-checked}. Each payload
 kind is also bound to its network: a transaction is signed as its hash on the
@@ -118,5 +123,5 @@ No caveat covers a transaction's fee, sequence number, time bounds, memo or
 source account, an authorization entry's nonce or expiration ledger, or which
 account a key id stands for, so an agent allowed to sign transactions can have
 its key pay any fee for an allowed call. An empty chain list allows every
-contract call, as an empty grant does, so a grant that allows
+contract call, though no deployment, so a grant that allows
 \code{transaction} or \code{authEntry} signatures should carry chain caveats.

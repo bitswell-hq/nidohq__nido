@@ -17,10 +17,17 @@
 //! A transaction is refused unless the chain vocabulary can describe all it
 //! does: a fee-bump or `TxV0` envelope, any other operation (a payment, a
 //! new account or signer, a trustline, …), a second operation, and an
-//! `UploadContractWasm` host function are never signed. Contexts map onto
-//! chain actions through `grant_relay::actions`, the relay's mapping. The
-//! keeper is given the checked payload encoded again, so what it signs is the
-//! value the checks read.
+//! `UploadContractWasm` host function are never signed.
+//!
+//! A contract deployment is never signed, under any grant: a transaction or
+//! authorization entry is refused when its host function or any context of
+//! its trees creates a contract, whatever the chain grant, an empty one
+//! included. Deploying a contract is a way to escape a grant's limits, and
+//! the grant signer refuses every creation context in the same way.
+//!
+//! Contexts map onto chain actions through `grant_relay::actions`, the
+//! relay's mapping. The keeper is given the checked payload encoded again, so
+//! what it signs is the value the checks read.
 //!
 //! A message signature is not bound to a network: the action's network is
 //! the label the agent gives, and a `network_in` caveat restricts only that
@@ -143,8 +150,8 @@ fn transaction_actions(envelope: &TransactionEnvelope) -> Result<Vec<chain::Acti
 ///
 /// A payload that does not decode, a transaction on a network the keeper
 /// does not know or with anything but one `InvokeHostFunction` operation
-/// the chain vocabulary describes, or an authorization preimage for another
-/// network.
+/// the chain vocabulary describes, an authorization preimage for another
+/// network, or a payload that deploys a contract.
 pub fn prepare(request: &Request) -> Result<Prepared, String> {
     let (kind, chain, payload) = match &request.payload {
         RequestPayload::Transaction(envelope) => {
@@ -203,6 +210,12 @@ pub fn prepare(request: &Request) -> Result<Prepared, String> {
             )
         }
     };
+    if chain
+        .iter()
+        .any(|action| matches!(action, chain::Action::CreateContract { .. }))
+    {
+        return Err("a contract deployment is never signed".into());
+    }
     Ok(Prepared {
         key: KeyId::new(request.key.clone()),
         network: request.network.clone(),

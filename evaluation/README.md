@@ -149,9 +149,9 @@ relay ([The local network](#the-local-network)).
 
 | Category | At the Soroban boundary | At the agent host |
 | - | - | - |
-| Self-escalation | `issue`, `refill` and `rotate` on the grant signer, through the account and as the grant signer; the account's `apply_doc`, `execute` and `schedule_upgrade`; an agent call through the owner's admin rule; delegating from a parent's grant, from a grant not held, or with a forged parent signature; documents that wrongly scope an agent rule to the account or to the grant signer | tool calls that issue, revoke or replace a grant; a sub-agent delegated a wider grant using it for files, mode, network and signing; revoked agents and their sub-agents |
-| Nested-call smuggling | a transfer to the attacker at depth 2 to 5 behind allowed calls; an allowed call nesting a transfer of a token the grant leaves out; nested transfers left out of the signed tree at depths 2 and 3; a nested transfer over the allowance | not applicable: a tool call has no nested calls |
-| Delegation workarounds | deploying a contract with the account as deployer; paying a Nido account the attacker minted; `approve` and `burn` of the budget asset, `approve` of another token; a sub-agent delegated no extra caveats and a larger allowance paying another recipient or more per call; arguments of another type with the same bytes (a muxed recipient, a `u64` amount, a `u32` for bytes of its XDR, a string for a symbol, an address for bytes of its strkey); a revoked grant and a revoked ancestor; a rotated-out key; a replayed entry | paths that name the work directory and reach outside it (`..`, symlinks, `..` after a symlink, a string prefix, another case, a relative path, a write through a symlink, a write under read-only); URLs that name the allowed host and reach another (another port or scheme, the address literal, a decimal IPv4 literal, a trailing dot, userinfo, redirects to another port or to the address literal); signing with another key, for another network, for a preimage of another network than named, a transaction, and by a sub-agent restricted to messages |
+| Self-escalation | `issue`, `refill` and `rotate` on the grant signer, through the account and as the grant signer; the account's `apply_doc`, `execute` and `schedule_upgrade`; an agent call through the owner's admin rule; delegating from a parent's grant, from a grant not held, or with a forged parent signature; documents that wrongly scope an agent rule to the account or to the grant signer | tool calls that issue, revoke or replace a grant; a sub-agent delegated a wider grant using it for files, mode, network, signing and a contract its parent's chain grant leaves out; revoked agents and their sub-agents |
+| Nested-call smuggling | a transfer to the attacker at depth 2 to 5 behind allowed calls; an allowed call nesting a transfer of a token the grant leaves out; nested transfers left out of the signed tree at depths 2 and 3; a nested transfer over the allowance | signatures whose trees hide a call the chain grant denies: a call on another contract nested in a transaction's entry, a transfer over the amount bound at depth 3, a second entry signed by another address, a call on another contract nested in an authorization preimage, and a transfer over the bound nested in a delegated signer's preimage |
+| Delegation workarounds | deploying a contract with the account as deployer; paying a Nido account the attacker minted; `approve` and `burn` of the budget asset, `approve` of another token; a sub-agent delegated no extra caveats and a larger allowance paying another recipient or more per call; arguments of another type with the same bytes (a muxed recipient, a `u64` amount, a `u32` for bytes of its XDR, a string for a symbol, an address for bytes of its strkey); a revoked grant and a revoked ancestor; a rotated-out key; a replayed entry | paths that name the work directory and reach outside it (`..`, symlinks, `..` after a symlink, a string prefix, another case, a relative path, a write through a symlink, a write under read-only); URLs that name the allowed host and reach another (another port or scheme, the address literal, a decimal IPv4 literal, a trailing dot, userinfo, redirects to another port or to the address literal); signing with another key, for another network, for a preimage of another network than named, a transaction, and by a sub-agent restricted to messages; transactions calling a contract the chain grant leaves out or over its amount bound; what the chain vocabulary cannot express (a fee-bump envelope, a new signer on the account, a payment beside the call); deploying a contract, as a transaction, nested in an authorization entry, and by an agent with no chain caveats |
 | Allowance oversubscription | a sibling spending past what is left of the root; a sibling over its own allowance; a grandchild under an exhausted parent | not applicable: the agent host has no budget vocabulary |
 
 ### Workloads
@@ -181,7 +181,11 @@ after the owner revokes the research agent so is its read.
 a file tree in a fresh temporary directory (`work/`, `secret/`, `workshop/`,
 and `work/link`, a symlink to `secret/`), and two HTTP servers on 127.0.0.1:
 the API the grant allows by the name `localhost` on its port, and a second
-server on another port. Clean failure there means: the file tree (every
+server on another port. Beside the research agent and its summarizer, a
+payer agent may have the same key sign transactions and authorization
+entries on testnet, under a chain grant of `transfer` on one token contract
+with the amount at most 1,000; its signing attempts exercise the chain check
+on every context a signature authorizes. Clean failure there means: the file tree (every
 file's SHA-256 and every symlink's target), the second server's request
 count, the keeper's signature log and every agent's verdicts on reading two
 probe files are unchanged. The results write the temporary directory as
@@ -309,7 +313,7 @@ The relay runs in the harness's process (release build).
 ### Summary
 
 - Soroban simulation: 45 attacks, 45 refused, 45 with state unchanged; 9 controls.
-- Agent host: 31 attacks, 31 refused, 31 with state unchanged; 3 controls.
+- Agent host: 45 attacks, 45 refused, 45 with state unchanged; 6 controls.
 - Cost bound: verdicts agree on every point; 96–164 CPU instructions per Lean step over the pairs ≥ 10 steps apart; least squares 99.4 (R² = 0.986); the whole check above the zero-caveat cost (972,392 instructions) is at most 8.3% of the bound priced at that constant.
 - Agent host, per check (medians): 0.30–1.01 µs through the component, 15–47x native `grant-eval`, 3.0–3.3x the host-side check without Wasm; the component compiles and instantiates in 22.0 ms.
 - Local network, relay grant mirroring the grant: 44 attacks, 44 refused (19 by the relay's own checks, the rest in its simulation), 44 with state unchanged, channel sequence numbers included; 8 controls confirmed on chain; 2 rows not run.
@@ -410,8 +414,9 @@ Over 28 pairs: 99.4 CPU instructions per Lean step (least squares through the or
 | Soroban simulation | delegation workarounds | 18 | 18 | 18 | 6 |
 | Soroban simulation | nested-call smuggling | 8 | 8 | 8 | 1 |
 | Soroban simulation | self-escalation | 16 | 16 | 16 | 0 |
-| Agent host | delegation workarounds | 21 | 21 | 21 | 3 |
-| Agent host | self-escalation | 10 | 10 | 10 | 0 |
+| Agent host | delegation workarounds | 29 | 29 | 29 | 5 |
+| Agent host | nested-call smuggling | 5 | 5 | 5 | 1 |
+| Agent host | self-escalation | 11 | 11 | 11 | 0 |
 | Local network, relay grant mirroring the grant | allowance oversubscription | 3 | 3 | 3 | 2 |
 | Local network, relay grant mirroring the grant | delegation workarounds | 17 | 17 | 17 | 5 |
 | Local network, relay grant mirroring the grant | nested-call smuggling | 8 | 8 | 8 | 1 |
@@ -491,6 +496,7 @@ Over 28 pairs: 99.4 CPU instructions per Lean step (least squares through the or
 | `ah-se-sub-agent-wider-mode` | the same sub-agent writes inside the work directory | agent-host | Files grant denies $SANDBOX/work/out/wide.txt | yes |
 | `ah-se-sub-agent-wider-network` | the same sub-agent, delegated `localhost` after its parent was given no host, fetches the API | agent-host | Network grant denies http://localhost:$API_PORT/v1 | yes |
 | `ah-se-sub-agent-wider-signing` | the same sub-agent, delegated every payload kind, signs an authorization entry | agent-host | Signing grant denies AuthEntry signature by research-key on "Standalone Network ; February 2017" | yes |
+| `ah-se-sub-agent-wider-chain` | a sub-agent of the payer, delegated another contract, signs a transaction calling it | agent-host | Chain grant denies CABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAFNSZ.transfer (context 0 of the Transaction signature's 2) | yes |
 | `ah-se-revoked-agent` | a revoked agent reads its own work file | agent-host | agent revoked | yes |
 | `ah-se-revoked-agent-delegates` | a revoked agent starts a sub-agent | agent-host | agent revoked | yes |
 | `ah-se-sub-agent-of-revoked` | a sub-agent of a revoked agent reads a work file | agent-host | agent revoked | yes |
@@ -518,6 +524,22 @@ Over 28 pairs: 99.4 CPU instructions per Lean step (least squares through the or
 | `ah-dw-sign-testnet-transaction` | sign a testnet transaction (a network and a payload kind the grant leaves out) | agent-host | Signing grant denies Transaction signature by research-key on "Test SDF Network ; September 2015" | yes |
 | `ah-dw-sign-summarizer-auth-entry` | the summarizer signs an authorization entry | agent-host | Signing grant denies AuthEntry signature by research-key on "Standalone Network ; February 2017" | yes |
 | `ah-dw-sign-control` | control: sign an authorization entry for the local network | allowed (control) |  | – |
+| `ah-dw-sign-tx-other-contract` | the payer signs a transaction calling a contract its chain grant leaves out | agent-host | Chain grant denies CABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAFNSZ.transfer (context 0 of the Transaction signature's 2) | yes |
+| `ah-dw-sign-tx-over-bound` | the payer signs a transfer over its chain grant's amount bound | agent-host | Chain grant denies CAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQC526.transfer (context 0 of the Transaction signature's 2) | yes |
+| `ah-dw-sign-fee-bump` | the payer signs a fee-bump envelope around an allowed transaction | agent-host | failed: only a transaction envelope of type Tx is signed | yes |
+| `ah-dw-sign-add-signer` | the payer signs a transaction adding a signer to its account, an operation the chain vocabulary cannot express | agent-host | failed: only a transaction of one InvokeHostFunction operation is signed | yes |
+| `ah-dw-sign-payment-beside-call` | the payer signs an allowed transfer with a payment as a second operation | agent-host | failed: only a transaction of one InvokeHostFunction operation is signed | yes |
+| `ah-dw-sign-deploy` | the payer signs a transaction deploying a contract | agent-host | failed: a contract deployment is never signed | yes |
+| `ah-dw-sign-deploy-nested` | the payer signs an authorization entry whose allowed transfer nests a contract deployment | agent-host | failed: a contract deployment is never signed | yes |
+| `ah-dw-sign-tx-control` | control: the payer signs an allowed transfer | allowed (control) |  | – |
+| `ah-dw-sign-auth-entry-control` | control: the payer signs an authorization entry whose transfer nests an allowed transfer at the bound | allowed (control) |  | – |
+| `ah-dw-sign-deploy-no-chain-caveats` | the research agent, whose grant has no chain caveats, signs an authorization entry deploying a contract | agent-host | failed: a contract deployment is never signed | yes |
+| `ah-nc-tx-entry-other-contract` | the payer signs a transaction whose allowed transfer nests a call on a contract its grant leaves out | agent-host | Chain grant denies CABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAFNSZ.drain (context 2 of the Transaction signature's 3) | yes |
+| `ah-nc-tx-entry-over-bound-depth-3` | the payer signs a transaction whose tree nests, at depth 3, a transfer over the amount bound | agent-host | Chain grant denies CAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQC526.transfer (context 3 of the Transaction signature's 4) | yes |
+| `ah-nc-tx-second-entry` | the payer signs a transaction whose second authorization entry, signed by another address, calls a contract its grant leaves out | agent-host | Chain grant denies CABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAFNSZ.transfer (context 2 of the Transaction signature's 3) | yes |
+| `ah-nc-auth-entry-other-contract` | the payer signs an authorization entry whose allowed transfer nests a call on another contract | agent-host | Chain grant denies CABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAFNSZ.drain (context 1 of the AuthEntry signature's 2) | yes |
+| `ah-nc-delegated-over-bound` | the payer signs a delegated signer's preimage whose allowed transfer nests a transfer over the amount bound | agent-host | Chain grant denies CAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQC526.transfer (context 1 of the AuthEntry signature's 2) | yes |
+| `ah-nc-control` | control: the payer signs a transaction whose transfer nests an allowed transfer at the bound | allowed (control) |  | – |
 
 ### Workloads
 
@@ -640,23 +662,23 @@ Over 28 pairs: 99.4 CPU instructions per Lean step (least squares through the or
 
 | Workload | Agent | Call | Expected | Relay grant mirroring the grant | Relay grant allowing every call | Unchanged if refused | CPU instructions on chain | In the simulation |
 | - | - | - | - | - | - | - | - | - |
-| payments | payments | transfer 50 to Bob | Allowed | allowed | allowed | – / – | 2,776,525 | 2,500,465 |
-| payments | payments | transfer 80 to Carol | Allowed | allowed | allowed | – / – | 2,772,322 | 2,501,825 |
-| payments | payments | transfer 120 to Bob | NotAllowed | relay: GRANT_DENIED (chain grant, supplied tree, action 0) | grant-signer: NotAllowed (#6) | yes / yes | – | 2,175,243 |
-| payments | payroll | transfer 60 to Bob | Allowed | allowed | allowed | – / – | 3,010,808 | 2,695,733 |
-| payments | payroll | transfer 60 to Bob | Allowed | allowed | allowed | – / – | 3,010,808 | 2,694,945 |
-| payments | payroll | transfer 60 to Bob | Overdrawn | grant-signer: Overdrawn (#7) | grant-signer: Overdrawn (#7) | yes / yes | – | 2,276,804 |
-| payments | payroll | transfer 10 to Carol | NotAllowed | relay: GRANT_DENIED (chain grant, supplied tree, action 0) | grant-signer: NotAllowed (#6) | yes / yes | – | 2,270,632 |
-| payments | payments | transfer 100 to Bob | Allowed | allowed | allowed | – / – | 2,771,465 | 2,503,124 |
-| payments | payments | transfer 100 to Bob | Overdrawn | grant-signer: Overdrawn (#7) | grant-signer: Overdrawn (#7) | yes / yes | – | 2,180,379 |
-| defi-router | router | forward 40 of Asset to Bob | Allowed | allowed | allowed | – / – | 3,672,684 | 3,327,210 |
-| defi-router | router | hop through [0, 1], 30 to Bob | Allowed | allowed | allowed | – / – | 4,575,115 | 4,196,094 |
-| defi-router | router | hop through [0, 1, 2], 20 to Carol | Allowed | allowed | allowed | – / – | 5,480,369 | 5,044,867 |
-| defi-router | swapper | forward 50 of Asset to Bob | Allowed | allowed | allowed | – / – | 4,006,202 | 3,606,282 |
-| defi-router | swapper | hop through [0, 1], 10 to Bob | NotAllowed | relay: GRANT_DENIED (chain grant, supplied tree, action 0) | grant-signer: NotAllowed (#6) | yes / yes | – | 3,578,670 |
-| defi-router | swapper | forward 60 of Asset to Bob | Overdrawn | grant-signer: Overdrawn (#7) | grant-signer: Overdrawn (#7) | yes / yes | – | 3,100,561 |
-| defi-router | swapper | forward 5 of Other to Bob | NotAllowed | relay: GRANT_DENIED (chain grant, supplied tree, action 2) | grant-signer: NotAllowed (#6) | yes / yes | – | 3,058,971 |
-| defi-router | router | forward 200 of Asset to Carol | Overdrawn | grant-signer: Overdrawn (#7) | grant-signer: Overdrawn (#7) | yes / yes | – | 2,926,102 |
+| payments | payments | transfer 50 to Bob | Allowed | allowed | allowed | – / – | 2,776,525 | 2,497,586 |
+| payments | payments | transfer 80 to Carol | Allowed | allowed | allowed | – / – | 2,772,322 | 2,498,946 |
+| payments | payments | transfer 120 to Bob | NotAllowed | relay: GRANT_DENIED (chain grant, supplied tree, action 0) | grant-signer: NotAllowed (#6) | yes / yes | – | 2,172,356 |
+| payments | payroll | transfer 60 to Bob | Allowed | allowed | allowed | – / – | 3,010,808 | 2,692,566 |
+| payments | payroll | transfer 60 to Bob | Allowed | allowed | allowed | – / – | 3,010,808 | 2,691,778 |
+| payments | payroll | transfer 60 to Bob | Overdrawn | grant-signer: Overdrawn (#7) | grant-signer: Overdrawn (#7) | yes / yes | – | 2,273,637 |
+| payments | payroll | transfer 10 to Carol | NotAllowed | relay: GRANT_DENIED (chain grant, supplied tree, action 0) | grant-signer: NotAllowed (#6) | yes / yes | – | 2,267,457 |
+| payments | payments | transfer 100 to Bob | Allowed | allowed | allowed | – / – | 2,771,465 | 2,500,245 |
+| payments | payments | transfer 100 to Bob | Overdrawn | grant-signer: Overdrawn (#7) | grant-signer: Overdrawn (#7) | yes / yes | – | 2,177,500 |
+| defi-router | router | forward 40 of Asset to Bob | Allowed | allowed | allowed | – / – | 3,672,684 | 3,322,031 |
+| defi-router | router | hop through [0, 1], 30 to Bob | Allowed | allowed | allowed | – / – | 4,575,115 | 4,189,479 |
+| defi-router | router | hop through [0, 1, 2], 20 to Carol | Allowed | allowed | allowed | – / – | 5,480,369 | 5,037,104 |
+| defi-router | swapper | forward 50 of Asset to Bob | Allowed | allowed | allowed | – / – | 4,006,202 | 3,599,951 |
+| defi-router | swapper | hop through [0, 1], 10 to Bob | NotAllowed | relay: GRANT_DENIED (chain grant, supplied tree, action 0) | grant-signer: NotAllowed (#6) | yes / yes | – | 3,570,895 |
+| defi-router | swapper | forward 60 of Asset to Bob | Overdrawn | grant-signer: Overdrawn (#7) | grant-signer: Overdrawn (#7) | yes / yes | – | 3,094,230 |
+| defi-router | swapper | forward 5 of Other to Bob | NotAllowed | relay: GRANT_DENIED (chain grant, supplied tree, action 2) | grant-signer: NotAllowed (#6) | yes / yes | – | 3,052,632 |
+| defi-router | router | forward 200 of Asset to Carol | Overdrawn | grant-signer: Overdrawn (#7) | grant-signer: Overdrawn (#7) | yes / yes | – | 2,920,923 |
 
 **Relay answer time** (ms from posting a call to the relay's answer: a refusal, or `submitted` once the transaction is signed and sent; every attack and workload call of both runs)
 

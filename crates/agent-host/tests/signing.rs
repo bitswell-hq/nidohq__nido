@@ -13,9 +13,9 @@ use nido_key_keeper::{KeyId, MemoryKeyKeeper, Payload as KeeperPayload, StellarN
 use sha2::{Digest, Sha256};
 use stellar_xdr::{
     AccountId, Asset, BytesM, ContractExecutable, ContractId, ContractIdPreimage,
-    ContractIdPreimageFromAddress, CreateAccountOp, CreateContractArgs, FeeBumpTransaction,
-    FeeBumpTransactionEnvelope, FeeBumpTransactionExt, FeeBumpTransactionInnerTx, Hash,
-    HashIdPreimage, HashIdPreimageSorobanAuthorization,
+    ContractIdPreimageFromAddress, CreateAccountOp, CreateContractArgs, CreateContractArgsV2,
+    FeeBumpTransaction, FeeBumpTransactionEnvelope, FeeBumpTransactionExt,
+    FeeBumpTransactionInnerTx, Hash, HashIdPreimage, HashIdPreimageSorobanAuthorization,
     HashIdPreimageSorobanAuthorizationWithAddress, HostFunction, Int128Parts, InvokeContractArgs,
     InvokeHostFunctionOp, Limits, Memo, MuxedAccount, Operation, OperationBody, PaymentOp,
     Preconditions, PublicKey, ScAddress, ScSymbol, ScVal, SequenceNumber, SetOptionsOp, Signer,
@@ -230,6 +230,11 @@ fn token_transfers() -> Vec<ChainCaveat> {
 /// messages on testnet, for transfers of at most `MAX_AMOUNT` on `TOKEN`.
 /// The keeper also holds `key-b`.
 fn fixture() -> Fixture {
+    fixture_with(token_transfers())
+}
+
+/// The same agent, with `chain` as its chain grant.
+fn fixture_with(chain: Vec<ChainCaveat>) -> Fixture {
     let mut keeper = MemoryKeyKeeper::new();
     let public = keeper.insert(KeyId::new("key-a"), [1; 32]);
     keeper.insert(KeyId::new("key-b"), [2; 32]);
@@ -240,7 +245,7 @@ fn fixture() -> Fixture {
                 SigningCaveat::KeyIn(vec!["key-a".into()]),
                 SigningCaveat::NetworkIn(vec![TESTNET_PASSPHRASE.into()]),
             ],
-            chain: token_transfers(),
+            chain,
             ..Grants::default()
         })
         .unwrap();
@@ -505,21 +510,106 @@ fn a_disallowed_call_in_any_authorization_entry_of_the_transaction_is_denied() {
     assert_chain_denied(&f, result);
 }
 
-#[test]
-fn a_transaction_deploying_a_contract_is_denied_by_a_chain_grant() {
-    let mut f = fixture();
-    let deploy = HostFunction::CreateContract(CreateContractArgs {
+/// A deployment of the wasm `[3; 32]` by `account(7)`.
+fn deployment() -> CreateContractArgs {
+    CreateContractArgs {
         contract_id_preimage: ContractIdPreimage::Address(ContractIdPreimageFromAddress {
             address: account(7),
             salt: Uint256([0; 32]),
         }),
         executable: ContractExecutable::Wasm(Hash([3; 32])),
-    });
-    let result = f.host.call(
-        f.agent,
-        &sign_tx(&envelope_of(vec![invoke_op(deploy, vec![])])),
+    }
+}
+
+/// The same deployment, with constructor arguments.
+fn deployment_v2() -> CreateContractArgsV2 {
+    let CreateContractArgs {
+        contract_id_preimage,
+        executable,
+    } = deployment();
+    CreateContractArgsV2 {
+        contract_id_preimage,
+        executable,
+        constructor_args: vec![amount(5)].try_into().unwrap(),
+    }
+}
+
+/// An authorization context deploying a contract, under `sub_invocations`.
+fn deploy_node(sub_invocations: Vec<SorobanAuthorizedInvocation>) -> SorobanAuthorizedInvocation {
+    SorobanAuthorizedInvocation {
+        function: SorobanAuthorizedFunction::CreateContractHostFn(deployment()),
+        sub_invocations: sub_invocations.try_into().unwrap(),
+    }
+}
+
+/// The chain grants a deployment is refused under: the fixture's, and none.
+fn chain_grants() -> [Vec<ChainCaveat>; 2] {
+    [token_transfers(), Vec::new()]
+}
+
+#[test]
+fn a_transaction_deploying_a_contract_is_refused_under_every_chain_grant() {
+    for chain in chain_grants() {
+        for deploy in [
+            HostFunction::CreateContract(deployment()),
+            HostFunction::CreateContractV2(deployment_v2()),
+        ] {
+            let mut f = fixture_with(chain.clone());
+            let result = f.host.call(
+                f.agent,
+                &sign_tx(&envelope_of(vec![invoke_op(deploy, vec![])])),
+            );
+            assert_refused(&f, result);
+        }
+    }
+}
+
+#[test]
+fn a_contract_deployment_inside_an_authorization_tree_is_refused_under_every_chain_grant() {
+    let v2 = SorobanAuthorizedInvocation {
+        function: SorobanAuthorizedFunction::CreateContractV2HostFn(deployment_v2()),
+        sub_invocations: VecM::default(),
+    };
+    for chain in chain_grants() {
+        // Nested under an allowed call in a transaction's entry.
+        let mut f = fixture_with(chain.clone());
+        let result = f.host.call(
+            f.agent,
+            &sign_tx(&invoke_tx(
+                transfer(TOKEN, 5),
+                vec![source_entry(node(
+                    transfer(TOKEN, 5),
+                    vec![deploy_node(vec![])],
+                ))],
+            )),
+        );
+        assert_refused(&f, result);
+        // At the root of an authorization preimage, and nested in a delegated
+        // signer's.
+        for preimage in [
+            preimage_of(TESTNET_PASSPHRASE, deploy_node(vec![])),
+            preimage_of(TESTNET_PASSPHRASE, v2.clone()),
+            delegated_preimage_of(
+                TESTNET_PASSPHRASE,
+                node(transfer(TOKEN, 5), vec![deploy_node(vec![])]),
+            ),
+        ] {
+            let mut f = fixture_with(chain.clone());
+            let result = f.host.call(f.agent, &sign_auth(&preimage));
+            assert_refused(&f, result);
+        }
+    }
+}
+
+#[test]
+fn an_empty_chain_grant_signs_any_contract_call() {
+    let mut f = fixture_with(Vec::new());
+    let preimage = preimage_of(
+        TESTNET_PASSPHRASE,
+        node(call(OTHER, "drain", vec![]), vec![]),
     );
-    assert_chain_denied(&f, result);
+    let sig = signature(f.host.call(f.agent, &sign_auth(&preimage)));
+    f.public.verify(&Sha256::digest(&preimage), &sig).unwrap();
 }
 
 #[test]

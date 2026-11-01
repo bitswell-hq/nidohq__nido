@@ -75,6 +75,30 @@ impl Deployer {
     }
 }
 
+/// Calls `Router::forward` and catches its failure: the account's
+/// authorization is then asked for inside a call whose failure the
+/// transaction survives.
+#[contract]
+pub struct Catcher;
+
+#[contractimpl]
+impl Catcher {
+    /// Whether `router.forward(account, token, to, amount)` succeeded.
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn catch_forward(
+        e: Env,
+        router: Address,
+        account: Address,
+        token: Address,
+        to: Address,
+        amount: i128,
+    ) -> bool {
+        let args: Vec<Val> = (account, token, to, amount).into_val(&e);
+        e.try_invoke_contract::<(), InvokeError>(&router, &Symbol::new(&e, "forward"), args)
+            .is_ok()
+    }
+}
+
 /// The account's starting balance in the budget asset.
 const BALANCE: i128 = 1_000;
 
@@ -536,6 +560,26 @@ impl Fixture {
     /// `Router::forward(account, asset, to, amount)`, whose nested transfer
     /// is the second context, authorized by `grant`'s holder.
     fn forward(&self, grant: u32, key: &SigningKey, to: &Address, amount: i128) -> Outcome {
+        let entry = self.forward_entry(grant, key, to, amount);
+        self.run(&[entry], || {
+            RouterClient::new(self.env(), &self.router).forward(
+                &self.account.address,
+                &self.asset,
+                to,
+                &amount,
+            );
+        })
+    }
+
+    /// The authorization `forward` asks of the account: `Router::forward`,
+    /// with the nested transfer as its second context.
+    fn forward_entry(
+        &self,
+        grant: u32,
+        key: &SigningKey,
+        to: &Address,
+        amount: i128,
+    ) -> SorobanAuthorizationEntry {
         let w = &self.w;
         let mut root = w.invocation(
             &self.router,
@@ -558,15 +602,32 @@ impl Fixture {
         )]
         .try_into()
         .unwrap();
-        let entry = self.agent_entry(grant, key, &["a-router", "a-asset"], root);
-        self.run(&[entry], || {
-            RouterClient::new(&w.env, &self.router).forward(
+        self.agent_entry(grant, key, &["a-router", "a-asset"], root)
+    }
+
+    /// The same authorization as `forward`, asked for inside
+    /// `Catcher::catch_forward`, which catches a failure of `forward`: the
+    /// transaction's outcome, and whether `forward` succeeded.
+    fn caught_forward(
+        &self,
+        catcher: &Address,
+        grant: u32,
+        key: &SigningKey,
+        to: &Address,
+        amount: i128,
+    ) -> (Outcome, Option<bool>) {
+        let entry = self.forward_entry(grant, key, to, amount);
+        let forwarded = Cell::new(None);
+        let outcome = self.run(&[entry], || {
+            forwarded.set(Some(CatcherClient::new(self.env(), catcher).catch_forward(
+                &self.router,
                 &self.account.address,
                 &self.asset,
                 to,
                 &amount,
-            );
-        })
+            )));
+        });
+        (outcome, forwarded.get())
     }
 
     /// `delegate(parent, child, caveats, allowance)`, authorized as the grant
@@ -1228,6 +1289,60 @@ fn every_transfer_in_one_authorization_is_charged() {
     assert_eq!(f.forward(g, &a, &f.bob, 31), refused(GrantError::Overdrawn));
     assert_eq!(f.grant(g).spent, 70);
     assert_eq!(f.balance(&f.bob), 70);
+}
+
+/// A refused authorization fails the call that asked for it, not the
+/// transaction: a caller can catch the failure and go on. The host then
+/// rolls back that call's storage writes and authorization state, and the
+/// grant signer charges in the `require_auth` of the authorization's root,
+/// inside the call that encloses everything the authorization allows, so a
+/// caught failure leaves no charge and a charge stays only with its calls.
+#[test]
+fn a_caught_refusal_or_failure_leaves_the_budget_as_if_the_call_never_ran() {
+    let f = Fixture::new("budget-caught");
+    let a = agent(1);
+    let catcher = f.env().register(Catcher, ());
+    let g = f.issue(&a, &[f.contract_in(&[&f.asset, &f.router])], 100);
+
+    // Over the allowance: refused, and called directly the refusal fails the
+    // transaction. Behind the catcher the transaction succeeds, and nothing
+    // was charged or moved.
+    assert_eq!(
+        f.forward(g, &a, &f.bob, 150),
+        refused(GrantError::Overdrawn)
+    );
+    assert_eq!(
+        f.caught_forward(&catcher, g, &a, &f.bob, 150),
+        (Outcome::Ok, Some(false))
+    );
+    assert_eq!((f.grant(g).spent, f.balance(&f.bob)), (0, 0));
+
+    // Within the allowance but over the account's balance: the grant signer
+    // charges, then the nested transfer fails. The caught failure rolls the
+    // charge back with the call.
+    // Called directly, the grant signer allows it and the asset contract's
+    // balance check (its error #10) fails the transfer.
+    f.refill(g, 4_900);
+    assert!(
+        matches!(
+            f.forward(g, &a, &f.bob, 2 * BALANCE),
+            Outcome::Other(ref m) if m.contains("Error(Contract, #10)")
+        ),
+        "the direct call fails in the transfer, not the authorization"
+    );
+    assert_eq!(f.grant(g).spent, 0);
+    assert_eq!(
+        f.caught_forward(&catcher, g, &a, &f.bob, 2 * BALANCE),
+        (Outcome::Ok, Some(false))
+    );
+    assert_eq!((f.grant(g).spent, f.balance(&f.bob)), (0, 0));
+
+    // An allowed call behind the catcher is charged once, with its transfer.
+    assert_eq!(
+        f.caught_forward(&catcher, g, &a, &f.bob, 60),
+        (Outcome::Ok, Some(true))
+    );
+    assert_eq!((f.grant(g).spent, f.balance(&f.bob)), (60, 60));
 }
 
 #[test]

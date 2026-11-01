@@ -122,11 +122,14 @@ claims:
 
   - id: deployed-cost
     statement: >-
-      On the 28 measured pairs of a passing and a failing check, the grant
-      signer's evaluator work (the difference in Soroban CPU instructions) is
-      96 to 164 instructions per Lean step, 99.4 by least squares through the
-      origin (R squared 0.986), and the contract, the native evaluator and the
-      Lean model agree on every verdict.
+      On the 27 of 28 measured pairs of a passing and a failing check whose
+      Lean step counts differ by at least 10, the grant signer's evaluator
+      work (the difference in Soroban CPU instructions) is 96 to 164
+      instructions per Lean step; over all 28, a least-squares fit through the
+      origin gives 99.4 (R squared 0.986). In the 28th, a 64-entry contractIn
+      list, the failing check takes 9 more Lean steps and 620 fewer
+      instructions. The contract, the native evaluator and the Lean model
+      agree on every verdict.
     status: measured
     evidence:
       file: evaluation/results/cost-bound.json
@@ -141,8 +144,9 @@ claims:
     statement: >-
       Priced at 99.4 instructions per step, the proven bound is more than 12
       times the whole measured check above the zero-caveat cost on every
-      measured point, and at a 16 KiB compared argument the bound is
-      543,146,436 steps where the model takes 16,458.
+      measured point; at a 16 KiB compared argument the bound is 543,146,436
+      steps where the model takes 16,458 on the passing check and 6 on the
+      failing one.
     status: measured
     evidence:
       file: evaluation/results/cost-bound.csv
@@ -590,11 +594,27 @@ claims:
       writeBack.
     status: unproven
 
+  - id: host-frame-rollback
+    statement: >-
+      A refused authorization fails the call that asked for it, which a
+      calling contract can catch and survive; the Soroban host then rolls back
+      that call's storage writes and authorization state. The grant signer
+      writes nothing before refusing and charges in the require_auth of the
+      authorization's root, inside the call enclosing every call the
+      authorization allows, so a caught refusal leaves no charge, a caught
+      failure after the charge rolls the charge back, and a charge stays only
+      with the root call it was made in.
+    status: tested
+    evidence:
+      test: a_caught_refusal_or_failure_leaves_the_budget_as_if_the_call_never_ran
+      file: crates/integration-tests/tests/it/grant_signer.rs
+
   - id: budget-batch-as-run
     statement: >-
       Every sequence of the grant signer's calls, as Signer.lean models its
       storage, lineage ledger, all-or-nothing spends and store loop, is a run
-      of the model's operations on the ledger of every grant.
+      of the model's operations on the ledger of every grant, given the host's
+      rollback of a failed call (host-frame-rollback).
     status: proven
     evidence:
       - lean: Ledger.writeBack_spendAll
@@ -728,8 +748,15 @@ claims:
       The host refuses to sign what the chain vocabulary cannot describe: a
       fee-bump envelope, a transaction with a second operation or with an
       operation other than one InvokeHostFunction, and a contract-code upload.
+      It refuses every contract deployment, as a transaction's host function
+      or as any context of its authorization entries or of a preimage's tree,
+      under every grant, an empty chain list included.
     status: tested
     evidence:
+      - test: a_transaction_deploying_a_contract_is_refused_under_every_chain_grant
+        file: crates/agent-host/tests/signing.rs
+      - test: a_contract_deployment_inside_an_authorization_tree_is_refused_under_every_chain_grant
+        file: crates/agent-host/tests/signing.rs
       - test: a_fee_bump_envelope_is_refused
         file: crates/agent-host/tests/signing.rs
       - test: a_transaction_with_a_second_operation_is_refused
@@ -805,11 +832,12 @@ claims:
 
   - id: attack-suite-host
     statement: >-
-      At the agent host, all 31 escalation attempts (10 self-escalation, 21
-      delegation workarounds through paths, URLs and signing requests) are
-      refused, each with the file tree, the second server's request count,
-      the keeper's signature log and every agent's verdicts unchanged, and the
-      3 allowed controls pass.
+      At the agent host, all 45 escalation attempts (11 self-escalation, 29
+      delegation workarounds through paths, URLs and signing requests, and 5
+      signatures whose trees nest a call the chain grant denies) are refused,
+      each with the file tree, the second server's request count, the
+      keeper's signature log and every agent's verdicts unchanged, and the 6
+      allowed controls pass.
     status: measured
     evidence:
       file: evaluation/results/agent-host-attacks.json

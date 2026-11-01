@@ -342,9 +342,16 @@ grant, restricted to the lineage: the same outcome, an error naming the same
 grant (the one `overdrawn_at` reports), and after the spends the whole
 ledger's lineage after them. Storing it leaves the whole ledger after them.
 An authorization's spends are all or nothing: the contract returns before
-storing on any failure, and a refused authorization fails its transaction.
-Its effect is therefore either no change or the run of all its spends, both
-of them runs. Every sequence of the contract's calls is a `Ledger.run`, so
+storing on any failure. A refused authorization fails the call that asked for
+it, which a calling contract can catch and survive; the Soroban host then
+rolls back that call's storage writes and authorization state. The contract
+stores a successful batch in the `require_auth` of the authorization's root,
+inside the call that encloses every call the authorization allows, so if that
+call fails, caught or not, the batch is rolled back with it. That host
+behaviour is a premise, not modelled; the grant-signer test
+`a_caught_refusal_or_failure_leaves_the_budget_as_if_the_call_never_ran`
+checks it. An authorization's effect is therefore either no change or the run
+of all its spends, both of them runs. Every sequence of the contract's calls is a `Ledger.run`, so
 theorem 4's bound on the total spent under a grant holds for the contract
 from its first grant on, with no hypothesis on the allowances. `example`s at
 the end of the module check a grandchild's lineage by `rfl`.
