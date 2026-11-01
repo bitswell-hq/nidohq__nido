@@ -1,0 +1,7 @@
+claims:
+  - id: x
+    statement: S.
+    status: tested
+    evidence:
+      test: rejects_wrong
+      file: tests/fixture_test.rs

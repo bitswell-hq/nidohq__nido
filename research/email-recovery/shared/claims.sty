@@ -1,0 +1,65 @@
+% Claim status tags, read from the generated claims.tex (claims-to-tex.pl).
+%
+%   \claim{id}           the claim's status as a tag, e.g. [unproven]
+%   \claimstatement{id}  the claim's statement as the ledger words it
+%   \ClaimTable          the appendix table of every claim (paper only)
+%
+% An id missing from the ledger is a LaTeX error; check-claims.pl reports it
+% first, with the file and line.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{claims}[2026/11/01 claim ledger tags]
+\RequirePackage{xcolor}
+\RequirePackage{tabularx}
+
+\definecolor{claim-proven}{HTML}{1B7837}
+\definecolor{claim-tested}{HTML}{2166AC}
+\definecolor{claim-measured}{HTML}{5E3C99}
+\definecolor{claim-assumed}{HTML}{B35806}
+\definecolor{claim-unproven}{HTML}{B2182B}
+
+\newcommand\ClaimDefine[4]{%
+  \expandafter\def\csname claim@status@#1\endcsname{#2}%
+  \expandafter\def\csname claim@text@#1\endcsname{#3}%
+  \expandafter\def\csname claim@evidence@#1\endcsname{#4}}
+
+\newcommand\claim@need[1]{%
+  \ifcsname claim@status@#1\endcsname\else
+    \PackageError{claims}{Claim `#1' is not in claims.yaml}{Add it to the ledger or fix the id.}%
+  \fi}
+
+% The tag for a status name.
+\newcommand\claimtag[1]{%
+  {\normalfont\sffamily\scriptsize\bfseries\textcolor{claim-#1}{[#1]}}}
+
+\DeclareRobustCommand\claim[1]{%
+  \claim@need{#1}%
+  \ifcsname claim@status@#1\endcsname
+    \edef\claim@s{\csname claim@status@#1\endcsname}%
+    \unskip\nobreak\hskip.3em\relax\expandafter\claimtag\expandafter{\claim@s}%
+  \fi}
+
+\DeclareRobustCommand\claimstatement[1]{%
+  \claim@need{#1}%
+  \ifcsname claim@text@#1\endcsname\csname claim@text@#1\endcsname\fi}
+
+% #1 is the id, #2 the id as typeset (with break points).
+\newcommand\ClaimRow[2]{%
+  \texttt{#2} & \claimstatement{#1} &
+  \edef\claim@s{\csname claim@status@#1\endcsname}\expandafter\claimtag\expandafter{\claim@s} &
+  \csname claim@evidence@#1\endcsname \tabularnewline}
+
+\newcommand\ClaimTable{%
+  \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{0.16\linewidth}
+      >{\raggedright\arraybackslash}X l
+      >{\raggedright\arraybackslash}p{0.30\linewidth}@{}}
+    \hline
+    \textbf{Claim} & \textbf{Statement} & \textbf{Status} & \textbf{Evidence}\tabularnewline
+    \hline
+    \ClaimTableRows
+    \hline
+  \end{tabularx}}
+
+\InputIfFileExists{claims.tex}{}{%
+  \PackageError{claims}{claims.tex not found}{Build with research/email-recovery/build.sh,
+    which generates it from claims.yaml.}}
+\endinput

@@ -1,0 +1,26 @@
+claims:
+  - id: a-proven
+    statement: Proven thing.
+    status: proven
+    evidence:
+      lean: Fixture.email_sound
+      file: formal/Fixture.lean
+  - id: a-tested
+    statement: Tested thing.
+    status: tested
+    evidence:
+      test: rejects_wrong_account
+      file: tests/fixture_test.rs
+  - id: a-measured
+    statement: Measured thing.
+    status: measured
+    evidence:
+      file: eval/verify.json
+  - id: a-assumed
+    statement: Assumed thing.
+    status: assumed
+    evidence:
+      assumption: Something holds.
+  - id: a-unproven
+    statement: Open thing.
+    status: unproven

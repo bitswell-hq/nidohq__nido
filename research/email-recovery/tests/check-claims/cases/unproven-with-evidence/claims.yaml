@@ -1,0 +1,6 @@
+claims:
+  - id: x
+    statement: S.
+    status: unproven
+    evidence:
+      assumption: A.

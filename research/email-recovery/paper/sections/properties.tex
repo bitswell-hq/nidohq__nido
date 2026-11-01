@@ -1,0 +1,20 @@
+\section{Properties}\label{sec:properties}
+
+We state the four properties informally. Each will be stated formally, in
+Lean where it fits, with the obligations it places on the circuit and the
+contracts named; until then each is \emph{unproven}. In Perch's terms the
+recovery statement's account is its \texttt{account} field, the new key is
+the replacement set the target document declares, the nonce is the attempt
+id together with the configuration epoch, and the expiry is the validity
+deadline.
+
+\begin{description}
+  \item[Soundness of the email factor.]
+    \claimstatement{email-factor-soundness}\claim{email-factor-soundness}
+  \item[Privacy.]
+    \claimstatement{address-privacy}\claim{address-privacy}
+  \item[Replay and front-running resistance.]
+    \claimstatement{replay-resistance}\claim{replay-resistance}
+  \item[One-factor safety.]
+    \claimstatement{one-factor-safety}\claim{one-factor-safety}
+\end{description}

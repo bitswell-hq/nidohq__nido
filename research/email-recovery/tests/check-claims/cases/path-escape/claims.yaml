@@ -1,0 +1,6 @@
+claims:
+  - id: x
+    statement: S.
+    status: measured
+    evidence:
+      file: ../../check-claims.pl

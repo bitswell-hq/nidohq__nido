@@ -1,0 +1,37 @@
+\section{Introduction}\label{sec:intro}
+
+A smart account that authenticates with a passkey is lost when every device
+holding the passkey is lost. Recovery schemes answer this with guardians,
+delays and secondary credentials. An email inbox is the credential most users
+already keep for years and can regain through their provider, which makes it
+an attractive recovery factor. Using it naively, however, puts the address in
+a database or on a public chain, and turns whoever runs the email check into a
+party that can recover any account.
+
+This paper describes email recovery for Soroban smart accounts in which no
+party stores the address or a secret derived from it in the clear. The
+account commits to a salted hash of the exact address. The user, on a new
+device, sends one recovery email from that inbox to a fixed address. The
+provider signs the email with DKIM~\cite{rfc6376}; the user's browser proves
+in zero knowledge that the signature verifies under a registered key, that
+the sender opens the commitment, and that the Subject binds the pending
+recovery statement. A per-account email-guardian contract verifies the proof
+on chain and counts as one guardian approval in Perch's
+recovery~\cite{perch-recovery-spec}. The delay, the policy quorum and the
+owner's ability to cancel still apply, so the email factor never completes a
+recovery on its own.
+
+\paragraph{Contributions.}
+\begin{itemize}
+  \item A recovery-factor design that keeps the address off chain and out of
+    every operator's hands, built on Perch's recovery without changing it
+    (\S\ref{sec:design}).
+  \item Formal statements of four properties: soundness of the email factor,
+    privacy of the address, replay and front-running resistance, and
+    one-factor safety (\S\ref{sec:properties}).
+  \item A claim ledger that tags every claim in this paper with its status
+    (Appendix~\ref{app:claims}).
+\end{itemize}
+The hardened circuit, the contracts, the browser prover and their evaluation
+are described in \S\ref{sec:impl} and \S\ref{sec:eval}; their results are
+pending.

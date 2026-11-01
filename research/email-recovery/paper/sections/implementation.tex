@@ -1,0 +1,21 @@
+\section{Implementation}\label{sec:impl}
+
+The implementation has five parts: the recovery statement format and the
+email-guardian contract on Perch's existing recovery; a Noir circuit, proved
+with UltraHonk, with header and body constraints for the launch providers;
+the browser prover and the recovery flow; the DKIM key registry contract with
+its timelock and attestation feed; and mocks of every third party (mail
+providers signing with test keys in each provider's format, inbound mail, DNS
+attestations, the sending service, the enclave and its custodians, and Web
+Push).
+
+The circuit must enforce what open-source email circuits have been found to
+miss. Public audits of zkEmail's Circom and Noir
+libraries~\cite{audit-zksecurity-2024,audit-yacademy,audit-veridise-2024,audit-consensys-2024}
+report, among others, header-field extraction fooled by a header in simple
+canonicalisation, and the first characters of a claimed header value left
+unchecked for CRLF.
+The circuit's constraints and the tests that pin each fix are described here
+once built.
+
+\pending{the circuit, contracts and browser prover are not yet built.}

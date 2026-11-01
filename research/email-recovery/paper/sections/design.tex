@@ -1,0 +1,67 @@
+\section{Design}\label{sec:design}
+
+\begin{figure*}[t]
+  \centering
+  \resizebox{0.8\linewidth}{!}{\input{figures/recovery-flow}}
+  \Description{The wallet on a new device sends an email carrying a blinded statement digest to the user's mail provider and receives the DKIM-signed copy. It submits a proof to the Perch recovery controller, which asks the per-account email guardian to check the digest; the guardian checks the signing key against the DKIM key registry. Another guardian also approves; recovery then needs the quorum and the delay before completion.}
+  \caption{The email factor inside one recovery attempt. The email guardian
+    is one of the account's guardians; the attempt still needs the quorum
+    and the delay.}
+  \label{fig:flow}
+\end{figure*}
+
+\paragraph{One factor, one guardian.} Each account that opts in gets its own
+immutable email-guardian contract, listed as one guardian in its Perch
+recovery configuration and counted toward the quorum like any other
+(Fig.~\ref{fig:flow}). The guardian's constructor fixes the commitment
+$\Commit$, where $\addr$ is the exact \texttt{From} address captured at
+enrollment and $\code$ is an account code of at least 128 random bits that
+only the user holds; the registry it trusts; and the controller it answers
+to. Changing the address deploys a new guardian, which goes through Perch's
+reconfiguration rules. Email combines with the delay and other guardians;
+email plus the delay alone is allowed only under the lost-key profile, with a
+delay of at least seven days and a second alert channel.
+
+\paragraph{The recovery email.} The user sends one email from their own
+inbox to a fixed recovery address; nothing needs the user's address to start
+recovery. Its Subject carries a fixed phrase and $\Blinded$, a blinded copy of
+the statement digest, where $\blind$ stays in the browser, so the provider
+cannot link the email to the public attempt.
+
+\paragraph{The proof.} The browser proves, with a progress indicator, that
+the email carries a valid DKIM signature under a key whose hash is in the
+registry's Merkle root, that \texttt{d=} equals the domain of a single,
+unfolded \texttt{From} address that opens $\Cm$, and that the Subject is the
+fixed phrase and $\Blinded$. Proving uses threads on the recovery origin,
+which is served cross-origin isolated (COOP/COEP).
+
+\paragraph{The guardian check.} The guardian's \texttt{\_\_check\_auth}
+receives the digest from the controller. It also requires the statement
+bytes, checks $\Sha(\text{bytes}) = \digest$ and that the account inside them
+is its own, checks that the registry root is current, and verifies the
+proof through Perch's UltraHonk verifier.
+
+\paragraph{The key registry.} A multisig adds keys after a timelock: 72
+hours for keys that independent DNS attestations observe live in DNS, seven
+days otherwise. Each account may pin a key, and retired keys stay valid for a
+grace period. Launch providers are an allowlist of major providers (Gmail,
+Outlook and Hotmail, iCloud, Yahoo, Proton, Fastmail, GMX and web.de); custom
+domains are not supported at first.
+
+\paragraph{Alerts.} When an account enters recovery, alerts go out from
+Perch's recovery events, with generic text and a per-attempt verification
+code. Nothing on chain tags the account for the alert service, which finds
+its records by a keyed hash of the account. When email is a recovery factor,
+a second channel, Web Push to a passkey device, is required. Alert addresses
+are held in a sealed vault: the browser encrypts each address to an attested
+enclave whose key is split 2-of-3 across independent custodians, and new
+enclave code waits out a 14-day public timelock. Alert mail is sent by an
+EU-owned service. The privacy claim is scoped: Nido's servers and staff
+cannot read the address.
+
+\paragraph{A later second path.} Sign-in with Google, Apple or Microsoft
+(OIDC) may later become a second way to produce the email factor. It never
+counts as a factor independent of the same provider's DKIM.
+
+\paragraph{Deployment.} The system runs on testnet first; mainnet waits for
+an external audit.

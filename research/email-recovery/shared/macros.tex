@@ -1,0 +1,17 @@
+% Notation shared by the paper and the slides.
+\usepackage{claims}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit}
+
+\newcommand\Nido{Nido}
+\newcommand\Perch{Perch}
+\newcommand\code{\mathsf{code}}          % the user-held account code, at least 128 random bits
+\newcommand\addr{\mathsf{addr}}          % the exact From address captured at enrollment
+\newcommand\Cm{\mathsf{C}}               % the address commitment
+\newcommand\digest{\mathsf{d}}           % Perch's recovery statement digest
+\newcommand\blind{\mathsf{r}}            % the browser-held blinding value
+\newcommand\Poseidon{\mathrm{Poseidon2}}
+\newcommand\Sha{\mathrm{SHA\text{-}256}}
+\newcommand\Commit{\Cm = \Poseidon(\addr, \code)}
+\newcommand\Blinded{H(\digest \,\|\, \blind)}
+\newcommand\pending[1]{\emph{Results pending: #1}}

@@ -1,0 +1,57 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+\input{macros}
+
+\setcopyright{none}
+\settopmatter{printacmref=false}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+\acmConference{}{}{}
+\acmYear{}
+\acmDOI{}
+\acmISBN{}
+
+\begin{document}
+
+\title{Email Recovery Without Plaintext: Zero-Knowledge Email as a Recovery Factor for Smart Accounts}
+
+\author{Anonymous Author(s)}
+\affiliation{%
+  \institution{Anonymous Institution}
+  \country{Anonymous Country}}
+
+\begin{abstract}
+A smart account can use control of an email inbox as one recovery factor
+without anyone storing a plaintext email address or secret. The account
+commits to a salted hash of the address. To recover, the user sends one email
+from their own inbox carrying the recovery statement, proves in the browser
+that the provider DKIM-signed it, and an on-chain verifier accepts the proof
+as one guardian approval inside an existing delayed recovery process. Email is
+never sufficient alone. We give the design on Perch's recovery for Soroban
+smart accounts, state its soundness, privacy, replay-resistance and
+one-factor-safety properties, and mark each claim as proven, tested,
+measured, assumed or unproven. Implementation and evaluation results are
+pending.
+\end{abstract}
+
+\keywords{account recovery, DKIM, zero-knowledge proofs, smart accounts, Soroban}
+
+\maketitle
+
+\input{sections/introduction}
+\input{sections/background}
+\input{sections/threat-model}
+\input{sections/design}
+\input{sections/properties}
+\input{sections/implementation}
+\input{sections/evaluation}
+\input{sections/related-work}
+\input{sections/limitations}
+\input{sections/conclusion}
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\appendix
+\input{sections/claims-appendix}
+
+\end{document}

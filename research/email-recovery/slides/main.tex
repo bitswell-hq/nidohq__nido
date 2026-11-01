@@ -1,0 +1,148 @@
+\documentclass[aspectratio=169,11pt]{beamer}
+\usetheme{default}
+\usecolortheme{default}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}[frame number]
+\setbeamerfont{footnote}{size=\tiny}
+
+\input{macros}
+
+\title{Email Recovery Without Plaintext}
+\subtitle{Zero-Knowledge Email as a Recovery Factor for Smart Accounts}
+\author{Anonymous Author(s)}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+\begin{frame}{The problem}
+  \begin{itemize}
+    \item A passkey smart account is lost with the last device that holds the passkey.
+    \item An inbox is a credential users keep for years and can regain.
+    \item Naive email recovery stores the address and makes the checker a
+      party that can recover any account.
+  \end{itemize}
+  \bigskip
+  \textbf{Goal:} email as one recovery factor, with no plaintext address or
+  secret stored anywhere.
+\end{frame}
+
+\begin{frame}{Background}
+  \begin{description}[Perch recovery]
+    \item[DKIM] the signing domain signs header fields and a body hash;
+      keys in DNS~\cite{rfc6376,rfc8301}.
+    \item[Perch recovery] guardians and a quorum approve a fixed-width
+      recovery statement; a delay follows; the owner may
+      cancel~\cite{perch-recovery-spec}.
+    \item[UltraHonk] Noir circuits proved with Barretenberg, verified on
+      Soroban by Perch's verifier~\cite{noir-docs,barretenberg-docs}.
+  \end{description}
+\end{frame}
+
+\begin{frame}{Threat model}
+  \begin{itemize}
+    \item The adversary sees the chain and the mempool, opens attempts, sends
+      email, may hold the victim's inbox, and may run Nido's servers.
+    \item Assumptions:
+      \begin{itemize}\small
+        \item DKIM signatures cannot be forged.\claim{dkim-unforgeability}
+        \item Providers sign only for the mailbox holder.\claim{provider-authenticates-sender}
+        \item The registry lists only real provider keys.\claim{registry-correctness}
+        \item UltraHonk is knowledge-sound and zero-knowledge.\claim{proof-system-security}
+        \item The commitment hides the address.\claim{commitment-hiding}
+      \end{itemize}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Design: one factor, one guardian}
+  \centering
+  \resizebox{0.95\linewidth}{!}{\input{figures/recovery-flow}}
+  \par\medskip\small
+  A per-account, immutable email guardian with $\Commit$, counted as one
+  guardian in Perch's quorum.
+\end{frame}
+
+\begin{frame}{Design: the recovery email and the proof}
+  \begin{itemize}
+    \item The user sends one email from their own inbox to a fixed address.
+    \item Subject: a fixed phrase and $\Blinded$; $\blind$ stays in the browser.
+    \item The browser proves: valid DKIM under a registered key; \texttt{d=}
+      matches a single unfolded \texttt{From}; that address opens $\Cm$; the
+      Subject binds the statement.
+    \item The guardian checks $\Sha(\text{statement bytes}) = \digest$, its own
+      account inside them, and the proof.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Design: registry and alerts}
+  \begin{itemize}
+    \item DKIM key registry: multisig with timelocks (72\,h for keys live in
+      DNS, 7 days otherwise), fed by DNS attestations; per-account key pin;
+      grace period for retired keys.
+    \item Launch providers: Gmail, Outlook/Hotmail, iCloud, Yahoo, Proton,
+      Fastmail, GMX/web.de.
+    \item Alerts from Perch's recovery events: generic text, a per-attempt
+      code, and Web Push to a passkey device.
+    \item Alert addresses sealed to an attested enclave, key split 2-of-3.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Properties}
+  \small
+  \begin{description}[Soundness]
+    \item[Soundness] \claimstatement{email-factor-soundness}\claim{email-factor-soundness}
+    \item[Privacy] \claimstatement{address-privacy}\claim{address-privacy}
+    \item[Replay] \claimstatement{replay-resistance}\claim{replay-resistance}
+    \item[One factor] \claimstatement{one-factor-safety}\claim{one-factor-safety}
+  \end{description}
+\end{frame}
+
+\begin{frame}{Implementation}
+  \begin{itemize}
+    \item Recovery statement format and the email-guardian contract on Perch.
+    \item A Noir DKIM circuit with header and body constraints for the
+      launch providers, fixing the issues public audits report~\cite{audit-consensys-2024,audit-veridise-2024}.
+    \item Browser prover, DKIM key registry, mocks of every third party.
+  \end{itemize}
+  \bigskip
+  \pending{not yet built.}
+\end{frame}
+
+\begin{frame}{Evaluation}
+  \begin{itemize}
+    \item Proving time and memory, desktop and phone-class devices.
+    \item On-chain instructions, bytes and fees, local network and testnet.
+    \item Attack suite: forged and replayed emails, wrong account or key,
+      stale or malicious registry keys, compromised inbox, header quirks,
+      front-running.
+  \end{itemize}
+  \bigskip
+  \pending{no measurements yet.}
+\end{frame}
+
+\begin{frame}{Related work, limitations and open questions}
+  \begin{itemize}
+    \item zkEmail proves statements about DKIM email~\cite{zkemail-nr};
+      zkLogin uses OIDC tokens~\cite{zklogin}.
+    \item All four properties are unproven; the assumptions are stated.
+    \item The provider learns that a recovery email was sent.
+    \item A key rotation can stall recovery up to the registry timelock.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Summary}
+  Email can be one recovery factor with no plaintext address anywhere: a
+  salted commitment, a browser-side DKIM proof, and a per-account guardian
+  inside Perch's delayed recovery. Every claim carries its status.
+\end{frame}
+
+\begin{frame}[allowframebreaks]{References}
+  \tiny
+  \bibliographystyle{plain}
+  \bibliography{references}
+\end{frame}
+
+\end{document}
