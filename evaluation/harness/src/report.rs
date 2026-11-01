@@ -25,11 +25,6 @@ const END: &str = "<!-- results:end -->";
 /// is noise); the fit uses every pair.
 const MIN_STEPS: i64 = 10;
 
-/// Per case: native times, component times and their ratios, over runs.
-type BenchRuns = (Vec<f64>, Vec<f64>, Vec<f64>);
-/// Per case: calls per run, calls per second and µs per call, over runs.
-type ThroughputRuns = (u64, Vec<f64>, Vec<f64>);
-
 #[derive(Serialize)]
 struct CostRow {
     id: String,
@@ -536,104 +531,224 @@ fn workload_tables(out: &mut String, soroban: &Value, host: &Value) {
     table(out, &["Step", "Expected", "Outcome", "Detail", "µs"], &rows);
 }
 
+/// A median with its 95% interval, as `median (low–high)`.
+fn stat(v: &Value, decimals: usize) -> String {
+    let m = v["median"].as_f64().unwrap_or(0.0);
+    let lo = v["median_ci95"][0].as_f64().unwrap_or(0.0);
+    let hi = v["median_ci95"][1].as_f64().unwrap_or(0.0);
+    format!("{m:.decimals$} ({lo:.decimals$}–{hi:.decimals$})")
+}
+
+fn median(v: &Value) -> f64 {
+    v["median"].as_f64().unwrap_or(0.0)
+}
+
+/// `n` rounded to a whole number with thousands separators.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+fn whole(n: f64) -> String {
+    thousands(n.max(0.0).round() as u64)
+}
+
+#[allow(clippy::too_many_lines)]
 fn bench_tables(out: &mut String, bench: &Value, throughput: &Value) {
-    let runs = bench.as_array().cloned().unwrap_or_default();
-    let mut cases: BTreeMap<String, BenchRuns> = BTreeMap::new();
-    let mut order = Vec::new();
-    let mut instantiate = Vec::new();
-    for run in &runs {
-        instantiate.push(run["instantiate_ms"].as_f64().unwrap_or(0.0));
-        for row in run["rows"].as_array().cloned().unwrap_or_default() {
-            let case = s(&row, "case");
-            if !order.contains(&case) {
-                order.push(case.clone());
-            }
-            let n = row["native_ns"].as_f64().unwrap_or(0.0);
-            let c = row["component_ns"].as_f64().unwrap_or(0.0);
-            let e = cases.entry(case).or_default();
-            e.0.push(n);
-            e.1.push(c);
-            e.2.push(c / n);
-        }
-    }
-    let iterations = runs.first().map_or(0, |r| u(r, "iterations"));
+    let m = &bench["method"];
     let _ = writeln!(
         out,
-        "**Per check, native `grant-eval` against the evaluator component** ({} runs of {} iterations; range over the runs; compiling and instantiating the component took {} ms)\n",
-        runs.len(),
-        thousands(iterations),
-        range(&instantiate, 0)
+        "One recorded run (`agent-host-bench.json`, `agent-host-throughput.json`). Build: {} with overflow checks, `{}`. \
+         Scheduling: the timing thread asked for `{}` ({}); macOS cannot pin a thread to a core. \
+         Every operation is warmed up for {} ms and timed in batches of at least {} ms. \
+         Check cases: {} interleaved rounds, the variants' order rotating each round; ratios are taken within a round. \
+         Each cell is the median with its 95% confidence interval.\n",
+        s(&bench["build"], "profile"),
+        s(&bench["build"], "target"),
+        s(&bench["scheduling"], "thread_qos"),
+        if bench["scheduling"]["set"].as_bool().unwrap_or(false) { "granted" } else { "not granted" },
+        m["warm_up_ms"],
+        m["min_batch_ms"],
+        m["check_rounds"],
     );
-    let rows: Vec<Vec<String>> = order
+    let before = &bench["machine_before"];
+    let after = &bench["machine_after"];
+    let cores: Vec<String> = before["cores"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
         .iter()
-        .map(|case| {
-            let (n, c, ratio) = &cases[case];
-            let per_second: Vec<f64> = c.iter().map(|ns| 1e9 / ns).collect();
+        .map(|c| format!("{} × {}", s(c, "physical"), s(c, "level")))
+        .collect();
+    let rows = vec![
+        vec!["CPU".to_owned(), s(before, "cpu")],
+        vec!["Cores by performance level".to_owned(), cores.join(", ")],
+        vec!["OS".to_owned(), s(before, "os")],
+        vec!["Power source".to_owned(), s(before, "power_source")],
+        vec!["Power mode".to_owned(), s(before, "power_mode")],
+        vec![
+            "Thermal".to_owned(),
+            before["thermal"]
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(Value::as_str)
+                        .collect::<Vec<_>>()
+                        .join("; ")
+                })
+                .unwrap_or_default(),
+        ],
+        vec![
+            "Load average (1, 5, 15 min) before / after".to_owned(),
+            format!(
+                "{} / {}",
+                s(before, "load_average"),
+                s(after, "load_average")
+            ),
+        ],
+    ];
+    table(out, &["Machine during the run", ""], &rows);
+
+    let rows: Vec<Vec<String>> = bench["checks"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
+        .iter()
+        .map(|r| {
             vec![
-                case.clone(),
-                format!("{} ns", range(n, 1)),
-                format!(
-                    "{} µs",
-                    range(&c.iter().map(|x| x / 1000.0).collect::<Vec<_>>(), 2)
-                ),
-                format!("{}x", range(ratio, 0)),
-                range(&per_second, 0),
+                s(r, "case"),
+                stat(&r["native_ns"], 1),
+                stat(&r["host_native_ns"], 1),
+                stat(&r["component_ns"], 1),
+                stat(&r["component_over_native"], 1),
+                stat(&r["component_over_host_native"], 2),
+                whole(1e9 / median(&r["component_ns"])),
             ]
         })
         .collect();
+    let _ = writeln!(
+        out,
+        "**Per check** (ns). *Native*: `grant-eval` on values built once. *Host-side, no Wasm*: the host's WIT values converted to `grant-eval` values natively, then evaluated. *Component*: the evaluator component through Wasmtime.\n"
+    );
     table(
         out,
         &[
             "Case",
             "Native",
+            "Host-side, no Wasm",
             "Component",
-            "Ratio",
+            "Component / native",
+            "Component / host-side",
             "Component checks per second",
         ],
         &rows,
     );
-
-    let runs = throughput.as_array().cloned().unwrap_or_default();
-    let mut cases: BTreeMap<String, ThroughputRuns> = BTreeMap::new();
-    let mut order = Vec::new();
-    for run in &runs {
-        for row in run.as_array().cloned().unwrap_or_default() {
-            let case = s(&row, "case");
-            if !order.contains(&case) {
-                order.push(case.clone());
-            }
-            let e = cases.entry(case).or_default();
-            e.0 = u(&row, "calls");
-            e.1.push(row["calls_per_second"].as_f64().unwrap_or(0.0));
-            e.2.push(row["micros_per_call"].as_f64().unwrap_or(0.0));
-        }
-    }
     let _ = writeln!(
         out,
-        "**Agent-host tool calls** (one agent, calls in sequence; {} runs; range over the runs)\n",
-        runs.len()
+        "Compiling and instantiating the component: {} ms over {} runs.\n",
+        stat(&bench["instantiate_ms"], 1),
+        m["instantiations"]
     );
-    let rows: Vec<Vec<String>> = order
+
+    let rows: Vec<Vec<String>> = throughput
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
         .iter()
-        .map(|case| {
-            let (calls, per_second, micros) = &cases[case];
+        .map(|r| {
+            let us = &r["micros_per_call"];
             vec![
-                case.clone(),
-                thousands(*calls),
-                range(per_second, 0),
-                range(micros, 2),
+                s(r, "case"),
+                stat(us, 2),
+                format!(
+                    "{:.2}–{:.2}",
+                    us["p10"].as_f64().unwrap_or(0.0),
+                    us["p90"].as_f64().unwrap_or(0.0)
+                ),
+                whole(1e6 / median(us)),
+                u(r, "calls_per_batch").to_string(),
             ]
         })
         .collect();
+    let _ = writeln!(
+        out,
+        "**Tool calls through the whole host** (µs per call; one agent, calls in sequence; {} rounds)\n",
+        m["call_rounds"]
+    );
     table(
         out,
         &[
             "Tool call",
-            "Calls per run",
-            "Calls per second",
-            "µs per call",
+            "Median (95% CI)",
+            "10th–90th percentile",
+            "Calls per second at the median",
+            "Calls per batch",
         ],
         &rows,
+    );
+}
+
+/// The headline numbers, each from the table it summarizes.
+fn headline(out: &mut String, sets: &[(&str, &Value)], fit: &Fit, bench: &Value) {
+    let _ = writeln!(
+        out,
+        "### Summary
+"
+    );
+    for (boundary, set) in sets {
+        let rows = set.as_array().cloned().unwrap_or_default();
+        let attacks: Vec<&Value> = rows
+            .iter()
+            .filter(|r| !r["control"].as_bool().unwrap_or(false))
+            .collect();
+        let refused = attacks
+            .iter()
+            .filter(|r| s(r, "outcome") == "refused")
+            .count();
+        let clean = attacks
+            .iter()
+            .filter(|r| r["state_unchanged"].as_bool().unwrap_or(false))
+            .count();
+        let controls = rows.len() - attacks.len();
+        let _ = writeln!(
+            out,
+            "- {boundary}: {} attacks, {refused} refused, {clean} with state unchanged; {controls} controls.",
+            attacks.len()
+        );
+    }
+    let ks: Vec<f64> = fit
+        .sweeps
+        .iter()
+        .flat_map(|s| [s.instructions_per_step_min, s.instructions_per_step_max])
+        .filter(|k| k.is_finite())
+        .collect();
+    let _ = writeln!(
+        out,
+        "- Cost bound: verdicts {} on every point; {} CPU instructions per Lean step over the pairs ≥ {MIN_STEPS} steps apart; \
+         least squares {:.1} (R² = {:.3}); the whole check above the zero-caveat cost ({} instructions) is at most {:.1}% of the bound priced at that constant.",
+        if fit.verdicts_agree { "agree" } else { "DISAGREE" },
+        range(&ks, 0),
+        fit.instructions_per_step,
+        fit.r_squared,
+        thousands(fit.zero_caveat_cpu),
+        fit.share_of_bound_max * 100.0
+    );
+    let checks = bench["checks"].as_array().cloned().unwrap_or_default();
+    let comp: Vec<f64> = checks
+        .iter()
+        .map(|r| median(&r["component_ns"]) / 1000.0)
+        .collect();
+    let ratio: Vec<f64> = checks
+        .iter()
+        .map(|r| median(&r["component_over_native"]))
+        .collect();
+    let host: Vec<f64> = checks
+        .iter()
+        .map(|r| median(&r["component_over_host_native"]))
+        .collect();
+    let _ = writeln!(
+        out,
+        "- Agent host, per check (medians): {} µs through the component, {}x native `grant-eval`, {}x the host-side check without Wasm; the component compiles and instantiates in {:.1} ms.\n",
+        range(&comp, 2),
+        range(&ratio, 0),
+        range(&host, 1),
+        median(&bench["instantiate_ms"])
     );
 }
 
@@ -670,13 +785,24 @@ pub fn run(dir: &Path, readme: &Path) -> Result<(), String> {
     )?;
     record::write_csv(dir, "cost-bound.csv", &rows)?;
 
+    let soroban_attacks = record::read(dir, "soroban-attacks.json")?;
+    let host_attacks = record::read(dir, "agent-host-attacks.json")?;
+    let bench = record::read(dir, "agent-host-bench.json")?;
     let mut out = String::new();
-    let _ = writeln!(out, "{BEGIN}\n\n### Machine and versions\n");
+    let _ = writeln!(out, "{BEGIN}\n");
+    headline(
+        &mut out,
+        &[
+            ("Soroban simulation", &soroban_attacks),
+            ("Agent host", &host_attacks),
+        ],
+        &fit,
+        &bench,
+    );
+    let _ = writeln!(out, "### Machine and versions\n");
     machine(&mut out, &record::read(dir, "machine.json")?);
     let _ = writeln!(out, "### Cost per check and the Lean bound\n");
     cost_tables(&mut out, &rows, &fit);
-    let soroban_attacks = record::read(dir, "soroban-attacks.json")?;
-    let host_attacks = record::read(dir, "agent-host-attacks.json")?;
     let _ = writeln!(out, "### Attack suite\n");
     summary(
         &mut out,
@@ -701,7 +827,7 @@ pub fn run(dir: &Path, readme: &Path) -> Result<(), String> {
     let _ = writeln!(out, "### Agent host: cost per check and throughput\n");
     bench_tables(
         &mut out,
-        &record::read(dir, "agent-host-bench.json")?,
+        &bench,
         &record::read(dir, "agent-host-throughput.json")?,
     );
     out.push_str(END);

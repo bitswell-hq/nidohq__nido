@@ -1,134 +1,98 @@
 [
-  [
-    {
-      "case": "denied fetch (check only)",
-      "calls": 20000,
-      "seconds": 0.058810083,
-      "calls_per_second": 340077.73803005856,
-      "micros_per_call": 2.9405041499999998
-    },
-    {
-      "case": "denied read outside the grant (resolve and check)",
-      "calls": 20000,
-      "seconds": 3.11803025,
-      "calls_per_second": 6414.305954857237,
-      "micros_per_call": 155.9015125
-    },
-    {
-      "case": "allowed read of a 15-byte file",
-      "calls": 5000,
-      "seconds": 0.997047708,
-      "calls_per_second": 5014.805169182537,
-      "micros_per_call": 199.40954159999998
-    },
-    {
-      "case": "allowed message signature",
-      "calls": 5000,
-      "seconds": 0.233079667,
-      "calls_per_second": 21451.892669814053,
-      "micros_per_call": 46.615933399999996
-    },
-    {
-      "case": "allowed authorization-entry signature",
-      "calls": 5000,
-      "seconds": 0.25713,
-      "calls_per_second": 19445.416715280207,
-      "micros_per_call": 51.42600000000001
-    },
-    {
-      "case": "allowed fetch from the local API",
-      "calls": 1000,
-      "seconds": 0.457257625,
-      "calls_per_second": 2186.950955711236,
-      "micros_per_call": 457.257625
+  {
+    "case": "denied fetch (check only)",
+    "calls_per_batch": 4096,
+    "micros_per_call": {
+      "samples": 31,
+      "median": 0.67774462890625,
+      "median_ci95": [
+        0.672841552734375,
+        0.67962646484375
+      ],
+      "p10": 0.66619873046875,
+      "p90": 0.687601806640625,
+      "min": 0.652811767578125,
+      "max": 0.693623779296875
     }
-  ],
-  [
-    {
-      "case": "denied fetch (check only)",
-      "calls": 20000,
-      "seconds": 0.05655575,
-      "calls_per_second": 353633.3617713495,
-      "micros_per_call": 2.8277875
-    },
-    {
-      "case": "denied read outside the grant (resolve and check)",
-      "calls": 20000,
-      "seconds": 3.151316792,
-      "calls_per_second": 6346.553304565389,
-      "micros_per_call": 157.5658396
-    },
-    {
-      "case": "allowed read of a 15-byte file",
-      "calls": 5000,
-      "seconds": 1.821495375,
-      "calls_per_second": 2744.9973624006593,
-      "micros_per_call": 364.299075
-    },
-    {
-      "case": "allowed message signature",
-      "calls": 5000,
-      "seconds": 0.250833375,
-      "calls_per_second": 19933.551506054566,
-      "micros_per_call": 50.166675000000005
-    },
-    {
-      "case": "allowed authorization-entry signature",
-      "calls": 5000,
-      "seconds": 0.256629042,
-      "calls_per_second": 19483.375540949106,
-      "micros_per_call": 51.3258084
-    },
-    {
-      "case": "allowed fetch from the local API",
-      "calls": 1000,
-      "seconds": 0.581061,
-      "calls_per_second": 1720.9897067605636,
-      "micros_per_call": 581.061
+  },
+  {
+    "case": "denied read outside the grant (resolve and check)",
+    "calls_per_batch": 64,
+    "micros_per_call": {
+      "samples": 31,
+      "median": 36.884109375,
+      "median_ci95": [
+        36.732421875,
+        37.32290625
+      ],
+      "p10": 36.578125,
+      "p90": 37.651046875,
+      "min": 36.48828125,
+      "max": 38.33071875
     }
-  ],
-  [
-    {
-      "case": "denied fetch (check only)",
-      "calls": 20000,
-      "seconds": 0.057167459,
-      "calls_per_second": 349849.3784724628,
-      "micros_per_call": 2.8583729499999997
-    },
-    {
-      "case": "denied read outside the grant (resolve and check)",
-      "calls": 20000,
-      "seconds": 3.927091792,
-      "calls_per_second": 5092.827226687855,
-      "micros_per_call": 196.35458960000003
-    },
-    {
-      "case": "allowed read of a 15-byte file",
-      "calls": 5000,
-      "seconds": 1.106930458,
-      "calls_per_second": 4516.995592509029,
-      "micros_per_call": 221.3860916
-    },
-    {
-      "case": "allowed message signature",
-      "calls": 5000,
-      "seconds": 0.23482775,
-      "calls_per_second": 21292.202476070226,
-      "micros_per_call": 46.96555
-    },
-    {
-      "case": "allowed authorization-entry signature",
-      "calls": 5000,
-      "seconds": 0.247417333,
-      "calls_per_second": 20208.77009453497,
-      "micros_per_call": 49.4834666
-    },
-    {
-      "case": "allowed fetch from the local API",
-      "calls": 1000,
-      "seconds": 0.466461625,
-      "calls_per_second": 2143.7990745755346,
-      "micros_per_call": 466.461625
+  },
+  {
+    "case": "allowed read of a 15-byte file",
+    "calls_per_batch": 64,
+    "micros_per_call": {
+      "samples": 31,
+      "median": 46.96615625,
+      "median_ci95": [
+        46.735015625,
+        47.182953125
+      ],
+      "p10": 46.324859375,
+      "p90": 47.755203125,
+      "min": 45.36784375,
+      "max": 51.222
     }
-  ]
+  },
+  {
+    "case": "allowed message signature",
+    "calls_per_batch": 256,
+    "micros_per_call": {
+      "samples": 31,
+      "median": 10.41048046875,
+      "median_ci95": [
+        10.3740234375,
+        10.45003125
+      ],
+      "p10": 10.34749609375,
+      "p90": 10.50471875,
+      "min": 10.3274765625,
+      "max": 10.63590625
+    }
+  },
+  {
+    "case": "allowed authorization-entry signature",
+    "calls_per_batch": 256,
+    "micros_per_call": {
+      "samples": 31,
+      "median": 10.8837890625,
+      "median_ci95": [
+        10.86539453125,
+        10.92366796875
+      ],
+      "p10": 10.82975390625,
+      "p90": 10.980140625,
+      "min": 10.812828125,
+      "max": 11.06119921875
+    }
+  },
+  {
+    "case": "allowed fetch from the local API",
+    "calls_per_batch": 16,
+    "micros_per_call": {
+      "samples": 31,
+      "median": 160.458375,
+      "median_ci95": [
+        158.2239375,
+        161.78125
+      ],
+      "p10": 154.890625,
+      "p90": 166.34375,
+      "min": 151.3958125,
+      "max": 176.315125
+    }
+  }
 ]

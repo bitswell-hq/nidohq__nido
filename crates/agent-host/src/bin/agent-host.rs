@@ -1,8 +1,9 @@
 //! `agent-host run <workload.json>`: replay a workload, one JSON result per
 //! step on stdout.
 //!
-//! `agent-host bench [iterations]`: time one check through the evaluator
-//! component against the same check made natively, as JSON.
+//! `agent-host bench`: time each check through the evaluator component
+//! against the same check made natively and in the host without the
+//! component, as JSON (`agent_host::bench` states the method).
 
 use std::process::ExitCode;
 
@@ -17,12 +18,8 @@ fn main() -> ExitCode {
         .as_slice()
     {
         ["run", path] => run(path),
-        ["bench"] => bench(100_000),
-        ["bench", n] => match n.parse() {
-            Ok(n) => bench(n),
-            Err(e) => Err(format!("iterations {n:?}: {e}")),
-        },
-        _ => Err("usage: agent-host run <workload.json> | agent-host bench [iterations]".into()),
+        ["bench"] => bench(),
+        _ => Err("usage: agent-host run <workload.json> | agent-host bench".into()),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -48,8 +45,8 @@ fn run(path: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn bench(iterations: u32) -> Result<(), String> {
-    let report = bench::run(iterations).map_err(|e| e.to_string())?;
+fn bench() -> Result<(), String> {
+    let report = bench::run().map_err(|e| e.to_string())?;
     println!(
         "{}",
         serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?

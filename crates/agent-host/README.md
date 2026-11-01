@@ -9,7 +9,7 @@ same `wasm32v1-none` target.
 
 ```sh
 cargo run --release -- run workload.json   # replay a scripted workload
-cargo run --release -- bench 200000        # per-check cost, component vs native
+cargo run --release -- bench               # per-check cost, component vs native
 cargo test
 ```
 
@@ -182,26 +182,25 @@ one host, printing one JSON result per step (`step`, `outcome` =
 
 ## Per-check cost
 
-`agent-host bench` times one check through the component against the same
-call to `grant-eval` made natively. Each case is a three-caveat grant and an
-action it allows, so every caveat is evaluated; the chain case checks a
-three-context authorization tree with `allows_all`. The component time
-includes copying the grant and action into the component's memory, the
-guest's conversion to `grant-eval` values, the evaluation and the return.
+`agent-host bench` (`src/bench.rs`) times each check three ways: `grant-eval`
+called natively on values built once; the host's WIT values converted to
+`grant-eval` values in the host and then evaluated, which is the check
+without WebAssembly; and the component, whose time includes copying the
+grant and action into its memory, the guest's conversion, the evaluation and
+the return. Each case is a three-caveat grant and an action it allows, so
+every caveat is evaluated; the chain case checks a three-context
+authorization tree with `allows_all`. It also times compiling and
+instantiating the component.
 
-Three runs of `agent-host bench 500000` (release build, Apple M5 Max,
-macOS 26.5), as the range over the runs:
-
-| Case | Native | Through the component | Ratio |
-| - | - | - | - |
-| files | 27–41 ns | 1.4–2.3 µs | 52–57x |
-| network | 13–24 ns | 0.8–1.2 µs | 49–62x |
-| signing | 35–53 ns | 1.0–1.5 µs | 26–29x |
-| chain (3 contexts) | 147–224 ns | 3.5–4.1 µs | 18–24x |
-
-Ratios are per run. Compiling and instantiating the component took 66–90 ms,
-once per host. These runs do not separate the boundary crossing (copying in,
-the guest's conversion, the call) from the evaluation inside the component.
+Every operation is warmed up, then timed in batches long enough for the
+clock's resolution not to matter, over interleaved rounds whose order of
+variants rotates, so a change in the machine's load reaches every variant
+alike; ratios are taken within a round. The report gives the median with a
+95% confidence interval, the 10th and 90th percentiles and the extremes.
+Absolute times depend on the machine's load and on which cores the
+scheduler picks. `evaluation/README.md` reports a recorded run with the
+machine's state (`evaluation/results/agent-host-bench.json`, from
+`just eval`).
 
 ## Tests
 

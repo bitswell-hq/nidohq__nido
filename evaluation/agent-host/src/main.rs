@@ -14,12 +14,13 @@
 //! network is two HTTP servers on 127.0.0.1: the API the grant allows and a
 //! second one on a port it does not.
 
+mod timing;
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::time::Instant;
 
 use agent_host::grant::{FileCaveat, Grants, Mode, NetworkCaveat, Payload, Scheme, SigningCaveat};
 use agent_host::net::{Method, Request};
@@ -785,40 +786,30 @@ fn run_attacks(sb: &Sandbox, api: &Server, other: &Server) -> Result<Vec<AttackR
 #[derive(Serialize)]
 struct Throughput {
     case: &'static str,
-    calls: u32,
-    seconds: f64,
-    calls_per_second: f64,
-    micros_per_call: f64,
+    calls_per_batch: u32,
+    micros_per_call: bench::Stats,
 }
 
-fn throughput(sb: &Sandbox, api: &Server, scale: u32) -> Result<Vec<Throughput>, String> {
+fn throughput(sb: &Sandbox, api: &Server) -> Result<Vec<Throughput>, String> {
     let mut host = Host::new(keeper()).map_err(|e| e.to_string())?;
     let agent = host.issue(&research_grant(sb, api))?;
     let other_port = format!("http://localhost:{}/v1", api.port.wrapping_add(1));
-    let cases: [(&'static str, ToolCall, bool, u32); 6] = [
-        (
-            "denied fetch (check only)",
-            fetch(&other_port),
-            false,
-            20 * scale,
-        ),
+    let cases: [(&'static str, ToolCall, bool); 6] = [
+        ("denied fetch (check only)", fetch(&other_port), false),
         (
             "denied read outside the grant (resolve and check)",
             read(sb.at("secret/key.txt")),
             false,
-            20 * scale,
         ),
         (
             "allowed read of a 15-byte file",
             read(sb.at("work/notes.txt")),
             true,
-            5 * scale,
         ),
         (
             "allowed message signature",
             sign(KEY, STANDALONE, RequestPayload::Message("m".into())),
             true,
-            5 * scale,
         ),
         (
             "allowed authorization-entry signature",
@@ -828,31 +819,28 @@ fn throughput(sb: &Sandbox, api: &Server, scale: u32) -> Result<Vec<Throughput>,
                 RequestPayload::AuthEntry(delegated_preimage(STANDALONE)),
             ),
             true,
-            5 * scale,
         ),
         (
             "allowed fetch from the local API",
             fetch(&format!("http://localhost:{}/v1", api.port)),
             true,
-            scale,
         ),
     ];
     let mut out = Vec::new();
-    for (case, call, allowed, n) in cases {
-        let start = Instant::now();
-        for _ in 0..n {
+    for (case, call, allowed) in cases {
+        let (micros_per_call, calls_per_batch) = bench::calls(|| {
             let r = host.call(agent, &call);
-            if r.is_ok() != allowed {
-                return Err(format!("{case}: {r:?}"));
+            if r.is_ok() == allowed {
+                Ok(true)
+            } else {
+                Err(agent_host::evaluator::EvalError(format!("{case}: {r:?}")))
             }
-        }
-        let seconds = start.elapsed().as_secs_f64();
+        })
+        .map_err(|e| e.to_string())?;
         out.push(Throughput {
             case,
-            calls: n,
-            seconds,
-            calls_per_second: f64::from(n) / seconds,
-            micros_per_call: seconds * 1e6 / f64::from(n),
+            calls_per_batch,
+            micros_per_call,
         });
     }
     Ok(out)
@@ -873,12 +861,6 @@ fn run(args: &[String]) -> Result<(), String> {
             .cloned()
     };
     let out = PathBuf::from(flag("--out").ok_or("--out <dir> is required")?);
-    let iterations: u32 = flag("--iterations")
-        .map_or(Ok(500_000), |s| s.parse())
-        .map_err(|e| format!("--iterations: {e}"))?;
-    let runs: u32 = flag("--runs")
-        .map_or(Ok(3), |s| s.parse())
-        .map_err(|e| format!("--runs: {e}"))?;
     let sb = Sandbox::create().map_err(|e| format!("sandbox: {e}"))?;
     let other = Server::start(0);
     let api = Server::start(other.port);
@@ -891,17 +873,34 @@ fn run(args: &[String]) -> Result<(), String> {
     eprintln!("agent-host: {} attack rows", attacks.len());
     write_json(&out, "agent-host-attacks.json", &attacks)?;
 
-    let mut reports = Vec::new();
-    for _ in 0..runs {
-        reports.push(bench::run(iterations).map_err(|e| e.to_string())?);
-    }
-    write_json(&out, "agent-host-bench.json", &reports)?;
-
-    let mut tp = Vec::new();
-    for _ in 0..runs {
-        tp.push(throughput(&sb, &api, 1_000)?);
-    }
-    write_json(&out, "agent-host-throughput.json", &tp)?;
+    // Timing: one recorded run, its method in `timing`, with the machine's
+    // state before and after.
+    let before = timing::machine();
+    let scheduling = timing::prefer_fast_cores();
+    let report = bench::run().map_err(|e| e.to_string())?;
+    let calls = throughput(&sb, &api)?;
+    let after = timing::machine();
+    write_json(
+        &out,
+        "agent-host-bench.json",
+        &json!({
+            "method": {
+                "warm_up_ms": report.warm_up_ms,
+                "min_batch_ms": report.min_batch_ms,
+                "check_rounds": report.check_rounds,
+                "instantiations": report.instantiations,
+                "call_rounds": bench::CALL_ROUNDS,
+                "interval": "distribution-free 95% confidence interval of the median",
+            },
+            "build": timing::build(),
+            "scheduling": scheduling,
+            "machine_before": before,
+            "machine_after": after,
+            "instantiate_ms": report.instantiate_ms,
+            "checks": report.checks,
+        }),
+    )?;
+    write_json(&out, "agent-host-throughput.json", &calls)?;
     Ok(())
 }
 

@@ -1,80 +1,350 @@
-[
-  {
-    "iterations": 500000,
-    "instantiate_ms": 100.826,
-    "rows": [
-      {
-        "case": "files",
-        "native_ns": 41.311832,
-        "component_ns": 2410.3045
+{
+  "build": {
+    "overflow_checks": "on (evaluation/agent-host/Cargo.toml [profile.release])",
+    "profile": "release",
+    "target": "aarch64-macos"
+  },
+  "checks": [
+    {
+      "batch_sizes": [
+        262144,
+        16384,
+        4096
+      ],
+      "case": "files",
+      "component_ns": {
+        "max": 617.12646484375,
+        "median": 579.884765625,
+        "median_ci95": [
+          579.11181640625,
+          581.156494140625
+        ],
+        "min": 571.258544921875,
+        "p10": 574.76806640625,
+        "p90": 585.662841796875,
+        "samples": 101
       },
-      {
-        "case": "network",
-        "native_ns": 25.233416,
-        "component_ns": 1207.079084
+      "component_over_host_native": {
+        "max": 3.479153125061292,
+        "median": 3.191629077876053,
+        "median_ci95": [
+          3.1726096484963793,
+          3.2198896484421455
+        ],
+        "min": 2.74617408715279,
+        "p10": 3.061135698260821,
+        "p90": 3.2908738121877046,
+        "samples": 101
       },
-      {
-        "case": "signing",
-        "native_ns": 51.48475,
-        "component_ns": 1541.497082
+      "component_over_native": {
+        "max": 50.92984296084567,
+        "median": 46.535541346778196,
+        "median_ci95": [
+          45.91228991612593,
+          46.87138660775351
+        ],
+        "min": 40.916442950188014,
+        "p10": 43.80966988788678,
+        "p90": 47.916199257914265,
+        "samples": 101
       },
-      {
-        "case": "chain (3 contexts)",
-        "native_ns": 219.319334,
-        "component_ns": 4198.9805
+      "host_native_ns": {
+        "max": 209.57183837890625,
+        "median": 182.5155029296875,
+        "median_ci95": [
+          180.67425537109375,
+          183.57086181640625
+        ],
+        "min": 170.873046875,
+        "p10": 176.531494140625,
+        "p90": 189.41241455078125,
+        "samples": 101
+      },
+      "native_ns": {
+        "max": 14.915782928466797,
+        "median": 12.51077651977539,
+        "median_ci95": [
+          12.377422332763672,
+          12.618064880371094
+        ],
+        "min": 11.794410705566406,
+        "p10": 12.096088409423828,
+        "p90": 13.231117248535156,
+        "samples": 101
       }
+    },
+    {
+      "batch_sizes": [
+        524288,
+        32768,
+        8192
+      ],
+      "case": "network",
+      "component_ns": {
+        "max": 307.2916259765625,
+        "median": 298.6246337890625,
+        "median_ci95": [
+          298.00927734375,
+          299.1893310546875
+        ],
+        "min": 293.8333740234375,
+        "p10": 296.1375732421875,
+        "p90": 301.9866943359375,
+        "samples": 101
+      },
+      "component_over_host_native": {
+        "max": 3.6246642174871417,
+        "median": 3.3058642350557244,
+        "median_ci95": [
+          3.2845353129017543,
+          3.3292594640775333
+        ],
+        "min": 2.884653288191082,
+        "p10": 2.992243964136422,
+        "p90": 3.422933416529295,
+        "samples": 101
+      },
+      "component_over_native": {
+        "max": 42.60638420156622,
+        "median": 39.562754437403456,
+        "median_ci95": [
+          39.20351878978453,
+          39.940398007408355
+        ],
+        "min": 36.22031927148291,
+        "p10": 37.86637325019867,
+        "p90": 41.04983580032771,
+        "samples": 101
+      },
+      "host_native_ns": {
+        "max": 103.95559692382812,
+        "median": 90.362548828125,
+        "median_ci95": [
+          89.93658447265625,
+          90.73004150390625
+        ],
+        "min": 83.06884765625,
+        "p10": 87.29934692382812,
+        "p90": 99.98828125,
+        "samples": 101
+      },
+      "native_ns": {
+        "max": 8.290449142456055,
+        "median": 7.56239891052246,
+        "median_ci95": [
+          7.508596420288085,
+          7.598716735839843
+        ],
+        "min": 7.002353668212891,
+        "p10": 7.309913635253906,
+        "p90": 7.8728981018066415,
+        "samples": 101
+      }
+    },
+    {
+      "batch_sizes": [
+        131072,
+        16384,
+        8192
+      ],
+      "case": "signing",
+      "component_ns": {
+        "max": 406.829833984375,
+        "median": 391.4642333984375,
+        "median_ci95": [
+          390.84375,
+          392.283203125
+        ],
+        "min": 383.646728515625,
+        "p10": 387.725830078125,
+        "p90": 396.17919921875,
+        "samples": 101
+      },
+      "component_over_host_native": {
+        "max": 3.3302303884403477,
+        "median": 3.0747607417162834,
+        "median_ci95": [
+          3.0554452987562937,
+          3.0909070746431726
+        ],
+        "min": 2.7607123583378304,
+        "p10": 2.8652475385075733,
+        "p90": 3.161491050644005,
+        "samples": 101
+      },
+      "component_over_native": {
+        "max": 26.132810585640772,
+        "median": 24.648290230153677,
+        "median_ci95": [
+          24.560077506276137,
+          24.761146625401874
+        ],
+        "min": 23.20241811981153,
+        "p10": 24.048308550907095,
+        "p90": 25.15181227115996,
+        "samples": 101
+      },
+      "host_native_ns": {
+        "max": 141.3726806640625,
+        "median": 127.69317626953124,
+        "median_ci95": [
+          126.75982666015626,
+          128.33660888671875
+        ],
+        "min": 116.97137451171875,
+        "p10": 123.34698486328125,
+        "p90": 137.6978759765625,
+        "samples": 101
+      },
+      "native_ns": {
+        "max": 16.889572143554688,
+        "median": 15.917465209960938,
+        "median_ci95": [
+          15.802062988281252,
+          15.959106445312498
+        ],
+        "min": 15.326812744140625,
+        "p10": 15.567779541015627,
+        "p90": 16.246795654296875,
+        "samples": 101
+      }
+    },
+    {
+      "batch_sizes": [
+        32768,
+        8192,
+        2048
+      ],
+      "case": "chain (3 contexts)",
+      "component_ns": {
+        "max": 1059.814453125,
+        "median": 1006.7343749999999,
+        "median_ci95": [
+          1003.8046874999999,
+          1009.2163085937501
+        ],
+        "min": 984.76171875,
+        "p10": 996.1748046875,
+        "p90": 1052.04296875,
+        "samples": 101
+      },
+      "component_over_host_native": {
+        "max": 3.1002637842665495,
+        "median": 2.9568494152706912,
+        "median_ci95": [
+          2.944603800645392,
+          2.9704687745600102
+        ],
+        "min": 2.8237519375139257,
+        "p10": 2.876767304426394,
+        "p90": 3.037924497408462,
+        "samples": 101
+      },
+      "component_over_native": {
+        "max": 15.906742655116346,
+        "median": 14.938235977484913,
+        "median_ci95": [
+          14.81528734977502,
+          14.995422741185807
+        ],
+        "min": 14.295010291219619,
+        "p10": 14.482154587256407,
+        "p90": 15.407188754554207,
+        "samples": 101
+      },
+      "host_native_ns": {
+        "max": 354.705810546875,
+        "median": 341.6492919921875,
+        "median_ci95": [
+          340.972900390625,
+          342.7530517578125
+        ],
+        "min": 330.1900634765625,
+        "p10": 335.65771484375,
+        "p90": 349.23291015625,
+        "samples": 101
+      },
+      "native_ns": {
+        "max": 70.397705078125,
+        "median": 67.90414428710938,
+        "median_ci95": [
+          67.44766235351562,
+          68.2462158203125
+        ],
+        "min": 64.07418823242188,
+        "p10": 65.80352783203125,
+        "p90": 69.6016845703125,
+        "samples": 101
+      }
+    }
+  ],
+  "instantiate_ms": {
+    "max": 22.441125,
+    "median": 22.030833,
+    "median_ci95": [
+      21.869291999999998,
+      22.169667
+    ],
+    "min": 21.641916000000002,
+    "p10": 21.825667,
+    "p90": 22.397541999999998,
+    "samples": 21
+  },
+  "machine_after": {
+    "cores": [
+      {
+        "level": "Super",
+        "physical": "6"
+      },
+      {
+        "level": "Performance",
+        "physical": "12"
+      }
+    ],
+    "cpu": "Apple M5 Max",
+    "load_average": "{ 5.42 4.83 5.63 }",
+    "os": "macOS 26.5.2 (25F84)",
+    "power_mode": "powermode            0",
+    "power_source": "Now drawing from 'AC Power'",
+    "thermal": [
+      "Note: No thermal warning level has been recorded",
+      "Note: No performance warning level has been recorded",
+      "Note: No CPU power status has been recorded"
     ]
   },
-  {
-    "iterations": 500000,
-    "instantiate_ms": 92.295625,
-    "rows": [
+  "machine_before": {
+    "cores": [
       {
-        "case": "files",
-        "native_ns": 40.7235,
-        "component_ns": 2331.087334
+        "level": "Super",
+        "physical": "6"
       },
       {
-        "case": "network",
-        "native_ns": 23.773168,
-        "component_ns": 1214.220084
-      },
-      {
-        "case": "signing",
-        "native_ns": 52.229834,
-        "component_ns": 1568.511668
-      },
-      {
-        "case": "chain (3 contexts)",
-        "native_ns": 224.986332,
-        "component_ns": 5333.04875
+        "level": "Performance",
+        "physical": "12"
       }
+    ],
+    "cpu": "Apple M5 Max",
+    "load_average": "{ 5.78 4.88 5.65 }",
+    "os": "macOS 26.5.2 (25F84)",
+    "power_mode": "powermode            0",
+    "power_source": "Now drawing from 'AC Power'",
+    "thermal": [
+      "Note: No thermal warning level has been recorded",
+      "Note: No performance warning level has been recorded",
+      "Note: No CPU power status has been recorded"
     ]
   },
-  {
-    "iterations": 500000,
-    "instantiate_ms": 87.474875,
-    "rows": [
-      {
-        "case": "files",
-        "native_ns": 40.388084,
-        "component_ns": 2296.9195
-      },
-      {
-        "case": "network",
-        "native_ns": 23.442834,
-        "component_ns": 1180.861
-      },
-      {
-        "case": "signing",
-        "native_ns": 51.490084,
-        "component_ns": 1580.347916
-      },
-      {
-        "case": "chain (3 contexts)",
-        "native_ns": 235.824834,
-        "component_ns": 4163.143334
-      }
-    ]
+  "method": {
+    "call_rounds": 31,
+    "check_rounds": 101,
+    "instantiations": 21,
+    "interval": "distribution-free 95% confidence interval of the median",
+    "min_batch_ms": 2,
+    "warm_up_ms": 200
+  },
+  "scheduling": {
+    "pinned": false,
+    "set": true,
+    "thread_qos": "QOS_CLASS_USER_INTERACTIVE"
   }
-]
+}
