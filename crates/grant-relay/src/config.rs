@@ -35,6 +35,10 @@ pub struct ConfigFile {
     /// The highest total fee the relay pays for one transaction, in stroops.
     #[serde(default = "default_max_fee")]
     pub max_fee: u32,
+    /// The resource fee a transaction declares, as a percentage added to the
+    /// simulated minimum; the refundable part not used is refunded.
+    #[serde(default = "default_resource_fee_margin_percent")]
+    pub resource_fee_margin_percent: u32,
     /// How long a submitted transaction stays valid (its `maxTime` offset).
     #[serde(default = "default_validity_seconds")]
     pub validity_seconds: u64,
@@ -56,6 +60,9 @@ fn default_inclusion_fee() -> u32 {
 }
 fn default_max_fee() -> u32 {
     10_000_000
+}
+fn default_resource_fee_margin_percent() -> u32 {
+    20
 }
 fn default_validity_seconds() -> u64 {
     60
@@ -179,6 +186,7 @@ pub struct Config {
     pub channels: Vec<[u8; 32]>,
     pub inclusion_fee: u32,
     pub max_fee: u32,
+    pub resource_fee_margin_percent: u32,
     pub validity: Duration,
     pub min_auth_expiry_ledgers: u32,
     pub poll_interval: Duration,
@@ -237,6 +245,7 @@ impl Config {
             channels,
             inclusion_fee: file.inclusion_fee,
             max_fee: file.max_fee,
+            resource_fee_margin_percent: file.resource_fee_margin_percent,
             validity: Duration::from_secs(file.validity_seconds),
             min_auth_expiry_ledgers: file.min_auth_expiry_ledgers,
             poll_interval: Duration::from_millis(file.poll_interval_ms),

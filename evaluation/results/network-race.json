@@ -1,0 +1,1027 @@
+{
+  "rounds": [
+    {
+      "account_paid": 90,
+      "after": [
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 84, 82, 52, 53, 76, 82, 68, 50, 80, 86, 77, 54, 75, 66, 50, 82, 78, 90, 70, 69, 55, 55, 86, 66, 66, 87, 50, 66, 81, 88, 66, 76, 53, 70, 85, 76, 65, 65, 77, 75, 72, 76, 55, 77, 74, 80, 79, 79, 75, 80, 74, 65, 81, 89))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "ee93a4f66f8d16b819bb9beb9ffccdfcdc1412e87fee6a324c2a99a1e0e67148",
+          "parent": null,
+          "revoked": false,
+          "spent": "90"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 84, 82, 52, 53, 76, 82, 68, 50, 80, 86, 77, 54, 75, 66, 50, 82, 78, 90, 70, 69, 55, 55, 86, 66, 66, 87, 50, 66, 81, 88, 66, 76, 53, 70, 85, 76, 65, 65, 77, 75, 72, 76, 55, 77, 74, 80, 79, 79, 75, 80, 74, 65, 81, 89))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "e28a8970753332bd72fef413e6b0b2ef1b4aadda7aa2c141f233712a6876b351",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 84, 82, 52, 53, 76, 82, 68, 50, 80, 86, 77, 54, 75, 66, 50, 82, 78, 90, 70, 69, 55, 55, 86, 66, 66, 87, 50, 66, 81, 88, 66, 76, 53, 70, 85, 76, 65, 65, 77, 75, 72, 76, 55, 77, 74, 80, 79, 79, 75, 80, 74, 65, 81, 89))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "d4eec1869fb1b8a4e817516ad5a931557cb56805c3eb16e8f3a803d647df7869",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 84, 82, 52, 53, 76, 82, 68, 50, 80, 86, 77, 54, 75, 66, 50, 82, 78, 90, 70, 69, 55, 55, 86, 66, 66, 87, 50, 66, 81, 88, 66, 76, 53, 70, 85, 76, 65, 65, 77, 75, 72, 76, 55, 77, 74, 80, 79, 79, 75, 80, 74, 65, 81, 89))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "772c8a442b7db06e166cfbc1ccbcbcde6f3eba76a4e98ef3ffc519502237d6ef",
+          "parent": 0,
+          "revoked": false,
+          "spent": "30"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 84, 82, 52, 53, 76, 82, 68, 50, 80, 86, 77, 54, 75, 66, 50, 82, 78, 90, 70, 69, 55, 55, 86, 66, 66, 87, 50, 66, 81, 88, 66, 76, 53, 70, 85, 76, 65, 65, 77, 75, 72, 76, 55, 77, 74, 80, 79, 79, 75, 80, 74, 65, 81, 89))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "353c8a7feeca38b2c4536e0bd2586fdb18d070e50e059f1d43f8bfefb97a7ce1",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 84, 82, 52, 53, 76, 82, 68, 50, 80, 86, 77, 54, 75, 66, 50, 82, 78, 90, 70, 69, 55, 55, 86, 66, 66, 87, 50, 66, 81, 88, 66, 76, 53, 70, 85, 76, 65, 65, 77, 75, 72, 76, 55, 77, 74, 80, 79, 79, 75, 80, 74, 65, 81, 89))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "7ea0e3bd52e207c9d3b0eba65c0704e66fca2d8e165a175218b174fc4160e413",
+          "parent": 0,
+          "revoked": false,
+          "spent": "30"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 84, 82, 52, 53, 76, 82, 68, 50, 80, 86, 77, 54, 75, 66, 50, 82, 78, 90, 70, 69, 55, 55, 86, 66, 66, 87, 50, 66, 81, 88, 66, 76, 53, 70, 85, 76, 65, 65, 77, 75, 72, 76, 55, 77, 74, 80, 79, 79, 75, 80, 74, 65, 81, 89))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "927308f53d6765503d2b64c103ab5aa47206ab39502cfe8f98442fdb543100b7",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 84, 82, 52, 53, 76, 82, 68, 50, 80, 86, 77, 54, 75, 66, 50, 82, 78, 90, 70, 69, 55, 55, 86, 66, 66, 87, 50, 66, 81, 88, 66, 76, 53, 70, 85, 76, 65, 65, 77, 75, 72, 76, 55, 77, 74, 80, 79, 79, 75, 80, 74, 65, 81, 89))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "62a611b472d89b0e5fc93c069b9f700b4c552d55bc0e87b56008ef17b6b2bebe",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 84, 82, 52, 53, 76, 82, 68, 50, 80, 86, 77, 54, 75, 66, 50, 82, 78, 90, 70, 69, 55, 55, 86, 66, 66, 87, 50, 66, 81, 88, 66, 76, 53, 70, 85, 76, 65, 65, 77, 75, 72, 76, 55, 77, 74, 80, 79, 79, 75, 80, 74, 65, 81, 89))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "8e486e8fb79499dba2a789c6b1639d409495233c79e0eaf52e2ea1fc9dbbb73f",
+          "parent": 0,
+          "revoked": false,
+          "spent": "30"
+        }
+      ],
+      "amount": 30,
+      "before": [
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 84, 82, 52, 53, 76, 82, 68, 50, 80, 86, 77, 54, 75, 66, 50, 82, 78, 90, 70, 69, 55, 55, 86, 66, 66, 87, 50, 66, 81, 88, 66, 76, 53, 70, 85, 76, 65, 65, 77, 75, 72, 76, 55, 77, 74, 80, 79, 79, 75, 80, 74, 65, 81, 89))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "ee93a4f66f8d16b819bb9beb9ffccdfcdc1412e87fee6a324c2a99a1e0e67148",
+          "parent": null,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 84, 82, 52, 53, 76, 82, 68, 50, 80, 86, 77, 54, 75, 66, 50, 82, 78, 90, 70, 69, 55, 55, 86, 66, 66, 87, 50, 66, 81, 88, 66, 76, 53, 70, 85, 76, 65, 65, 77, 75, 72, 76, 55, 77, 74, 80, 79, 79, 75, 80, 74, 65, 81, 89))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "e28a8970753332bd72fef413e6b0b2ef1b4aadda7aa2c141f233712a6876b351",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 84, 82, 52, 53, 76, 82, 68, 50, 80, 86, 77, 54, 75, 66, 50, 82, 78, 90, 70, 69, 55, 55, 86, 66, 66, 87, 50, 66, 81, 88, 66, 76, 53, 70, 85, 76, 65, 65, 77, 75, 72, 76, 55, 77, 74, 80, 79, 79, 75, 80, 74, 65, 81, 89))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "d4eec1869fb1b8a4e817516ad5a931557cb56805c3eb16e8f3a803d647df7869",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 84, 82, 52, 53, 76, 82, 68, 50, 80, 86, 77, 54, 75, 66, 50, 82, 78, 90, 70, 69, 55, 55, 86, 66, 66, 87, 50, 66, 81, 88, 66, 76, 53, 70, 85, 76, 65, 65, 77, 75, 72, 76, 55, 77, 74, 80, 79, 79, 75, 80, 74, 65, 81, 89))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "772c8a442b7db06e166cfbc1ccbcbcde6f3eba76a4e98ef3ffc519502237d6ef",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 84, 82, 52, 53, 76, 82, 68, 50, 80, 86, 77, 54, 75, 66, 50, 82, 78, 90, 70, 69, 55, 55, 86, 66, 66, 87, 50, 66, 81, 88, 66, 76, 53, 70, 85, 76, 65, 65, 77, 75, 72, 76, 55, 77, 74, 80, 79, 79, 75, 80, 74, 65, 81, 89))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "353c8a7feeca38b2c4536e0bd2586fdb18d070e50e059f1d43f8bfefb97a7ce1",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 84, 82, 52, 53, 76, 82, 68, 50, 80, 86, 77, 54, 75, 66, 50, 82, 78, 90, 70, 69, 55, 55, 86, 66, 66, 87, 50, 66, 81, 88, 66, 76, 53, 70, 85, 76, 65, 65, 77, 75, 72, 76, 55, 77, 74, 80, 79, 79, 75, 80, 74, 65, 81, 89))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "7ea0e3bd52e207c9d3b0eba65c0704e66fca2d8e165a175218b174fc4160e413",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 84, 82, 52, 53, 76, 82, 68, 50, 80, 86, 77, 54, 75, 66, 50, 82, 78, 90, 70, 69, 55, 55, 86, 66, 66, 87, 50, 66, 81, 88, 66, 76, 53, 70, 85, 76, 65, 65, 77, 75, 72, 76, 55, 77, 74, 80, 79, 79, 75, 80, 74, 65, 81, 89))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "927308f53d6765503d2b64c103ab5aa47206ab39502cfe8f98442fdb543100b7",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 84, 82, 52, 53, 76, 82, 68, 50, 80, 86, 77, 54, 75, 66, 50, 82, 78, 90, 70, 69, 55, 55, 86, 66, 66, 87, 50, 66, 81, 88, 66, 76, 53, 70, 85, 76, 65, 65, 77, 75, 72, 76, 55, 77, 74, 80, 79, 79, 75, 80, 74, 65, 81, 89))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "62a611b472d89b0e5fc93c069b9f700b4c552d55bc0e87b56008ef17b6b2bebe",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 84, 82, 52, 53, 76, 82, 68, 50, 80, 86, 77, 54, 75, 66, 50, 82, 78, 90, 70, 69, 55, 55, 86, 66, 66, 87, 50, 66, 81, 88, 66, 76, 53, 70, 85, 76, 65, 65, 77, 75, 72, 76, 55, 77, 74, 80, 79, 79, 75, 80, 74, 65, 81, 89))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "8e486e8fb79499dba2a789c6b1639d409495233c79e0eaf52e2ea1fc9dbbb73f",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        }
+      ],
+      "bob_received": 90,
+      "charges_match_transfers": true,
+      "number": 0,
+      "root_allowance": 100,
+      "root_spent": 90,
+      "sent": [
+        {
+          "api_key": "CDAFYCW266V2F5XVGDWKY535CGFBYGL7RFWEEX7CBEIKJK4DA5ZL6MG7-grant-3",
+          "busy": 0,
+          "latency": 0.909588292,
+          "reply": {
+            "chain_failure": null,
+            "code": null,
+            "cpu_instructions": 2920454,
+            "details": null,
+            "error": null,
+            "hash": "5022f35cb21edf463877f96c8eae720faa54f8c28625525cc179e72fc9cbcfa9",
+            "ledger": 361,
+            "mem_bytes": 790472,
+            "rpc_retries": 0,
+            "settled": "confirmed",
+            "status": 200,
+            "submit_ms": 69.938792
+          },
+          "submitted_at": 0.000064875
+        },
+        {
+          "api_key": "CDAFYCW266V2F5XVGDWKY535CGFBYGL7RFWEEX7CBEIKJK4DA5ZL6MG7-grant-8",
+          "busy": 0,
+          "latency": 0.918435375,
+          "reply": {
+            "chain_failure": null,
+            "code": null,
+            "cpu_instructions": 2920454,
+            "details": null,
+            "error": null,
+            "hash": "ac96f534aa543bf5e3b1c3a66cb1bc9f38c90baa66a373e7702c87502bfdeba2",
+            "ledger": 361,
+            "mem_bytes": 790472,
+            "rpc_retries": 0,
+            "settled": "confirmed",
+            "status": 200,
+            "submit_ms": 67.838916
+          },
+          "submitted_at": 0.000061292
+        },
+        {
+          "api_key": "CDAFYCW266V2F5XVGDWKY535CGFBYGL7RFWEEX7CBEIKJK4DA5ZL6MG7-grant-5",
+          "busy": 0,
+          "latency": 0.921108708,
+          "reply": {
+            "chain_failure": null,
+            "code": null,
+            "cpu_instructions": 2917093,
+            "details": null,
+            "error": null,
+            "hash": "0853b40a4a6f1438ec2ef5d319c6948ada72f23cdee9f47890c77b2eb9488f6a",
+            "ledger": 361,
+            "mem_bytes": 791084,
+            "rpc_retries": 0,
+            "settled": "confirmed",
+            "status": 200,
+            "submit_ms": 67.250375
+          },
+          "submitted_at": 0.000066417
+        },
+        {
+          "api_key": "CDAFYCW266V2F5XVGDWKY535CGFBYGL7RFWEEX7CBEIKJK4DA5ZL6MG7-grant-4",
+          "busy": 0,
+          "latency": 0.921110708,
+          "reply": {
+            "chain_failure": "OpInner(InvokeHostFunction(Trapped)); grant signer: Overdrawn (#7)",
+            "code": null,
+            "cpu_instructions": 2423423,
+            "details": null,
+            "error": null,
+            "hash": "f44f8b6bcf17f5673c7d8b3a5f98887d5774fee614af76f89f5a31668cdfcb6b",
+            "ledger": 361,
+            "mem_bytes": 769964,
+            "rpc_retries": 0,
+            "settled": "failed",
+            "status": 200,
+            "submit_ms": 70.066375
+          },
+          "submitted_at": 0.000065542
+        },
+        {
+          "api_key": "CDAFYCW266V2F5XVGDWKY535CGFBYGL7RFWEEX7CBEIKJK4DA5ZL6MG7-grant-6",
+          "busy": 0,
+          "latency": 0.923531,
+          "reply": {
+            "chain_failure": "OpInner(InvokeHostFunction(Trapped)); grant signer: Overdrawn (#7)",
+            "code": null,
+            "cpu_instructions": 2423423,
+            "details": null,
+            "error": null,
+            "hash": "b953958e822077c46593fb6614b1382659039cc48db2c4b0afc9d467727920e4",
+            "ledger": 361,
+            "mem_bytes": 769964,
+            "rpc_retries": 0,
+            "settled": "failed",
+            "status": 200,
+            "submit_ms": 69.545334
+          },
+          "submitted_at": 0.000086167
+        },
+        {
+          "api_key": "CDAFYCW266V2F5XVGDWKY535CGFBYGL7RFWEEX7CBEIKJK4DA5ZL6MG7-grant-1",
+          "busy": 0,
+          "latency": 0.923556833,
+          "reply": {
+            "chain_failure": "OpInner(InvokeHostFunction(Trapped)); grant signer: Overdrawn (#7)",
+            "code": null,
+            "cpu_instructions": 2423423,
+            "details": null,
+            "error": null,
+            "hash": "3afd752d7571572ca364c04657e3d647c9e332ca8441b375607e67ab54bed11d",
+            "ledger": 361,
+            "mem_bytes": 769964,
+            "rpc_retries": 0,
+            "settled": "failed",
+            "status": 200,
+            "submit_ms": 68.607833
+          },
+          "submitted_at": 0.000063167
+        },
+        {
+          "api_key": "CDAFYCW266V2F5XVGDWKY535CGFBYGL7RFWEEX7CBEIKJK4DA5ZL6MG7-grant-7",
+          "busy": 0,
+          "latency": 0.925718208,
+          "reply": {
+            "chain_failure": "OpInner(InvokeHostFunction(Trapped)); grant signer: Overdrawn (#7)",
+            "code": null,
+            "cpu_instructions": 2423423,
+            "details": null,
+            "error": null,
+            "hash": "6c7b10f327e80140bbb29bdb459293ebeece70c5cc568c8471a1798f099e36ea",
+            "ledger": 361,
+            "mem_bytes": 769964,
+            "rpc_retries": 0,
+            "settled": "failed",
+            "status": 200,
+            "submit_ms": 71.798209
+          },
+          "submitted_at": 0.000104917
+        },
+        {
+          "api_key": "CDAFYCW266V2F5XVGDWKY535CGFBYGL7RFWEEX7CBEIKJK4DA5ZL6MG7-grant-2",
+          "busy": 0,
+          "latency": 0.929795041,
+          "reply": {
+            "chain_failure": "OpInner(InvokeHostFunction(Trapped)); grant signer: Overdrawn (#7)",
+            "code": null,
+            "cpu_instructions": 2423423,
+            "details": null,
+            "error": null,
+            "hash": "45381bb846ed210238d2dd4731c08a88cf0a16b86475183ed1d3214b057ee7c8",
+            "ledger": 361,
+            "mem_bytes": 769964,
+            "rpc_retries": 0,
+            "settled": "failed",
+            "status": 200,
+            "submit_ms": 61.799792
+          },
+          "submitted_at": 0.000064167
+        }
+      ],
+      "sibling_allowance": 100,
+      "siblings": 8,
+      "siblings_charged_as_confirmed": true,
+      "within_allowance": true
+    },
+    {
+      "account_paid": 90,
+      "after": [
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 67, 54, 50, 74, 84, 79, 51, 81, 50, 90, 69, 86, 79, 67, 66, 84, 82, 52, 72, 89, 67, 82, 66, 83, 89, 67, 89, 52, 80, 68, 68, 82, 78, 88, 76, 83, 72, 52, 73, 66, 84, 76, 53, 72, 65, 65, 89, 84, 55, 85, 79, 80, 86, 51))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "ee93a4f66f8d16b819bb9beb9ffccdfcdc1412e87fee6a324c2a99a1e0e67148",
+          "parent": null,
+          "revoked": false,
+          "spent": "90"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 67, 54, 50, 74, 84, 79, 51, 81, 50, 90, 69, 86, 79, 67, 66, 84, 82, 52, 72, 89, 67, 82, 66, 83, 89, 67, 89, 52, 80, 68, 68, 82, 78, 88, 76, 83, 72, 52, 73, 66, 84, 76, 53, 72, 65, 65, 89, 84, 55, 85, 79, 80, 86, 51))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "e28a8970753332bd72fef413e6b0b2ef1b4aadda7aa2c141f233712a6876b351",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 67, 54, 50, 74, 84, 79, 51, 81, 50, 90, 69, 86, 79, 67, 66, 84, 82, 52, 72, 89, 67, 82, 66, 83, 89, 67, 89, 52, 80, 68, 68, 82, 78, 88, 76, 83, 72, 52, 73, 66, 84, 76, 53, 72, 65, 65, 89, 84, 55, 85, 79, 80, 86, 51))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "d4eec1869fb1b8a4e817516ad5a931557cb56805c3eb16e8f3a803d647df7869",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 67, 54, 50, 74, 84, 79, 51, 81, 50, 90, 69, 86, 79, 67, 66, 84, 82, 52, 72, 89, 67, 82, 66, 83, 89, 67, 89, 52, 80, 68, 68, 82, 78, 88, 76, 83, 72, 52, 73, 66, 84, 76, 53, 72, 65, 65, 89, 84, 55, 85, 79, 80, 86, 51))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "772c8a442b7db06e166cfbc1ccbcbcde6f3eba76a4e98ef3ffc519502237d6ef",
+          "parent": 0,
+          "revoked": false,
+          "spent": "30"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 67, 54, 50, 74, 84, 79, 51, 81, 50, 90, 69, 86, 79, 67, 66, 84, 82, 52, 72, 89, 67, 82, 66, 83, 89, 67, 89, 52, 80, 68, 68, 82, 78, 88, 76, 83, 72, 52, 73, 66, 84, 76, 53, 72, 65, 65, 89, 84, 55, 85, 79, 80, 86, 51))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "353c8a7feeca38b2c4536e0bd2586fdb18d070e50e059f1d43f8bfefb97a7ce1",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 67, 54, 50, 74, 84, 79, 51, 81, 50, 90, 69, 86, 79, 67, 66, 84, 82, 52, 72, 89, 67, 82, 66, 83, 89, 67, 89, 52, 80, 68, 68, 82, 78, 88, 76, 83, 72, 52, 73, 66, 84, 76, 53, 72, 65, 65, 89, 84, 55, 85, 79, 80, 86, 51))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "7ea0e3bd52e207c9d3b0eba65c0704e66fca2d8e165a175218b174fc4160e413",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 67, 54, 50, 74, 84, 79, 51, 81, 50, 90, 69, 86, 79, 67, 66, 84, 82, 52, 72, 89, 67, 82, 66, 83, 89, 67, 89, 52, 80, 68, 68, 82, 78, 88, 76, 83, 72, 52, 73, 66, 84, 76, 53, 72, 65, 65, 89, 84, 55, 85, 79, 80, 86, 51))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "927308f53d6765503d2b64c103ab5aa47206ab39502cfe8f98442fdb543100b7",
+          "parent": 0,
+          "revoked": false,
+          "spent": "30"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 67, 54, 50, 74, 84, 79, 51, 81, 50, 90, 69, 86, 79, 67, 66, 84, 82, 52, 72, 89, 67, 82, 66, 83, 89, 67, 89, 52, 80, 68, 68, 82, 78, 88, 76, 83, 72, 52, 73, 66, 84, 76, 53, 72, 65, 65, 89, 84, 55, 85, 79, 80, 86, 51))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "62a611b472d89b0e5fc93c069b9f700b4c552d55bc0e87b56008ef17b6b2bebe",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 67, 54, 50, 74, 84, 79, 51, 81, 50, 90, 69, 86, 79, 67, 66, 84, 82, 52, 72, 89, 67, 82, 66, 83, 89, 67, 89, 52, 80, 68, 68, 82, 78, 88, 76, 83, 72, 52, 73, 66, 84, 76, 53, 72, 65, 65, 89, 84, 55, 85, 79, 80, 86, 51))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "8e486e8fb79499dba2a789c6b1639d409495233c79e0eaf52e2ea1fc9dbbb73f",
+          "parent": 0,
+          "revoked": false,
+          "spent": "30"
+        }
+      ],
+      "amount": 30,
+      "before": [
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 67, 54, 50, 74, 84, 79, 51, 81, 50, 90, 69, 86, 79, 67, 66, 84, 82, 52, 72, 89, 67, 82, 66, 83, 89, 67, 89, 52, 80, 68, 68, 82, 78, 88, 76, 83, 72, 52, 73, 66, 84, 76, 53, 72, 65, 65, 89, 84, 55, 85, 79, 80, 86, 51))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "ee93a4f66f8d16b819bb9beb9ffccdfcdc1412e87fee6a324c2a99a1e0e67148",
+          "parent": null,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 67, 54, 50, 74, 84, 79, 51, 81, 50, 90, 69, 86, 79, 67, 66, 84, 82, 52, 72, 89, 67, 82, 66, 83, 89, 67, 89, 52, 80, 68, 68, 82, 78, 88, 76, 83, 72, 52, 73, 66, 84, 76, 53, 72, 65, 65, 89, 84, 55, 85, 79, 80, 86, 51))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "e28a8970753332bd72fef413e6b0b2ef1b4aadda7aa2c141f233712a6876b351",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 67, 54, 50, 74, 84, 79, 51, 81, 50, 90, 69, 86, 79, 67, 66, 84, 82, 52, 72, 89, 67, 82, 66, 83, 89, 67, 89, 52, 80, 68, 68, 82, 78, 88, 76, 83, 72, 52, 73, 66, 84, 76, 53, 72, 65, 65, 89, 84, 55, 85, 79, 80, 86, 51))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "d4eec1869fb1b8a4e817516ad5a931557cb56805c3eb16e8f3a803d647df7869",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 67, 54, 50, 74, 84, 79, 51, 81, 50, 90, 69, 86, 79, 67, 66, 84, 82, 52, 72, 89, 67, 82, 66, 83, 89, 67, 89, 52, 80, 68, 68, 82, 78, 88, 76, 83, 72, 52, 73, 66, 84, 76, 53, 72, 65, 65, 89, 84, 55, 85, 79, 80, 86, 51))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "772c8a442b7db06e166cfbc1ccbcbcde6f3eba76a4e98ef3ffc519502237d6ef",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 67, 54, 50, 74, 84, 79, 51, 81, 50, 90, 69, 86, 79, 67, 66, 84, 82, 52, 72, 89, 67, 82, 66, 83, 89, 67, 89, 52, 80, 68, 68, 82, 78, 88, 76, 83, 72, 52, 73, 66, 84, 76, 53, 72, 65, 65, 89, 84, 55, 85, 79, 80, 86, 51))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "353c8a7feeca38b2c4536e0bd2586fdb18d070e50e059f1d43f8bfefb97a7ce1",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 67, 54, 50, 74, 84, 79, 51, 81, 50, 90, 69, 86, 79, 67, 66, 84, 82, 52, 72, 89, 67, 82, 66, 83, 89, 67, 89, 52, 80, 68, 68, 82, 78, 88, 76, 83, 72, 52, 73, 66, 84, 76, 53, 72, 65, 65, 89, 84, 55, 85, 79, 80, 86, 51))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "7ea0e3bd52e207c9d3b0eba65c0704e66fca2d8e165a175218b174fc4160e413",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 67, 54, 50, 74, 84, 79, 51, 81, 50, 90, 69, 86, 79, 67, 66, 84, 82, 52, 72, 89, 67, 82, 66, 83, 89, 67, 89, 52, 80, 68, 68, 82, 78, 88, 76, 83, 72, 52, 73, 66, 84, 76, 53, 72, 65, 65, 89, 84, 55, 85, 79, 80, 86, 51))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "927308f53d6765503d2b64c103ab5aa47206ab39502cfe8f98442fdb543100b7",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 67, 54, 50, 74, 84, 79, 51, 81, 50, 90, 69, 86, 79, 67, 66, 84, 82, 52, 72, 89, 67, 82, 66, 83, 89, 67, 89, 52, 80, 68, 68, 82, 78, 88, 76, 83, 72, 52, 73, 66, 84, 76, 53, 72, 65, 65, 89, 84, 55, 85, 79, 80, 86, 51))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "62a611b472d89b0e5fc93c069b9f700b4c552d55bc0e87b56008ef17b6b2bebe",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 67, 54, 50, 74, 84, 79, 51, 81, 50, 90, 69, 86, 79, 67, 66, 84, 82, 52, 72, 89, 67, 82, 66, 83, 89, 67, 89, 52, 80, 68, 68, 82, 78, 88, 76, 83, 72, 52, 73, 66, 84, 76, 53, 72, 65, 65, 89, 84, 55, 85, 79, 80, 86, 51))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "8e486e8fb79499dba2a789c6b1639d409495233c79e0eaf52e2ea1fc9dbbb73f",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        }
+      ],
+      "bob_received": 90,
+      "charges_match_transfers": true,
+      "number": 1,
+      "root_allowance": 100,
+      "root_spent": 90,
+      "sent": [
+        {
+          "api_key": "CC2DJ6VQ43QQUR22AVRN3Q5EYIJJR5QHA6QQW6V4GXDTFZP74JFMQUKE-grant-8",
+          "busy": 0,
+          "latency": 0.572895,
+          "reply": {
+            "chain_failure": null,
+            "code": null,
+            "cpu_instructions": 2916043,
+            "details": null,
+            "error": null,
+            "hash": "3c1214e05dc19a0b8db8d5679fb57e49e91a5c7487dbe7e1c533c924a5bac9b6",
+            "ledger": 381,
+            "mem_bytes": 791084,
+            "rpc_retries": 0,
+            "settled": "confirmed",
+            "status": 200,
+            "submit_ms": 59.672709
+          },
+          "submitted_at": 0.000065
+        },
+        {
+          "api_key": "CC2DJ6VQ43QQUR22AVRN3Q5EYIJJR5QHA6QQW6V4GXDTFZP74JFMQUKE-grant-4",
+          "busy": 0,
+          "latency": 0.574921,
+          "reply": {
+            "chain_failure": "OpInner(InvokeHostFunction(Trapped)); grant signer: Overdrawn (#7)",
+            "code": null,
+            "cpu_instructions": 2423423,
+            "details": null,
+            "error": null,
+            "hash": "bdf6f4adf009c7be6fa5e2dc03a356fea29e2766e34036e572bc84b3e272d354",
+            "ledger": 381,
+            "mem_bytes": 769964,
+            "rpc_retries": 0,
+            "settled": "failed",
+            "status": 200,
+            "submit_ms": 60.477166
+          },
+          "submitted_at": 0.000067625
+        },
+        {
+          "api_key": "CC2DJ6VQ43QQUR22AVRN3Q5EYIJJR5QHA6QQW6V4GXDTFZP74JFMQUKE-grant-3",
+          "busy": 0,
+          "latency": 0.575927125,
+          "reply": {
+            "chain_failure": null,
+            "code": null,
+            "cpu_instructions": 2920454,
+            "details": null,
+            "error": null,
+            "hash": "97fa61f603c26145136017d0ef11a5c4740f85371604a5258000d0ca4b99dc66",
+            "ledger": 381,
+            "mem_bytes": 790472,
+            "rpc_retries": 0,
+            "settled": "confirmed",
+            "status": 200,
+            "submit_ms": 62.277291999999996
+          },
+          "submitted_at": 0.000066959
+        },
+        {
+          "api_key": "CC2DJ6VQ43QQUR22AVRN3Q5EYIJJR5QHA6QQW6V4GXDTFZP74JFMQUKE-grant-6",
+          "busy": 0,
+          "latency": 0.5837975,
+          "reply": {
+            "chain_failure": null,
+            "code": null,
+            "cpu_instructions": 2920454,
+            "details": null,
+            "error": null,
+            "hash": "c9c011820bed5659dd86f805369a4f34e148eccea90a0b1c511401907117001b",
+            "ledger": 381,
+            "mem_bytes": 790472,
+            "rpc_retries": 0,
+            "settled": "confirmed",
+            "status": 200,
+            "submit_ms": 61.007041
+          },
+          "submitted_at": 0.000085209
+        },
+        {
+          "api_key": "CC2DJ6VQ43QQUR22AVRN3Q5EYIJJR5QHA6QQW6V4GXDTFZP74JFMQUKE-grant-7",
+          "busy": 0,
+          "latency": 0.584916292,
+          "reply": {
+            "chain_failure": "OpInner(InvokeHostFunction(Trapped)); grant signer: Overdrawn (#7)",
+            "code": null,
+            "cpu_instructions": 2423423,
+            "details": null,
+            "error": null,
+            "hash": "1f583d137169992fee0c25e882863a116847300f7a95480304a372d1397959c2",
+            "ledger": 381,
+            "mem_bytes": 769964,
+            "rpc_retries": 0,
+            "settled": "failed",
+            "status": 200,
+            "submit_ms": 60.981041
+          },
+          "submitted_at": 0.000095792
+        },
+        {
+          "api_key": "CC2DJ6VQ43QQUR22AVRN3Q5EYIJJR5QHA6QQW6V4GXDTFZP74JFMQUKE-grant-5",
+          "busy": 0,
+          "latency": 0.585690625,
+          "reply": {
+            "chain_failure": "OpInner(InvokeHostFunction(Trapped)); grant signer: Overdrawn (#7)",
+            "code": null,
+            "cpu_instructions": 2423423,
+            "details": null,
+            "error": null,
+            "hash": "bb430a24efba5a8d3bab0a5ed69974497b62cd05d23036b87dc1d1f039a69860",
+            "ledger": 381,
+            "mem_bytes": 769964,
+            "rpc_retries": 0,
+            "settled": "failed",
+            "status": 200,
+            "submit_ms": 61.053875
+          },
+          "submitted_at": 0.000068542
+        },
+        {
+          "api_key": "CC2DJ6VQ43QQUR22AVRN3Q5EYIJJR5QHA6QQW6V4GXDTFZP74JFMQUKE-grant-2",
+          "busy": 0,
+          "latency": 0.585702125,
+          "reply": {
+            "chain_failure": "OpInner(InvokeHostFunction(Trapped)); grant signer: Overdrawn (#7)",
+            "code": null,
+            "cpu_instructions": 2423423,
+            "details": null,
+            "error": null,
+            "hash": "a9a2c7ad78c3102daf4b6192bffa9b7c09db86e84ba82b10cecab31ae3618de9",
+            "ledger": 381,
+            "mem_bytes": 769964,
+            "rpc_retries": 0,
+            "settled": "failed",
+            "status": 200,
+            "submit_ms": 62.187292
+          },
+          "submitted_at": 0.000066209
+        },
+        {
+          "api_key": "CC2DJ6VQ43QQUR22AVRN3Q5EYIJJR5QHA6QQW6V4GXDTFZP74JFMQUKE-grant-1",
+          "busy": 0,
+          "latency": 0.585710166,
+          "reply": {
+            "chain_failure": "OpInner(InvokeHostFunction(Trapped)); grant signer: Overdrawn (#7)",
+            "code": null,
+            "cpu_instructions": 2423423,
+            "details": null,
+            "error": null,
+            "hash": "af99b9e19b3b5e408e46b85e03822095cb8cebd376101fe434f73b54b81e62f7",
+            "ledger": 381,
+            "mem_bytes": 769964,
+            "rpc_retries": 0,
+            "settled": "failed",
+            "status": 200,
+            "submit_ms": 62.132875
+          },
+          "submitted_at": 0.000065459
+        }
+      ],
+      "sibling_allowance": 100,
+      "siblings": 8,
+      "siblings_charged_as_confirmed": true,
+      "within_allowance": true
+    },
+    {
+      "account_paid": 90,
+      "after": [
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 53, 86, 70, 74, 77, 87, 73, 90, 80, 82, 73, 89, 79, 52, 82, 73, 81, 72, 71, 89, 55, 85, 84, 50, 84, 68, 87, 88, 85, 75, 89, 70, 55, 80, 54, 84, 88, 70, 66, 53, 51, 90, 88, 84, 70, 83, 51, 66, 83, 76, 66, 66, 76, 73))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "ee93a4f66f8d16b819bb9beb9ffccdfcdc1412e87fee6a324c2a99a1e0e67148",
+          "parent": null,
+          "revoked": false,
+          "spent": "90"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 53, 86, 70, 74, 77, 87, 73, 90, 80, 82, 73, 89, 79, 52, 82, 73, 81, 72, 71, 89, 55, 85, 84, 50, 84, 68, 87, 88, 85, 75, 89, 70, 55, 80, 54, 84, 88, 70, 66, 53, 51, 90, 88, 84, 70, 83, 51, 66, 83, 76, 66, 66, 76, 73))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "e28a8970753332bd72fef413e6b0b2ef1b4aadda7aa2c141f233712a6876b351",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 53, 86, 70, 74, 77, 87, 73, 90, 80, 82, 73, 89, 79, 52, 82, 73, 81, 72, 71, 89, 55, 85, 84, 50, 84, 68, 87, 88, 85, 75, 89, 70, 55, 80, 54, 84, 88, 70, 66, 53, 51, 90, 88, 84, 70, 83, 51, 66, 83, 76, 66, 66, 76, 73))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "d4eec1869fb1b8a4e817516ad5a931557cb56805c3eb16e8f3a803d647df7869",
+          "parent": 0,
+          "revoked": false,
+          "spent": "30"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 53, 86, 70, 74, 77, 87, 73, 90, 80, 82, 73, 89, 79, 52, 82, 73, 81, 72, 71, 89, 55, 85, 84, 50, 84, 68, 87, 88, 85, 75, 89, 70, 55, 80, 54, 84, 88, 70, 66, 53, 51, 90, 88, 84, 70, 83, 51, 66, 83, 76, 66, 66, 76, 73))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "772c8a442b7db06e166cfbc1ccbcbcde6f3eba76a4e98ef3ffc519502237d6ef",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 53, 86, 70, 74, 77, 87, 73, 90, 80, 82, 73, 89, 79, 52, 82, 73, 81, 72, 71, 89, 55, 85, 84, 50, 84, 68, 87, 88, 85, 75, 89, 70, 55, 80, 54, 84, 88, 70, 66, 53, 51, 90, 88, 84, 70, 83, 51, 66, 83, 76, 66, 66, 76, 73))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "353c8a7feeca38b2c4536e0bd2586fdb18d070e50e059f1d43f8bfefb97a7ce1",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 53, 86, 70, 74, 77, 87, 73, 90, 80, 82, 73, 89, 79, 52, 82, 73, 81, 72, 71, 89, 55, 85, 84, 50, 84, 68, 87, 88, 85, 75, 89, 70, 55, 80, 54, 84, 88, 70, 66, 53, 51, 90, 88, 84, 70, 83, 51, 66, 83, 76, 66, 66, 76, 73))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "7ea0e3bd52e207c9d3b0eba65c0704e66fca2d8e165a175218b174fc4160e413",
+          "parent": 0,
+          "revoked": false,
+          "spent": "30"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 53, 86, 70, 74, 77, 87, 73, 90, 80, 82, 73, 89, 79, 52, 82, 73, 81, 72, 71, 89, 55, 85, 84, 50, 84, 68, 87, 88, 85, 75, 89, 70, 55, 80, 54, 84, 88, 70, 66, 53, 51, 90, 88, 84, 70, 83, 51, 66, 83, 76, 66, 66, 76, 73))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "927308f53d6765503d2b64c103ab5aa47206ab39502cfe8f98442fdb543100b7",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 53, 86, 70, 74, 77, 87, 73, 90, 80, 82, 73, 89, 79, 52, 82, 73, 81, 72, 71, 89, 55, 85, 84, 50, 84, 68, 87, 88, 85, 75, 89, 70, 55, 80, 54, 84, 88, 70, 66, 53, 51, 90, 88, 84, 70, 83, 51, 66, 83, 76, 66, 66, 76, 73))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "62a611b472d89b0e5fc93c069b9f700b4c552d55bc0e87b56008ef17b6b2bebe",
+          "parent": 0,
+          "revoked": false,
+          "spent": "30"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 53, 86, 70, 74, 77, 87, 73, 90, 80, 82, 73, 89, 79, 52, 82, 73, 81, 72, 71, 89, 55, 85, 84, 50, 84, 68, 87, 88, 85, 75, 89, 70, 55, 80, 54, 84, 88, 70, 66, 53, 51, 90, 88, 84, 70, 83, 51, 66, 83, 76, 66, 66, 76, 73))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "8e486e8fb79499dba2a789c6b1639d409495233c79e0eaf52e2ea1fc9dbbb73f",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        }
+      ],
+      "amount": 30,
+      "before": [
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 53, 86, 70, 74, 77, 87, 73, 90, 80, 82, 73, 89, 79, 52, 82, 73, 81, 72, 71, 89, 55, 85, 84, 50, 84, 68, 87, 88, 85, 75, 89, 70, 55, 80, 54, 84, 88, 70, 66, 53, 51, 90, 88, 84, 70, 83, 51, 66, 83, 76, 66, 66, 76, 73))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "ee93a4f66f8d16b819bb9beb9ffccdfcdc1412e87fee6a324c2a99a1e0e67148",
+          "parent": null,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 53, 86, 70, 74, 77, 87, 73, 90, 80, 82, 73, 89, 79, 52, 82, 73, 81, 72, 71, 89, 55, 85, 84, 50, 84, 68, 87, 88, 85, 75, 89, 70, 55, 80, 54, 84, 88, 70, 66, 53, 51, 90, 88, 84, 70, 83, 51, 66, 83, 76, 66, 66, 76, 73))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "e28a8970753332bd72fef413e6b0b2ef1b4aadda7aa2c141f233712a6876b351",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 53, 86, 70, 74, 77, 87, 73, 90, 80, 82, 73, 89, 79, 52, 82, 73, 81, 72, 71, 89, 55, 85, 84, 50, 84, 68, 87, 88, 85, 75, 89, 70, 55, 80, 54, 84, 88, 70, 66, 53, 51, 90, 88, 84, 70, 83, 51, 66, 83, 76, 66, 66, 76, 73))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "d4eec1869fb1b8a4e817516ad5a931557cb56805c3eb16e8f3a803d647df7869",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 53, 86, 70, 74, 77, 87, 73, 90, 80, 82, 73, 89, 79, 52, 82, 73, 81, 72, 71, 89, 55, 85, 84, 50, 84, 68, 87, 88, 85, 75, 89, 70, 55, 80, 54, 84, 88, 70, 66, 53, 51, 90, 88, 84, 70, 83, 51, 66, 83, 76, 66, 66, 76, 73))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "772c8a442b7db06e166cfbc1ccbcbcde6f3eba76a4e98ef3ffc519502237d6ef",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 53, 86, 70, 74, 77, 87, 73, 90, 80, 82, 73, 89, 79, 52, 82, 73, 81, 72, 71, 89, 55, 85, 84, 50, 84, 68, 87, 88, 85, 75, 89, 70, 55, 80, 54, 84, 88, 70, 66, 53, 51, 90, 88, 84, 70, 83, 51, 66, 83, 76, 66, 66, 76, 73))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "353c8a7feeca38b2c4536e0bd2586fdb18d070e50e059f1d43f8bfefb97a7ce1",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 53, 86, 70, 74, 77, 87, 73, 90, 80, 82, 73, 89, 79, 52, 82, 73, 81, 72, 71, 89, 55, 85, 84, 50, 84, 68, 87, 88, 85, 75, 89, 70, 55, 80, 54, 84, 88, 70, 66, 53, 51, 90, 88, 84, 70, 83, 51, 66, 83, 76, 66, 66, 76, 73))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "7ea0e3bd52e207c9d3b0eba65c0704e66fca2d8e165a175218b174fc4160e413",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 53, 86, 70, 74, 77, 87, 73, 90, 80, 82, 73, 89, 79, 52, 82, 73, 81, 72, 71, 89, 55, 85, 84, 50, 84, 68, 87, 88, 85, 75, 89, 70, 55, 80, 54, 84, 88, 70, 66, 53, 51, 90, 88, 84, 70, 83, 51, 66, 83, 76, 66, 66, 76, 73))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "927308f53d6765503d2b64c103ab5aa47206ab39502cfe8f98442fdb543100b7",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 53, 86, 70, 74, 77, 87, 73, 90, 80, 82, 73, 89, 79, 52, 82, 73, 81, 72, 71, 89, 55, 85, 84, 50, 84, 68, 87, 88, 85, 75, 89, 70, 55, 80, 54, 84, 88, 70, 66, 53, 51, 90, 88, 84, 70, 83, 51, 66, 83, 76, 66, 66, 76, 73))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "62a611b472d89b0e5fc93c069b9f700b4c552d55bc0e87b56008ef17b6b2bebe",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        },
+        {
+          "allowance": "100",
+          "caveats": 2,
+          "caveats_debug": "Vec(Ok(ContractIn(Vec(Ok(Bytes(67, 66, 53, 86, 70, 74, 77, 87, 73, 90, 80, 82, 73, 89, 79, 52, 82, 73, 81, 72, 71, 89, 55, 85, 84, 50, 84, 68, 87, 88, 85, 75, 89, 70, 55, 80, 54, 84, 88, 70, 66, 53, 51, 90, 88, 84, 70, 83, 51, 66, 83, 76, 66, 66, 76, 73))))), Ok(FunctionIn(Vec(Ok(Bytes(116, 114, 97, 110, 115, 102, 101, 114))))))",
+          "key": "8e486e8fb79499dba2a789c6b1639d409495233c79e0eaf52e2ea1fc9dbbb73f",
+          "parent": 0,
+          "revoked": false,
+          "spent": "0"
+        }
+      ],
+      "bob_received": 90,
+      "charges_match_transfers": true,
+      "number": 2,
+      "root_allowance": 100,
+      "root_spent": 90,
+      "sent": [
+        {
+          "api_key": "CA5XAQWAZMYLVHFQUIJGFUXUKNUUKPCMCA6RNKP2H7DHMCDBT6IGMZXU-grant-5",
+          "busy": 0,
+          "latency": 1.647875375,
+          "reply": {
+            "chain_failure": null,
+            "code": null,
+            "cpu_instructions": 2915071,
+            "details": null,
+            "error": null,
+            "hash": "8dbf466ca478ef53ff639038ce9b2f549f7836c52b31dff9950071404d37befa",
+            "ledger": 401,
+            "mem_bytes": 791084,
+            "rpc_retries": 0,
+            "settled": "confirmed",
+            "status": 200,
+            "submit_ms": 94.996625
+          },
+          "submitted_at": 0.000160292
+        },
+        {
+          "api_key": "CA5XAQWAZMYLVHFQUIJGFUXUKNUUKPCMCA6RNKP2H7DHMCDBT6IGMZXU-grant-1",
+          "busy": 0,
+          "latency": 1.915775542,
+          "reply": {
+            "chain_failure": "OpInner(InvokeHostFunction(Trapped)); grant signer: Overdrawn (#7)",
+            "code": null,
+            "cpu_instructions": 2422901,
+            "details": null,
+            "error": null,
+            "hash": "af8e78a8af6af7b67ed5e05b27c5b9090fea31adc3a37de6ab4ab86f54aa6ede",
+            "ledger": 401,
+            "mem_bytes": 769964,
+            "rpc_retries": 0,
+            "settled": "failed",
+            "status": 200,
+            "submit_ms": 62.792333000000006
+          },
+          "submitted_at": 0.0000955
+        },
+        {
+          "api_key": "CA5XAQWAZMYLVHFQUIJGFUXUKNUUKPCMCA6RNKP2H7DHMCDBT6IGMZXU-grant-6",
+          "busy": 0,
+          "latency": 1.9182263750000002,
+          "reply": {
+            "chain_failure": "OpInner(InvokeHostFunction(Trapped)); grant signer: Overdrawn (#7)",
+            "code": null,
+            "cpu_instructions": 2422901,
+            "details": null,
+            "error": null,
+            "hash": "11b09e6b4aea9d62d999d372085324489e6c5180da8dddf31a920824fcb04f1b",
+            "ledger": 401,
+            "mem_bytes": 769964,
+            "rpc_retries": 0,
+            "settled": "failed",
+            "status": 200,
+            "submit_ms": 63.441417
+          },
+          "submitted_at": 0.000160959
+        },
+        {
+          "api_key": "CA5XAQWAZMYLVHFQUIJGFUXUKNUUKPCMCA6RNKP2H7DHMCDBT6IGMZXU-grant-3",
+          "busy": 0,
+          "latency": 1.9194558339999999,
+          "reply": {
+            "chain_failure": "OpInner(InvokeHostFunction(Trapped)); grant signer: Overdrawn (#7)",
+            "code": null,
+            "cpu_instructions": 2422901,
+            "details": null,
+            "error": null,
+            "hash": "4e66fcd1ff24efacfa1a3ee997003e7dcfb9bac208c4e21ecc6c5e99e49d8501",
+            "ledger": 401,
+            "mem_bytes": 769964,
+            "rpc_retries": 0,
+            "settled": "failed",
+            "status": 200,
+            "submit_ms": 64.230583
+          },
+          "submitted_at": 0.000150084
+        },
+        {
+          "api_key": "CA5XAQWAZMYLVHFQUIJGFUXUKNUUKPCMCA6RNKP2H7DHMCDBT6IGMZXU-grant-4",
+          "busy": 0,
+          "latency": 1.919447042,
+          "reply": {
+            "chain_failure": "OpInner(InvokeHostFunction(Trapped)); grant signer: Overdrawn (#7)",
+            "code": null,
+            "cpu_instructions": 2422901,
+            "details": null,
+            "error": null,
+            "hash": "0a0e2a0458bd6497accd69920c3d01aed4c3215f869fd27d9cb2c363a3017f62",
+            "ledger": 401,
+            "mem_bytes": 769964,
+            "rpc_retries": 0,
+            "settled": "failed",
+            "status": 200,
+            "submit_ms": 62.973667
+          },
+          "submitted_at": 0.000160167
+        },
+        {
+          "api_key": "CA5XAQWAZMYLVHFQUIJGFUXUKNUUKPCMCA6RNKP2H7DHMCDBT6IGMZXU-grant-8",
+          "busy": 0,
+          "latency": 1.919521208,
+          "reply": {
+            "chain_failure": "OpInner(InvokeHostFunction(Trapped)); grant signer: Overdrawn (#7)",
+            "code": null,
+            "cpu_instructions": 2422901,
+            "details": null,
+            "error": null,
+            "hash": "82ae7ffc1fd8c51d35faf21966fb05515f9324bbe878b09b45139df76f34c763",
+            "ledger": 401,
+            "mem_bytes": 769964,
+            "rpc_retries": 0,
+            "settled": "failed",
+            "status": 200,
+            "submit_ms": 63.496458000000004
+          },
+          "submitted_at": 0.000092875
+        },
+        {
+          "api_key": "CA5XAQWAZMYLVHFQUIJGFUXUKNUUKPCMCA6RNKP2H7DHMCDBT6IGMZXU-grant-2",
+          "busy": 0,
+          "latency": 1.920799541,
+          "reply": {
+            "chain_failure": null,
+            "code": null,
+            "cpu_instructions": 2919328,
+            "details": null,
+            "error": null,
+            "hash": "d8dff3fd009e8e289019800c18a0b7825b08d42d301606be5c641bd03282bbcf",
+            "ledger": 401,
+            "mem_bytes": 790472,
+            "rpc_retries": 0,
+            "settled": "confirmed",
+            "status": 200,
+            "submit_ms": 62.867959
+          },
+          "submitted_at": 0.000146334
+        },
+        {
+          "api_key": "CA5XAQWAZMYLVHFQUIJGFUXUKNUUKPCMCA6RNKP2H7DHMCDBT6IGMZXU-grant-7",
+          "busy": 0,
+          "latency": 1.9262976250000001,
+          "reply": {
+            "chain_failure": null,
+            "code": null,
+            "cpu_instructions": 2919328,
+            "details": null,
+            "error": null,
+            "hash": "44079e87a863a4bba0302a611777613fc97d5e8acbee69332207bc1b122a5f1a",
+            "ledger": 401,
+            "mem_bytes": 790472,
+            "rpc_retries": 0,
+            "settled": "confirmed",
+            "status": 200,
+            "submit_ms": 63.845292
+          },
+          "submitted_at": 0.000102084
+        }
+      ],
+      "sibling_allowance": 100,
+      "siblings": 8,
+      "siblings_charged_as_confirmed": true,
+      "within_allowance": true
+    }
+  ]
+}

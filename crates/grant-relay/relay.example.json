@@ -11,6 +11,7 @@
   ],
   "inclusion_fee": 100,
   "max_fee": 10000000,
+  "resource_fee_margin_percent": 20,
   "validity_seconds": 60,
   "min_auth_expiry_ledgers": 2,
   "poll_interval_ms": 1000,

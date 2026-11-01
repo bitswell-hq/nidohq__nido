@@ -1,31 +1,44 @@
-//! One Nido account with agents, in the Soroban host under enforcing
-//! authorization: the world of `crates/integration-tests` (every Perch
-//! contract from its deployed wasm, the account minted by Nido's factory),
-//! the grant signer from its wasm as the account's delegated signer, two
-//! Stellar Asset Contracts (the budget asset and another token) and
-//! instances of the evaluation's dApp wasm.
+//! One Nido account with agents: the account minted by Nido's factory, the
+//! grant signer from its wasm as the account's delegated signer, two Stellar
+//! Asset Contracts (the budget asset and another token) and instances of the
+//! evaluation's dApp wasm.
+//!
+//! The same fixture runs on two backends ([`Backend`]): the Soroban host
+//! under enforcing authorization, on the world of `crates/integration-tests`
+//! (every Perch contract from its deployed wasm); and a local Stellar network
+//! (`crate::network`), where the owner's setup goes straight to the chain and
+//! every agent call goes through the relay. The attack suite and the
+//! workloads are written once against this fixture.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
 use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::sync::Arc;
 
 use ed25519_dalek::{Signer as _, SigningKey};
 use nido_grant_signer::{Arg, Caveat, Grant, GrantError, GrantSignature, GrantSignerClient};
 use nido_integration_tests::world::{strkey, world, Account, Passkey, World, NETWORK};
-use nido_integration_tests::GRANT_SIGNER_WASM;
+use nido_integration_tests::{account_auth_digest, build_contract_assertion, GRANT_SIGNER_WASM};
+use perch_smart_account::AccountConfiguration;
 use serde::Serialize;
 use soroban_sdk::auth::Context;
-use soroban_sdk::testutils::Address as _;
+use soroban_sdk::testutils::{Address as _, Ledger as _};
 use soroban_sdk::token::{StellarAssetClient, TokenClient};
 use soroban_sdk::xdr::{
     HashIdPreimage, HashIdPreimageSorobanAuthorization,
-    HashIdPreimageSorobanAuthorizationWithAddress, Limits, ScVal, SorobanAddressCredentials,
-    SorobanAddressCredentialsWithDelegates, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
-    SorobanAuthorizedInvocation, SorobanCredentials, SorobanDelegateSignature, VecM, WriteXdr,
+    HashIdPreimageSorobanAuthorizationWithAddress, InvokeContractArgs, Limits, ScVal,
+    SorobanAddressCredentials, SorobanAddressCredentialsWithDelegates, SorobanAuthorizationEntry,
+    SorobanAuthorizedFunction, SorobanAuthorizedInvocation, SorobanCredentials,
+    SorobanDelegateSignature, StringM, ToXdr as _, VecM, WriteXdr,
 };
-use soroban_sdk::{Address, Bytes, BytesN, Env, IntoVal, InvokeError, Map, Symbol, Val, Vec};
+use soroban_sdk::{
+    Address, Bytes, BytesN, Env, IntoVal, InvokeError, Map, Symbol, TryFromVal, Val, Vec,
+};
 use stellar_accounts::smart_account::{AuthPayload, Signer};
+use stellar_accounts::verifiers::webauthn::WebAuthnSigData;
 
+use crate::network::relay::{self, AgentSpec, Reply};
+use crate::network::{Mode, Net};
 use crate::outcome::{classify, Outcome};
 
 /// The account's starting balance in each asset.
@@ -50,8 +63,23 @@ pub enum Misrule {
     Signer,
 }
 
+/// Where the fixture's contracts run.
+pub enum Backend {
+    /// The Soroban host, every authorization installed with `set_auths`.
+    Sim(Box<World>),
+    /// A local Stellar network: the owner's setup sent from the network's
+    /// operator account, agent calls sent through the relay.
+    Net(Arc<Net>),
+}
+
 pub struct Fixture {
-    pub w: World,
+    backend: Backend,
+    /// The simulation's host; on the network, a host that only builds
+    /// values, on the network's id.
+    env: Env,
+    verifier: Address,
+    /// The network passphrase documents name.
+    network: &'static str,
     pub account: Account,
     pub signer: Address,
     /// The budget asset.
@@ -66,11 +94,19 @@ pub struct Fixture {
     /// Contract to document rule name, for the account's rule selection.
     rules: BTreeMap<String, String>,
     nonce: Cell<i64>,
+    /// On the network: the budget asset (code and issuer).
+    budget: Option<soroban_sdk::xdr::AlphaNum4>,
+    /// On the network: the relay agents for the current grants, `None` when
+    /// a setup step may have changed them.
+    agents: RefCell<Option<std::vec::Vec<AgentSpec>>>,
+    /// On the network: the relay's reply to the latest agent call.
+    last_reply: RefCell<Option<Reply>>,
 }
 
 impl Fixture {
     /// An account whose document gives agents one rule per asset and dApp
-    /// instance, plus `extra`, with `dapps` instances of `dapp_wasm`.
+    /// instance, plus `extra`, with `dapps` instances of `dapp_wasm`, in the
+    /// Soroban host.
     #[must_use]
     pub fn new(label: &str, dapp_wasm: &[u8], dapps: usize, extra: Option<Misrule>) -> Self {
         let w = world();
@@ -93,11 +129,110 @@ impl Fixture {
         StellarAssetClient::new(&env, &asset).mint(&account.address, &BALANCE);
         StellarAssetClient::new(&env, &other).mint(&account.address, &BALANCE);
         env.set_auths(&[]);
+        let parties = [
+            Address::generate(&env),
+            Address::generate(&env),
+            Address::generate(&env),
+        ];
+        let verifier = w.verifier.clone();
+        let target = w.target.clone();
+        Self::finish(
+            Backend::Sim(Box::new(w)),
+            env,
+            verifier,
+            NETWORK,
+            account,
+            signer,
+            [asset, other],
+            dapps,
+            parties,
+            &target,
+            extra,
+        )
+    }
 
+    /// The same account on the local network: minted by the network's
+    /// factory, its grant signer, two credit assets' contracts and `dapps`
+    /// dApp instances deployed there, and its document applied by the owner.
+    ///
+    /// # Panics
+    ///
+    /// If a setup step fails.
+    #[must_use]
+    pub fn on_network(net: &Arc<Net>, label: &str, dapps: usize, extra: Option<Misrule>) -> Self {
+        let env = Env::new_with_config(soroban_sdk::testutils::EnvTestConfig {
+            capture_snapshot_at_drop: false,
+        });
+        env.cost_estimate().budget().reset_unlimited();
+        env.ledger()
+            .with_mut(|l| l.network_id = grant_relay::local::network_id());
+        let at = |s: &str| Address::from_str(&env, s);
+        let owner = Passkey::labelled(&format!("eval/{label}/owner"));
+        let account = mint(net, &env, &format!("eval/{label}"), owner);
+        let signer = at(&net
+            .deploy(
+                "grant-signer",
+                net.grant_signer_hash,
+                std::vec![sc(&env, account.address.clone())],
+            )
+            .expect("the grant signer deploys"));
+        let holder = std::vec![strkey(&account.address)];
+        let (asset, budget) = net
+            .asset("BUDG", &holder, BALANCE)
+            .expect("the budget asset");
+        let asset = at(&asset);
+        let other = at(&net
+            .asset("OTHR", &holder, BALANCE)
+            .expect("the other token")
+            .0);
+        let dapps = (0..dapps)
+            .map(|i| {
+                at(&net
+                    .deploy(&format!("dapp-{i}"), net.dapp_hash, std::vec![])
+                    .expect("a dApp instance deploys"))
+            })
+            .collect();
+        // Parties that only receive the asset: contract addresses, which hold
+        // a Stellar asset without a trustline, as in the simulation.
+        let party = |name: &str| at(&stellar_strkey::Contract(net.salt(name)).to_string());
+        let parties = [party("bob"), party("carol"), party("mallory")];
+        let target = party("target");
+        let verifier = at(&net.verifier);
+        let mut f = Self::finish(
+            Backend::Net(Arc::clone(net)),
+            env,
+            verifier,
+            grant_relay::local::PASSPHRASE,
+            account,
+            signer,
+            [asset, other],
+            dapps,
+            parties,
+            &target,
+            extra,
+        );
+        f.budget = Some(budget);
+        f
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn finish(
+        backend: Backend,
+        env: Env,
+        verifier: Address,
+        network: &'static str,
+        account: Account,
+        signer: Address,
+        [asset, other]: [Address; 2],
+        dapps: std::vec::Vec<Address>,
+        [bob, carol, mallory]: [Address; 3],
+        target: &Address,
+        extra: Option<Misrule>,
+    ) -> Self {
         let mut rules = BTreeMap::new();
         rules.insert(strkey(&asset), "a-asset".to_owned());
         rules.insert(strkey(&other), "a-other".to_owned());
-        rules.insert(strkey(&w.target), "a-target".to_owned());
+        rules.insert(strkey(target), "a-target".to_owned());
         for (i, d) in dapps.iter().enumerate() {
             rules.insert(strkey(d), format!("a-dapp-{i}"));
         }
@@ -111,10 +246,13 @@ impl Fixture {
             }
         }
         let f = Self {
-            bob: Address::generate(&env),
-            carol: Address::generate(&env),
-            mallory: Address::generate(&env),
-            w,
+            backend,
+            env,
+            verifier,
+            network,
+            bob,
+            carol,
+            mallory,
             account,
             signer,
             asset,
@@ -122,21 +260,91 @@ impl Fixture {
             dapps,
             rules,
             nonce: Cell::new(1 << 40),
+            budget: None,
+            agents: RefCell::new(None),
+            last_reply: RefCell::new(None),
         };
         let doc = f.doc(None);
-        f.w.apply_bytes_as(&f.account, "owner", &doc, 0)
-            .expect("the agents' document applies");
+        match &f.backend {
+            Backend::Sim(w) => {
+                w.apply_bytes_as(&f.account, "owner", &doc, 0)
+                    .expect("the agents' document applies");
+            }
+            Backend::Net(_) => {
+                let e = f.env();
+                let args = Vec::from_array(
+                    e,
+                    [
+                        doc.into_val(e),
+                        0u32.into_val(e),
+                        Option::<u64>::None.into_val(e),
+                    ],
+                );
+                assert_eq!(
+                    f.owner_call(&f.account.address, "apply_doc", &args),
+                    Outcome::Allowed,
+                    "the agents' document applies"
+                );
+            }
+        }
         f
     }
 
     #[must_use]
     pub fn env(&self) -> &Env {
-        &self.w.env
+        &self.env
+    }
+
+    /// The enforcement point agent calls go through.
+    #[must_use]
+    pub fn boundary(&self) -> &'static str {
+        match &self.backend {
+            Backend::Sim(_) => "soroban-simulation",
+            Backend::Net(_) => "local-network",
+        }
+    }
+
+    /// CPU instructions and memory bytes of the latest invocation, where the
+    /// backend meters them (the simulation).
+    #[must_use]
+    pub fn resources(&self) -> Option<(i64, i64)> {
+        match &self.backend {
+            Backend::Sim(_) => {
+                let r = self.env.cost_estimate().resources();
+                Some((r.instructions, r.mem_bytes))
+            }
+            Backend::Net(_) => None,
+        }
+    }
+
+    /// The relay's reply to the latest agent call, on the network.
+    #[must_use]
+    pub fn take_reply(&self) -> Option<Reply> {
+        self.last_reply.borrow_mut().take()
     }
 
     #[must_use]
     pub fn client(&self) -> GrantSignerClient<'_> {
         GrantSignerClient::new(self.env(), &self.signer)
+    }
+
+    /// `v` as an XDR value.
+    #[must_use]
+    pub fn sc<T: IntoVal<Env, Val>>(&self, v: T) -> ScVal {
+        sc(&self.env, v)
+    }
+
+    /// The latest ledger.
+    ///
+    /// # Panics
+    ///
+    /// If the network does not answer.
+    #[must_use]
+    pub fn ledger(&self) -> u32 {
+        match &self.backend {
+            Backend::Sim(w) => w.ledger(),
+            Backend::Net(n) => n.ledger().expect("the latest ledger"),
+        }
     }
 
     /// The account's document: the owner passkey on the admin rule, the grant
@@ -169,8 +377,9 @@ impl Fixture {
             ));
         }
         let json = format!(
-            r#"{{"version":1,"network":"{NETWORK}","signers":[{{"id":"owner","verifier":"{}","key":"{owner}"}},{{"id":"grants","address":"{}"}}],"rules":[{}]}}"#,
-            strkey(&self.w.verifier),
+            r#"{{"version":1,"network":"{}","signers":[{{"id":"owner","verifier":"{}","key":"{owner}"}},{{"id":"grants","address":"{}"}}],"rules":[{}]}}"#,
+            self.network,
+            strkey(&self.verifier),
             strkey(&self.signer),
             all.join(",")
         );
@@ -213,7 +422,7 @@ impl Fixture {
 
     /// Run `call` with exactly `entries` authorized, and classify a failure
     /// by the host's event log.
-    pub fn run(&self, entries: &[SorobanAuthorizationEntry], call: impl FnOnce()) -> Outcome {
+    fn run(&self, entries: &[SorobanAuthorizationEntry], call: impl FnOnce()) -> Outcome {
         self.env().set_auths(entries);
         let result = catch_unwind(AssertUnwindSafe(call));
         self.env().set_auths(&[]);
@@ -234,24 +443,95 @@ impl Fixture {
         }
     }
 
+    /// `contract.f(args)` signed by the owner passkey through the admin rule,
+    /// sent from the network's operator account.
+    fn owner_call(&self, contract: &Address, f: &str, args: &Vec<Val>) -> Outcome {
+        let Backend::Net(net) = &self.backend else {
+            unreachable!("the simulation's owner signs through its world")
+        };
+        let root = self.node(contract, f, args, std::vec![]);
+        let entry = self.owner_entry(net, root);
+        *self.agents.borrow_mut() = None;
+        match net.setup(&host_function(&root_call(&entry)), Some(std::vec![entry])) {
+            Ok(()) => Outcome::Allowed,
+            Err(e) => classify(&e, &strkey(&self.signer), &strkey(&self.account.address)),
+        }
+    }
+
+    /// The owner passkey's authorization of `root` through the admin rule,
+    /// as a browser assertion signs it.
+    fn owner_entry(
+        &self,
+        net: &Net,
+        root: SorobanAuthorizedInvocation,
+    ) -> SorobanAuthorizationEntry {
+        let e = self.env();
+        let nonce = self.next_nonce();
+        let expiration = net.ledger().expect("the latest ledger") + 1_000;
+        let preimage = HashIdPreimage::SorobanAuthorization(HashIdPreimageSorobanAuthorization {
+            network_id: soroban_sdk::xdr::Hash(e.ledger().network_id().to_array()),
+            nonce,
+            signature_expiration_ledger: expiration,
+            invocation: root.clone(),
+        });
+        let payload = e.crypto().sha256(&Bytes::from_slice(
+            e,
+            &preimage.to_xdr(Limits::none()).unwrap(),
+        ));
+        let rule_ids = soroban_sdk::vec![e, self.rule_id("admin")];
+        let digest = account_auth_digest(e, &self.account.address, &payload, &rule_ids);
+        let owner = self.account.key("owner");
+        let a = build_contract_assertion(&owner.key, e, &digest);
+        let sig = WebAuthnSigData {
+            signature: a.signature,
+            authenticator_data: a.authenticator_data,
+            client_data: a.client_data,
+        };
+        let mut signers: Map<Signer, Bytes> = Map::new(e);
+        signers.set(owner.signer(e, &self.verifier), sig.to_xdr(e));
+        SorobanAuthorizationEntry {
+            credentials: SorobanCredentials::Address(SorobanAddressCredentials {
+                address: self.account.address.clone().into(),
+                nonce,
+                signature_expiration_ledger: expiration,
+                signature: self.sc(AuthPayload {
+                    signers,
+                    context_rule_ids: rule_ids,
+                }),
+            }),
+            root_invocation: root,
+        }
+    }
+
     /// Call `f(args)` on the grant signer as the account, authorized by the
     /// owner passkey through the admin rule.
     pub fn admin(&self, f: &str, args: &Vec<Val>) -> Outcome {
-        let w = &self.w;
         let name = Symbol::new(self.env(), f);
-        let root = w.invocation(
-            &self.account.address,
-            "execute",
-            std::vec![
-                w.sc(self.signer.clone()),
-                w.sc(name.clone()),
-                w.sc(args.clone())
-            ],
-        );
-        let entry = w.signed(&self.account, "owner", "admin", root);
-        self.run(&[entry], || {
-            w.account(&self.account).execute(&self.signer, &name, args);
-        })
+        match &self.backend {
+            Backend::Sim(w) => {
+                let root = w.invocation(
+                    &self.account.address,
+                    "execute",
+                    std::vec![
+                        w.sc(self.signer.clone()),
+                        w.sc(name.clone()),
+                        w.sc(args.clone())
+                    ],
+                );
+                let entry = w.signed(&self.account, "owner", "admin", root);
+                self.run(&[entry], || {
+                    w.account(&self.account).execute(&self.signer, &name, args);
+                })
+            }
+            Backend::Net(_) => {
+                let e = self.env();
+                let exec = Vec::from_array(
+                    e,
+                    [self.signer.into_val(e), name.into_val(e), args.into_val(e)],
+                );
+                self.owner_call(&self.account.address, "execute", &exec)
+            }
+        }
     }
 
     /// The owner issues a root grant over the budget asset; returns its id.
@@ -295,12 +575,66 @@ impl Fixture {
     /// Every grant, by id.
     #[must_use]
     pub fn grants(&self) -> std::vec::Vec<Grant> {
-        (0u32..).map_while(|id| self.client().grant(&id)).collect()
+        (0u32..)
+            .map_while(|id| match &self.backend {
+                Backend::Sim(_) => self.client().grant(&id),
+                Backend::Net(_) => self.view::<Option<Grant>>(
+                    &self.signer,
+                    "grant",
+                    &Vec::from_array(self.env(), [id.into_val(self.env())]),
+                ),
+            })
+            .collect()
     }
 
     #[must_use]
     pub fn balance(&self, token: &Address, a: &Address) -> i128 {
-        TokenClient::new(self.env(), token).balance(a)
+        match &self.backend {
+            Backend::Sim(_) => TokenClient::new(self.env(), token).balance(a),
+            Backend::Net(_) => self.view(
+                token,
+                "balance",
+                &Vec::from_array(self.env(), [a.into_val(self.env())]),
+            ),
+        }
+    }
+
+    /// `contract.f(args)` evaluated against the network's current state.
+    fn view<T: TryFromVal<Env, Val>>(&self, contract: &Address, f: &str, args: &Vec<Val>) -> T {
+        let Backend::Net(net) = &self.backend else {
+            unreachable!("the simulation reads through its clients")
+        };
+        let result = net
+            .read(&crate::network::invoke(
+                &strkey(contract),
+                f,
+                args.iter().map(|v| self.sc(v)).collect(),
+            ))
+            .unwrap_or_else(|e| panic!("reading {f}: {e}"));
+        let val = Val::try_from_val(self.env(), &result).expect("a host value");
+        T::try_from_val(self.env(), &val)
+            .unwrap_or_else(|_| panic!("reading {f}: unexpected value {result:?}"))
+    }
+
+    /// The id of the account's live rule named `name` (`u32::MAX` when there
+    /// is none), as its `configuration()` view reports it.
+    fn rule_id(&self, name: &str) -> u32 {
+        match &self.backend {
+            Backend::Sim(w) => w.rule_id(&self.account.address, name),
+            Backend::Net(_) => {
+                let config: AccountConfiguration = self.view(
+                    &self.account.address,
+                    "configuration",
+                    &Vec::new(self.env()),
+                );
+                let wanted = soroban_sdk::String::from_str(self.env(), name);
+                config
+                    .rules
+                    .iter()
+                    .find(|r| !r.recovery && r.name == wanted)
+                    .map_or(u32::MAX, |r| r.id)
+            }
+        }
     }
 
     // --- agent authorizations ------------------------------------------------
@@ -343,7 +677,7 @@ impl Fixture {
     }
 
     fn grant_signature(&self, grant: u32, key: &SigningKey, payload: &[u8; 32]) -> ScVal {
-        self.w.sc(GrantSignature {
+        self.sc(GrantSignature {
             grant,
             signature: BytesN::from_array(self.env(), &key.sign(payload).to_bytes()),
         })
@@ -361,12 +695,7 @@ impl Fixture {
             },
             |r| r.iter().map(|s| (*s).to_owned()).collect(),
         );
-        Vec::from_iter(
-            self.env(),
-            names
-                .iter()
-                .map(|r| self.w.rule_id(&self.account.address, r)),
-        )
+        Vec::from_iter(self.env(), names.iter().map(|r| self.rule_id(r)))
     }
 
     fn tree_rules(&self, node: &SorobanAuthorizedInvocation, out: &mut std::vec::Vec<String>) {
@@ -396,7 +725,7 @@ impl Fixture {
         root: SorobanAuthorizedInvocation,
     ) -> SorobanAuthorizationEntry {
         let nonce = self.next_nonce();
-        let expiration = self.w.ledger() + 1_000;
+        let expiration = self.ledger() + 1_000;
         let payload = self.payload(Some(&self.account.address), nonce, expiration, &root);
         let mut signers: Map<Signer, Bytes> = Map::new(self.env());
         signers.set(
@@ -410,7 +739,7 @@ impl Fixture {
                         address: self.account.address.clone().into(),
                         nonce,
                         signature_expiration_ledger: expiration,
-                        signature: self.w.sc(AuthPayload {
+                        signature: self.sc(AuthPayload {
                             signers,
                             context_rule_ids: self.rule_ids(&root, rules),
                         }),
@@ -438,7 +767,7 @@ impl Fixture {
         root: SorobanAuthorizedInvocation,
     ) -> SorobanAuthorizationEntry {
         let nonce = self.next_nonce();
-        let expiration = self.w.ledger() + 1_000;
+        let expiration = self.ledger() + 1_000;
         let payload = self.payload(None, nonce, expiration, &root);
         SorobanAuthorizationEntry {
             credentials: SorobanCredentials::Address(SorobanAddressCredentials {
@@ -460,13 +789,14 @@ impl Fixture {
         args: &Vec<Val>,
         subs: std::vec::Vec<SorobanAuthorizedInvocation>,
     ) -> SorobanAuthorizedInvocation {
-        let w = &self.w;
-        let mut n = w.invocation(contract, f, args.iter().map(|v| w.sc(v)).collect());
+        let mut n = invocation(contract, f, args.iter().map(|v| self.sc(v)).collect());
         n.sub_invocations = subs.try_into().unwrap();
         n
     }
 
-    /// Invoke `contract.f(args)` with `entries` as the only authorization.
+    /// Invoke `contract.f(args)` with `entries` as the only authorization:
+    /// an agent's call. On the network it goes through the relay, as the
+    /// holder of the grant whose signature the entries carry.
     pub fn call(
         &self,
         entries: &[SorobanAuthorizationEntry],
@@ -474,10 +804,166 @@ impl Fixture {
         f: &str,
         args: &Vec<Val>,
     ) -> Outcome {
-        self.run(entries, || {
-            self.env()
-                .invoke_contract::<Val>(contract, &Symbol::new(self.env(), f), args.clone());
-        })
+        match &self.backend {
+            Backend::Sim(_) => self.run(entries, || {
+                self.env().invoke_contract::<Val>(
+                    contract,
+                    &Symbol::new(self.env(), f),
+                    args.clone(),
+                );
+            }),
+            Backend::Net(net) => {
+                let func = crate::network::invoke(
+                    &strkey(contract),
+                    f,
+                    args.iter().map(|v| self.sc(v)).collect(),
+                );
+                let agents = self.relay_agents(net);
+                let handle = net.relay_for(&agents).expect("the relay starts");
+                let key = entries
+                    .iter()
+                    .find_map(|e| self.grant_of(e))
+                    .map_or_else(|| "no-grant".to_owned(), |g| self.api_key(g));
+                let mut reply = handle
+                    .call(&key, &func, entries)
+                    .unwrap_or_else(|e| panic!("relaying {f}: {e}"));
+                relay::settle(&net.rpc, &mut reply, &strkey(&self.signer));
+                let outcome = relay::outcome(
+                    &reply,
+                    &strkey(&self.signer),
+                    &strkey(&self.account.address),
+                );
+                *self.last_reply.borrow_mut() = Some(reply);
+                outcome
+            }
+        }
+    }
+
+    /// A setup step's call made by an agent (a holder delegating a
+    /// sub-grant): in the simulation as [`Self::call`]; on the network sent
+    /// straight to the chain, since the step sets up the scenario and is not
+    /// one of its attempts.
+    pub fn setup_call(
+        &self,
+        entries: &[SorobanAuthorizationEntry],
+        contract: &Address,
+        f: &str,
+        args: &Vec<Val>,
+    ) -> Outcome {
+        match &self.backend {
+            Backend::Sim(_) => self.call(entries, contract, f, args),
+            Backend::Net(net) => {
+                *self.agents.borrow_mut() = None;
+                let func = crate::network::invoke(
+                    &strkey(contract),
+                    f,
+                    args.iter().map(|v| self.sc(v)).collect(),
+                );
+                match net.setup(&func, Some(entries.to_vec())) {
+                    Ok(()) => Outcome::Allowed,
+                    Err(e) => classify(&e, &strkey(&self.signer), &strkey(&self.account.address)),
+                }
+            }
+        }
+    }
+
+    /// The grant whose holder signed `entry`.
+    fn grant_of(&self, entry: &SorobanAuthorizationEntry) -> Option<u32> {
+        let signature = match &entry.credentials {
+            SorobanCredentials::AddressWithDelegates(c) => &c.delegates.first()?.signature,
+            SorobanCredentials::Address(c) => &c.signature,
+            _ => return None,
+        };
+        let val = Val::try_from_val(self.env(), signature).ok()?;
+        GrantSignature::try_from_val(self.env(), &val)
+            .ok()
+            .map(|s| s.grant)
+    }
+
+    /// The relay API key of grant `grant`'s holder.
+    #[must_use]
+    pub fn api_key(&self, grant: u32) -> String {
+        format!("{}-grant-{grant}", strkey(&self.signer))
+    }
+
+    /// The relay's agents: one per grant, with the grant's caveats as its
+    /// chain grant ([`Mode::Mirrored`], leaving out revoked grants and grants
+    /// under a revoked ancestor), or with none ([`Mode::PassThrough`]).
+    pub fn relay_agents(&self, net: &Net) -> std::vec::Vec<AgentSpec> {
+        if let Some(a) = self.agents.borrow().as_ref() {
+            return a.clone();
+        }
+        let grants = self.grants();
+        let revoked = |mut id: u32| loop {
+            let g = &grants[id as usize];
+            if g.revoked {
+                return true;
+            }
+            match g.parent {
+                Some(p) => id = p,
+                None => return false,
+            }
+        };
+        let agents: std::vec::Vec<AgentSpec> = (0u32..)
+            .zip(&grants)
+            .filter(|(id, _)| net.mode() == Mode::PassThrough || !revoked(*id))
+            .map(|(id, g)| AgentSpec {
+                api_key: self.api_key(id),
+                chain: match net.mode() {
+                    Mode::Mirrored => g.caveats.iter().map(|c| relay_caveat(&c)).collect(),
+                    Mode::PassThrough => std::vec::Vec::new(),
+                },
+            })
+            .collect();
+        *self.agents.borrow_mut() = Some(agents.clone());
+        agents
+    }
+
+    /// A Nido account the factory mints, with `owner` as its admin passkey.
+    #[must_use]
+    pub fn mint(&self, label: &str, owner: Passkey) -> Account {
+        match &self.backend {
+            Backend::Sim(w) => w.mint(label, owner, std::vec![]),
+            Backend::Net(net) => mint(net, self.env(), label, owner),
+        }
+    }
+
+    /// Give `key`'s account a trustline for the budget asset, creating the
+    /// account, on the network. The simulation needs none: its enforcing
+    /// authorization refuses a refused transfer before the token looks for
+    /// the recipient's trustline.
+    ///
+    /// # Panics
+    ///
+    /// If the network does not create it.
+    pub fn trustline(&self, key: &SigningKey) {
+        if let (Backend::Net(net), Some(budget)) = (&self.backend, &self.budget) {
+            net.trustline(key, budget).expect("the trustline");
+        }
+    }
+
+    /// Install `wasm`; returns its hash.
+    #[must_use]
+    pub fn upload(&self, wasm: &[u8]) -> BytesN<32> {
+        match &self.backend {
+            Backend::Sim(w) => w.env.deployer().upload_contract_wasm(wasm),
+            Backend::Net(_) => BytesN::from_array(self.env(), &crate::network::hash(wasm)),
+        }
+    }
+
+    /// The attack suite's deployer (`attacks::Deployer`): registered in the
+    /// simulation, deployed from its wasm (`fixtures/deployer`) on the
+    /// network.
+    #[must_use]
+    pub fn deployer(&self) -> Address {
+        match &self.backend {
+            Backend::Sim(w) => w.env.register(super::attacks::Deployer, ()),
+            Backend::Net(net) => Address::from_str(
+                self.env(),
+                &net.deploy("deployer", net.deployer_hash, std::vec![])
+                    .expect("the deployer deploys"),
+            ),
+        }
     }
 
     // --- argument lists and trees of the calls agents make ------------------
@@ -568,29 +1054,38 @@ impl Fixture {
     }
 
     /// `__check_auth` of the grant signer called directly on `contexts`, for
-    /// `grant`'s holder `key`.
+    /// `grant`'s holder `key`. Only the simulation can call it directly; the
+    /// network's host refuses a direct call of `__check_auth`, so there it is
+    /// `None`.
     pub fn verdict(
         &self,
         grant: u32,
         key: &SigningKey,
         contexts: &[Context],
-    ) -> Result<(), Result<GrantError, InvokeError>> {
+    ) -> Option<Result<(), Result<GrantError, InvokeError>>> {
+        if let Backend::Net(_) = &self.backend {
+            return None;
+        }
         let payload = [0x5a; 32];
         let signature = GrantSignature {
             grant,
             signature: BytesN::from_array(self.env(), &key.sign(&payload).to_bytes()),
         };
-        self.env().try_invoke_contract_check_auth::<GrantError>(
+        Some(self.env().try_invoke_contract_check_auth::<GrantError>(
             &self.signer,
             &BytesN::from_array(self.env(), &payload),
             signature.into_val(self.env()),
             &Vec::from_slice(self.env(), contexts),
-        )
+        ))
     }
 
     // --- state ---------------------------------------------------------------
 
     /// Everything a refused attack must leave unchanged.
+    ///
+    /// # Panics
+    ///
+    /// If the network does not answer.
     #[must_use]
     pub fn snapshot(&self) -> Snapshot {
         let mut balances = BTreeMap::new();
@@ -611,16 +1106,131 @@ impl Fixture {
                 balances.insert(format!("{token_name}:{name}"), self.balance(token, a));
             }
         }
-        let account = self.w.account(&self.account);
-        Snapshot {
-            balances,
-            grants: self.grants().iter().map(GrantView::from).collect(),
-            revision: account.revision(),
-            doc_hash: account
-                .applied_doc_hash()
-                .map(|h| hex::encode(h.to_array())),
-            pending_upgrade: account.pending_upgrade().is_some(),
+        let grants = self.grants().iter().map(GrantView::from).collect();
+        match &self.backend {
+            Backend::Sim(w) => {
+                let account = w.account(&self.account);
+                Snapshot {
+                    balances,
+                    grants,
+                    revision: account.revision(),
+                    doc_hash: account
+                        .applied_doc_hash()
+                        .map(|h| hex::encode(h.to_array())),
+                    pending_upgrade: account.pending_upgrade().is_some(),
+                    channels: BTreeMap::new(),
+                }
+            }
+            Backend::Net(net) => {
+                let a = &self.account.address;
+                let none = Vec::new(self.env());
+                let doc_hash: Option<BytesN<32>> = self.view(a, "applied_doc_hash", &none);
+                let pending: Val = self.view(a, "pending_upgrade", &none);
+                Snapshot {
+                    balances,
+                    grants,
+                    revision: self.view(a, "revision", &none),
+                    doc_hash: doc_hash.map(|h| hex::encode(h.to_array())),
+                    pending_upgrade: !pending.is_void(),
+                    channels: net
+                        .channel_sequences()
+                        .expect("the channels' sequence numbers")
+                        .into_iter()
+                        .collect(),
+                }
+            }
         }
+    }
+}
+
+/// A stored caveat as the relay's configuration file writes it. Contracts,
+/// functions, symbols and addresses are stored as their text.
+fn relay_caveat(c: &Caveat) -> serde_json::Value {
+    use serde_json::json;
+    let text = |b: &Bytes| String::from_utf8(b.to_alloc_vec()).expect("stored as text");
+    let list = |l: &Vec<Bytes>| l.iter().map(|b| text(&b)).collect::<std::vec::Vec<_>>();
+    match c {
+        Caveat::ContractIn(l) => json!({ "contract_in": list(l) }),
+        Caveat::FunctionIn(l) => json!({ "function_in": list(l) }),
+        Caveat::ArgI128AtMost(i, n) => json!({ "arg_i128_at_most": [i, n.to_string()] }),
+        Caveat::ArgEq(i, v) => {
+            let v = match v {
+                Arg::I128(n) => json!({ "i128": n.to_string() }),
+                Arg::U64(n) => json!({ "u64": n }),
+                Arg::Bool(b) => json!({ "bool": b }),
+                Arg::Bytes(b) => json!({ "bytes": hex::encode(b.to_alloc_vec()) }),
+                Arg::Address(b) => json!({ "address": text(b) }),
+                Arg::Symbol(b) => json!({ "symbol": text(b) }),
+                Arg::Other(b) => json!({ "other": hex::encode(b.to_alloc_vec()) }),
+            };
+            json!({ "arg_eq": [i, v] })
+        }
+    }
+}
+
+/// `v` as an XDR value in `env`.
+///
+/// # Panics
+///
+/// If `v` has no XDR form.
+#[allow(clippy::needless_pass_by_value)]
+pub fn sc<T: IntoVal<Env, Val>>(env: &Env, v: T) -> ScVal {
+    let val: Val = v.into_val(env);
+    ScVal::try_from_val(env, &val).unwrap()
+}
+
+/// An authorized invocation of `contract.f(args)`, with no sub-invocations.
+fn invocation(
+    contract: &Address,
+    f: &str,
+    args: std::vec::Vec<ScVal>,
+) -> SorobanAuthorizedInvocation {
+    SorobanAuthorizedInvocation {
+        function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
+            contract_address: contract.clone().into(),
+            function_name: StringM::try_from(f).unwrap().into(),
+            args: args.try_into().unwrap(),
+        }),
+        sub_invocations: VecM::default(),
+    }
+}
+
+/// The call an entry's root invocation authorizes.
+fn root_call(entry: &SorobanAuthorizationEntry) -> InvokeContractArgs {
+    match &entry.root_invocation.function {
+        SorobanAuthorizedFunction::ContractFn(args) => args.clone(),
+        _ => panic!("the owner authorizes contract calls"),
+    }
+}
+
+fn host_function(args: &InvokeContractArgs) -> soroban_sdk::xdr::HostFunction {
+    soroban_sdk::xdr::HostFunction::InvokeContract(args.clone())
+}
+
+/// Mint an account on the network through its factory: salt
+/// `sha256("nido-it/salt/<label>")` with this run's tag, admin passkey `owner`.
+fn mint(net: &Net, env: &Env, label: &str, owner: Passkey) -> Account {
+    let salt = net.salt(&format!("nido-it/salt/{label}"));
+    let args = std::vec![
+        sc(env, BytesN::from_array(env, &salt)),
+        sc(env, BytesN::from_array(env, &owner.pubkey())),
+    ];
+    net.setup(
+        &crate::network::invoke(&net.factory, "create_account", args.clone()),
+        None,
+    )
+    .unwrap_or_else(|e| panic!("minting {label}: {e}"));
+    let address = net
+        .read(&crate::network::invoke(
+            &net.factory,
+            "get_c_address",
+            std::vec![args[0].clone()],
+        ))
+        .expect("the account's address");
+    let address = Val::try_from_val(env, &address).expect("a host value");
+    Account {
+        address: Address::try_from_val(env, &address).expect("an address"),
+        keys: std::vec![("owner", owner)],
     }
 }
 
@@ -651,7 +1261,7 @@ impl From<&Grant> for GrantView {
 }
 
 /// Balances, grants (with their budget nodes) and the account's
-/// configuration.
+/// configuration; on the network, also the relay channels' sequence numbers.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Snapshot {
     pub balances: BTreeMap<String, i128>,
@@ -659,6 +1269,7 @@ pub struct Snapshot {
     pub revision: u64,
     pub doc_hash: Option<String>,
     pub pending_upgrade: bool,
+    pub channels: BTreeMap<String, i64>,
 }
 
 impl Snapshot {
@@ -686,6 +1297,14 @@ impl Snapshot {
         }
         if self.pending_upgrade != other.pending_upgrade {
             out.push("pending upgrade".into());
+        }
+        for (k, v) in &self.channels {
+            if other.channels.get(k) != Some(v) {
+                out.push(format!(
+                    "channel {k}: sequence {v} -> {:?}",
+                    other.channels.get(k)
+                ));
+            }
         }
         out
     }

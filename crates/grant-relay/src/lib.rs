@@ -13,6 +13,7 @@
 pub mod actions;
 pub mod channels;
 pub mod config;
+pub mod local;
 pub mod protocol;
 pub mod relay;
 pub mod rpc;

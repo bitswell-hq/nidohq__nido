@@ -16,6 +16,7 @@ path = "src/main.rs"
 soroban-sdk = { workspace = true, features = ["testutils", "hazmat-address", "alloc"] }
 stellar-accounts = { workspace = true }
 perch-account = { workspace = true }
+perch-smart-account = { workspace = true }
 nido-integration-tests = { path = "../../crates/integration-tests" }
 # The grant signer's types and client; the contract runs from its wasm.
 nido-grant-signer = { path = "../../contracts/grant-signer" }

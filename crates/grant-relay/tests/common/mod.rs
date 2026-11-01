@@ -623,6 +623,17 @@ pub fn fee(envelope: &TransactionEnvelope) -> u32 {
     v1.tx.fee
 }
 
+/// The resource fee the transaction declares.
+pub fn resource_fee(envelope: &TransactionEnvelope) -> i64 {
+    let TransactionEnvelope::Tx(v1) = envelope else {
+        panic!("v1 envelope")
+    };
+    let TransactionExt::V1(data) = &v1.tx.ext else {
+        panic!("Soroban transaction data")
+    };
+    data.resource_fee
+}
+
 /// Read the transaction's status until it is terminal or `timeout` passes.
 pub fn settle<K, R>(
     relay: &Relay<K, R>,

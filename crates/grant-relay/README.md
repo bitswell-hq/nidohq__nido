@@ -63,7 +63,7 @@ The codes:
 | - | - | - |
 | 400 | `INVALID_PARAMS` | Not one of the two request shapes; undecodable XDR; an authorization entry with `SourceAccount` credentials. |
 | 400 | `UNSUPPORTED_HOST_FUNCTION` | `UploadContractWasm`. |
-| 400 | `SIMULATION_FAILED` | A simulation failed. `details.error` is the host's message. The enforcing simulation runs each account's `__check_auth`, so a bad signature lands here. |
+| 400 | `SIMULATION_FAILED` | A simulation failed. `details.error` is the host's message and `details.authMode` the simulation's: `record` (step 6 below) or `enforce` (step 7). The enforcing simulation runs each account's `__check_auth`, so a bad signature lands here. |
 | 400 | `AUTH_EXPIRY_TOO_SHORT` | An entry expires before the latest ledger plus `min_auth_expiry_ledgers`. |
 | 400 | `FEE_TOO_HIGH` | Inclusion fee plus resource fee exceeds `max_fee`. |
 | 400 | `SUBMIT_FAILED` | `sendTransaction` answered `ERROR`. `details.errorResultXdr` is the result. |
@@ -142,8 +142,15 @@ authorization (they appear in no tree), calls a contract makes inside its own
 - **Unanswered sends.** When `sendTransaction` gives no answer, the transaction
   may have reached the network. The relay answers `submitted`, keeps the
   channel leased, and settles it by hash like any other.
-- **Fees.** The channel pays its own fee: `inclusion_fee` plus the simulated
-  resource fee, at most `max_fee`. No fund account fee-bumps. One request is
+- **Fees.** The channel pays its own fee: `inclusion_fee` plus a resource fee
+  of the simulated minimum and `resource_fee_margin_percent` of it, the total
+  capped at `max_fee` (`FEE_TOO_HIGH` when the minimum alone exceeds it). The
+  margin covers rent that grows between simulation and the ledger that
+  includes the transaction: a contract that extends an entry's TTL to the
+  maximum on every write pays rent for every ledger since its last write, so
+  two writes a ledger apart can need more than the simulation priced, and the
+  transaction would fail with `INSUFFICIENT_REFUNDABLE_FEE`. The refundable
+  part not used is refunded. No fund account fee-bumps. One request is
   one transaction and one custody signature, so there is one signing action to
   check and one keeper call. A fee bump would add a second envelope and a
   second signature to buy only the consolidation of funds in one account. The
@@ -167,6 +174,7 @@ A JSON file (`relay.example.json` is a complete one for a local network):
   "channels": ["G…", "G…"],
   "inclusion_fee": 100,
   "max_fee": 10000000,
+  "resource_fee_margin_percent": 20,
   "validity_seconds": 60,
   "min_auth_expiry_ledgers": 2,
   "poll_interval_ms": 1000,
@@ -266,8 +274,10 @@ cargo run -p grant-relay --bin grant-relay -- --config crates/grant-relay/relay.
 The example's channel seeds are `0b…0b` and `0c…0c` (32 bytes each) and its
 agent's API key is `dev-agent-key`; the frontend's relay URL for it is
 `http://127.0.0.1:8090/agents/dev-agent-key`. These keys are public and for a
-local network only. `tests/local_network.rs` performs the channel setup in
-code (`hand_to_custody`).
+local network only. `grant_relay::local` (`src/local.rs`) performs the
+channel setup in code (`hand_to_custody`), with the pinned quickstart image
+and the setup transactions that `tests/local_network.rs` and the evaluation's
+local-network stage (`evaluation/README.md`) use.
 
 ## Tests
 

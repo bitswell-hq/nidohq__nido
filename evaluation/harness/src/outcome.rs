@@ -10,7 +10,14 @@ use stellar_accounts::smart_account::SmartAccountError;
 #[serde(tag = "outcome", rename_all = "snake_case")]
 pub enum Outcome {
     Allowed,
-    Refused { component: String, error: String },
+    Refused {
+        component: String,
+        error: String,
+    },
+    /// Not run on this backend, and why.
+    NotRun {
+        reason: String,
+    },
 }
 
 impl Outcome {
@@ -75,7 +82,7 @@ pub fn first_host_error(text: &str) -> Option<String> {
 
 /// Host diagnostics that say why the host itself refused, and the reason the
 /// results give for each.
-const HOST_REASONS: [(&str, &str); 4] = [
+const HOST_REASONS: [(&str, &str); 5] = [
     (
         "Unauthorized function call for address",
         "no authorization entry covers the call",
@@ -88,6 +95,10 @@ const HOST_REASONS: [(&str, &str); 4] = [
     (
         "trustline entry is missing",
         "the recipient has no trustline",
+    ),
+    (
+        "encountered authorization not tied to the root contract invocation",
+        "recording simulation: authorization asked for below the root invocation",
     ),
 ];
 

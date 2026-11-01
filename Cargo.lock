@@ -1244,6 +1244,7 @@ dependencies = [
  "nido-key-keeper",
  "p256",
  "perch-account",
+ "perch-smart-account",
  "serde",
  "serde_json",
  "sha2",
