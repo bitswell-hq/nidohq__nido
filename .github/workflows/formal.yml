@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "formal/**"
+      - "crates/grant-eval/**"
       - ".github/workflows/formal.yml"
   push:
     branches: [main]
@@ -20,8 +21,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # elan reads formal/lean-toolchain and installs that Lean release on the
-      # first `lake` call. The package has no Lake dependencies, so the build
-      # is the toolchain download plus a few seconds of elaboration.
+      # first `lake` call.
       - name: Install elan
         run: |
           curl -sSfL https://raw.githubusercontent.com/leanprover/elan/v4.2.4/elan-init.sh \
@@ -37,5 +37,30 @@ jobs:
             exit 1
           fi
 
+      # Aeneas's Lean library depends on Mathlib: fetch Mathlib's prebuilt
+      # oleans instead of building it. Lake fetches Aeneas's own oleans from
+      # the release archive at the pinned commit (preferReleaseBuild).
+      - name: Fetch the Mathlib cache
+        run: lake exe cache get
+
       - name: lake build
         run: lake build
+
+  extraction:
+    name: Extraction matches crates/grant-eval
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # formal/scripts/extract.sh takes Charon and Aeneas from Aeneas's Nix
+      # flake at the pinned commit; hacl.cachix.org (Aeneas's binary cache)
+      # serves the prebuilt tools.
+      - name: Install Nix
+        uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+        with:
+          extra_nix_config: |
+            extra-substituters = https://hacl.cachix.org
+            extra-trusted-public-keys = hacl.cachix.org-1:FzsZ2xsByOwKwIWNPII7yMOelJNDZ12mDAj3d1eGX0c=
+
+      - name: Re-run Charon and Aeneas and compare
+        run: formal/scripts/extract.sh --check

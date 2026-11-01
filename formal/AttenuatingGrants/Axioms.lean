@@ -8,13 +8,20 @@ import AttenuatingGrants.Cost.Files
 import AttenuatingGrants.Cost.Network
 import AttenuatingGrants.Cost.Signing
 
+import AttenuatingGrants.Equiv.Chain
+import AttenuatingGrants.Equiv.Files
+import AttenuatingGrants.Equiv.Network
+import AttenuatingGrants.Equiv.Signing
+
 /-!
 # Axioms
 
 Each delivered theorem depends on at most Lean's built-in axioms (`propext`,
-`Quot.sound`, `Classical.choice`): no `sorryAx`, no `Lean.ofReduceBool`, and
-nothing declared by this package. `#guard_msgs` fails the build if any of these
-dependency lists changes.
+`Quot.sound`, `Classical.choice`): no `sorryAx`, no `Lean.ofReduceBool`,
+nothing declared by this package, and none of the axioms Aeneas's Lean library
+declares. That covers the model's theorems and every theorem about the
+extracted evaluator. `#guard_msgs` fails the build if any of these dependency
+lists changes.
 -/
 
 namespace AttenuatingGrants
@@ -134,7 +141,6 @@ namespace AttenuatingGrants
 /-- info: 'AttenuatingGrants.Signing.payloadIn_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms Signing.payloadIn_iff
-
 
 /-! ## Cost (theorem 1) -/
 
@@ -321,5 +327,371 @@ namespace AttenuatingGrants
 /-- info: 'AttenuatingGrants.Signing.allowsAll_cost_bound' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms Signing.allowsAll_cost_bound
+
+/-! ## Extracted evaluator: loops, byte strings, the generic evaluator, carry-over -/
+
+/-- info: 'AttenuatingGrants.Extraction.index_usize_eq' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Extraction.index_usize_eq
+
+/-- info: 'AttenuatingGrants.Extraction.incr_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Extraction.incr_eq
+
+/-- info: 'AttenuatingGrants.Extraction.loop_any' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Extraction.loop_any
+
+/-- info: 'AttenuatingGrants.Extraction.loop_all' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Extraction.loop_all
+
+/-- info: 'AttenuatingGrants.Extraction.any_eq_mem' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Extraction.any_eq_mem
+
+/-- info: 'AttenuatingGrants.Extraction.byte_injective' depends on axioms: [propext] -/
+#guard_msgs in
+#print axioms Extraction.byte_injective
+
+/-- info: 'AttenuatingGrants.Extraction.bytesOf_inj' depends on axioms: [propext] -/
+#guard_msgs in
+#print axioms Extraction.bytesOf_inj
+
+/-- info: 'AttenuatingGrants.Extraction.zip_all_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Extraction.zip_all_eq
+
+/-- info: 'AttenuatingGrants.Extraction.slice_len_bne' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Extraction.slice_len_bne
+
+/-- info: 'AttenuatingGrants.Extraction.bytes_eq_loop_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Extraction.bytes_eq_loop_eq
+
+/-- info: 'AttenuatingGrants.Extraction.bytes_eq_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Extraction.bytes_eq_eq
+
+/-- info: 'AttenuatingGrants.Extraction.bytes_in_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Extraction.bytes_in_eq
+
+/-- info: 'AttenuatingGrants.Extraction.any_bytes_eq_mem' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Extraction.any_bytes_eq_mem
+
+/-- info: 'AttenuatingGrants.Extraction.eval_allows_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Extraction.eval_allows_eq
+
+/-- info: 'AttenuatingGrants.Extraction.eval_allows_all_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Extraction.eval_allows_all_eq
+
+/-- info: 'AttenuatingGrants.Extraction.grant_allows_map' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Extraction.grant_allows_map
+
+/-- info: 'AttenuatingGrants.Extraction.implements_iff_all' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Extraction.implements_iff_all
+
+/-- info: 'AttenuatingGrants.Extraction.implementsAll_iff_all' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Extraction.implementsAll_iff_all
+
+/-- info: 'AttenuatingGrants.Extraction.Narrower.refl' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Extraction.Narrower.refl
+
+/-- info: 'AttenuatingGrants.Extraction.Narrower.trans' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Extraction.Narrower.trans
+
+/-- info: 'AttenuatingGrants.Extraction.Implements.allows_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Extraction.Implements.allows_iff
+
+/-- info: 'AttenuatingGrants.Extraction.Implements.narrower_of_subset' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Extraction.Implements.narrower_of_subset
+
+/-- info: 'AttenuatingGrants.Extraction.Implements.narrower_push' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Extraction.Implements.narrower_push
+
+/-- info: 'AttenuatingGrants.Extraction.Implements.narrower_of_delegates' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound] -/
+#guard_msgs in
+#print axioms Extraction.Implements.narrower_of_delegates
+
+/-- info: 'AttenuatingGrants.Extraction.ImplementsAll.allows_all_of_narrower' depends on axioms: [propext,
+ Classical.choice,
+ Quot.sound] -/
+#guard_msgs in
+#print axioms Extraction.ImplementsAll.allows_all_of_narrower
+
+/-! ## Extracted evaluator: Network -/
+
+/-- info: 'AttenuatingGrants.Network.denotePort_injective' depends on axioms: [propext] -/
+#guard_msgs in
+#print axioms Network.denotePort_injective
+
+/-- info: 'AttenuatingGrants.Network.denoteGrant_allows' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Network.denoteGrant_allows
+
+/-- info: 'AttenuatingGrants.Network.scheme_eq_eq' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Network.scheme_eq_eq
+
+/-- info: 'AttenuatingGrants.Network.scheme_in_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Network.scheme_in_eq
+
+/-- info: 'AttenuatingGrants.Network.port_in_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Network.port_in_eq
+
+/-- info: 'AttenuatingGrants.Network.holds_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Network.holds_eq
+
+/-- info: 'AttenuatingGrants.Network.inst_holds_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Network.inst_holds_eq
+
+/-- info: 'AttenuatingGrants.Network.extracted_allows' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Network.extracted_allows
+
+/-- info: 'AttenuatingGrants.Network.extracted_allowsAll' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Network.extracted_allowsAll
+
+/-- info: 'AttenuatingGrants.Network.implements' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Network.implements
+
+/-- info: 'AttenuatingGrants.Network.implementsAll' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Network.implementsAll
+
+/-- info: 'AttenuatingGrants.Network.extracted_narrower_of_subset' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Network.extracted_narrower_of_subset
+
+/-- info: 'AttenuatingGrants.Network.extracted_narrower_push' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Network.extracted_narrower_push
+
+/-- info: 'AttenuatingGrants.Network.extracted_delegates_narrower' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Network.extracted_delegates_narrower
+
+/-- info: 'AttenuatingGrants.Network.extracted_allowsAll_of_delegates' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Network.extracted_allowsAll_of_delegates
+
+/-! ## Extracted evaluator: Signing -/
+
+/-- info: 'AttenuatingGrants.Signing.denoteGrant_allows' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Signing.denoteGrant_allows
+
+/-- info: 'AttenuatingGrants.Signing.payload_eq_eq' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Signing.payload_eq_eq
+
+/-- info: 'AttenuatingGrants.Signing.payload_in_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Signing.payload_in_eq
+
+/-- info: 'AttenuatingGrants.Signing.holds_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Signing.holds_eq
+
+/-- info: 'AttenuatingGrants.Signing.inst_holds_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Signing.inst_holds_eq
+
+/-- info: 'AttenuatingGrants.Signing.extracted_allows' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Signing.extracted_allows
+
+/-- info: 'AttenuatingGrants.Signing.extracted_allowsAll' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Signing.extracted_allowsAll
+
+/-- info: 'AttenuatingGrants.Signing.implements' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Signing.implements
+
+/-- info: 'AttenuatingGrants.Signing.implementsAll' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Signing.implementsAll
+
+/-- info: 'AttenuatingGrants.Signing.extracted_narrower_of_subset' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Signing.extracted_narrower_of_subset
+
+/-- info: 'AttenuatingGrants.Signing.extracted_narrower_push' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Signing.extracted_narrower_push
+
+/-- info: 'AttenuatingGrants.Signing.extracted_delegates_narrower' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Signing.extracted_delegates_narrower
+
+/-- info: 'AttenuatingGrants.Signing.extracted_allowsAll_of_delegates' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Signing.extracted_allowsAll_of_delegates
+
+/-! ## Extracted evaluator: Files -/
+
+/-- info: 'AttenuatingGrants.Files.denoteGrant_allows' depends on axioms: [propext] -/
+#guard_msgs in
+#print axioms Files.denoteGrant_allows
+
+/-- info: 'AttenuatingGrants.Files.mode_eq_eq' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Files.mode_eq_eq
+
+/-- info: 'AttenuatingGrants.Files.mode_in_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Files.mode_in_eq
+
+/-- info: 'AttenuatingGrants.Files.isPrefix_denotePath' depends on axioms: [propext] -/
+#guard_msgs in
+#print axioms Files.isPrefix_denotePath
+
+/-- info: 'AttenuatingGrants.Files.isPrefix_length_le' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Files.isPrefix_length_le
+
+/-- info: 'AttenuatingGrants.Files.is_prefix_loop_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Files.is_prefix_loop_eq
+
+/-- info: 'AttenuatingGrants.Files.slice_len_gt' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Files.slice_len_gt
+
+/-- info: 'AttenuatingGrants.Files.is_prefix_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Files.is_prefix_eq
+
+/-- info: 'AttenuatingGrants.Files.holds_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Files.holds_eq
+
+/-- info: 'AttenuatingGrants.Files.inst_holds_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Files.inst_holds_eq
+
+/-- info: 'AttenuatingGrants.Files.extracted_allows' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Files.extracted_allows
+
+/-- info: 'AttenuatingGrants.Files.extracted_allowsAll' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Files.extracted_allowsAll
+
+/-- info: 'AttenuatingGrants.Files.implements' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Files.implements
+
+/-- info: 'AttenuatingGrants.Files.implementsAll' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Files.implementsAll
+
+/-- info: 'AttenuatingGrants.Files.extracted_narrower_of_subset' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Files.extracted_narrower_of_subset
+
+/-- info: 'AttenuatingGrants.Files.extracted_narrower_push' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Files.extracted_narrower_push
+
+/-- info: 'AttenuatingGrants.Files.extracted_delegates_narrower' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Files.extracted_delegates_narrower
+
+/-- info: 'AttenuatingGrants.Files.extracted_allowsAll_of_delegates' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Files.extracted_allowsAll_of_delegates
+
+/-! ## Extracted evaluator: Chain -/
+
+/-- info: 'AttenuatingGrants.Chain.denoteGrant_allows' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Chain.denoteGrant_allows
+
+/-- info: 'AttenuatingGrants.Chain.i128_bv_inj' depends on axioms: [propext] -/
+#guard_msgs in
+#print axioms Chain.i128_bv_inj
+
+/-- info: 'AttenuatingGrants.Chain.denoteU64_inj' depends on axioms: [propext] -/
+#guard_msgs in
+#print axioms Chain.denoteU64_inj
+
+/-- info: 'AttenuatingGrants.Chain.val_eq_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Chain.val_eq_eq
+
+/-- info: 'AttenuatingGrants.Chain.slice_get_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Chain.slice_get_eq
+
+/-- info: 'AttenuatingGrants.Chain.cast_index_val' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Chain.cast_index_val
+
+/-- info: 'AttenuatingGrants.Chain.holds_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Chain.holds_eq
+
+/-- info: 'AttenuatingGrants.Chain.inst_holds_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Chain.inst_holds_eq
+
+/-- info: 'AttenuatingGrants.Chain.extracted_allows' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Chain.extracted_allows
+
+/-- info: 'AttenuatingGrants.Chain.extracted_allowsAll' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Chain.extracted_allowsAll
+
+/-- info: 'AttenuatingGrants.Chain.implements' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Chain.implements
+
+/-- info: 'AttenuatingGrants.Chain.implementsAll' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Chain.implementsAll
+
+/-- info: 'AttenuatingGrants.Chain.extracted_denies_createContract' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Chain.extracted_denies_createContract
+
+/-- info: 'AttenuatingGrants.Chain.extracted_narrower_of_subset' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Chain.extracted_narrower_of_subset
+
+/-- info: 'AttenuatingGrants.Chain.extracted_narrower_push' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Chain.extracted_narrower_push
+
+/-- info: 'AttenuatingGrants.Chain.extracted_delegates_narrower' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Chain.extracted_delegates_narrower
+
+/-- info: 'AttenuatingGrants.Chain.extracted_allowsAll_of_delegates' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Chain.extracted_allowsAll_of_delegates
 
 end AttenuatingGrants

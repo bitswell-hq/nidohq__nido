@@ -92,6 +92,13 @@ check:
 fmt:
     cargo fmt --all
 
+# formal/scripts/extract.sh pins Charon and Aeneas and needs Nix with flakes
+# (formal/README.md gives a Docker alternative). `--check` compares with the
+# committed files instead of writing them.
+# Regenerate the Lean translation of crates/grant-eval (formal/AttenuatingGrants/Extracted/)
+extract-lean *args:
+    formal/scripts/extract.sh {{args}}
+
 # Clean build artifacts
 clean:
     cargo clean
