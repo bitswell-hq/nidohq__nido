@@ -4,4 +4,9 @@ import AttenuatingGrants.Vocab.Chain
 import AttenuatingGrants.Vocab.Files
 import AttenuatingGrants.Vocab.Network
 import AttenuatingGrants.Vocab.Signing
+import AttenuatingGrants.Cost.Basic
+import AttenuatingGrants.Cost.Chain
+import AttenuatingGrants.Cost.Files
+import AttenuatingGrants.Cost.Network
+import AttenuatingGrants.Cost.Signing
 import AttenuatingGrants.Axioms
