@@ -13,6 +13,7 @@ import AttenuatingGrants.Equiv.Chain
 import AttenuatingGrants.Equiv.Files
 import AttenuatingGrants.Equiv.Network
 import AttenuatingGrants.Equiv.Signing
+import AttenuatingGrants.Equiv.Budget
 
 /-!
 # Axioms
@@ -717,8 +718,6 @@ namespace AttenuatingGrants
 
 /-! ## Budgets (theorem 4) -/
 
-/-! ## Budgets (theorem 4) -/
-
 /-- info: 'AttenuatingGrants.Budget.Ledger.mem_walk' depends on axioms: [propext] -/
 #guard_msgs in
 #print axioms Budget.Ledger.mem_walk
@@ -778,5 +777,139 @@ namespace AttenuatingGrants
 /-- info: 'AttenuatingGrants.Budget.Ledger.spentUnder_le_allowance' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms Budget.Ledger.spentUnder_le_allowance
+
+/-- info: 'AttenuatingGrants.Budget.Ledger.append_ok_iff' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.Ledger.append_ok_iff
+
+/-- info: 'AttenuatingGrants.Budget.Ledger.append_error' depends on axioms: [propext] -/
+#guard_msgs in
+#print axioms Budget.Ledger.append_error
+
+/-- info: 'AttenuatingGrants.Budget.Ledger.getElem?_append_of_lt' depends on axioms: [propext] -/
+#guard_msgs in
+#print axioms Budget.Ledger.getElem?_append_of_lt
+
+/-- info: 'AttenuatingGrants.Budget.Ledger.append_withinAllowance' depends on axioms: [propext] -/
+#guard_msgs in
+#print axioms Budget.Ledger.append_withinAllowance
+
+/-- info: 'AttenuatingGrants.Budget.Ledger.append_bounded' depends on axioms: [propext] -/
+#guard_msgs in
+#print axioms Budget.Ledger.append_bounded
+
+/-- info: 'AttenuatingGrants.Budget.Ledger.spend_parentsFirst' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.Ledger.spend_parentsFirst
+
+/-- info: 'AttenuatingGrants.Budget.Ledger.refill_parentsFirst' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.Ledger.refill_parentsFirst
+
+/-- info: 'AttenuatingGrants.Budget.Ledger.append_parentsFirst' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.Ledger.append_parentsFirst
+
+/-- info: 'AttenuatingGrants.Budget.Ledger.run_parentsFirst' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.Ledger.run_parentsFirst
+
+/-- info: 'AttenuatingGrants.Budget.Ledger.run_extends' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.Ledger.run_extends
+
+/-- info: 'AttenuatingGrants.Budget.Ledger.within_of_walk' depends on axioms: [propext] -/
+#guard_msgs in
+#print axioms Budget.Ledger.within_of_walk
+
+/-- info: 'AttenuatingGrants.Budget.Ledger.parentOf_run' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.Ledger.parentOf_run
+
+/-- info: 'AttenuatingGrants.Budget.Ledger.spentUnder_run' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.Ledger.spentUnder_run
+
+/-! ## Extracted evaluator: Budgets -/
+
+/-- info: 'AttenuatingGrants.Budget.denoteLedger_injective' depends on axioms: [propext] -/
+#guard_msgs in
+#print axioms Budget.denoteLedger_injective
+
+/-- info: 'AttenuatingGrants.Budget.fits_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.fits_eq
+
+/-- info: 'AttenuatingGrants.Budget.extracted_check_spend' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.extracted_check_spend
+
+/-- info: 'AttenuatingGrants.Budget.charge_loop_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.charge_loop_eq
+
+/-- info: 'AttenuatingGrants.Budget.extracted_spend' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.extracted_spend
+
+/-- info: 'AttenuatingGrants.Budget.extracted_spend_error' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.extracted_spend_error
+
+/-- info: 'AttenuatingGrants.Budget.extracted_refill' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.extracted_refill
+
+/-- info: 'AttenuatingGrants.Budget.extracted_refill_error' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.extracted_refill_error
+
+/-- info: 'AttenuatingGrants.Budget.extracted_append' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.extracted_append
+
+/-- info: 'AttenuatingGrants.Budget.extracted_append_error' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.extracted_append_error
+
+/-- info: 'AttenuatingGrants.Budget.extracted_spend_ok_charges' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.extracted_spend_ok_charges
+
+/-- info: 'AttenuatingGrants.Budget.extracted_spend_ok_unchanged' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.extracted_spend_ok_unchanged
+
+/-- info: 'AttenuatingGrants.Budget.extracted_spend_ok_length' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.extracted_spend_ok_length
+
+/-- info: 'AttenuatingGrants.Budget.extracted_spend_overdrawn' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.extracted_spend_overdrawn
+
+/-- info: 'AttenuatingGrants.Budget.extracted_spend_withinAllowance' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.extracted_spend_withinAllowance
+
+/-- info: 'AttenuatingGrants.Budget.extracted_refill_withinAllowance' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.extracted_refill_withinAllowance
+
+/-- info: 'AttenuatingGrants.Budget.extracted_append_withinAllowance' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.extracted_append_withinAllowance
+
+/-- info: 'AttenuatingGrants.Budget.extracted_run' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.extracted_run
+
+/-- info: 'AttenuatingGrants.Budget.extracted_run_withinAllowance' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.extracted_run_withinAllowance
+
+/-- info: 'AttenuatingGrants.Budget.extracted_spentUnder_le_allowance' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.extracted_spentUnder_le_allowance
 
 end AttenuatingGrants

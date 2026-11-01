@@ -21,7 +21,7 @@ set_option maxRecDepth 2048
 namespace grant_eval
 
 /-- [grant_eval::budget::Node]
-    Source: 'crates/grant-eval/src/budget.rs', lines 18:0-24:1
+    Source: 'crates/grant-eval/src/budget.rs', lines 25:0-31:1
     Visibility: public -/
 structure budget.Node where
   parent : Option Std.Usize
@@ -29,7 +29,7 @@ structure budget.Node where
   spent : Std.U128
 
 /-- [grant_eval::budget::SpendError]
-    Source: 'crates/grant-eval/src/budget.rs', lines 27:0-34:1
+    Source: 'crates/grant-eval/src/budget.rs', lines 34:0-41:1
     Visibility: public -/
 @[discriminant isize]
 inductive budget.SpendError where
@@ -38,15 +38,22 @@ inductive budget.SpendError where
 | Overdrawn : Std.Usize → budget.SpendError
 
 /-- [grant_eval::budget::RefillError]
-    Source: 'crates/grant-eval/src/budget.rs', lines 37:0-42:1
+    Source: 'crates/grant-eval/src/budget.rs', lines 44:0-49:1
     Visibility: public -/
 @[discriminant isize]
 inductive budget.RefillError where
 | NoSuchNode : Std.Usize → budget.RefillError
 | Overflow : Std.Usize → budget.RefillError
 
+/-- [grant_eval::budget::AppendError]
+    Source: 'crates/grant-eval/src/budget.rs', lines 52:0-55:1
+    Visibility: public -/
+@[discriminant isize]
+inductive budget.AppendError where
+| NoSuchNode : Std.Usize → budget.AppendError
+
 /-- [grant_eval::budget::fits]:
-    Source: 'crates/grant-eval/src/budget.rs', lines 47:0-52:1
+    Source: 'crates/grant-eval/src/budget.rs', lines 60:0-65:1
     Visibility: public -/
 def budget.fits (node : budget.Node) (amount : Std.U128) : Result Bool := do
   let o ← lift (U128.checked_add node.spent amount)
@@ -55,7 +62,7 @@ def budget.fits (node : budget.Node) (amount : Std.U128) : Result Bool := do
   | some total => ok (total <= node.allowance)
 
 /-- [grant_eval::budget::check_spend]: loop body 0:
-    Source: 'crates/grant-eval/src/budget.rs', lines 65:4-86:1
+    Source: 'crates/grant-eval/src/budget.rs', lines 78:4-99:1
     Visibility: public -/
 @[rust_loop_body]
 def budget.check_spend_loop.body
@@ -93,7 +100,7 @@ def budget.check_spend_loop.body
     ok (done (core.result.Result.Err (budget.SpendError.NoSuchNode current)))
 
 /-- [grant_eval::budget::check_spend]: loop 0:
-    Source: 'crates/grant-eval/src/budget.rs', lines 65:4-86:1
+    Source: 'crates/grant-eval/src/budget.rs', lines 78:4-99:1
     Visibility: public -/
 @[rust_loop]
 def budget.check_spend_loop
@@ -107,7 +114,7 @@ def budget.check_spend_loop
     (current, step)
 
 /-- [grant_eval::budget::check_spend]:
-    Source: 'crates/grant-eval/src/budget.rs', lines 62:0-86:1
+    Source: 'crates/grant-eval/src/budget.rs', lines 75:0-99:1
     Visibility: public -/
 @[reducible]
 def budget.check_spend
@@ -117,7 +124,7 @@ def budget.check_spend
   budget.check_spend_loop ledger amount node 0#usize
 
 /-- [grant_eval::budget::charge]: loop body 0:
-    Source: 'crates/grant-eval/src/budget.rs', lines 93:4-106:1 -/
+    Source: 'crates/grant-eval/src/budget.rs', lines 106:4-119:1 -/
 @[rust_loop_body]
 def budget.charge_loop.body
   (amount : Std.U128) (ledger : Slice budget.Node) (current : Std.Usize)
@@ -147,7 +154,7 @@ def budget.charge_loop.body
   else ok (done ledger)
 
 /-- [grant_eval::budget::charge]: loop 0:
-    Source: 'crates/grant-eval/src/budget.rs', lines 93:4-106:1 -/
+    Source: 'crates/grant-eval/src/budget.rs', lines 106:4-119:1 -/
 @[rust_loop]
 def budget.charge_loop
   (ledger : Slice budget.Node) (amount : Std.U128) (current : Std.Usize)
@@ -160,7 +167,7 @@ def budget.charge_loop
     (ledger, current, step)
 
 /-- [grant_eval::budget::charge]:
-    Source: 'crates/grant-eval/src/budget.rs', lines 90:0-106:1 -/
+    Source: 'crates/grant-eval/src/budget.rs', lines 103:0-119:1 -/
 @[reducible]
 def budget.charge
   (ledger : Slice budget.Node) (node : Std.Usize) (amount : Std.U128) :
@@ -169,7 +176,7 @@ def budget.charge
   budget.charge_loop ledger amount node 0#usize
 
 /-- [grant_eval::budget::spend]:
-    Source: 'crates/grant-eval/src/budget.rs', lines 113:0-121:1
+    Source: 'crates/grant-eval/src/budget.rs', lines 126:0-134:1
     Visibility: public -/
 def budget.spend
   (ledger : Slice budget.Node) (node : Std.Usize) (amount : Std.U128) :
@@ -183,7 +190,7 @@ def budget.spend
   | core.result.Result.Err _ => ok (r, ledger)
 
 /-- [grant_eval::budget::refill]:
-    Source: 'crates/grant-eval/src/budget.rs', lines 130:0-141:1
+    Source: 'crates/grant-eval/src/budget.rs', lines 143:0-154:1
     Visibility: public -/
 def budget.refill
   (ledger : Slice budget.Node) (node : Std.Usize) (extra : Std.U128) :
@@ -205,6 +212,31 @@ def budget.refill
     | some allowance =>
       let ledger1 := get_mut_back (some { n with allowance })
       ok (core.result.Result.Ok (), ledger1)
+
+/-- [grant_eval::budget::append]:
+    Source: 'crates/grant-eval/src/budget.rs', lines 167:0-184:1
+    Visibility: public -/
+def budget.append
+  (ledger : alloc.vec.Vec budget.Node) (parent : Option Std.Usize)
+  (allowance : Std.U128) :
+  Result ((core.result.Result Std.Usize budget.AppendError) × (alloc.vec.Vec
+    budget.Node))
+  := do
+  let index := alloc.vec.Vec.len ledger
+  match parent with
+  | none =>
+    let ledger1 ←
+      alloc.vec.Vec.push ledger ({ parent := none, allowance, spent := 0#u128 }
+        : budget.Node)
+    ok (core.result.Result.Ok index, ledger1)
+  | some p =>
+    if p >= index
+    then ok (core.result.Result.Err (budget.AppendError.NoSuchNode p), ledger)
+    else
+      let ledger1 ←
+        alloc.vec.Vec.push ledger ({ parent, allowance, spent := 0#u128 } :
+          budget.Node)
+      ok (core.result.Result.Ok index, ledger1)
 
 /-- [grant_eval::bytes::bytes_eq]: loop body 0:
     Source: 'crates/grant-eval/src/bytes.rs', lines 15:4-22:1

@@ -1,4 +1,6 @@
-use grant_eval::budget::{check_spend, refill, spend, Node, RefillError, SpendError};
+use grant_eval::budget::{
+    append, check_spend, refill, spend, AppendError, Node, RefillError, SpendError,
+};
 
 fn node(parent: Option<usize>, allowance: u128, spent: u128) -> Node {
     Node {
@@ -163,6 +165,57 @@ fn malformed_ledgers_fail_without_change() {
     assert_eq!(try_spend(&mut l, 2, 11), Err(Err::Overdrawn(2)));
 }
 
+#[test]
+fn delegation_may_oversubscribe_and_stays_capped() {
+    let mut l = vec![node(None, 10, 0)];
+    // A child with more than its parent, and a sibling: 20 + 8 against 10.
+    assert!(matches!(append(&mut l, Some(0), 20), Ok(1)));
+    assert!(matches!(append(&mut l, Some(0), 8), Ok(2)));
+    // A grandchild under the oversubscribed child.
+    assert!(matches!(append(&mut l, Some(1), 5), Ok(3)));
+    assert_eq!(
+        snapshot(&l),
+        [
+            (None, 10, 0),
+            (Some(0), 20, 0),
+            (Some(0), 8, 0),
+            (Some(1), 5, 0)
+        ]
+    );
+    assert_eq!(try_spend(&mut l, 3, 5), Ok(()));
+    assert_eq!(spent(&l), [5, 5, 0, 5]);
+    // The root, not the child's 20, caps the child.
+    assert_eq!(try_spend(&mut l, 1, 6), Err(Err::Overdrawn(0)));
+    assert_eq!(try_spend(&mut l, 2, 5), Ok(()));
+    assert_eq!(spent(&l), [10, 5, 5, 5]);
+}
+
+#[test]
+fn append_issues_roots_and_rejects_missing_parents() {
+    let mut l: Vec<Node> = vec![];
+    // A parent must already exist: on an empty ledger every index is missing.
+    assert!(matches!(
+        append(&mut l, Some(0), 1),
+        Err(AppendError::NoSuchNode(0))
+    ));
+    assert!(l.is_empty());
+    assert!(matches!(append(&mut l, None, 7), Ok(0)));
+    assert!(matches!(append(&mut l, None, u128::MAX), Ok(1)));
+    let before = snapshot(&l);
+    // A node cannot be its own parent: index 2 does not exist yet.
+    assert!(matches!(
+        append(&mut l, Some(2), 1),
+        Err(AppendError::NoSuchNode(2))
+    ));
+    assert!(matches!(
+        append(&mut l, Some(usize::MAX), 1),
+        Err(AppendError::NoSuchNode(usize::MAX))
+    ));
+    assert_eq!(snapshot(&l), before);
+    assert_eq!(try_spend(&mut l, 1, u128::MAX), Ok(()));
+    assert_eq!(try_spend(&mut l, 0, 8), Err(Err::Overdrawn(0)));
+}
+
 /// A plain-Rust reading of the semantics: the chain from `at` to its root,
 /// spender first, or the first error.
 fn reference_chain(
@@ -206,6 +259,7 @@ fn within(l: &[(Option<usize>, u128, u128)], i: usize, a: usize) -> bool {
 enum Op {
     Spend(usize, u128),
     Refill(usize, u128),
+    Append(Option<usize>, u128),
 }
 
 /// Every sequence of up to `max_len` ops drawn from `universe`.
@@ -232,9 +286,12 @@ fn sequences(universe: &[Op], max_len: usize) -> Vec<Vec<Op>> {
 /// - `spend` agrees with the reference chain;
 /// - a success charges exactly the chain by the amount and changes nothing
 ///   else; a failure changes nothing;
-/// - every node's spent stays within its allowance;
-/// - each node's spent equals the total of successful spends at or under it,
-///   so that total never exceeds the node's allowance.
+/// - an append adds exactly the new node at the next index, or fails
+///   changing nothing;
+/// - every node's spent stays within its allowance, and every parent link
+///   points to an earlier node;
+/// - each node's spent equals the total of successful spends at or under it
+///   in the current tree, so that total never exceeds the node's allowance.
 #[test]
 fn exhaustive_runs_on_an_oversubscribed_tree() {
     let max = u128::MAX;
@@ -260,6 +317,10 @@ fn exhaustive_runs_on_an_oversubscribed_tree() {
         Op::Refill(1, 4),
         Op::Refill(0, 5),
         Op::Refill(0, max),
+        // Node 5 under the oversubscribed child 1, with more than node 1 has.
+        Op::Append(Some(1), 9),
+        Op::Append(None, 2),
+        Op::Append(Some(7), 1),
     ];
     let (mut successes, mut failures) = (0usize, 0usize);
     for ops in sequences(&universe, 4) {
@@ -288,6 +349,18 @@ fn exhaustive_runs_on_an_oversubscribed_tree() {
                         }
                     }
                 }
+                Op::Append(parent, allowance) => {
+                    let got = append(&mut l, parent, allowance);
+                    if parent.is_none_or(|p| p < before.len()) {
+                        assert!(matches!(got, Ok(i) if i == before.len()), "{ops:?}");
+                        let mut expected = before.clone();
+                        expected.push((parent, allowance, 0));
+                        assert_eq!(snapshot(&l), expected, "{ops:?}");
+                    } else {
+                        assert!(got.is_err(), "{ops:?}");
+                        assert_eq!(snapshot(&l), before, "{ops:?}");
+                    }
+                }
                 Op::Refill(at, extra) => {
                     let got = refill(&mut l, at, extra);
                     let after = snapshot(&l);
@@ -301,8 +374,9 @@ fn exhaustive_runs_on_an_oversubscribed_tree() {
                 }
             }
             let now = snapshot(&l);
-            for (a, &(_, allowance, spent)) in now.iter().enumerate() {
+            for (a, &(parent, allowance, spent)) in now.iter().enumerate() {
                 assert!(spent <= allowance, "{ops:?}");
+                assert!(parent.is_none_or(|p| p < a), "{ops:?}");
                 let under: u128 = log
                     .iter()
                     .filter(|&&(i, _)| within(&now, i, a))

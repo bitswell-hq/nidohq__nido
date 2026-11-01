@@ -18,4 +18,5 @@ import AttenuatingGrants.Equiv.Chain
 import AttenuatingGrants.Equiv.Files
 import AttenuatingGrants.Equiv.Network
 import AttenuatingGrants.Equiv.Signing
+import AttenuatingGrants.Equiv.Budget
 import AttenuatingGrants.Axioms

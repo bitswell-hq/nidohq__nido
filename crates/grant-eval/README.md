@@ -102,17 +102,36 @@ precedes its children (its index is smaller).
 | `check_spend(ledger, node, amount)` | walks from `node` to its root and returns the first failure: `Overdrawn(i)` at the first node, counting from `node`, whose `spent + amount` overflows or exceeds its allowance; `NoSuchNode(i)` or `BadParent(i)` on a malformed ledger |
 | `spend(ledger, node, amount)` | if `check_spend` succeeds, adds `amount` to `node` and every ancestor; otherwise returns its error and changes nothing |
 | `refill(ledger, node, extra)` | raises `node`'s allowance by `extra`; `NoSuchNode` or `Overflow` change nothing |
+| `append(ledger, parent, allowance)` | pushes a node with nothing spent under `parent`, or as a new root for `None`, and returns its index; `NoSuchNode(p)` if `p` is not an existing index, changing nothing |
 
-Children's allowances may sum to more than their parent's. Because every
+Children's allowances may sum to more than their parent's, and `append`
+accepts any allowance, so delegation may oversubscribe. Because every
 ancestor is charged in the same transaction, the total spent at or under a
 node never exceeds that node's allowance. `Overdrawn(i)` names where a refill
-request goes; `refill` is an admin-document action, never an agent's.
+request goes; `refill` and issuing a new root are admin-document actions,
+never an agent's. A new node takes the next index, so parents keep preceding
+their children.
 
-The Lean model is `formal/AttenuatingGrants/Budget.lean`, which states and
-proves budget safety (theorem 4) for the model. Amounts there are unbounded
-`Nat`; a refill fails past `u128::MAX` as `checked_add` does, and a spend
-whose sum overflows `u128` exceeds the allowance in both, so the two agree on
-every `u128` input with no wrapped or saturated case.
+The Lean model is `formal/AttenuatingGrants/Budget.lean`. Amounts there are
+unbounded `Nat`; a refill fails past `u128::MAX` as `checked_add` does, and a
+spend whose sum overflows `u128` exceeds the allowance in both, so the two
+agree on every `u128` input with no wrapped or saturated case.
+`formal/AttenuatingGrants/Equiv/Budget.lean` proves that the Charon + Aeneas
+translation of these functions computes the model on every ledger, so the
+model's results hold for this code:
+
+- `check_spend`, `spend` and `refill` return on every input, and `append` on
+  every ledger below `usize::MAX` nodes, with the model's outcome and ledger;
+- a successful `spend` charges the spender and every ancestor by the amount
+  and changes nothing else; a failed one returns the ledger unchanged
+  (theorem 4);
+- the charging walk visits exactly the chain `check_spend` accepted, and its
+  `spent += amount` never overflows;
+- every node's spent stays within its allowance, and over any sequence of
+  spends, refills and appends from a ledger with nothing spent, the total
+  successfully spent at or under a node never exceeds its allowance.
+
+`formal/README.md` lists the theorems.
 
 ## Restricted subset
 
@@ -128,7 +147,8 @@ the translation is a total function:
   Aeneas's README lists as supported). The budget walks count steps with `i`
   against the ledger's length and follow parent links with a second
   variable.
-- Nothing in the evaluation path can panic:
+- Nothing in the evaluation path can panic, and nothing in `budget` but the
+  allocation in `append`:
   - slice indexing `s[i]` happens only under `i < s.len()` (and, in
     `bytes_eq` and `is_prefix`, after checking the second slice is at least as
     long);
@@ -139,7 +159,11 @@ the translation is a total function:
   - budget amounts use `checked_add`, and an overflow fails the spend or
     refill. The one plain addition, `spent += amount` in the charging walk,
     runs only after `check_spend` found `spent + amount` within that node's
-    allowance;
+    allowance (proven: `Budget.charge_loop_eq`);
+  - `append` calls `Vec::push`, which allocates; a failed allocation aborts.
+    Aeneas models `push` as failing only once a vector holds `usize::MAX`
+    elements, and the proofs about `append` assume the ledger stays below
+    that;
   - `index as usize` widens a `u32`, lossless on every target with at least
     32-bit pointers (a compile-time assertion in `chain.rs` checks this).
 - No function calls a function of the same name in another module by its bare
@@ -158,9 +182,10 @@ no `axiom` or `opaque` declaration.
 
 Trusted, not proven: `rustc`, the Soroban SDK, the Charon and Aeneas
 translation together with Aeneas's Lean library (its models of the `core` and
-`alloc` items the evaluator calls: slices, `Vec`, indexing, `get`, `len`,
-checked `usize` addition, `u32 as usize`), and the host wiring that builds
-actions. The wiring stays small and auditable:
+`alloc` items the evaluator calls: slices, `Vec` with `len`, `push` and
+`deref_mut`, indexing, `get`, `get_mut`, `len`, checked `usize` addition,
+checked and unchecked `u128` addition, `u32 as usize`), the allocator, and
+the host wiring that builds actions. The wiring stays small and auditable:
 
 - File paths reach the evaluator canonical: `..`, symlinks and
   case-insensitive file systems are resolved by the host.
@@ -169,8 +194,10 @@ actions. The wiring stays small and auditable:
   checked again.
 - The Soroban integration turns each authorization context into a `chain`
   action.
-- Budget wiring passes the node of the grant actually being spent under, and
-  exposes `refill` only to the admin document.
+- Budget wiring passes the node of the grant actually being spent under,
+  appends a node under the delegator's when a grant is delegated, and exposes
+  `refill` and root issuing (`append` with no parent) only to the admin
+  document.
 
 **Grants control access, not information flow.** A grant decides which actions
 an agent may take. It does not track what the agent learns from an allowed
