@@ -20,7 +20,16 @@ only the user holds; the registry it trusts; and the controller it answers
 to. Changing the address deploys a new guardian, which goes through Perch's
 reconfiguration rules. Email combines with the delay and other guardians;
 email plus the delay alone is allowed only under the lost-key profile, with a
-delay of at least seven days and a second alert channel.
+delay of at least seven days and a second alert channel. The wallet's
+recovery builder enforces this on every configuration it produces:
+\begin{itemize}
+  \item \claimstatement{wallet-one-email-guardian}\claim{wallet-one-email-guardian}
+  \item \claimstatement{wallet-second-alert-channel}\claim{wallet-second-alert-channel}
+  \item \claimstatement{wallet-email-plus-delay}\claim{wallet-email-plus-delay}
+  \item \claimstatement{wallet-email-allowed-actions}\claim{wallet-email-allowed-actions}
+\end{itemize}
+Perch's controller accepts any configuration the owner applies, so these
+rules bind Nido's wallet, not the chain.
 
 \paragraph{The recovery email.} The user sends one email from their own
 inbox to a fixed recovery address; nothing needs the user's address to start
