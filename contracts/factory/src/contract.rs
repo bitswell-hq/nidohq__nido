@@ -359,11 +359,11 @@ mod test {
         assert!(client.try_create_account(&salt, &key).is_err());
     }
 
-    /// The open setup race (THREAT_MODEL 10, L5; nidohq/nido#245): the address
+    /// The open setup race (`THREAT_MODEL` 10, L5; nidohq/nido#245): the address
     /// derives from the salt alone and `create_account` is permissionless, so
     /// whoever submits a salt first owns its address, with their own key as
     /// the admin, and the owner's later call fails as a reused salt. This pins
-    /// today's behaviour; launch gate MAINNET_READINESS A6 requires the wallet
+    /// today's behaviour; launch gate `MAINNET_READINESS` A6 requires the wallet
     /// to detect it (or the factory to prevent it) before mainnet.
     #[test]
     fn whoever_submits_the_salt_first_owns_the_address() {
