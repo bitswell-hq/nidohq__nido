@@ -108,6 +108,14 @@ jobs:
       # with the committed CLI proof).
       - name: SDK Perch parity (statement encodings, ZK proving)
         run: npx vitest run --root packages/passkey-sdk src/perch
+      # TEST-ONLY mocks of the launch mail providers: every honest fixture
+      # must verify under mailauth (pinned, strict) against the mock DNS, every
+      # attack case must get its expected verifier result, and every observed
+      # provider signature layout must be reproduced line for line.
+      - name: Email provider mocks (DKIM fixtures vs mailauth)
+        run: |
+          npx tsc -p packages/email-mocks/tsconfig.test.json
+          npx vitest run --root packages/email-mocks
 
   e2e:
     name: E2E (fast UI + CDP)
