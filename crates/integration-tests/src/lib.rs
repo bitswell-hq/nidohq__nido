@@ -34,6 +34,11 @@ pub const DKIM_REGISTRY_WASM: &[u8] =
 pub const ENCLAVE_IMAGE_REGISTRY_WASM: &[u8] =
     include_bytes!("../../../target/wasm32v1-none/contract/nido_enclave_image_registry.wasm");
 
+/// The per-account grant signer agents authorize through
+/// (`contracts/grant-signer`).
+pub const GRANT_SIGNER_WASM: &[u8] =
+    include_bytes!("../../../target/wasm32v1-none/contract/nido_grant_signer.wasm");
+
 /// The factory embeds the same Perch account wasm as [`PERCH_ACCOUNT_WASM`]
 /// (`contracts/factory/build.rs`), so uploading [`PERCH_ACCOUNT_WASM`] before
 /// `create_account` satisfies its `deploy_v2` hash lookup.
