@@ -1,0 +1,11 @@
+[package]
+name = "email_recovery"
+type = "lib"
+compiler_version = ">=1.0.0"
+
+[dependencies]
+bignum = { path = "../vendor/bignum" }
+sha256 = { path = "../vendor/sha256" }
+# Perch's vendored noir-lang/poseidon v0.2.0, so every Poseidon2 hash here is
+# the one Perch's Soroban host reproduces (soroban-poseidon).
+poseidon = { path = "../../../vendor/perch/circuits/vendor/poseidon" }

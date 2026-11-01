@@ -109,6 +109,16 @@ email-recovery-docs:
 email-recovery-formal:
     cd research/email-recovery/formal && lake build
 
+# Test the email-recovery circuit components with Perch's pinned nargo and bb
+# (installed into target/zk-toolchain). See circuits/email-recovery/README.md.
+test-email-circuits:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    eval "$(circuits/email-recovery/scripts/toolchain.sh)"
+    circuits/email-recovery/scripts/check-toolchain.sh
+    circuits/email-recovery/scripts/check-vendor.sh
+    cd circuits/email-recovery && "$NARGO" test --workspace
+
 build-ts:
     npx tsc -p ./packages/passkey-sdk/tsconfig.json
 
