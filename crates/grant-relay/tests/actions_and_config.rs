@@ -3,12 +3,12 @@
 mod common;
 
 use common::*;
-use grant_eval::chain::{Action, Val};
+use grant_eval::chain::{self, Action, Caveat, Val};
 use grant_relay::actions;
 use grant_relay::ConfigFile;
 use stellar_xdr::{
     ContractExecutable, ContractIdPreimage, CreateContractArgs, HostFunction, Limits, ScString,
-    ScVal, SorobanAuthorizedFunction, WriteXdr,
+    ScVal, ScVec, SorobanAuthorizedFunction, WriteXdr,
 };
 
 fn invoke_parts(a: &Action) -> (String, String, &[Val]) {
@@ -48,16 +48,59 @@ fn i128_arguments_keep_their_full_range() {
     }
 }
 
+fn string_hi() -> ScVal {
+    ScVal::String(ScString("hi".try_into().unwrap()))
+}
+
+fn vec_of_u32_one() -> ScVal {
+    ScVal::Vec(Some(ScVec(vec![ScVal::U32(1)].try_into().unwrap())))
+}
+
 #[test]
-fn argument_types_without_a_val_variant_keep_their_position_as_xdr_bytes() {
-    let s = ScVal::String(ScString("hi".try_into().unwrap()));
-    let Val::Bytes(bytes) = actions::val(&s) else {
-        panic!("not bytes")
-    };
-    assert_eq!(bytes, s.to_xdr(Limits::none()).unwrap());
-    assert!(matches!(actions::val(&ScVal::U32(7)), Val::Bytes(_)));
+fn argument_types_without_a_val_variant_are_other_with_their_full_xdr() {
+    for v in [ScVal::U32(7), ScVal::I64(-1), string_hi(), vec_of_u32_one()] {
+        let Val::Other(xdr) = actions::val(&v) else {
+            panic!("{v:?} is not Other")
+        };
+        assert_eq!(xdr, v.to_xdr(Limits::none()).unwrap());
+    }
     assert!(matches!(actions::val(&ScVal::U64(7)), Val::U64(7)));
     assert!(matches!(actions::val(&ScVal::Bool(true)), Val::Bool(true)));
+}
+
+/// The XDR the `grant_eval` chain tests write by hand is what `stellar_xdr`
+/// encodes.
+#[test]
+fn the_evaluator_tests_unmodeled_xdr_is_the_real_encoding() {
+    let xdr = |v: ScVal| v.to_xdr(Limits::none()).unwrap();
+    assert_eq!(xdr(ScVal::U32(1)), [0, 0, 0, 3, 0, 0, 0, 1]);
+    assert_eq!(
+        xdr(string_hi()),
+        [0, 0, 0, 14, 0, 0, 0, 2, b'h', b'i', 0, 0]
+    );
+    assert_eq!(
+        xdr(vec_of_u32_one()),
+        [0, 0, 0, 16, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 3, 0, 0, 0, 1]
+    );
+}
+
+/// An `arg_eq` caveat written for bytes never matches a `u32`, `string` or
+/// `vec` argument whose XDR is exactly those bytes.
+#[test]
+fn a_bytes_caveat_never_matches_an_unmodeled_argument_with_the_same_xdr() {
+    for v in [ScVal::U32(1), string_hi(), vec_of_u32_one()] {
+        let action = actions::host_function(&HostFunction::InvokeContract(invoke_args(
+            &token(),
+            "set",
+            vec![v.clone()],
+        )))
+        .unwrap();
+        let xdr = v.to_xdr(Limits::none()).unwrap();
+        let bytes_grant = [Caveat::ArgEq(0, Val::Bytes(xdr.clone()))];
+        assert!(!chain::allows(&bytes_grant, &action), "{v:?}");
+        let other_grant = [Caveat::ArgEq(0, Val::Other(xdr))];
+        assert!(chain::allows(&other_grant, &action), "{v:?}");
+    }
 }
 
 #[test]
@@ -157,9 +200,20 @@ fn argument_values_parse_into_their_variants() {
         { "arg_eq": [2, { "u64": 5 }] },
         { "arg_eq": [3, { "bool": false }] },
         { "arg_eq": [4, { "bytes": "00ff" }] },
-        { "arg_eq": [5, { "symbol": "native" }] }
+        { "arg_eq": [5, { "symbol": "native" }] },
+        { "arg_eq": [6, { "other": "0000000300000007" }] }
     ]);
     parse(&json).unwrap();
+    // `other` takes ScVal XDR of a type without its own value form.
+    for refused in [
+        "00",
+        "zz",
+        // `ScVal::U64(7)`, which is written `{"u64": 7}`.
+        "000000050000000000000007",
+    ] {
+        json["agents"][0]["chain"] = serde_json::json!([{ "arg_eq": [0, { "other": refused }] }]);
+        assert!(parse(&json).is_err(), "{refused}");
+    }
     json["agents"][0]["chain"] = serde_json::json!([{ "arg_eq": [0, { "address": "nope" }] }]);
     assert!(parse(&json).is_err());
 }

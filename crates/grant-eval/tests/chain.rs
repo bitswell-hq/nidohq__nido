@@ -93,6 +93,7 @@ fn arg_i128_at_most_missing_or_wrongly_typed_argument() {
         Val::Bytes(vec![1]),
         Val::Address(ALICE.to_vec()),
         Val::Symbol(b"one".to_vec()),
+        Val::Other(U32_ONE.to_vec()),
     ] {
         let action = invoke(
             TOKEN,
@@ -132,6 +133,43 @@ fn arg_eq_missing_or_wrongly_typed_argument() {
     assert!(!holds(&Caveat::ArgEq(2, Val::U64(1)), &transfer(1)));
 }
 
+// `ScVal` XDR of arguments the vocabulary does not model: a 4-byte
+// big-endian type discriminant, then the body (crates/grant-relay's tests
+// check these against `stellar_xdr`).
+/// `ScVal::U32(1)`: `SCV_U32` = 3.
+const U32_ONE: &[u8] = &[0, 0, 0, 3, 0, 0, 0, 1];
+/// `ScVal::String("hi")`: `SCV_STRING` = 14, length 2, padded to 4 bytes.
+const STRING_HI: &[u8] = &[0, 0, 0, 14, 0, 0, 0, 2, b'h', b'i', 0, 0];
+/// `ScVal::Vec(Some([U32(1)]))`: `SCV_VEC` = 16, present, length 1, `U32(1)`.
+const VEC_OF_U32_ONE: &[u8] = &[0, 0, 0, 16, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 3, 0, 0, 0, 1];
+
+#[test]
+fn a_bytes_caveat_never_matches_an_unmodeled_argument_with_the_same_xdr() {
+    for xdr in [U32_ONE, STRING_HI, VEC_OF_U32_ONE] {
+        let call = invoke(TOKEN, b"set", vec![Val::Other(xdr.to_vec())]);
+        // The argument's XDR is exactly the caveat's bytes, and still denied.
+        assert!(!holds(&Caveat::ArgEq(0, Val::Bytes(xdr.to_vec())), &call));
+        assert!(!allows(
+            &[Caveat::ArgEq(0, Val::Bytes(xdr.to_vec()))],
+            &call
+        ));
+        // The other way round: an `Other` caveat never matches a bytes argument.
+        let bytes_call = invoke(TOKEN, b"set", vec![Val::Bytes(xdr.to_vec())]);
+        assert!(!holds(
+            &Caveat::ArgEq(0, Val::Other(xdr.to_vec())),
+            &bytes_call
+        ));
+        // An `Other` caveat matches the argument it was written for.
+        assert!(holds(&Caveat::ArgEq(0, Val::Other(xdr.to_vec())), &call));
+    }
+    // Distinct unmodeled arguments stay distinct.
+    let u32_call = invoke(TOKEN, b"set", vec![Val::Other(U32_ONE.to_vec())]);
+    assert!(!holds(
+        &Caveat::ArgEq(0, Val::Other(STRING_HI.to_vec())),
+        &u32_call
+    ));
+}
+
 #[test]
 fn val_eq_is_variant_and_payload_equality() {
     let all = || {
@@ -142,6 +180,7 @@ fn val_eq_is_variant_and_payload_equality() {
             Val::Bytes(vec![1]),
             Val::Address(vec![1]),
             Val::Symbol(vec![1]),
+            Val::Other(vec![1]),
         ]
     };
     for (i, a) in all().iter().enumerate() {
@@ -155,6 +194,7 @@ fn val_eq_is_variant_and_payload_equality() {
     assert!(!val_eq(&Val::Bytes(vec![1]), &Val::Bytes(vec![1, 0])));
     assert!(!val_eq(&Val::Address(vec![1]), &Val::Address(vec![2])));
     assert!(!val_eq(&Val::Symbol(vec![]), &Val::Symbol(vec![0])));
+    assert!(!val_eq(&Val::Other(vec![1]), &Val::Other(vec![1, 0])));
 }
 
 #[test]
@@ -218,7 +258,7 @@ fn allows_all_denies_when_one_nested_context_is_disallowed() {
     ));
 }
 
-const N_CAVEATS: usize = 9;
+const N_CAVEATS: usize = 10;
 
 fn caveat(i: usize) -> Caveat {
     match i {
@@ -231,11 +271,12 @@ fn caveat(i: usize) -> Caveat {
         6 => Caveat::ArgEq(0, Val::Address(ALICE.to_vec())),
         7 => Caveat::ArgEq(1, Val::Symbol(b"up".to_vec())),
         8 => Caveat::ArgEq(2, Val::I128(100)),
+        9 => Caveat::ArgEq(0, Val::Bytes(U32_ONE.to_vec())),
         _ => unreachable!(),
     }
 }
 
-const N_ACTIONS: usize = 10;
+const N_ACTIONS: usize = 11;
 
 fn action(i: usize) -> Action {
     match i {
@@ -261,6 +302,7 @@ fn action(i: usize) -> Action {
         ),
         8 => invoke(POOL, b"transfer", vec![Val::Bytes(ALICE.to_vec())]),
         9 => create_contract(),
+        10 => invoke(TOKEN, b"set", vec![Val::Other(U32_ONE.to_vec())]),
         _ => unreachable!(),
     }
 }
@@ -287,7 +329,8 @@ fn reference(caveat: &Caveat, action: &Action) -> bool {
             (Some(Val::Bool(x)), Val::Bool(y)) => x == y,
             (Some(Val::Bytes(x)), Val::Bytes(y))
             | (Some(Val::Address(x)), Val::Address(y))
-            | (Some(Val::Symbol(x)), Val::Symbol(y)) => x == y,
+            | (Some(Val::Symbol(x)), Val::Symbol(y))
+            | (Some(Val::Other(x)), Val::Other(y)) => x == y,
             _ => false,
         },
     }

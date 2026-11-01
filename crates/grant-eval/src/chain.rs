@@ -2,6 +2,11 @@
 //!
 //! Every chain caveat is false on [`Action::CreateContract`], so any grant
 //! with at least one chain caveat denies contract deployment.
+//!
+//! Each argument is one [`Val`], and two values are equal only when they have
+//! the same variant, so an argument of one type never satisfies an
+//! [`Caveat::ArgEq`] written for another. An argument type the vocabulary does
+//! not model is [`Val::Other`], never [`Val::Bytes`].
 
 use alloc::vec::Vec;
 
@@ -16,6 +21,11 @@ pub enum Val {
     Bytes(Vec<u8>),
     Address(Vec<u8>),
     Symbol(Vec<u8>),
+    /// An argument of a type the other variants do not model (`u32`, `i64`,
+    /// `string`, `vec`, `map`, …), as its full `ScVal` XDR. The XDR begins
+    /// with the type's discriminant, so two `Other` values are equal only when
+    /// the arguments have the same type and the same value.
+    Other(Vec<u8>),
 }
 
 /// One context of a Soroban authorization tree.
@@ -57,7 +67,8 @@ pub fn val_eq(a: &Val, b: &Val) -> bool {
         (Val::Bool(x), Val::Bool(y)) => *x == *y,
         (Val::Bytes(x), Val::Bytes(y))
         | (Val::Address(x), Val::Address(y))
-        | (Val::Symbol(x), Val::Symbol(y)) => bytes_eq(x, y),
+        | (Val::Symbol(x), Val::Symbol(y))
+        | (Val::Other(x), Val::Other(y)) => bytes_eq(x, y),
         _ => false,
     }
 }

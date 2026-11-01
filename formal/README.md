@@ -80,7 +80,10 @@ network ids, path components) are `Bytes := List UInt8`, compared by exact
 bytewise equality. Aeneas translates a Rust `Vec<u8>` or slice to a structure
 whose `val` is a `List` of bytes, so the equivalence relates the two by that
 projection. Chain values follow Soroban's `Val`: `i128` is `BitVec 128`
-compared as a signed integer (`BitVec.toInt`), `u64` is `UInt64`. Host
+compared as a signed integer (`BitVec.toInt`), `u64` is `UInt64`, and an
+argument of a type the vocabulary does not model is `other` of its full
+`ScVal` XDR. Values of different constructors are never equal, so `argEq`
+holds only for an argument of its value's constructor. Host
 normalization (lowercasing hosts, canonicalizing `..`, symlinks and
 case-insensitive paths, DNS) happens before an action reaches the evaluator
 and is not modelled.
@@ -195,6 +198,8 @@ no such term: the empty grant checks one action in zero steps.
 | Lean name | Statement |
 |---|---|
 | `Chain.contractIn_iff`, `functionIn_iff`, `argI128AtMost_iff`, `argEq_iff` | each Chain caveat on an `invoke` holds iff its condition does |
+| `Chain.argEq_kind` | `argEq i val` holds only when `args[i]? = some w` with `w.kind = val.kind` (the same constructor) |
+| `Chain.argEq_false_of_kind_ne`, `Chain.argEq_bytes_false_of_other` | an argument of another constructor fails `argEq`; an `other xdr` argument fails `argEq i (.bytes b)` for every `b`, `xdr` included |
 | `Chain.holds_createContract` | every Chain caveat is false on `createContract` |
 | `Chain.restricted_denies_createContract` | `cs ≠ [] → (grant cs).allows (.createContract h) = false` |
 | `Files.isPrefix_iff`, `Files.pathUnder_iff` | `pathUnder p` holds iff `p <+: a.path` (`List.IsPrefix`) |
@@ -267,6 +272,8 @@ For each vocabulary `V` (`Chain`, `Files`, `Network`, `Signing`), with
 | `V.extracted_allowsAll` | `grant_eval.v.allows_all g acts = ok ((denoteGrant g).allowsAll (acts.val.map denoteAction))` |
 | `V.holds_eq` | `grant_eval.v.holds c a = ok ((denoteCaveat c).holds (denoteAction a))` |
 | `Chain.extracted_denies_createContract` | `g.val ≠ [] → grant_eval.chain.allows g (.CreateContract h) = ok false` |
+| `Chain.extracted_val_eq_kind` | `grant_eval.chain.val_eq a b = ok true → (denoteVal a).kind = (denoteVal b).kind` |
+| `Chain.extracted_val_eq_other_bytes` | `grant_eval.chain.val_eq (.Other x) (.Bytes y) = ok false` for every `x`, `y` |
 
 Each holds for every input, so the extracted functions return `ok`: they
 neither fail nor diverge. The building blocks are in `Equiv/`:

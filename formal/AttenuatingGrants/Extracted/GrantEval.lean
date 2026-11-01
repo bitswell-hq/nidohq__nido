@@ -100,7 +100,7 @@ def bytes.bytes_in
   bytes.bytes_in_loop x list 0#usize
 
 /-- [grant_eval::chain::Val]
-    Source: 'crates/grant-eval/src/chain.rs', lines 12:0-19:1
+    Source: 'crates/grant-eval/src/chain.rs', lines 17:0-29:1
     Visibility: public -/
 @[discriminant isize]
 inductive chain.Val where
@@ -110,9 +110,10 @@ inductive chain.Val where
 | Bytes : alloc.vec.Vec Std.U8 → chain.Val
 | Address : alloc.vec.Vec Std.U8 → chain.Val
 | Symbol : alloc.vec.Vec Std.U8 → chain.Val
+| Other : alloc.vec.Vec Std.U8 → chain.Val
 
 /-- [grant_eval::chain::Action]
-    Source: 'crates/grant-eval/src/chain.rs', lines 22:0-31:1
+    Source: 'crates/grant-eval/src/chain.rs', lines 32:0-41:1
     Visibility: public -/
 @[discriminant isize]
 inductive chain.Action where
@@ -124,7 +125,7 @@ inductive chain.Action where
 | CreateContract : alloc.vec.Vec Std.U8 → chain.Action
 
 /-- [grant_eval::chain::Caveat]
-    Source: 'crates/grant-eval/src/chain.rs', lines 34:0-45:1
+    Source: 'crates/grant-eval/src/chain.rs', lines 44:0-55:1
     Visibility: public -/
 @[discriminant isize]
 inductive chain.Caveat where
@@ -134,12 +135,12 @@ inductive chain.Caveat where
 | ArgEq : Std.U32 → chain.Val → chain.Caveat
 
 /-- [grant_eval::chain::_]
-    Source: 'crates/grant-eval/src/chain.rs', lines 49:0-49:41 -/
+    Source: 'crates/grant-eval/src/chain.rs', lines 59:0-59:41 -/
 @[global_simps, irreducible]
 def chain._ : Result Unit := massert (core.num.Usize.BITS >= 32#u32)
 
 /-- [grant_eval::chain::val_eq]:
-    Source: 'crates/grant-eval/src/chain.rs', lines 53:0-63:1
+    Source: 'crates/grant-eval/src/chain.rs', lines 63:0-74:1
     Visibility: public -/
 def chain.val_eq (a : chain.Val) (b : chain.Val) : Result Bool := do
   match a with
@@ -151,6 +152,7 @@ def chain.val_eq (a : chain.Val) (b : chain.Val) : Result Bool := do
     | chain.Val.Bytes _ => ok false
     | chain.Val.Address _ => ok false
     | chain.Val.Symbol _ => ok false
+    | chain.Val.Other _ => ok false
   | chain.Val.U64 x =>
     match b with
     | chain.Val.I128 _ => ok false
@@ -159,6 +161,7 @@ def chain.val_eq (a : chain.Val) (b : chain.Val) : Result Bool := do
     | chain.Val.Bytes _ => ok false
     | chain.Val.Address _ => ok false
     | chain.Val.Symbol _ => ok false
+    | chain.Val.Other _ => ok false
   | chain.Val.Bool x =>
     match b with
     | chain.Val.I128 _ => ok false
@@ -167,6 +170,7 @@ def chain.val_eq (a : chain.Val) (b : chain.Val) : Result Bool := do
     | chain.Val.Bytes _ => ok false
     | chain.Val.Address _ => ok false
     | chain.Val.Symbol _ => ok false
+    | chain.Val.Other _ => ok false
   | chain.Val.Bytes x =>
     match b with
     | chain.Val.I128 _ => ok false
@@ -178,6 +182,7 @@ def chain.val_eq (a : chain.Val) (b : chain.Val) : Result Bool := do
       bytes.bytes_eq s s1
     | chain.Val.Address _ => ok false
     | chain.Val.Symbol _ => ok false
+    | chain.Val.Other _ => ok false
   | chain.Val.Address x =>
     match b with
     | chain.Val.I128 _ => ok false
@@ -189,6 +194,7 @@ def chain.val_eq (a : chain.Val) (b : chain.Val) : Result Bool := do
       let s1 := alloc.vec.Vec.deref y
       bytes.bytes_eq s s1
     | chain.Val.Symbol _ => ok false
+    | chain.Val.Other _ => ok false
   | chain.Val.Symbol x =>
     match b with
     | chain.Val.I128 _ => ok false
@@ -200,9 +206,22 @@ def chain.val_eq (a : chain.Val) (b : chain.Val) : Result Bool := do
       let s := alloc.vec.Vec.deref x
       let s1 := alloc.vec.Vec.deref y
       bytes.bytes_eq s s1
+    | chain.Val.Other _ => ok false
+  | chain.Val.Other x =>
+    match b with
+    | chain.Val.I128 _ => ok false
+    | chain.Val.U64 _ => ok false
+    | chain.Val.Bool _ => ok false
+    | chain.Val.Bytes _ => ok false
+    | chain.Val.Address _ => ok false
+    | chain.Val.Symbol _ => ok false
+    | chain.Val.Other y =>
+      let s := alloc.vec.Vec.deref x
+      let s1 := alloc.vec.Vec.deref y
+      bytes.bytes_eq s s1
 
 /-- [grant_eval::chain::holds]:
-    Source: 'crates/grant-eval/src/chain.rs', lines 67:0-87:1
+    Source: 'crates/grant-eval/src/chain.rs', lines 78:0-98:1
     Visibility: public -/
 def chain.holds
   (caveat : chain.Caveat) (action : chain.Action) : Result Bool := do
@@ -233,6 +252,7 @@ def chain.holds
         | chain.Val.Bytes _ => ok false
         | chain.Val.Address _ => ok false
         | chain.Val.Symbol _ => ok false
+        | chain.Val.Other _ => ok false
     | chain.Caveat.ArgEq index expected =>
       let s := alloc.vec.Vec.deref args
       let i ← lift (UScalar.cast .Usize index)
@@ -251,14 +271,14 @@ structure eval.Check (Self : Type _) (A : Type _) where
   holds : Self → A → Result Bool
 
 /-- [grant_eval::chain::{impl grant_eval::eval::Check<grant_eval::chain::Action> for grant_eval::chain::Caveat}::holds]:
-    Source: 'crates/grant-eval/src/chain.rs', lines 90:4-92:5
+    Source: 'crates/grant-eval/src/chain.rs', lines 101:4-103:5
     Visibility: public -/
 def chain.Caveat.Insts.Grant_evalEvalCheckAction.holds
   (self : chain.Caveat) (action : chain.Action) : Result Bool := do
   chain.holds self action
 
 /-- Trait implementation: [grant_eval::chain::{impl grant_eval::eval::Check<grant_eval::chain::Action> for grant_eval::chain::Caveat}]
-    Source: 'crates/grant-eval/src/chain.rs', lines 89:0-93:1 -/
+    Source: 'crates/grant-eval/src/chain.rs', lines 100:0-104:1 -/
 @[reducible]
 def chain.Caveat.Insts.Grant_evalEvalCheckAction : eval.Check chain.Caveat
   chain.Action := {
@@ -310,7 +330,7 @@ def eval.allows
   eval.allows_loop CheckInst grant action 0#usize
 
 /-- [grant_eval::chain::allows]:
-    Source: 'crates/grant-eval/src/chain.rs', lines 97:0-99:1
+    Source: 'crates/grant-eval/src/chain.rs', lines 108:0-110:1
     Visibility: public -/
 def chain.allows
   (grant : Slice chain.Caveat) (action : chain.Action) : Result Bool := do
@@ -361,7 +381,7 @@ def eval.allows_all
   eval.allows_all_loop CheckInst grant actions 0#usize
 
 /-- [grant_eval::chain::allows_all]:
-    Source: 'crates/grant-eval/src/chain.rs', lines 103:0-105:1
+    Source: 'crates/grant-eval/src/chain.rs', lines 114:0-116:1
     Visibility: public -/
 def chain.allows_all
   (grant : Slice chain.Caveat) (actions : Slice chain.Action) :

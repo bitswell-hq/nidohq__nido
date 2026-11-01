@@ -7,8 +7,9 @@
 //!   bytes, and an `Address` argument by its strkey (`G…`, `C…`, `M…`, …).
 //! - `ScVal::I128`, `U64`, `Bool`, `Bytes` and `Symbol` map onto the `Val`
 //!   variant of the same name. Any other argument type (`u32`, `i64`,
-//!   `string`, `vec`, `map`, …) becomes `Val::Bytes` holding its full `ScVal`
-//!   XDR, so it keeps its position in the argument list.
+//!   `string`, `vec`, `map`, …) becomes `Val::Other` holding its full `ScVal`
+//!   XDR, discriminant included, so it keeps its position in the argument list
+//!   and never equals a value of another type.
 //! - A contract-creating host function or authorized function becomes
 //!   `CreateContract`, with the wasm hash of a `Wasm` executable and empty
 //!   bytes for the Stellar Asset Contract executable.
@@ -91,7 +92,7 @@ pub fn val(v: &ScVal) -> Val {
         ScVal::Bytes(b) => Val::Bytes(b.0.to_vec()),
         ScVal::Symbol(s) => Val::Symbol(s.0.to_vec()),
         ScVal::Address(a) => Val::Address(a.to_string().into_bytes()),
-        other => Val::Bytes(
+        other => Val::Other(
             other
                 .to_xdr(Limits::none())
                 .expect("an ScVal decoded from XDR encodes again"),

@@ -11,6 +11,7 @@ use std::time::Duration;
 use grant_eval::{chain, signing};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
+use stellar_xdr::ReadXdr;
 
 use crate::RelayError;
 
@@ -111,7 +112,9 @@ pub enum I128Text {
 }
 
 /// An argument value: `{"i128": "5"}`, `{"u64": 5}`, `{"bool": true}`,
-/// `{"bytes": "<hex>"}`, `{"address": "G…"}`, `{"symbol": "name"}`.
+/// `{"bytes": "<hex>"}`, `{"address": "G…"}`, `{"symbol": "name"}`, or
+/// `{"other": "<hex>"}`: the `ScVal` XDR of an argument whose type has no
+/// variant of its own (`u32`, `string`, `vec`, …).
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum ValFile {
@@ -121,6 +124,7 @@ pub enum ValFile {
     Bytes(String),
     Address(String),
     Symbol(String),
+    Other(String),
 }
 
 /// A signing caveat: `{"key_in": ["key-…"]}`,
@@ -296,6 +300,17 @@ fn val(v: &ValFile) -> Result<chain::Val, String> {
             chain::Val::Address(a.clone().into_bytes())
         }
         ValFile::Symbol(s) => chain::Val::Symbol(s.clone().into_bytes()),
+        ValFile::Other(h) => {
+            // Through `actions::val`, so the value is exactly what an argument
+            // of that type maps to; a type with its own variant is refused.
+            let bytes = hex::decode(h).map_err(|e| format!("other {h:?}: {e}"))?;
+            let arg = stellar_xdr::ScVal::from_xdr(bytes, stellar_xdr::Limits::none())
+                .map_err(|e| format!("other {h:?}: not ScVal XDR: {e}"))?;
+            match crate::actions::val(&arg) {
+                v @ chain::Val::Other(_) => v,
+                _ => return Err(format!("other {h:?}: this type has its own value form")),
+            }
+        }
     })
 }
 

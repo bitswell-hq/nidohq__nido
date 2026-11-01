@@ -86,6 +86,18 @@ namespace AttenuatingGrants
 #guard_msgs in
 #print axioms Chain.argEq_iff
 
+/-- info: 'AttenuatingGrants.Chain.argEq_kind' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Chain.argEq_kind
+
+/-- info: 'AttenuatingGrants.Chain.argEq_false_of_kind_ne' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Chain.argEq_false_of_kind_ne
+
+/-- info: 'AttenuatingGrants.Chain.argEq_bytes_false_of_other' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Chain.argEq_bytes_false_of_other
+
 /-- info: 'AttenuatingGrants.Chain.holds_createContract' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms Chain.holds_createContract
@@ -641,6 +653,14 @@ namespace AttenuatingGrants
 /-- info: 'AttenuatingGrants.Chain.val_eq_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms Chain.val_eq_eq
+
+/-- info: 'AttenuatingGrants.Chain.extracted_val_eq_kind' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Chain.extracted_val_eq_kind
+
+/-- info: 'AttenuatingGrants.Chain.extracted_val_eq_other_bytes' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Chain.extracted_val_eq_other_bytes
 
 /-- info: 'AttenuatingGrants.Chain.slice_get_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in

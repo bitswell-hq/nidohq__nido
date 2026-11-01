@@ -12,6 +12,9 @@ vector, byte strings by `bytesOf`, an argument index `u32` to its value as a
 `Nat`.
 
 * `val_eq_eq`: the extracted `val_eq` is equality of the denoted values.
+* `extracted_val_eq_kind`, `extracted_val_eq_other_bytes`: the extracted
+  `val_eq` is true only for values of the same variant; an `Other` value never
+  equals a `Bytes` value, whatever the two byte strings.
 * `extracted_allows`: `chain.allows g a` returns `ok` of `Grant.allows` on the
   denoted grant and action, for every input.
 * `extracted_allowsAll`: likewise `chain.allows_all` and `Grant.allowsAll`.
@@ -37,6 +40,7 @@ def denoteVal : grant_eval.chain.Val → Val
   | .Bytes v => .bytes (bytesOf v.val)
   | .Address v => .address (bytesOf v.val)
   | .Symbol v => .symbol (bytesOf v.val)
+  | .Other v => .other (bytesOf v.val)
 
 def denoteAction : grant_eval.chain.Action → Action
   | .Invoke contract function args =>
@@ -83,6 +87,19 @@ theorem val_eq_eq (a b : grant_eval.chain.Val) :
   cases a <;> cases b <;>
     simp [grant_eval.chain.val_eq, denoteVal, bytes_eq_eq, bytesOf_inj, i128_bv_inj,
       denoteU64_inj]
+
+/-- The extracted `val_eq` is true only for values of the same variant. -/
+theorem extracted_val_eq_kind {a b : grant_eval.chain.Val}
+    (h : grant_eval.chain.val_eq a b = ok true) : (denoteVal a).kind = (denoteVal b).kind := by
+  rw [val_eq_eq] at h
+  have : denoteVal a = denoteVal b := of_decide_eq_true (Result.ok_injective h)
+  rw [this]
+
+/-- An unmodeled argument never equals a `Bytes` value, even with the same
+bytes. -/
+theorem extracted_val_eq_other_bytes (x y : alloc.vec.Vec Std.U8) :
+    grant_eval.chain.val_eq (.Other x) (.Bytes y) = ok false := by
+  simp [val_eq_eq, denoteVal]
 
 /-! ## Caveats -/
 
