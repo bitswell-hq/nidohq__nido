@@ -110,9 +110,8 @@ accepts a context on this contract only if it is `delegate` whose `parent`
 is the signing grant. A holder delegates by authorizing the contract's own
 address; the host allows a contract's `require_auth` of itself to call its
 own `__check_auth` (immediate re-entry, `host/frame.rs`), and refuses any
-other re-entry. The contract's own address holds nothing; a holder's
-authorization of it for anything but a delegation is checked like any other
-context.
+other re-entry. So `__check_auth` is also the check of this contract's own
+address ([below](#the-two-roles-of-__check_auth)).
 
 ## `__check_auth`
 
@@ -122,20 +121,63 @@ In order, returning the first failure ([`GrantError`](src/error.rs)):
    any of them is revoked.
 2. Verify the holder's ed25519 signature over the payload (a failure traps).
 3. For each context:
+   - a contract creation, with or without constructor arguments:
+     `ContractCreation`;
    - a call on this contract other than the holder's own delegation:
      `NotHolder`;
    - a call on the account: `AccountCall`;
    - a call on the budget asset other than `transfer(from, to, amount)` with
      a non-negative `i128` amount: `UnmeteredCall`.
-4. Map every other context to a `grant_eval::chain::Action` (contract calls
-   with their arguments, contract creation with its wasm hash) and require
-   `grant_eval::chain::allows_all` over the grant's caveats: `NotAllowed`.
+4. Map every other context, a contract call, to a `grant_eval::chain::Action`
+   with its arguments and require `grant_eval::chain::allows_all` over the
+   grant's caveats: `NotAllowed`.
 5. Charge each budget-asset transfer to the grant and every ancestor with
    `grant_eval::budget::spend` over the lineage's ledger: `Overdrawn` if any
    node would pass its allowance. Only if every spend succeeds are the new
    `spent` values stored.
 
 A refused authorization fails the transaction, so no state changes.
+
+## The two roles of `__check_auth`
+
+The host calls this contract's `__check_auth` in two roles, with the same
+three arguments (a signature payload, a `GrantSignature`, the contexts), so
+the contract cannot tell which role it is in:
+
+1. **The account's delegated signer.** OZ authenticates a delegated signer
+   only through `delegate_account_auth` (`stellar-accounts`,
+   `smart_account/storage.rs`, `authenticate`), which passes the account's
+   payload, whose preimage names the account, and the account's contexts
+   (`soroban-env-host` 27, `auth.rs`, `delegate_account_auth`).
+2. **The check of this contract's own address**, whenever a call needs that
+   address's authorization: this contract's `delegate`, any other contract
+   that calls `require_auth` on this address, and a deployment with this
+   address as deployer. The payload is that address's and the contexts are
+   what it authorizes.
+
+The checks are the same in both roles. In the second, a holder authorizes
+only as this contract's address, and only within its grant: the guards
+refuse every contract creation, every call on this contract but the holder's
+own delegation, every call on the account and every unmetered call on the
+budget asset; the caveats bound every other call; and transfers of the
+budget asset are charged to the grant. This gives no authority over the
+account: the account accepts this contract only through
+`delegate_account_auth`, so this address's own authorization never stands
+in for the account's. Besides this contract's own `delegate`, the deployment
+asks for this address's authorization only for calls that act on the address
+itself, such as a transfer from its own balance.
+
+Two consequences are stated, not enforced:
+
+- Under an empty grant, which allows every context the guards let through,
+  a holder can authorize any call on another contract as this address.
+- The address holds nothing the deployment gives it, but anyone can send it
+  assets, and any holder whose grant allows the transfer can move them. So
+  nothing should be sent to it.
+
+Contract creation is refused whatever the grant because in the second role
+no account document applies, so under the empty grant no other check would
+refuse a deployment with this address as deployer.
 
 ## Threat model coverage
 
@@ -148,7 +190,7 @@ authority.
 | Delegate from an ancestor's grant (dropping its own caveats) or a grant it does not hold | `NotHolder` |
 | Change its rule or policies (`apply_doc`), call the account's `execute`, schedule or cancel upgrades | No agent rule is scoped to the account (`UnvalidatedContext`). A document that gives agents a rule for the account still meets `AccountCall`. |
 | A call the grant allows that makes a disallowed call inside the same authorization | Every context is checked; one disallowed context refuses the whole authorization. A nested call the signed tree leaves out is refused by the host. |
-| Deploy a contract | Every chain caveat is false on contract creation, so any grant with a caveat refuses it. Perch documents have no creation scope, so the account refuses it first. |
+| Deploy a contract | `ContractCreation`, under every grant and in both roles of `__check_auth`. Perch documents have no creation scope, so through the account the account refuses it first. |
 | Hand off the budget asset (`approve`, `burn`, `transfer_from`) | `UnmeteredCall` |
 | Overspend through siblings or nested transfers | Every transfer in the authorization is charged to the spender and every ancestor; the first overdrawn node fails the spend and nothing is stored. |
 
@@ -163,18 +205,34 @@ assets are bounded only by caveats, for example `ArgI128AtMost(2, n)` per
 call or a `ContractIn` that leaves the asset out.
 
 Grant ids index one `grant_eval::budget` ledger: a grant's `parent`,
-`allowance` and `spent` are its node. `issue` adds a root and `delegate` a
-node under the delegator's with nothing spent, as `budget::append` does, and
-`refill` calls `budget::refill` on the node. An authorization calls
-`budget::spend` on the signing grant's lineage (root first, each node's parent
-the one before it), which holds every node `spend` reads or writes on the
-whole ledger, so it returns the same result and charges the same nodes.
-`formal/` proves, about the extracted `spend`, `refill` and `append`, that a
-spend charges the spender and every ancestor or fails changing nothing, and
-that the total spent under any node stays within its allowance
-(`Budget.extracted_spend`, `extracted_spend_error`,
-`extracted_spentUnder_le_allowance`). That this contract's storage and the
-lineage are that ledger is wiring (below).
+`allowance` and `spent` are its node. The contract never holds that ledger
+whole:
+
+- `issue` stores a root and `delegate` a grant under the delegator's, at the
+  next id with nothing spent, which is `budget::append` on the whole ledger.
+- `refill` calls `budget::refill` on a ledger of the one grant and stores the
+  new allowance.
+- An authorization builds the ledger of the signing grant's lineage alone
+  (root first, each node's parent the one before it), calls `budget::spend`
+  on it at the last node once per metered transfer, stopping at the first
+  failure, and only if every spend succeeds stores each node's `spent` into
+  its grant.
+
+`formal/AttenuatingGrants/Signer.lean` follows these steps and proves that
+they compute the whole ledger's result: a spend or a check on the lineage
+ledger has the whole ledger's outcome at the signing grant, with node `k`
+of the lineage ledger standing for the lineage's `k`th grant, and storing the
+lineage ledger after an authorization's spends leaves the whole ledger after
+them
+(`Ledger.spend_lineage`, `spendAll_lineage`, `writeBack_spendAll`;
+`Ledger.refillGrant_eq` for `refill`). The spends of one authorization are
+all or nothing, so every sequence of this contract's calls is a run of the
+whole ledger (`Signer.Run.exists_run`), and the total spent at or under any
+grant never exceeds its allowance (`Signer.spentUnder_le_allowance`). The
+calls go to the extracted `budget::spend` and `check_spend`, which compute
+the model (`Budget.extracted_spendAll_lineage`,
+`extracted_check_spend_lineage`). What remains trusted is that the code
+below is those definitions ([Trusted wiring](#trusted-wiring)).
 
 `overdrawn_at(id, amount)` names the nearest grant on `id`'s lineage that
 cannot take `amount`: where a refill request goes. `refill` is the account's.
@@ -196,14 +254,19 @@ them:
 
 The evaluator is verified in `formal/`; what connects it to Soroban is not:
 
-- `src/actions.rs` turns contexts and stored caveats into the evaluator's
-  types with `crates/grant-relay`'s encoding: a contract by its strkey, a
-  function by its symbol's bytes, an address argument by its strkey, `i128`,
-  `u64`, `bool`, `Bytes` and `Symbol` arguments by value, and any other
-  argument as `Other` with its full `ScVal` XDR. A test checks the two
+- `src/actions.rs` turns contract-call contexts and stored caveats into the
+  evaluator's types with `crates/grant-relay`'s encoding: a contract by its
+  strkey, a function by its symbol's bytes, an address argument by its
+  strkey, `i128`, `u64`, `bool`, `Bytes` and `Symbol` arguments by value, and
+  any other argument as `Other` with its full `ScVal` XDR. A test checks the two
   mappings agree on every argument type.
-- `src/contract.rs` builds the lineage and its budget ledger, applies the
-  guards, and stores the charged `spent` values.
+- `src/contract.rs` applies the guards, and holds the budget path that
+  `formal/` follows: its storage holds grants `0` to `NextId - 1`, none ever
+  removed, and they are the ledger; `issue` and `delegate` store at
+  `NextId`; `lineage`, `ledger`, the spend loop and the store loop are
+  `Ledger.IsLineage`, `Ledger.chain`, `spendAllExtracted` and
+  `Ledger.writeBack` of `formal/AttenuatingGrants/Signer.lean` and
+  `Equiv/Signer.lean`; `refill` is `Ledger.refillGrant`.
 - The host's CAP-0071 behaviour, which Perch's `cap71_semantics.rs` pins for
   the pinned `soroban-env-host` and OZ fork.
 
@@ -212,7 +275,9 @@ The evaluator is verified in `formal/`; what connects it to Soroban is not:
 `crates/integration-tests/tests/it/grant_signer.rs`, on a factory-minted
 Perch account under enforcing authorization (`set_auths`): allowed calls,
 disallowed functions, contracts and arguments, a disallowed transfer nested
-inside an allowed call, contract deployment, every escalation in the table
+inside an allowed call, contract deployment under a restricted and an empty
+grant in both roles of `__check_auth`, what a holder can and cannot
+authorize as this contract's own address, every escalation in the table
 above (including documents that wrongly scope agent rules to the account or
 to this contract), delegation that narrows and cannot widen, oversubscribed
 siblings with an overdrawn ancestor changing nothing, transfers charged
@@ -234,16 +299,16 @@ grant at depth 0, every caveat holding so each is evaluated):
 
 | Caveats | 1 context: CPU instructions | 1 context: memory bytes | Each further context: CPU instructions | Each further context: memory bytes |
 | ---: | ---: | ---: | ---: | ---: |
-| 1 | 1,018,572 | 418,924 | 72,015 | 542 |
-| 4 | 1,160,739 | 432,665 | 89,831 | 542 |
-| 16 | 1,734,245 | 487,221 | 161,095 | 542 |
+| 1 | 1,015,834 | 419,518 | 71,155 | 542 |
+| 4 | 1,157,329 | 433,259 | 88,971 | 542 |
+| 16 | 1,727,379 | 487,815 | 160,235 | 542 |
 
 One context includes the VM instantiation, the grant load and the signature
 check; each further context is the difference between five contexts and one,
-divided by four. A metered transfer (one context, charged and stored) costs 1,123,054,
-1,279,904 and 1,909,151 instructions for 1, 4 and 16 caveats. A whole agent
+divided by four. A metered transfer (one context, charged and stored) costs 1,120,900,
+1,276,886 and 1,903,061 instructions for 1, 4 and 16 caveats. A whole agent
 transaction, `protected` authorized through the account with a 4-caveat
-grant, costs 2,270,304 instructions and 655,437 memory bytes, against a
+grant, costs 2,267,129 instructions and 655,323 memory bytes, against a
 per-transaction limit of 400,000,000 instructions.
 
 ```sh

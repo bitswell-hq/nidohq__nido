@@ -14,6 +14,8 @@ import AttenuatingGrants.Equiv.Files
 import AttenuatingGrants.Equiv.Network
 import AttenuatingGrants.Equiv.Signing
 import AttenuatingGrants.Equiv.Budget
+import AttenuatingGrants.Signer
+import AttenuatingGrants.Equiv.Signer
 
 /-!
 # Axioms
@@ -911,5 +913,85 @@ namespace AttenuatingGrants
 /-- info: 'AttenuatingGrants.Budget.extracted_spentUnder_le_allowance' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms Budget.extracted_spentUnder_le_allowance
+
+/-! ## The grant signer's budget path -/
+
+/-- info: 'AttenuatingGrants.Budget.Ledger.walk_lineage' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.Ledger.walk_lineage
+
+/-- info: 'AttenuatingGrants.Budget.Ledger.chargePath_lineage' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.Ledger.chargePath_lineage
+
+/-- info: 'AttenuatingGrants.Budget.Ledger.within_lineage' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.Ledger.within_lineage
+
+/-- info: 'AttenuatingGrants.Budget.Ledger.spend_lineage' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.Ledger.spend_lineage
+
+/-- info: 'AttenuatingGrants.Budget.Ledger.spendAll_lineage' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.Ledger.spendAll_lineage
+
+/-- info: 'AttenuatingGrants.Budget.Ledger.spendAll_run' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.Ledger.spendAll_run
+
+/-- info: 'AttenuatingGrants.Budget.Ledger.spendAll_changes' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.Ledger.spendAll_changes
+
+/-- info: 'AttenuatingGrants.Budget.Ledger.writeBack_eq' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.Ledger.writeBack_eq
+
+/-- info: 'AttenuatingGrants.Budget.Ledger.writeBack_spendAll' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.Ledger.writeBack_spendAll
+
+/-- info: 'AttenuatingGrants.Budget.Ledger.refillGrant_eq' depends on axioms: [propext] -/
+#guard_msgs in
+#print axioms Budget.Ledger.refillGrant_eq
+
+/-- info: 'AttenuatingGrants.Budget.Ledger.run_append' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.Ledger.run_append
+
+/-- info: 'AttenuatingGrants.Budget.Signer.Step.exists_run' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.Signer.Step.exists_run
+
+/-- info: 'AttenuatingGrants.Budget.Signer.Run.exists_run' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.Signer.Run.exists_run
+
+/-- info: 'AttenuatingGrants.Budget.Signer.spentUnder_le_allowance' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.Signer.spentUnder_le_allowance
+
+/-- info: 'AttenuatingGrants.Budget.Signer.withinAllowance' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.Signer.withinAllowance
+
+/-- info: 'AttenuatingGrants.Budget.Signer.parentsFirst' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.Signer.parentsFirst
+
+/-! ## The grant signer's calls to the extracted budget code -/
+
+/-- info: 'AttenuatingGrants.Budget.extracted_spendAll' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.extracted_spendAll
+
+/-- info: 'AttenuatingGrants.Budget.extracted_spendAll_lineage' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.extracted_spendAll_lineage
+
+/-- info: 'AttenuatingGrants.Budget.extracted_check_spend_lineage' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Budget.extracted_check_spend_lineage
 
 end AttenuatingGrants

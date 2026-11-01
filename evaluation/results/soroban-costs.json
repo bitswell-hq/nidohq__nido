@@ -8,8 +8,8 @@
     "arg_bytes": 32,
     "list_len": 1,
     "allowed": true,
-    "cpu_instructions": 974554,
-    "mem_bytes": 415988
+    "cpu_instructions": 972392,
+    "mem_bytes": 416582
   },
   {
     "id": "cost-01-caveats-pass",
@@ -20,8 +20,8 @@
     "arg_bytes": 32,
     "list_len": 1,
     "allowed": true,
-    "cpu_instructions": 1026909,
-    "mem_bytes": 420172
+    "cpu_instructions": 1024459,
+    "mem_bytes": 420766
   },
   {
     "id": "cost-01-caveats-fail",
@@ -32,8 +32,8 @@
     "arg_bytes": 32,
     "list_len": 1,
     "allowed": false,
-    "cpu_instructions": 1020241,
-    "mem_bytes": 420172
+    "cpu_instructions": 1017791,
+    "mem_bytes": 420766
   },
   {
     "id": "cost-02-caveats-pass",
@@ -44,8 +44,8 @@
     "arg_bytes": 32,
     "list_len": 1,
     "allowed": true,
-    "cpu_instructions": 1072078,
-    "mem_bytes": 424403
+    "cpu_instructions": 1069340,
+    "mem_bytes": 424997
   },
   {
     "id": "cost-02-caveats-fail",
@@ -56,8 +56,8 @@
     "arg_bytes": 32,
     "list_len": 1,
     "allowed": false,
-    "cpu_instructions": 1062718,
-    "mem_bytes": 424403
+    "cpu_instructions": 1059980,
+    "mem_bytes": 424997
   },
   {
     "id": "cost-03-caveats-pass",
@@ -68,8 +68,8 @@
     "arg_bytes": 32,
     "list_len": 1,
     "allowed": true,
-    "cpu_instructions": 1172252,
-    "mem_bytes": 434033
+    "cpu_instructions": 1168746,
+    "mem_bytes": 434627
   },
   {
     "id": "cost-03-caveats-fail",
@@ -80,8 +80,8 @@
     "arg_bytes": 32,
     "list_len": 1,
     "allowed": false,
-    "cpu_instructions": 1148152,
-    "mem_bytes": 434033
+    "cpu_instructions": 1144646,
+    "mem_bytes": 434627
   },
   {
     "id": "cost-04-caveats-pass",
@@ -92,8 +92,8 @@
     "arg_bytes": 32,
     "list_len": 1,
     "allowed": true,
-    "cpu_instructions": 1360082,
-    "mem_bytes": 451853
+    "cpu_instructions": 1355424,
+    "mem_bytes": 452447
   },
   {
     "id": "cost-04-caveats-fail",
@@ -104,8 +104,8 @@
     "arg_bytes": 32,
     "list_len": 1,
     "allowed": false,
-    "cpu_instructions": 1315858,
-    "mem_bytes": 451853
+    "cpu_instructions": 1311200,
+    "mem_bytes": 452447
   },
   {
     "id": "cost-05-caveats-pass",
@@ -116,8 +116,8 @@
     "arg_bytes": 32,
     "list_len": 1,
     "allowed": true,
-    "cpu_instructions": 1742264,
-    "mem_bytes": 488661
+    "cpu_instructions": 1735302,
+    "mem_bytes": 489255
   },
   {
     "id": "cost-05-caveats-fail",
@@ -128,8 +128,8 @@
     "arg_bytes": 32,
     "list_len": 1,
     "allowed": false,
-    "cpu_instructions": 1648436,
-    "mem_bytes": 488661
+    "cpu_instructions": 1641474,
+    "mem_bytes": 489255
   },
   {
     "id": "cost-06-caveats-pass",
@@ -140,8 +140,8 @@
     "arg_bytes": 32,
     "list_len": 1,
     "allowed": true,
-    "cpu_instructions": 2500738,
-    "mem_bytes": 560837
+    "cpu_instructions": 2489168,
+    "mem_bytes": 561431
   },
   {
     "id": "cost-06-caveats-fail",
@@ -152,8 +152,8 @@
     "arg_bytes": 32,
     "list_len": 1,
     "allowed": false,
-    "cpu_instructions": 2317058,
-    "mem_bytes": 560837
+    "cpu_instructions": 2305488,
+    "mem_bytes": 561431
   },
   {
     "id": "cost-07-caveats-pass",
@@ -164,8 +164,8 @@
     "arg_bytes": 32,
     "list_len": 1,
     "allowed": true,
-    "cpu_instructions": 4024716,
-    "mem_bytes": 706357
+    "cpu_instructions": 4003738,
+    "mem_bytes": 706951
   },
   {
     "id": "cost-07-caveats-fail",
@@ -176,8 +176,8 @@
     "arg_bytes": 32,
     "list_len": 1,
     "allowed": false,
-    "cpu_instructions": 3651976,
-    "mem_bytes": 706357
+    "cpu_instructions": 3630998,
+    "mem_bytes": 706951
   },
   {
     "id": "cost-08-arg_bytes_compared-pass",
@@ -188,8 +188,8 @@
     "arg_bytes": 0,
     "list_len": 1,
     "allowed": true,
-    "cpu_instructions": 1114102,
-    "mem_bytes": 430199
+    "cpu_instructions": 1110692,
+    "mem_bytes": 430793
   },
   {
     "id": "cost-08-arg_bytes_compared-fail",
@@ -200,8 +200,8 @@
     "arg_bytes": 0,
     "list_len": 1,
     "allowed": false,
-    "cpu_instructions": 1102966,
-    "mem_bytes": 430199
+    "cpu_instructions": 1099556,
+    "mem_bytes": 430793
   },
   {
     "id": "cost-09-arg_bytes_uncompared-pass",
@@ -212,8 +212,8 @@
     "arg_bytes": 0,
     "list_len": 1,
     "allowed": true,
-    "cpu_instructions": 1075164,
-    "mem_bytes": 425355
+    "cpu_instructions": 1072042,
+    "mem_bytes": 425949
   },
   {
     "id": "cost-09-arg_bytes_uncompared-fail",
@@ -224,8 +224,8 @@
     "arg_bytes": 0,
     "list_len": 1,
     "allowed": false,
-    "cpu_instructions": 1065804,
-    "mem_bytes": 425355
+    "cpu_instructions": 1062682,
+    "mem_bytes": 425949
   },
   {
     "id": "cost-10-arg_bytes_compared-pass",
@@ -236,8 +236,8 @@
     "arg_bytes": 64,
     "list_len": 1,
     "allowed": true,
-    "cpu_instructions": 1124200,
-    "mem_bytes": 430969
+    "cpu_instructions": 1120790,
+    "mem_bytes": 431563
   },
   {
     "id": "cost-10-arg_bytes_compared-fail",
@@ -248,8 +248,8 @@
     "arg_bytes": 64,
     "list_len": 1,
     "allowed": false,
-    "cpu_instructions": 1106920,
-    "mem_bytes": 430969
+    "cpu_instructions": 1103510,
+    "mem_bytes": 431563
   },
   {
     "id": "cost-11-arg_bytes_uncompared-pass",
@@ -260,8 +260,8 @@
     "arg_bytes": 64,
     "list_len": 1,
     "allowed": true,
-    "cpu_instructions": 1075134,
-    "mem_bytes": 425627
+    "cpu_instructions": 1072012,
+    "mem_bytes": 426221
   },
   {
     "id": "cost-11-arg_bytes_uncompared-fail",
@@ -272,8 +272,8 @@
     "arg_bytes": 64,
     "list_len": 1,
     "allowed": false,
-    "cpu_instructions": 1065774,
-    "mem_bytes": 425627
+    "cpu_instructions": 1062652,
+    "mem_bytes": 426221
   },
   {
     "id": "cost-12-arg_bytes_compared-pass",
@@ -284,8 +284,8 @@
     "arg_bytes": 256,
     "list_len": 1,
     "allowed": true,
-    "cpu_instructions": 1146014,
-    "mem_bytes": 432009
+    "cpu_instructions": 1142604,
+    "mem_bytes": 432603
   },
   {
     "id": "cost-12-arg_bytes_compared-fail",
@@ -296,8 +296,8 @@
     "arg_bytes": 256,
     "list_len": 1,
     "allowed": false,
-    "cpu_instructions": 1110302,
-    "mem_bytes": 432009
+    "cpu_instructions": 1106892,
+    "mem_bytes": 432603
   },
   {
     "id": "cost-13-arg_bytes_uncompared-pass",
@@ -308,8 +308,8 @@
     "arg_bytes": 256,
     "list_len": 1,
     "allowed": true,
-    "cpu_instructions": 1076666,
-    "mem_bytes": 425899
+    "cpu_instructions": 1073544,
+    "mem_bytes": 426493
   },
   {
     "id": "cost-13-arg_bytes_uncompared-fail",
@@ -320,8 +320,8 @@
     "arg_bytes": 256,
     "list_len": 1,
     "allowed": false,
-    "cpu_instructions": 1067306,
-    "mem_bytes": 425899
+    "cpu_instructions": 1064184,
+    "mem_bytes": 426493
   },
   {
     "id": "cost-14-arg_bytes_compared-pass",
@@ -332,8 +332,8 @@
     "arg_bytes": 1024,
     "list_len": 1,
     "allowed": true,
-    "cpu_instructions": 1236592,
-    "mem_bytes": 435353
+    "cpu_instructions": 1233182,
+    "mem_bytes": 435947
   },
   {
     "id": "cost-14-arg_bytes_compared-fail",
@@ -344,8 +344,8 @@
     "arg_bytes": 1024,
     "list_len": 1,
     "allowed": false,
-    "cpu_instructions": 1127152,
-    "mem_bytes": 435353
+    "cpu_instructions": 1123742,
+    "mem_bytes": 435947
   },
   {
     "id": "cost-15-arg_bytes_uncompared-pass",
@@ -356,8 +356,8 @@
     "arg_bytes": 1024,
     "list_len": 1,
     "allowed": true,
-    "cpu_instructions": 1086808,
-    "mem_bytes": 426171
+    "cpu_instructions": 1084454,
+    "mem_bytes": 426765
   },
   {
     "id": "cost-15-arg_bytes_uncompared-fail",
@@ -368,8 +368,8 @@
     "arg_bytes": 1024,
     "list_len": 1,
     "allowed": false,
-    "cpu_instructions": 1077448,
-    "mem_bytes": 426171
+    "cpu_instructions": 1075094,
+    "mem_bytes": 426765
   },
   {
     "id": "cost-16-arg_bytes_compared-pass",
@@ -380,8 +380,8 @@
     "arg_bytes": 4096,
     "list_len": 1,
     "allowed": true,
-    "cpu_instructions": 1602918,
-    "mem_bytes": 447913
+    "cpu_instructions": 1600276,
+    "mem_bytes": 448507
   },
   {
     "id": "cost-16-arg_bytes_compared-fail",
@@ -392,8 +392,8 @@
     "arg_bytes": 4096,
     "list_len": 1,
     "allowed": false,
-    "cpu_instructions": 1198566,
-    "mem_bytes": 447913
+    "cpu_instructions": 1195924,
+    "mem_bytes": 448507
   },
   {
     "id": "cost-17-arg_bytes_uncompared-pass",
@@ -404,8 +404,8 @@
     "arg_bytes": 4096,
     "list_len": 1,
     "allowed": true,
-    "cpu_instructions": 1121052,
-    "mem_bytes": 426443
+    "cpu_instructions": 1118698,
+    "mem_bytes": 427037
   },
   {
     "id": "cost-17-arg_bytes_uncompared-fail",
@@ -416,8 +416,8 @@
     "arg_bytes": 4096,
     "list_len": 1,
     "allowed": false,
-    "cpu_instructions": 1111692,
-    "mem_bytes": 426443
+    "cpu_instructions": 1109338,
+    "mem_bytes": 427037
   },
   {
     "id": "cost-18-arg_bytes_compared-pass",
@@ -428,8 +428,8 @@
     "arg_bytes": 16384,
     "list_len": 1,
     "allowed": true,
-    "cpu_instructions": 3061898,
-    "mem_bytes": 497337
+    "cpu_instructions": 3059256,
+    "mem_bytes": 497931
   },
   {
     "id": "cost-18-arg_bytes_compared-fail",
@@ -440,8 +440,8 @@
     "arg_bytes": 16384,
     "list_len": 1,
     "allowed": false,
-    "cpu_instructions": 1477898,
-    "mem_bytes": 497337
+    "cpu_instructions": 1475256,
+    "mem_bytes": 497931
   },
   {
     "id": "cost-19-arg_bytes_uncompared-pass",
@@ -452,8 +452,8 @@
     "arg_bytes": 16384,
     "list_len": 1,
     "allowed": true,
-    "cpu_instructions": 1257700,
-    "mem_bytes": 426715
+    "cpu_instructions": 1254578,
+    "mem_bytes": 427309
   },
   {
     "id": "cost-19-arg_bytes_uncompared-fail",
@@ -464,8 +464,8 @@
     "arg_bytes": 16384,
     "list_len": 1,
     "allowed": false,
-    "cpu_instructions": 1248340,
-    "mem_bytes": 426715
+    "cpu_instructions": 1245218,
+    "mem_bytes": 427309
   },
   {
     "id": "cost-20-contexts-pass",
@@ -476,8 +476,8 @@
     "arg_bytes": 32,
     "list_len": 1,
     "allowed": true,
-    "cpu_instructions": 1173344,
-    "mem_bytes": 436345
+    "cpu_instructions": 1169646,
+    "mem_bytes": 436939
   },
   {
     "id": "cost-20-contexts-fail",
@@ -488,8 +488,8 @@
     "arg_bytes": 32,
     "list_len": 1,
     "allowed": false,
-    "cpu_instructions": 1149244,
-    "mem_bytes": 436345
+    "cpu_instructions": 1145546,
+    "mem_bytes": 436939
   },
   {
     "id": "cost-21-contexts-pass",
@@ -500,8 +500,8 @@
     "arg_bytes": 32,
     "list_len": 1,
     "allowed": true,
-    "cpu_instructions": 1271758,
-    "mem_bytes": 437047
+    "cpu_instructions": 1266912,
+    "mem_bytes": 437641
   },
   {
     "id": "cost-21-contexts-fail",
@@ -512,8 +512,8 @@
     "arg_bytes": 32,
     "list_len": 1,
     "allowed": false,
-    "cpu_instructions": 1220890,
-    "mem_bytes": 437047
+    "cpu_instructions": 1216044,
+    "mem_bytes": 437641
   },
   {
     "id": "cost-22-contexts-pass",
@@ -524,8 +524,8 @@
     "arg_bytes": 32,
     "list_len": 1,
     "allowed": true,
-    "cpu_instructions": 1465808,
-    "mem_bytes": 438315
+    "cpu_instructions": 1458666,
+    "mem_bytes": 438909
   },
   {
     "id": "cost-22-contexts-fail",
@@ -536,8 +536,8 @@
     "arg_bytes": 32,
     "list_len": 1,
     "allowed": false,
-    "cpu_instructions": 1361404,
-    "mem_bytes": 438315
+    "cpu_instructions": 1354262,
+    "mem_bytes": 438909
   },
   {
     "id": "cost-23-contexts-pass",
@@ -548,8 +548,8 @@
     "arg_bytes": 32,
     "list_len": 1,
     "allowed": true,
-    "cpu_instructions": 1858228,
-    "mem_bytes": 440715
+    "cpu_instructions": 1846494,
+    "mem_bytes": 441309
   },
   {
     "id": "cost-23-contexts-fail",
@@ -560,8 +560,8 @@
     "arg_bytes": 32,
     "list_len": 1,
     "allowed": false,
-    "cpu_instructions": 1646752,
-    "mem_bytes": 440715
+    "cpu_instructions": 1635018,
+    "mem_bytes": 441309
   },
   {
     "id": "cost-24-contexts-pass",
@@ -572,8 +572,8 @@
     "arg_bytes": 32,
     "list_len": 1,
     "allowed": true,
-    "cpu_instructions": 2642342,
-    "mem_bytes": 445379
+    "cpu_instructions": 2621424,
+    "mem_bytes": 445973
   },
   {
     "id": "cost-24-contexts-fail",
@@ -584,8 +584,8 @@
     "arg_bytes": 32,
     "list_len": 1,
     "allowed": false,
-    "cpu_instructions": 2216722,
-    "mem_bytes": 445379
+    "cpu_instructions": 2195804,
+    "mem_bytes": 445973
   },
   {
     "id": "cost-25-contract_list-pass",
@@ -596,8 +596,8 @@
     "arg_bytes": 32,
     "list_len": 1,
     "allowed": true,
-    "cpu_instructions": 1031011,
-    "mem_bytes": 423436
+    "cpu_instructions": 1028177,
+    "mem_bytes": 424030
   },
   {
     "id": "cost-25-contract_list-fail",
@@ -608,8 +608,8 @@
     "arg_bytes": 32,
     "list_len": 1,
     "allowed": false,
-    "cpu_instructions": 1024343,
-    "mem_bytes": 423436
+    "cpu_instructions": 1021509,
+    "mem_bytes": 424030
   },
   {
     "id": "cost-26-contract_list-pass",
@@ -620,8 +620,8 @@
     "arg_bytes": 32,
     "list_len": 4,
     "allowed": true,
-    "cpu_instructions": 1060304,
-    "mem_bytes": 426878
+    "cpu_instructions": 1056606,
+    "mem_bytes": 427472
   },
   {
     "id": "cost-26-contract_list-fail",
@@ -632,8 +632,8 @@
     "arg_bytes": 32,
     "list_len": 4,
     "allowed": false,
-    "cpu_instructions": 1053924,
-    "mem_bytes": 426878
+    "cpu_instructions": 1050226,
+    "mem_bytes": 427472
   },
   {
     "id": "cost-27-contract_list-pass",
@@ -644,8 +644,8 @@
     "arg_bytes": 32,
     "list_len": 16,
     "allowed": true,
-    "cpu_instructions": 1178746,
-    "mem_bytes": 440238
+    "cpu_instructions": 1171592,
+    "mem_bytes": 440832
   },
   {
     "id": "cost-27-contract_list-fail",
@@ -656,8 +656,8 @@
     "arg_bytes": 32,
     "list_len": 16,
     "allowed": false,
-    "cpu_instructions": 1173518,
-    "mem_bytes": 440238
+    "cpu_instructions": 1166364,
+    "mem_bytes": 440832
   },
   {
     "id": "cost-28-contract_list-pass",
@@ -668,8 +668,8 @@
     "arg_bytes": 32,
     "list_len": 64,
     "allowed": true,
-    "cpu_instructions": 1646924,
-    "mem_bytes": 493270
+    "cpu_instructions": 1625946,
+    "mem_bytes": 493864
   },
   {
     "id": "cost-28-contract_list-fail",
@@ -680,7 +680,7 @@
     "arg_bytes": 32,
     "list_len": 64,
     "allowed": false,
-    "cpu_instructions": 1646304,
-    "mem_bytes": 493270
+    "cpu_instructions": 1625326,
+    "mem_bytes": 493864
   }
 ]

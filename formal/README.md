@@ -297,6 +297,69 @@ runs out only on an empty ledger.
 
 All names are in the `AttenuatingGrants` namespace.
 
+### The grant signer's budget path
+
+`AttenuatingGrants/Signer.lean` follows how `contracts/grant-signer` uses
+the budget code and proves that theorem 4 holds for it. The contract stores
+one grant per id, and a grant's `parent`, `allowance` and `spent` are node
+`id` of one ledger, which the contract never holds whole. An authorization
+loads the signing grant's lineage, builds a ledger of the lineage alone,
+spends on it once per metered transfer, and stores the result only if every
+spend succeeded. `refill` refills a ledger holding only the one grant. Names
+are in `AttenuatingGrants.Budget`:
+
+| Definition | Meaning |
+|---|---|
+| `Ledger.IsLineage l ps` | `ps` is a grant and its ancestors in `l`, root first, each with its node: what the contract's `lineage` returns |
+| `Ledger.chain ps` | the lineage's own ledger, node `k` with parent `k - 1`: the contract's `ledger` |
+| `Ledger.spendAll l i xs` | spend each of `xs` at `i` in order, stopping at the first failure; `none` if one failed: the contract's spend loop |
+| `Ledger.writeBack l ps c` | store node `k`'s `spent` of `c` into grant `ps[k]`, writing only values that changed: the contract's store loop |
+| `Ledger.refillGrant l i x` | `refill` on a ledger of grant `i` alone, the new allowance stored: the contract's `refill` |
+| `gid ps k`, `renameError ps` | node `k` of the lineage ledger is grant `ps[k]`; an error with its node renamed so |
+| `Ledger.reread l ps` | `ps` with each node read again from `l` |
+| `Signer.Step l l' log` | one call of the contract, by its effect on the ledger and the transfers it charged: a refused call or a failed transaction changes nothing; `issue` and `delegate` append; `refill` is `refillGrant`; an authorization whose spends all succeed stores its lineage ledger |
+| `Signer.Run l l' log` | a sequence of calls, with every transfer charged, oldest first |
+
+With `ps` a lineage of `l` ending at `e` (`ps.getLast? = some e`), `l` a
+ledger whose parents precede their children (`ParentsFirst`, which every run
+keeps) and `k = ps.length - 1`:
+
+| Lean name | Statement |
+|---|---|
+| `Ledger.walk_lineage`, `Ledger.chargePath_lineage` | `l.chargePath e.1 x = (((chain ps).chargePath k x).map (·.map (gid ps))).mapError (renameError ps)` |
+| `Ledger.within_lineage` | `l.Within e.1 a ↔ a ∈ ps.map Prod.fst` |
+| `Ledger.spend_lineage` | `((chain ps).spend k x).1.mapError (renameError ps) = (l.spend e.1 x).1` and `((chain ps).spend k x).2 = chain (reread (l.spend e.1 x).2 ps)` |
+| `Ledger.spendAll_lineage` | `(chain ps).spendAll k xs = (l.spendAll e.1 xs).map (fun l' => chain (reread l' ps))` |
+| `Ledger.writeBack_spendAll` | `l.spendAll e.1 xs = some l' → l.writeBack ps (chain (reread l' ps)) = l'` |
+| `Ledger.spendAll_run` | `l.spendAll i xs = some l' → l.run (xs.map (Op.spend i)) = (l', xs.map (i, ·))` |
+| `Ledger.refillGrant_eq` | `refillGrant l i x = (l.refill i x).2` |
+| `Signer.Step.exists_run`, `Signer.Run.exists_run` | `ParentsFirst l → Signer.Run l l' log → ∃ ops, l.run ops = (l', log)` |
+| `Signer.spentUnder_le_allowance` | `Signer.Run [] l log → l[a]? = some n → spentUnder l log a ≤ n.allowance` |
+| `Signer.withinAllowance`, `Signer.parentsFirst` | every grant's spent stays within its allowance, and parents stay first, over any sequence of calls |
+
+So the lineage ledger computes what the whole ledger computes at the signing
+grant, restricted to the lineage: the same outcome, an error naming the same
+grant (the one `overdrawn_at` reports), and after the spends the whole
+ledger's lineage after them. Storing it leaves the whole ledger after them.
+An authorization's spends are all or nothing: the contract returns before
+storing on any failure, and a refused authorization fails its transaction.
+Its effect is therefore either no change or the run of all its spends, both
+of them runs. Every sequence of the contract's calls is a `Ledger.run`, so
+theorem 4's bound on the total spent under a grant holds for the contract
+from its first grant on, with no hypothesis on the allowances. `example`s at
+the end of the module check a grandchild's lineage by `rfl`.
+
+Stated, not proven: that the contract's code is these definitions. Its
+storage holds grants `0` to `NextId - 1`, and none is ever removed; read as
+`(parent, allowance, spent)` they are the ledger. `issue` and `delegate`
+store a grant with nothing spent at `NextId`, after `delegate` has loaded
+its parent, which is `append`. `lineage` returns a list satisfying
+`IsLineage` and ending at the signing grant. `ledger` builds a vector
+denoting `chain ps`. The spend loop calls the extracted `spend` at the last
+node for each metered transfer in order and returns on the first error
+(`spendAllExtracted`, below). The store loop is `writeBack`. Each is a few
+lines of `contracts/grant-signer/src/contract.rs`.
+
 ## Extracted evaluator
 
 The proof runs from the Rust code back to the model:
@@ -426,6 +489,22 @@ assume the ledger stays below that many nodes. A real `Vec<Node>` cannot reach
 it (allocation fails long before, and a failed allocation aborts), but the
 model has no allocator, so the bound is stated rather than proven.
 
+### The grant signer's calls
+
+`Equiv/Signer.lean` defines `spendAllExtracted`, the grant signer's spend
+loop over the extracted `spend` (each amount in order at node `i`, stopping
+at the first `Err`), and proves, with `L = denoteLedger s.val`:
+
+| Lean name | Statement |
+|---|---|
+| `Budget.extracted_spendAll` | `spendAllExtracted s i xs = ok r` with `r.map (denoteLedger ·.val) = L.spendAll i.val (xs.map val)` |
+| `Budget.extracted_spendAll_lineage` | for a lineage `ps` of a `ParentsFirst` ledger `l` ending at `e`, `L = chain ps` and `i.val = ps.length - 1`: `r.map (denoteLedger ·.val) = (l.spendAll e.1 (xs.map val)).map (fun l' => chain (reread l' ps))` |
+| `Budget.extracted_check_spend_lineage` | under the same hypotheses, `check_spend s i x = ok r` with `(denoteSpend r).mapError (renameError ps) = (l.chargePath e.1 x.val).map (fun _ => ())` |
+
+With [The grant signer's budget path](#the-grant-signers-budget-path), the
+contract's calls to the extracted code store the whole ledger's result, and
+`overdrawn_at` names the grant the whole ledger's check names.
+
 ### Attenuation and chaining on Rust caveat slices
 
 `Extraction.Narrower allows g h` holds when every action the extracted
@@ -461,7 +540,11 @@ Proven: the Lean translation agrees with the model. Trusted, not proven:
   checked `usize` addition, checked and unchecked `u128` addition,
   `u32 as usize`, scalar comparison);
 - the **Soroban SDK** and the **host wiring** that builds actions, as for the
-  model.
+  model;
+- the grant signer's **storage wiring**: that its stored grants are the
+  ledger and its `lineage`, `ledger`, spend loop and store loop are
+  `IsLineage`, `chain`, `spendAllExtracted` and `writeBack`
+  ([The grant signer's budget path](#the-grant-signers-budget-path)).
 
 ## Axioms
 
@@ -481,7 +564,8 @@ the agreement of the Charon + Aeneas translation of `crates/grant-eval` with
 the model, with attenuation and chaining carried over to Rust caveat slices
 and budget safety (theorem 4, spent within allowance, and total spent under a
 node within its allowance, over runs that grow the tree) carried over to the
-Rust budget code.
+Rust budget code and to the grant signer's use of it, one lineage ledger per
+authorization.
 
 Stated but unproven, or not yet stated:
 
@@ -498,10 +582,11 @@ Stated but unproven, or not yet stated:
   assume the ledger holds fewer than `Usize.max` nodes, where Aeneas's model
   of `Vec::push` fails ([Budgets](#budgets)). That a real ledger stays below
   it is a property of the allocator, not proven here.
-- **Callers of the budget code**: `runExtracted` is a Lean definition of how a
-  caller sequences the extracted functions. That the deployed wiring calls
-  them that way, passes the node of the grant being spent under, and exposes
-  `refill` and root issuing only to the admin document is not proven.
-- **Ledger storage and approval**: where the ledger is stored (for example a
-  Soroban contract) and how a refill request reaches its approver are outside
+- **Callers of the budget code**: `runExtracted` and `spendAllExtracted` are
+  Lean definitions of how a caller sequences the extracted functions, and
+  `Signer.lean` follows the grant signer's storage, lineage and store loop.
+  That `contracts/grant-signer` is those definitions, and that only the
+  account's authorization reaches its `issue` and `refill`, is stated, not
+  proven ([The grant signer's budget path](#the-grant-signers-budget-path)).
+- **Refill approval**: how a refill request reaches its approver is outside
   this package.

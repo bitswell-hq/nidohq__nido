@@ -8,8 +8,8 @@
     "outcome": "allowed",
     "as_expected": true,
     "contexts": 1,
-    "cpu_instructions": 2500465,
-    "mem_bytes": 697733,
+    "cpu_instructions": 2497586,
+    "mem_bytes": 697619,
     "state_unchanged_if_refused": null
   },
   {
@@ -21,8 +21,8 @@
     "outcome": "allowed",
     "as_expected": true,
     "contexts": 1,
-    "cpu_instructions": 2501825,
-    "mem_bytes": 698277,
+    "cpu_instructions": 2498946,
+    "mem_bytes": 698163,
     "state_unchanged_if_refused": null
   },
   {
@@ -36,8 +36,8 @@
     "error": "NotAllowed (#6)",
     "as_expected": true,
     "contexts": 1,
-    "cpu_instructions": 2175243,
-    "mem_bytes": 649554,
+    "cpu_instructions": 2172356,
+    "mem_bytes": 649440,
     "state_unchanged_if_refused": true
   },
   {
@@ -49,8 +49,8 @@
     "outcome": "allowed",
     "as_expected": true,
     "contexts": 1,
-    "cpu_instructions": 2695733,
-    "mem_bytes": 717615,
+    "cpu_instructions": 2692566,
+    "mem_bytes": 717501,
     "state_unchanged_if_refused": null
   },
   {
@@ -62,8 +62,8 @@
     "outcome": "allowed",
     "as_expected": true,
     "contexts": 1,
-    "cpu_instructions": 2694945,
-    "mem_bytes": 718227,
+    "cpu_instructions": 2691778,
+    "mem_bytes": 718113,
     "state_unchanged_if_refused": null
   },
   {
@@ -77,8 +77,8 @@
     "error": "Overdrawn (#7)",
     "as_expected": true,
     "contexts": 1,
-    "cpu_instructions": 2276804,
-    "mem_bytes": 653588,
+    "cpu_instructions": 2273637,
+    "mem_bytes": 653474,
     "state_unchanged_if_refused": true
   },
   {
@@ -92,8 +92,8 @@
     "error": "NotAllowed (#6)",
     "as_expected": true,
     "contexts": 1,
-    "cpu_instructions": 2270632,
-    "mem_bytes": 653588,
+    "cpu_instructions": 2267457,
+    "mem_bytes": 653474,
     "state_unchanged_if_refused": true
   },
   {
@@ -105,8 +105,8 @@
     "outcome": "allowed",
     "as_expected": true,
     "contexts": 1,
-    "cpu_instructions": 2503124,
-    "mem_bytes": 701715,
+    "cpu_instructions": 2500245,
+    "mem_bytes": 701601,
     "state_unchanged_if_refused": null
   },
   {
@@ -120,8 +120,8 @@
     "error": "Overdrawn (#7)",
     "as_expected": true,
     "contexts": 1,
-    "cpu_instructions": 2180379,
-    "mem_bytes": 650574,
+    "cpu_instructions": 2177500,
+    "mem_bytes": 650460,
     "state_unchanged_if_refused": true
   },
   {
@@ -133,8 +133,8 @@
     "outcome": "allowed",
     "as_expected": true,
     "contexts": 2,
-    "cpu_instructions": 3327210,
-    "mem_bytes": 1854706,
+    "cpu_instructions": 3322031,
+    "mem_bytes": 1854592,
     "state_unchanged_if_refused": null
   },
   {
@@ -146,8 +146,8 @@
     "outcome": "allowed",
     "as_expected": true,
     "contexts": 3,
-    "cpu_instructions": 4196094,
-    "mem_bytes": 3017296,
+    "cpu_instructions": 4189479,
+    "mem_bytes": 3017182,
     "state_unchanged_if_refused": null
   },
   {
@@ -159,8 +159,8 @@
     "outcome": "allowed",
     "as_expected": true,
     "contexts": 4,
-    "cpu_instructions": 5044867,
-    "mem_bytes": 4179084,
+    "cpu_instructions": 5037104,
+    "mem_bytes": 4178970,
     "state_unchanged_if_refused": null
   },
   {
@@ -172,8 +172,8 @@
     "outcome": "allowed",
     "as_expected": true,
     "contexts": 2,
-    "cpu_instructions": 3606282,
-    "mem_bytes": 1878442,
+    "cpu_instructions": 3599951,
+    "mem_bytes": 1878328,
     "state_unchanged_if_refused": null
   },
   {
@@ -187,8 +187,8 @@
     "error": "NotAllowed (#6)",
     "as_expected": true,
     "contexts": 3,
-    "cpu_instructions": 3578670,
-    "mem_bytes": 1822616,
+    "cpu_instructions": 3570895,
+    "mem_bytes": 1822502,
     "state_unchanged_if_refused": true
   },
   {
@@ -202,8 +202,8 @@
     "error": "Overdrawn (#7)",
     "as_expected": true,
     "contexts": 2,
-    "cpu_instructions": 3100561,
-    "mem_bytes": 1799702,
+    "cpu_instructions": 3094230,
+    "mem_bytes": 1799588,
     "state_unchanged_if_refused": true
   },
   {
@@ -217,8 +217,8 @@
     "error": "NotAllowed (#6)",
     "as_expected": true,
     "contexts": 2,
-    "cpu_instructions": 3058971,
-    "mem_bytes": 1799702,
+    "cpu_instructions": 3052632,
+    "mem_bytes": 1799588,
     "state_unchanged_if_refused": true
   },
   {
@@ -232,8 +232,8 @@
     "error": "Overdrawn (#7)",
     "as_expected": true,
     "contexts": 2,
-    "cpu_instructions": 2926102,
-    "mem_bytes": 1795010,
+    "cpu_instructions": 2920923,
+    "mem_bytes": 1794896,
     "state_unchanged_if_refused": true
   }
 ]

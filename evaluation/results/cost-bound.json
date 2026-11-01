@@ -3,51 +3,51 @@
     "instructions_per_step": 99.36606214531973,
     "pairs": 28,
     "r_squared": 0.9855744358610339,
-    "share_of_bound_max": 0.08341547368272482,
+    "share_of_bound_max": 0.08266947580990658,
     "sweeps": [
       {
         "instructions_per_step_max": 150.96774193548387,
         "instructions_per_step_min": 123.48148148148148,
-        "share_of_bound_first": 0.028994615680851543,
-        "share_of_bound_last": 0.037425097812705484,
-        "share_of_bound_max": 0.04828127992171816,
+        "share_of_bound_first": 0.02883511898872882,
+        "share_of_bound_last": 0.03719422789810952,
+        "share_of_bound_max": 0.04799611916913511,
         "sweep": "caveats"
       },
       {
         "instructions_per_step_max": 163.76470588235293,
         "instructions_per_step_min": 96.2800875273523,
-        "share_of_bound_first": 0.08341547368272482,
-        "share_of_bound_last": 0.000038675774069621184,
-        "share_of_bound_max": 0.08341547368272482,
+        "share_of_bound_first": 0.08266947580990658,
+        "share_of_bound_last": 0.00003866688029286305,
+        "share_of_bound_max": 0.08266947580990658,
         "sweep": "arg_bytes_compared"
       },
       {
         "instructions_per_step_max": 150.96774193548387,
         "instructions_per_step_min": 150.96774193548387,
-        "share_of_bound_first": 0.06287374190113657,
-        "share_of_bound_last": 0.0013078459130850242,
-        "share_of_bound_max": 0.06287374190113657,
+        "share_of_bound_first": 0.06227381354187714,
+        "share_of_bound_last": 0.0013034116916001309,
+        "share_of_bound_max": 0.06227381354187714,
         "sweep": "arg_bytes_uncompared"
       },
       {
         "instructions_per_step_max": 141.77881412391739,
         "instructions_per_step_min": 132.41758241758242,
-        "share_of_bound_first": 0.03549397575511363,
-        "share_of_bound_last": 0.01861148285774858,
-        "share_of_bound_max": 0.03549397575511363,
+        "share_of_bound_first": 0.035219722790880745,
+        "share_of_bound_last": 0.01840217749490874,
+        "share_of_bound_max": 0.035219722790880745,
         "sweep": "contexts"
       },
       {
         "instructions_per_step_max": 134.05128205128204,
         "instructions_per_step_min": 123.48148148148148,
-        "share_of_bound_first": 0.03126633592768285,
-        "share_of_bound_last": 0.006019032212776658,
-        "share_of_bound_max": 0.03126633592768285,
+        "share_of_bound_first": 0.030894176979396493,
+        "share_of_bound_last": 0.005850592053168695,
+        "share_of_bound_max": 0.030894176979396493,
         "sweep": "contract_list"
       }
     ],
     "verdicts_agree": true,
-    "zero_caveat_cpu": 974554
+    "zero_caveat_cpu": 972392
   },
   "pairs": [
     {

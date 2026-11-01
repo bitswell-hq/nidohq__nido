@@ -23,6 +23,7 @@ use nido_integration_tests::world::{
 use nido_integration_tests::GRANT_SIGNER_WASM;
 use soroban_sdk::auth::{
     Context, ContractContext, ContractExecutable, CreateContractHostFnContext,
+    CreateContractWithConstructorHostFnContext,
 };
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::{StellarAssetClient, TokenClient};
@@ -773,52 +774,147 @@ fn contract_deployment_is_denied() {
     let f = Fixture::new("deploy");
     let a = agent(1);
     let g = f.issue(&a, &[f.contract_in(&[&f.w.target])], 0);
+    // An empty grant: no caveat stands in the way, only the guard.
+    let empty = f.issue(&a, &[], 0);
 
-    // The grant signer refuses a creation context, alone or behind an
-    // allowed call.
-    let create = Context::CreateContractHostFn(CreateContractHostFnContext {
-        executable: ContractExecutable::Wasm(BytesN::from_array(f.env(), &[7; 32])),
-        salt: BytesN::from_array(f.env(), &[1; 32]),
-    });
-    assert_eq!(
-        f.verdict(g, &a, std::slice::from_ref(&create)),
-        Err(Ok(GrantError::NotAllowed))
-    );
-    assert_eq!(
-        f.verdict(g, &a, &[f.protected_context(), create]),
-        Err(Ok(GrantError::NotAllowed))
-    );
-    assert_eq!(f.verdict(g, &a, &[f.protected_context()]), Ok(()));
+    // The grant signer refuses a creation context under every grant, alone
+    // or behind an allowed call, with or without constructor arguments.
+    let env = f.env();
+    let wasm_hash = BytesN::from_array(env, &[7; 32]);
+    let salt = BytesN::from_array(env, &[1; 32]);
+    let creations = [
+        Context::CreateContractHostFn(CreateContractHostFnContext {
+            executable: ContractExecutable::Wasm(wasm_hash.clone()),
+            salt: salt.clone(),
+        }),
+        Context::CreateContractWithCtorHostFn(CreateContractWithConstructorHostFnContext {
+            executable: ContractExecutable::Wasm(wasm_hash),
+            salt,
+            constructor_args: Vec::from_array(env, [f.account.address.into_val(env)]),
+        }),
+    ];
+    for grant in [g, empty] {
+        for create in &creations {
+            assert_eq!(
+                f.verdict(grant, &a, std::slice::from_ref(create)),
+                Err(Ok(GrantError::ContractCreation))
+            );
+            assert_eq!(
+                f.verdict(grant, &a, &[f.protected_context(), create.clone()]),
+                Err(Ok(GrantError::ContractCreation))
+            );
+        }
+        assert_eq!(f.verdict(grant, &a, &[f.protected_context()]), Ok(()));
+    }
 
-    // Through the account, a deployment with the account as deployer has no
-    // rule to select (document rules are scoped to contracts), so the
-    // account refuses it before any signer is asked.
+    // `creation(by)` is a deployment with `by` as the deploying address;
+    // `deploy(by, entry)` runs it, authorized by `entry`.
     let w = &f.w;
     let wasm = w.env.deployer().upload_contract_wasm(GRANT_SIGNER_WASM);
     let salt = BytesN::from_array(&w.env, &[3; 32]);
-    let root = SorobanAuthorizedInvocation {
+    let deployer = w.env.register(Deployer, ());
+    let creation = |by: &Address| SorobanAuthorizedInvocation {
         function: SorobanAuthorizedFunction::CreateContractV2HostFn(CreateContractArgsV2 {
             contract_id_preimage: ContractIdPreimage::Address(ContractIdPreimageFromAddress {
-                address: f.account.address.clone().into(),
+                address: by.clone().into(),
                 salt: Uint256(salt.to_array()),
             }),
             executable: soroban_sdk::xdr::ContractExecutable::Wasm(soroban_sdk::xdr::Hash(
                 wasm.to_array(),
             )),
-            constructor_args: std::vec![w.sc(f.account.address.clone())]
-                .try_into()
-                .unwrap(),
+            constructor_args: std::vec![w.sc(by.clone())].try_into().unwrap(),
         }),
         sub_invocations: VecM::default(),
     };
-    let deployer = w.env.register(Deployer, ());
-    let entry = f.agent_entry(g, &a, &["a-target"], root);
-    assert_eq!(
+    let deploy = |by: &Address, entry: SorobanAuthorizationEntry| {
         f.run(&[entry], || {
-            DeployerClient::new(&w.env, &deployer).deploy(&f.account.address, &wasm, &salt);
-        }),
-        unvalidated()
+            DeployerClient::new(&w.env, &deployer).deploy(by, &wasm, &salt);
+        })
+    };
+
+    for grant in [g, empty] {
+        // Through the account, a deployment with the account as deployer has
+        // no rule to select (document rules are scoped to contracts), so the
+        // account refuses it before any signer is asked.
+        let account = &f.account.address;
+        let entry = f.agent_entry(grant, &a, &["a-target"], creation(account));
+        assert_eq!(deploy(account, entry), unvalidated());
+
+        // As the grant signer's own address (its second role), no document
+        // applies; the grant signer refuses the deployment itself.
+        let entry = f.signer_entry(grant, &a, creation(&f.signer));
+        assert_eq!(
+            deploy(&f.signer, entry),
+            refused(GrantError::ContractCreation)
+        );
+    }
+}
+
+/// The grant signer's `__check_auth` is also the custom-account check of its
+/// own address, called with the same three arguments, so the guards and the
+/// caveats apply alike in both roles (and `verdict`, which calls it
+/// directly, stands for both). In this second role a holder authorizes only
+/// as the grant signer's address, within its grant; that never counts as the
+/// account's authorization.
+#[test]
+fn the_grant_signers_own_address_acts_only_for_itself_within_the_grant() {
+    let f = Fixture::new("own-address");
+    let a = agent(1);
+    let empty = f.issue(&a, &[], 0);
+    let router_only = f.issue(&a, &[f.contract_in(&[&f.router])], 0);
+    let w = &f.w;
+    let protected = |who: &Address, grant: u32| {
+        let root = w.invocation(&w.target, "protected", std::vec![w.sc(who.clone())]);
+        let entry = f.signer_entry(grant, &a, root);
+        f.run(&[entry], || {
+            TargetClient::new(&w.env, &w.target).protected(who);
+        })
+    };
+
+    // `protected(grant signer)` needs the grant signer's own authorization:
+    // the empty grant gives it, and a grant that leaves out the target
+    // refuses it.
+    assert_eq!(protected(&f.signer, empty), Outcome::Ok);
+    assert_eq!(
+        protected(&f.signer, router_only),
+        refused(GrantError::NotAllowed)
     );
+
+    // The same holder's signature as the grant signer's address authorizes
+    // nothing for the account.
+    let out = protected(&f.account.address, empty);
+    assert!(matches!(out, Outcome::Other(_)), "{out:?}");
+
+    // In this role too, a call on the account, an unmetered call on the
+    // budget asset and a call on the grant signer other than the holder's
+    // own delegation are refused under the empty grant.
+    let e = f.env();
+    let approve = f.context(
+        &f.asset,
+        "approve",
+        Vec::from_array(
+            e,
+            [
+                f.signer.into_val(e),
+                f.bob.into_val(e),
+                1i128.into_val(e),
+                1u32.into_val(e),
+            ],
+        ),
+    );
+    for (context, error) in [
+        (
+            f.context(&f.account.address, "cancel_upgrade", Vec::new(e)),
+            GrantError::AccountCall,
+        ),
+        (approve, GrantError::UnmeteredCall),
+        (
+            f.context(&f.signer, "refill", Vec::new(e)),
+            GrantError::NotHolder,
+        ),
+    ] {
+        assert_eq!(f.verdict(empty, &a, &[context]), Err(Ok(error)));
+    }
 }
 
 // ---------------------------------------------------------------------------
