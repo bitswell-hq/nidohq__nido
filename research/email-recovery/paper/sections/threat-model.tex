@@ -1,0 +1,32 @@
+\section{Threat model}\label{sec:threat}
+
+\paragraph{Parties.} The user holds a passkey and, once it is lost, a new
+device. The mail provider signs outgoing mail and publishes its keys in DNS.
+The DKIM key registry is governed by a multisig fed by independent DNS
+attestations. Nido operates the wallet front end, the alert service and the
+sealed vault that holds alert addresses. Other guardians are whatever the
+account's recovery policy lists.
+
+\paragraph{Adversary.} The adversary sees the whole chain and every
+transaction, including pending ones, and may submit its own. It may open
+recovery attempts against any account, send arbitrary email, run its own
+mail domain, compromise the victim's inbox, corrupt some DNS attesters, and
+corrupt fewer registry signers than the multisig threshold. It may also
+operate Nido's servers, apart from the attested enclave that holds alert
+addresses.
+
+\paragraph{Assumptions.} The properties of \S\ref{sec:properties} rest on
+the following, each recorded in the claim ledger.
+\begin{itemize}
+  \item \claimstatement{dkim-unforgeability}\claim{dkim-unforgeability}
+  \item \claimstatement{provider-authenticates-sender}\claim{provider-authenticates-sender}
+  \item \claimstatement{registry-correctness}\claim{registry-correctness}
+  \item \claimstatement{proof-system-security}\claim{proof-system-security}
+  \item \claimstatement{commitment-hiding}\claim{commitment-hiding}
+\end{itemize}
+
+\paragraph{Out of scope.} An adversary who controls the inbox \emph{and}
+enough other factors to reach the quorum, and outlasts the delay unnoticed,
+recovers the account; that is the intended semantics of the policy. The mail
+provider learns that its user sent a recovery email, but not which account
+it concerns.

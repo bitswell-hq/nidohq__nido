@@ -1,0 +1,1 @@
+claim 'x': test 'rejects_wrong' does not appear in 'tests/fixture_test.rs'

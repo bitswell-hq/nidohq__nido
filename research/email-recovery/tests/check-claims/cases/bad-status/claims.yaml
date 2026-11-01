@@ -1,0 +1,4 @@
+claims:
+  - id: x
+    statement: S.
+    status: likely

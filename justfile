@@ -74,6 +74,13 @@ build-contracts:
         stellar contract optimize --wasm "$wasm" --wasm-out "$wasm"; \
     done
 
+# Runs latexmk inside a TeX Live image pinned by digest, so it needs Docker.
+# Fails on undefined references or citations and on any claim-ledger
+# inconsistency. See research/email-recovery/README.md.
+# Build the email-recovery paper and slides into research/email-recovery/build/
+email-recovery-docs:
+    bash research/email-recovery/build.sh
+
 build-ts:
     npx tsc -p ./packages/passkey-sdk/tsconfig.json
 

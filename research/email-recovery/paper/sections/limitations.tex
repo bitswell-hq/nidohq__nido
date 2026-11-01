@@ -1,0 +1,14 @@
+\section{Limitations and open questions}\label{sec:limits}
+
+\begin{itemize}
+  \item All four properties of \S\ref{sec:properties} are unproven, and the
+    assumptions in \S\ref{sec:threat} are stated, not established.
+  \item The provider learns that its user sent a recovery email, and when.
+  \item Proving in a phone browser is slow; a progress indicator covers the
+    wait, and its duration is to be measured.
+  \item A provider key rotation can stall a recovery for up to the registry
+    timelock, unless the account pinned the new key.
+  \item Custom domains and organisation tenants are not supported.
+  \item The design depends on the allowlisted providers authenticating
+    senders and signing the \texttt{From} and \texttt{Subject} headers.
+\end{itemize}

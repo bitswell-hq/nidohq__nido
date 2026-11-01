@@ -1,0 +1,38 @@
+name: Email-recovery paper and slides
+
+on:
+  pull_request:
+    paths:
+      - "research/email-recovery/**"
+      - ".github/workflows/email-recovery-docs.yml"
+  push:
+    paths:
+      - "research/email-recovery/**"
+      - ".github/workflows/email-recovery-docs.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build PDFs (pinned TeX Live)
+    runs-on: ubuntu-latest
+    steps:
+      # Claim evidence may point anywhere in the repository, including into
+      # vendor/perch, so the checker needs the submodule too.
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      # build.sh runs the claim checks and latexmk inside the TeX Live image
+      # pinned by digest in the script, the same command as
+      # `just email-recovery-docs`.
+      - name: Build paper and slides
+        run: bash research/email-recovery/build.sh
+
+      - name: Upload PDFs
+        uses: actions/upload-artifact@v4
+        with:
+          name: email-recovery-pdfs
+          path: |
+            research/email-recovery/build/email-recovery-paper.pdf
+            research/email-recovery/build/email-recovery-slides.pdf
+          if-no-files-found: error

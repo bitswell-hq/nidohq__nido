@@ -1,0 +1,98 @@
+# Claim ledger for the email-recovery paper and slides.
+#
+# One entry per claim the documents make. \claim{id} renders the status tag
+# and \claimstatement{id} the statement, so both documents word a claim the
+# same way. check-claims.pl enforces the format; README.md describes it.
+#
+# status: proven | tested | measured | assumed | unproven
+# evidence, by status (paths relative to the repository root):
+#   proven    { lean: <theorem name>, file: <.lean path> }
+#   tested    { test: <test name>,    file: <test file path> }
+#   measured  { file: <measurement file path> }
+#   assumed   { assumption: <the stated assumption> }
+#   unproven  (none)
+
+claims:
+  # The four properties of the email factor.
+  - id: email-factor-soundness
+    statement: >-
+      An accepted email proof implies a DKIM signature, under a key the
+      registry lists for the enrolled domain, over an email whose From
+      address opens the account's commitment and whose Subject binds the
+      exact recovery statement: the account, the replacement credential, the
+      attempt and epoch, and the expiry.
+    status: unproven
+
+  - id: address-privacy
+    statement: >-
+      The guardian's on-chain state and the proofs it accepts reveal nothing
+      about the enrolled address beyond the salted commitment.
+    status: unproven
+
+  - id: replay-resistance
+    statement: >-
+      An accepted proof is bound to one account, one recovery statement and
+      one attempt, so a replayed or front-run copy approves nothing else.
+    status: unproven
+
+  - id: one-factor-safety
+    statement: >-
+      No sequence of email-factor approvals alone completes a recovery;
+      completion still requires the recovery delay and the policy quorum.
+    status: unproven
+
+  # The assumptions the properties rest on.
+  - id: dkim-unforgeability
+    statement: >-
+      Without a provider's private DKIM key, nobody can produce a valid
+      rsa-sha256 signature under that key.
+    status: assumed
+    evidence:
+      assumption: >-
+        RSASSA-PKCS1-v1_5 with SHA-256 is existentially unforgeable under
+        chosen-message attack for 2048-bit moduli, and each provider keeps
+        its signing keys secret.
+
+  - id: provider-authenticates-sender
+    statement: >-
+      A launch provider DKIM-signs a message whose From address is one of
+      its mailboxes only when the holder of that mailbox submitted it.
+    status: assumed
+    evidence:
+      assumption: >-
+        Each allowlisted provider authenticates the submitting user and
+        refuses to sign a From address in its domain that the user does not
+        control.
+
+  - id: registry-correctness
+    statement: >-
+      Every key the DKIM key registry lists as active for a domain was
+      published by that domain's provider.
+    status: assumed
+    evidence:
+      assumption: >-
+        Fewer than the registry multisig's threshold of signers are
+        malicious, and a key added without the provider's publication is
+        noticed and vetoed before its timelock ends.
+
+  - id: proof-system-security
+    statement: >-
+      UltraHonk proofs in the zero-knowledge flavor that Perch's verifier
+      accepts are knowledge-sound and reveal nothing beyond the public
+      inputs.
+    status: assumed
+    evidence:
+      assumption: >-
+        Knowledge soundness and zero knowledge of UltraHonk in the random
+        oracle model, with Keccak as the transcript hash, as implemented by
+        Perch's pinned Barretenberg and its Soroban verifier.
+
+  - id: commitment-hiding
+    statement: >-
+      The commitment Poseidon2(address, account code) hides the address
+      from anyone who does not hold the account code.
+    status: assumed
+    evidence:
+      assumption: >-
+        Poseidon2 behaves as a random oracle on its inputs, and the account
+        code carries at least 128 bits of entropy that only the user holds.

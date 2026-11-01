@@ -1,0 +1,16 @@
+\section{Related work}\label{sec:related}
+
+\paragraph{Proofs about email.} The zkEmail
+project~\cite{zkemail-docs,zkemail-verify,zkemail-nr} proves statements
+about DKIM-signed email in zero knowledge, with Circom circuits and a Noir
+library, and its libraries have been audited
+publicly~\cite{audit-zksecurity-2024,audit-yacademy,audit-veridise-2024,audit-consensys-2024}.
+This work uses email as one recovery factor inside a delayed, quorum-based
+recovery, binds the proof to a recovery statement rather than to an
+application command, and blinds that statement from the provider.
+
+\paragraph{Proofs about existing credentials.} zkLogin~\cite{zklogin}
+authenticates blockchain transactions with OpenID Connect tokens from
+existing platforms and hides the link between the off-chain and on-chain
+identity. An OIDC path here would be a second way to produce the email
+factor, never an independent one alongside the same provider's DKIM.

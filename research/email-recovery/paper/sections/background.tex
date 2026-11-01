@@ -1,0 +1,43 @@
+\section{Background}\label{sec:background}
+
+\subsection{DKIM}
+DomainKeys Identified Mail~\cite{rfc6376} lets the organisation that owns a
+signing domain take responsibility for a message. The signer adds a
+\texttt{DKIM-Signature} header naming the signing domain (\texttt{d=}), a
+selector (\texttt{s=}) under which the public key is published in DNS, the
+list of signed header fields (\texttt{h=}), a hash of the canonicalised body
+(\texttt{bh=}), the canonicalisation (\texttt{c=}), and an optional body
+length limit (\texttt{l=}). RFC~8301~\cite{rfc8301} requires signers to use
+\texttt{rsa-sha256}, forbids \texttt{rsa-sha1} for signing, and requires
+RSA keys of at least 1024 bits, recommending 2048. RFC~8463~\cite{rfc8463}
+adds Ed25519-SHA256. A DKIM signature attests to the signing domain, not to
+the author: binding it to a sender requires checking that \texttt{d=}
+matches the domain of the \texttt{From} address, whose syntax, including
+display names, quoting and header folding, is defined by
+RFC~5322~\cite{rfc5322}.
+
+\subsection{Smart-account recovery on Perch}
+Soroban is the smart-contract platform of the Stellar
+network~\cite{soroban-docs}; a contract account authorizes through its own
+\texttt{\_\_check\_auth}. Perch~\cite{perch-repo} builds smart accounts on
+OpenZeppelin's Stellar contracts~\cite{oz-stellar-contracts} and specifies
+their recovery~\cite{perch-recovery-spec}. An account enrolls a recovery
+configuration naming guardians and a quorum, an optional ZK factor, and a
+delay. A recovery attempt binds one \emph{recovery statement}, a fixed-width
+encoding of the action, network, account, controller, configuration epoch
+and hash, timing (delay, expiry and a validity deadline in ledgers) and the
+subject; for a lost-key recovery the subject names the attempt and the
+source and target documents. Guardians authorize $\digest =
+\Sha(\text{statement})$. After the quorum is reached the attempt waits out
+the delay, during which the owner may cancel under the lost-key profile, and
+then completes by applying the target document.
+
+\subsection{Noir and UltraHonk}
+Noir~\cite{noir-docs} is a language for zero-knowledge circuits.
+Barretenberg~\cite{barretenberg-docs} proves Noir circuits with UltraHonk, a
+Plonk-family~\cite{plonk} proof system whose verifier runs a sumcheck, as in
+HyperPlonk~\cite{hyperplonk}, over commitments under a universal reference
+string, so a new circuit needs a new verification key but no trusted setup of
+its own. Perch's ZK recovery backend proves its circuit with UltraHonk in
+Barretenberg's zero-knowledge flavor and verifies it on Soroban; the email
+circuit targets the same verifier with its own verification key.

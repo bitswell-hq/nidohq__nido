@@ -1,0 +1,7 @@
+claims:
+  - id: x
+    statement: S.
+    status: proven
+    evidence:
+      test: rejects_wrong_account
+      file: tests/fixture_test.rs

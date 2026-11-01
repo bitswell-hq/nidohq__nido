@@ -1,0 +1,7 @@
+claims:
+  - id: x
+    statement: S.
+    status: unproven
+  - id: x
+    statement: T.
+    status: unproven
