@@ -1,4 +1,4 @@
-//! Differential corpus for the SDK's PolicyDoc validation
+//! Differential corpus for the SDK's `PolicyDoc` validation
 //! (`packages/passkey-sdk/src/policyDoc/validate.ts`, run by `lowerDoc`).
 //!
 //! The on-chain compiler refuses any document `perch_ir::validate` refuses,
@@ -41,7 +41,7 @@ impl Rng {
         self.0.wrapping_mul(0x2545_F491_4F6C_DD1D)
     }
     fn below(&mut self, n: usize) -> usize {
-        (self.next() % n as u64) as usize
+        usize::try_from(self.next() % n as u64).unwrap()
     }
     fn chance(&mut self, pct: u64) -> bool {
         self.next() % 100 < pct
@@ -115,8 +115,8 @@ fn rule(r: &mut Rng, ids: &[&str]) -> Value {
         5..=8 => {
             let signers = signer_list(r, ids);
             let m = r.mostly(
-                &[1u32, signers.len() as u32],
-                &[0, signers.len() as u32 + 1],
+                &[1u32, u32::try_from(signers.len()).unwrap()],
+                &[0, u32::try_from(signers.len()).unwrap() + 1],
             );
             json!({ "type": "threshold", "signers": signers, "m": m })
         }
@@ -203,7 +203,10 @@ fn recovery(r: &mut Rng, ids: &[&str]) -> Value {
     if ty != "zk-only" {
         let n = r.mostly(&[1usize, 2, 3], &[0usize]);
         let gs: Vec<String> = (0..n).map(|_| any_addr(r)).collect();
-        let q = r.mostly(&[1u32, n as u32], &[0, n as u32 + 1]);
+        let q = r.mostly(
+            &[1u32, u32::try_from(n).unwrap()],
+            &[0, u32::try_from(n).unwrap() + 1],
+        );
         mode["guardians"] = json!(gs);
         mode["quorum"] = json!(q);
     }

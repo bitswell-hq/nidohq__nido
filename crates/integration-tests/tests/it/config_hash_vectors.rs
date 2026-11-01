@@ -29,9 +29,7 @@ fn generate_config_hash_vectors() {
             nido_integration_tests::world::Passkey::labelled(&format!("{label}/owner")),
             std::vec![],
         );
-        let guardians: std::vec::Vec<nido_integration_tests::world::Account> = if mode
-            == Mode::Zk
-        {
+        let guardians: std::vec::Vec<nido_integration_tests::world::Account> = if mode == Mode::Zk {
             std::vec![]
         } else {
             (0..3u64)

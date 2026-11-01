@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/grant-eval",
     "crates/integration-tests",
+    "crates/key-keeper",
     "contracts/*",
 ]
 # examples/* are self-contained stellar-scaffold projects with their own

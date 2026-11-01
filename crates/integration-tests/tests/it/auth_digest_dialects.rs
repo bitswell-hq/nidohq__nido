@@ -30,17 +30,33 @@ fn an_account_authorizes_only_its_own_auth_digest_dialect() {
     let alice_root = w.invocation(
         &alice.address,
         "execute",
-        std::vec![w.sc(w.target.clone()), w.sc(protected.clone()), w.sc(alice_args.clone())],
+        std::vec![
+            w.sc(w.target.clone()),
+            w.sc(protected.clone()),
+            w.sc(alice_args.clone())
+        ],
     );
 
-    let bound = w.passkey_entry(&alice.address, &[alice.key("owner")], alice_rule, alice_root.clone());
+    let bound = w.passkey_entry(
+        &alice.address,
+        &[alice.key("owner")],
+        alice_rule,
+        alice_root.clone(),
+    );
     w.with_auths(&[bound], || {
-        w.account(&alice).execute(&w.target, &protected, &alice_args);
+        w.account(&alice)
+            .execute(&w.target, &protected, &alice_args);
     });
 
-    let unbound = w.passkey_entry_unbound(&alice.address, &[alice.key("owner")], alice_rule, alice_root);
+    let unbound = w.passkey_entry_unbound(
+        &alice.address,
+        &[alice.key("owner")],
+        alice_rule,
+        alice_root,
+    );
     let refused = w.with_auths(&[unbound], || {
-        w.account(&alice).try_execute(&w.target, &protected, &alice_args)
+        w.account(&alice)
+            .try_execute(&w.target, &protected, &alice_args)
     });
     assert!(
         refused.is_err(),
@@ -52,7 +68,9 @@ fn an_account_authorizes_only_its_own_auth_digest_dialect() {
     // committed pre-redeploy wasm, with its passkey naming this world's verifier.
     let old_key = Passkey::new(2);
     let signer = old_key.signer(&w.env, &w.verifier);
-    let old = w.env.register(OLD_PERCH_ACCOUNT_WASM, (vec![&w.env, signer],));
+    let old = w
+        .env
+        .register(OLD_PERCH_ACCOUNT_WASM, (vec![&w.env, signer],));
     let old_client = PerchAccountClient::new(&w.env, &old);
     assert_eq!(
         old_client.capabilities().auth_digest,
@@ -63,7 +81,11 @@ fn an_account_authorizes_only_its_own_auth_digest_dialect() {
     let old_root = w.invocation(
         &old,
         "execute",
-        std::vec![w.sc(w.target.clone()), w.sc(protected.clone()), w.sc(old_args.clone())],
+        std::vec![
+            w.sc(w.target.clone()),
+            w.sc(protected.clone()),
+            w.sc(old_args.clone())
+        ],
     );
 
     let unbound = w.passkey_entry_unbound(&old, &[&old_key], old_rule, old_root.clone());
