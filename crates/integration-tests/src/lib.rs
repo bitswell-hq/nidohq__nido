@@ -8,6 +8,7 @@ use stellar_accounts::policies::simple_threshold::SimpleThresholdAccountParams;
 use stellar_accounts::policies::spending_limit::SpendingLimitAccountParams;
 use stellar_accounts::smart_account::{ContextRule, ContextRuleType, Signer};
 
+pub mod email;
 pub mod world;
 pub mod zk;
 
@@ -20,6 +21,10 @@ pub const SPENDING_LIMIT_POLICY_WASM: &[u8] =
 
 pub const PREAUTH_SWEEP_POLICY_WASM: &[u8] =
     include_bytes!("../../../target/wasm32v1-none/contract/nido_preauth_sweep_policy.wasm");
+
+/// The per-account email guardian (`contracts/email-guardian`).
+pub const EMAIL_GUARDIAN_WASM: &[u8] =
+    include_bytes!("../../../target/wasm32v1-none/contract/nido_email_guardian.wasm");
 
 /// The factory embeds the same Perch account wasm as [`PERCH_ACCOUNT_WASM`]
 /// (`contracts/factory/build.rs`), so uploading [`PERCH_ACCOUNT_WASM`] before
