@@ -49,7 +49,8 @@ named in the sentence. Each requirement is marked with what backs it today:
 | Mail provider | The DKIM signing key for its domain | Signs the user's outgoing mail; learns nothing about the attempt (§4.2) |
 | Email guardian | `C`, the registry, the pin, the controller, the account, allowed actions, the verifier | One per account; counts as one Perch guardian (§8) |
 | Perch controller | The account's recovery configuration and attempts | Collects guardian approvals, enforces quorum, delay, cancellation [Perch] |
-| DKIM key registry | A Merkle tree of `(domain, key_hash)` leaves | Says which key-tree roots are acceptable now (§7.3) |
+| DKIM key registry | A Merkle tree of `(domain, key_hash)` leaves, a k-of-n multisig, an attester set | Says which key-tree roots are acceptable now (§7.3, §7.6) |
+| DNS attesters | Ed25519 signing keys | Sign what a provider's DKIM key record publishes (§7.5) |
 | Proof verifier | The email circuit's verification key | Perch's UltraHonk verifier behind Perch's `ProofVerifierInterface` (§8.4) |
 | Alert service | A keyed lookup from account to alert channels | Notifies the user when the account's recovery state changes (§10) |
 
@@ -416,7 +417,9 @@ The RSA-2048 modulus is written as 18 limbs of 120 bits, least significant
 limb first (the top limb holds the modulus's highest 8 bits). The exponent
 is not hashed: the circuit fixes it to 65537. Keys are tracked by this hash,
 never by selector name, because a provider may reuse a selector for a new
-key.
+key. The registry computes `key_hash` itself from the modulus an addition
+carries (§7.6) **[built, tested]** (`contracts/dkim-registry/src/hash.rs`;
+cross-checked against Noir, §7.6 "Cross-check of the hashing").
 
 ### 7.2 Registry leaf and tree
 
@@ -440,32 +443,61 @@ salt leaf (§7.4) can stand in for a key leaf without a `P2` collision.
 (`noir-lang/poseidon` v0.2.0, `poseidon2.nr`), so hashes with different
 input counts start from different states.
 
+The registry stores this tree with the host's Poseidon2 (`soroban-poseidon`'s
+`Poseidon2Sponge::<4, Bn254Fr>`, the sponge Perch's pool uses) and Perch's
+empty-subtree table (`perch_zk_primitives::ZERO_HASHES`, whose first 17
+entries are `Z_0..Z_16`), so the root it stores is the root the circuit
+proves against **[built, tested]**.
+
 ### 7.3 Registry root acceptance
 
 The guardian asks one question of the registry:
 `is_accepted_root(root) -> bool`, at the current ledger
-(`DkimRegistryInterface`, `contracts/email-guardian/src/registry.rs`)
-**[built, tested]** against a test-only registry. The registry contract
-**must** answer it from its own state as follows **[specified]** (the
-registry contract):
+(`DkimRegistryInterface`, `contracts/email-guardian/src/registry.rs`). The
+registry contract (`contracts/dkim-registry`, §7.6) answers it from its own
+state as follows **[built, tested]**:
 
-1. **Activation.** A root that adds a key becomes acceptable only after that
-   addition's timelock: 51,840 ledgers (72 hours) for a key independent DNS
-   attestations observed live in DNS, 120,960 ledgers (7 days) otherwise.
-   Additions are proposed by the registry's multisig and fed by independent
-   DNS attestations.
-2. **Grace.** A root stays acceptable for a grace period after a newer root
-   supersedes it, so a proof generated against the previous root still
-   verifies and a key the provider has just retired keeps working briefly.
-3. **Revocation.** Revoking a key for compromise ends the acceptability of
-   every root containing it at once, grace included.
+1. **Activation.** A root that adds a key becomes acceptable only when that
+   addition executes, and an addition executes only after its timelock:
+   51,840 ledgers (72 hours) after the later of its approval and the
+   ledger since which at least `attest_threshold` attesters' latest
+   observations see the key live in DNS (`attested_at`, §7.5), or 120,960
+   ledgers (7 days) after its approval, whichever comes first. Additions are proposed and approved by the
+   registry's multisig. The 72-hour path is closed to a key that was ever
+   revoked (rule 3).
+2. **Grace.** A root superseded at ledger `S` stays acceptable through ledger
+   `S + grace_ledgers` inclusive, so a proof generated against the previous
+   root still verifies and a key the provider has just retired keeps working
+   briefly. The registry keeps at most `MAX_LIVE_ROOTS = 16` roots (the
+   current one and those in grace); when more changes than that fall inside
+   one grace period, the oldest superseded root loses the rest of its grace.
+3. **Revocation.** Revoking a key for compromise refuses, from the ledger the
+   revocation executes in, every root that contains the key, grace included.
+   It removes the key from the tree if present and stops every addition of
+   it proposed before the revocation. A revoked key can return only through
+   a new addition proposed after the revocation, approved by the full
+   `threshold`, on the 7-day path.
 4. Leaves exist only for allowlisted domains (launch: Gmail, Outlook.com and
-   Hotmail, iCloud, Yahoo, Proton, Fastmail, GMX and web.de) and only for
-   RSA keys of exactly 2048 bits.
+   Hotmail, iCloud, Yahoo, Proton, Fastmail, GMX and web.de; §7.6
+   "Parameters") and only for RSA keys of exactly 2048 bits. The registry
+   refuses any other addition (`DomainNotAllowed`, `KeyNotRsa2048`) and
+   computes the key hash and the leaf itself.
+5. The empty tree's root `Z_16` is never acceptable: no key could be proven
+   under it.
 
-Root churn is low (only governed additions change the tree), so a grace
-window over superseded roots does not have the denial-of-service problem
-Perch's pool avoids by keeping every root (Perch §14.1).
+"Contains" is exact. For each leaf the registry records the root sequence
+numbers it was part of (`LeafRecord.spans`), so a revocation refuses exactly
+the roots that held the key and leaves every other root in its grace. Leaf
+indices are never reused, so a refused root can never become current again,
+even though retiring the only key added since a root restores that root's
+value.
+
+`is_accepted_root` reads instance storage only (§7.6 "Storage"). An archived
+tree node can delay a governance change, never an approval.
+
+Root churn is low (only governed changes alter the tree), so a grace window
+over superseded roots does not have the denial-of-service problem Perch's
+pool avoids by keeping every root (Perch §14.1).
 
 ### 7.4 Per-account key pin
 
@@ -491,6 +523,13 @@ pin = { root, valid_until_ledger }
   reveals nothing about which keys it holds. Leaf 0 cannot serve as a key
   leaf: that would need a `P2` collision across different tags and input
   counts.
+- **Built with the registry's hashing.** A wallet builds the pin tree with
+  `nido_dkim_registry::hash::Hasher` (`pin_salt`, `leaf`) and
+  `nido_dkim_registry::root_of`, the registry's own formulas. The integration
+  test `the_pin_path_works_independently_of_the_registry` deploys a guardian
+  whose pin holds a key the registry never admitted, and shows the pin
+  accepting it, still accepting it after the registry revokes it, and the
+  pin root refused once the pin expires **[built, tested]**.
 - **Bounded.** The constructor refuses a pin that has already expired or
   whose `valid_until_ledger` is more than `MAX_PIN_LIFETIME_LEDGERS =
   6,307,200` (365 days) past the deployment ledger **[built, tested]**.
@@ -504,6 +543,206 @@ pin = { root, valid_until_ledger }
   must clear the rest of the quorum and the delay with alerts. The owner
   closes the window early by replacing the guardian with one without the
   pin (§5.5).
+
+### 7.5 DNS attestations
+
+An attester resolves `selector._domainkey.domain` (RFC 6376 §3.6.2.1)
+through one or more resolvers, reads the DKIM key record (RFC 6376 §3.6.1),
+and signs one observation of it:
+
+| Offset | Length | Field |
+| --- | --- | --- |
+| 0 | 38 | `TAG = "nido/email-recovery/v1/dns-attestation"` (ASCII) |
+| 38 | 32 | `registry`: the registry's contract id |
+| 70 | 1 | domain length, 1 to 62 |
+| 71 | 62 | domain: lowercase LDH labels, at least two (the `domain` rule of §4.5, lowercase), zero-padded |
+| 133 | 1 | selector length, 1 to 63 |
+| 134 | 63 | selector: lowercase letters, digits, `-`, `_`, `.`, zero-padded |
+| 197 | 32 | `key_hash` (§7.1) |
+| 229 | 1 | `observed_live`: `1` if the record publishes the RSA-2048 key with `key_hash`; `0` if the name has no TXT record, its `p=` is empty, or it holds another key |
+| 230 | 8 | `observed_at`: Unix seconds, big-endian |
+| 238 | 1 | resolver count, 1 to 4 |
+| 239 | … | per resolver: length (1 byte, 1 to 64), then an identifier in printable ASCII (`0x21`–`0x7e`), such as `8.8.8.8` |
+
+The encoding is exact: padding bytes are zero and the length is the sum of
+the fields, so each observation has one encoding. The attester signs these
+bytes with Ed25519 (RFC 8032), and the registry verifies the signature with
+the host's `ed25519_verify`, which traps the call on an invalid signature.
+The `registry` field binds an attestation to one registry deployment, and
+through its contract id to one network. `observed_at` is the attester's wall
+clock; the registry compares it with the ledger's close time **[built,
+tested]** (`contracts/dkim-registry/src/attestation.rs`).
+
+`attest(id, attester, attestation, signature)` records an attestation
+against proposal `id`. Anyone may submit it. The registry refuses it unless:
+
+| Check | Error |
+| --- | --- |
+| `attester` is one of the configured attester keys | `NotAnAttester` (30) |
+| the proposal exists, is not executed, and has not lapsed | `UnknownProposal` (15), `ProposalClosed` (17), `ProposalExpired` (16) |
+| the proposal is an addition or a retirement | `NotAttestable` (36) |
+| the bytes are one well-formed encoding | `MalformedAttestation` (31) |
+| `registry` is this contract's id | `WrongRegistry` (32) |
+| the domain and `key_hash` are the proposal's | `AttestationMismatch` (33) |
+| `close_time − 86,400 ≤ observed_at ≤ close_time + 300` | `StaleAttestation` (34) |
+| `observed_at` is later than this attester's latest recorded observation for this proposal | `AlreadyAttested` (35) |
+| the signature verifies | the call traps |
+
+Each attester's latest observation for a proposal is the one that counts: a
+newer one replaces it, so an older signed reading (for instance from before
+DNS propagation) cannot hold an attester's place. An addition counts latest
+observations with `observed_live = 1`; a retirement counts those with
+`observed_live = 0`. The proposal's `attested_at` is the ledger since which
+the counted observations have numbered at least `attest_threshold`; a newer
+observation that drops the count below the threshold clears it, and reaching
+the threshold again sets it to that ledger. Every observation is published
+(`dns_attested`), so an attester that does not see a proposed key in DNS is
+visible to everyone watching.
+
+**The mock.** `crates/dns-attestation-mock` (TEST ONLY, no live DNS) turns a
+key record's TXT strings into a signed attestation with test-only Ed25519
+keys **[built, tested]**. It follows RFC 6376 §3.2 (tag-lists: a duplicate
+tag invalidates the record, unknown tags are ignored), §3.6.1 (`v=DKIM1`
+first if present, `k=` defaulting to `rsa`, `p=` base64 with whitespace
+ignored, an empty `p=` meaning revoked), and §3.6.2.2 (a record's strings
+are concatenated). For `k=rsa` it accepts both encodings of `p=`: the DER
+`RSAPublicKey` that §3.6.1's text names, and the DER `SubjectPublicKeyInfo`
+that the RFC's own example procedure (Appendix C, `openssl rsa -pubout`)
+produces, which reported erratum 6674
+(<https://www.rfc-editor.org/errata/eid6674>) notes providers publish. Its
+fixtures (`crates/dns-attestation-mock/testdata/`) are records for
+throwaway OpenSSL keys in each shape the RFC allows, a blanked record, and
+malformed ones. A CLI (`cargo run -p nido-dns-attestation-mock -- attest
+...`) prints attestations as JSON for fixtures.
+
+### 7.6 The registry contract
+
+`contracts/dkim-registry` (crate `nido-dkim-registry`, soroban-sdk as the
+workspace pins it). One instance per deployment; each guardian names it in
+`GuardianConfig.registry`. There is no admin, no setter, and no upgrade
+entry point: the wasm imports no host function that deploys or replaces
+contract code and exports exactly the entry points below
+(`the_registry_has_no_upgrade_path`) **[built, tested]**. Changing a
+parameter means deploying a new registry, and a guardian moves to it only by
+being replaced through Perch's reconfiguration gate (§5.5), because the
+registry's address is fixed in the guardian.
+
+**Construction.** `__constructor(config: RegistryConfig)` refuses
+(`DkimRegistryError`) unless:
+
+| Field | Check | Error |
+| --- | --- | --- |
+| `members: Vec<Address>` | 1 to `MAX_MEMBERS = 20`, distinct | `InvalidMembers` (1) |
+| `threshold`, `revoke_threshold` | `1 ≤ revoke_threshold ≤ threshold ≤ members` | `InvalidThreshold` (2) |
+| `attesters: Vec<BytesN<32>>` (Ed25519 keys) | 1 to `MAX_ATTESTERS = 20`, distinct | `InvalidAttesters` (3) |
+| `attest_threshold` | `1 ≤ attest_threshold ≤ attesters` | `InvalidAttestThreshold` (4) |
+| `grace_ledgers` | at most `MAX_GRACE_LEDGERS = 120,960` | `InvalidGrace` (5) |
+| `domains: Vec<Bytes>` | 1 to `MAX_DOMAINS = 32`, distinct, each a lowercase domain of 1 to 62 bytes (§4.5 `domain`) | `InvalidDomains` (6) |
+
+The registry starts with the empty tree. Every key, the launch keys
+included, enters through a timelocked addition.
+
+**Proposals.** Members propose and approve with `member.require_auth()`. A
+proposer's own approval counts, and each member approves once
+(`AlreadyApproved`, 18). Calls by anyone else are refused (`NotAMember`,
+10).
+
+| Kind | Proposed with | Needs | Takes effect |
+| --- | --- | --- | --- |
+| Add | `propose_add(member, domain, modulus)`: the 256-byte big-endian RSA modulus; the registry computes `key_hash` (§7.1) | `threshold` approvals, then the timelock of §7.3 rule 1 | `execute(id)`, by anyone, once eligible (`eligible_at(id)`): the leaf is appended at the next index |
+| Retire | `propose_retire(member, domain, key_hash)`, for a key in the tree | `threshold` approvals and `attest_threshold` attestations that the key is gone from DNS | `execute(id)`, by anyone: the leaf is emptied; earlier roots keep their grace |
+| Revoke | `propose_revoke(member, domain, key_hash)`, for a key in the tree, pending, or never seen | `revoke_threshold` approvals | the approval that reaches the threshold executes it (§7.3 rule 3) |
+
+A proposal lapses `PROPOSAL_LIFETIME_LEDGERS = 518,400` ledgers (30 days)
+after it was created: it can no longer be approved, attested, or executed
+(`ProposalExpired`, 16). The other refusals are `DomainNotAllowed` (11),
+`KeyNotRsa2048` (12), `KeyAlreadyPresent` (13), `KeyNotPresent` (14),
+`UnknownProposal` (15), `ProposalClosed` (17), `NotApproved` (19),
+`TimelockActive` (20), `KeyRevoked` (21: an addition proposed before its
+key's revocation), `TreeFull` (22), and `NotAttested` (23). The codes are
+part of the ABI (`contracts/dkim-registry/src/error.rs`).
+
+**Other entry points.** All are permissionless.
+
+| Entry point | Effect |
+| --- | --- |
+| `attest(id, attester, attestation, signature)` | §7.5 |
+| `execute(id) -> root` | as above; returns the new root |
+| `is_accepted_root(root) -> bool` | §7.3; extends the instance's TTL when it is below half the network maximum |
+| `root()`, `state()`, `config()` | the current root; the root sequence number, next leaf index, next proposal id, and the roots that may still be acceptable; the configuration |
+| `proposal(id)`, `eligible_at(id)` | a proposal with its approvals, attestations, and execution; an approved addition's first eligible ledger |
+| `leaf(domain, key_hash)`, `leaf_at(index)` | a leaf's index, presence, root spans, and latest revocation; the leaf at an index |
+| `siblings(index)` | the 16 siblings of a leaf's path in the current tree: the circuit's witness (§6.2 C6) |
+| `key_hash(modulus)` | §7.1, as an addition computes it |
+| `version()` | `1` |
+| `renew()`, `renew_path(index)` | extend the instance and code, or one leaf's path, siblings, and records, to the network maximum TTL |
+
+**Storage.** Instance: the configuration and the state (current root, root
+sequence number, next leaf index, next proposal id, and the live roots: the
+current root and those in grace). Persistent: tree nodes below the root
+(`Node(level, index)`; a missing node is the empty subtree), leaf records,
+the leaf at each index, and proposals. Every write extends its entry to the
+network's maximum TTL.
+
+**Events.** Every proposal, approval, attestation, activation, retirement,
+and revocation is an event (§10). Topic 0 is the struct name in snake case,
+topic 1 the domain (the proposal id for approvals).
+
+| Event | Fields |
+| --- | --- |
+| `key_proposed` | domain; id, kind, key hash, the full modulus (additions), proposer |
+| `proposal_approved` | id; member, approval count, whether the threshold is reached |
+| `dns_attested` | domain; id, attester, selector, key hash, `observed_live`, `observed_at`, resolvers |
+| `key_activated` | domain; id, key hash, index, new root, previous root, whether the 72-hour path applied |
+| `key_retired` | domain; id, key hash, index, new root, previous root, the last ledger the previous root is accepted |
+| `key_revoked` | domain; id, key hash, current root, every root the revocation refused |
+
+**Parameters.** Fixed in the contract: the two timelocks, the proposal
+lifetime, the attestation age (24 hours) and clock skew (5 minutes), the
+bounds above, and `MAX_LIVE_ROOTS = 16`. Set at construction, with these
+proposed defaults:
+
+| Parameter | Proposed default | Rationale |
+| --- | --- | --- |
+| `members`, `threshold` | 5 members, threshold 3 | Two members can be unavailable without stalling an addition, and two compromised or colluding members cannot add a key. Who the members are is open (§13 item 5). |
+| `revoke_threshold` | 2 | An emergency threshold below `threshold`: two members can cut off a leaked key at once, or stop a key a threshold of members planted while its timelock runs. Open (§13 item 5). |
+| `attesters`, `attest_threshold` | 3 independent operators, threshold 2 | One attester can be down without closing the 72-hour path, and one attester cannot open it alone. |
+| `grace_ledgers` | 17,280 (24 hours) | Covers phone proving (up to about two minutes), mail delivery, and a proof made the same day against the previous root. Open (§13 item 5). |
+| `domains` | `nido_dkim_registry::LAUNCH_DOMAINS`: `gmail.com`, `outlook.com`, `hotmail.com`, `icloud.com`, `yahoo.com`, `proton.me`, `protonmail.com`, `fastmail.com`, `gmx.net`, `gmx.de`, `web.de` | The launch providers' primary address domains. Each must also be the `d=` its provider signs with (§4.3 rule 7); open per provider (§13 item 6). |
+
+**Tests [built, tested].** `contracts/dkim-registry/src/test.rs` covers
+every construction refusal; allowlist and key-size refusals; the key hash
+being computed, never supplied (`the_key_hash_is_computed_never_supplied`);
+k-of-n approval and member authorization; both timelocks one ledger before
+and at their boundary
+(`an_attested_addition_activates_after_exactly_72_hours`,
+`any_other_addition_activates_after_exactly_7_days`) and where the 72-hour
+clock starts; grace expiry; the live-root cap; retirement; revocation
+refusing roots in grace, sparing roots without the key, reaching an already
+retired key, stopping a pending addition, and the 7-day-only return; every
+attestation refusal and malformed encoding; an attester's latest
+observation replacing its earlier one and stopping or restarting the
+72-hour clock (`an_attesters_latest_observation_counts`); and every event. The
+integration tests run the registry from its wasm, fed by the mock:
+
+| Test | What it shows |
+| --- | --- |
+| `email_guardian.rs::a_key_added_through_the_attested_path_is_refused_before_72_hours_and_accepted_after` | An approval proven against the root a pending addition will produce is refused by the guardian (`UnknownRoot`) one ledger before the 72 hours end, and counted from the ledger the addition executes in |
+| `email_guardian.rs::a_revoked_keys_root_is_refused_at_once` | An approval the guardian accepted is refused in the ledger its key is revoked |
+| `email_guardian.rs::the_pin_path_works_independently_of_the_registry` | §7.4 |
+| `dkim_registry.rs::the_registry_has_no_upgrade_path` | No code-changing host import; exactly the entry points above |
+| `dkim_registry.rs::dkim_registry_costs` | §12 |
+
+**Cross-check of the hashing.** `contracts/dkim-registry/vectors/` is a
+Noir package that recomputes, with `noir-lang/poseidon` v0.2.0 (the email
+circuit's Poseidon2) and code written independently of the contract (limbs
+read byte by byte, roots folded level by level), three fixture keys'
+`key_hash` and leaves, the roots of the registry's tree after adding them
+and retiring one, a pin root, and `Z_16`. It asserts its values, and the
+contract's `noir_vectors` test asserts the same values for keys added
+through the contract's own proposals. `just dkim-registry-vectors` runs it
+with Perch's pinned nargo (1.0.0-beta.9), and CI runs that recipe **[built,
+tested]**.
 
 ## 8. The email-guardian contract
 
@@ -642,7 +881,8 @@ another commitment, another digest, or another root are refused), the
 pin's acceptance window, and parsing of all five statement shapes produced
 by Perch's own encoder. It uses a test-only verifier (accepts a "proof"
 exactly when it is a SHA-256 tag of the public inputs it receives) and a
-test-only registry; the guardian's code path is the production one.
+test-only registry; the guardian's code path is the production one. The
+integration tests (§9.3, §7.6) use the registry contract from its wasm.
 
 ## 9. One-factor safety and policy rules
 
@@ -702,7 +942,8 @@ different wallet could build one Nido would refuse.
 
 `crates/integration-tests/tests/it/email_guardian.rs` pins the on-chain part
 on Nido's stack (Perch's controller and account from their deployed wasm,
-the guardian from its wasm) **[built, tested]**:
+the guardian and the key registry from their wasm, the registry fed by the
+DNS attester mock) **[built, tested]**:
 
 | Test | What it shows |
 | --- | --- |
@@ -746,6 +987,20 @@ alerts. When email is a recovery factor, a second channel (Web Push to a
 passkey device) is required (§9.3 rule 2).
 **[specified]** (alert service).
 
+**Registry changes.** The key registry's events (§7.6) concern every
+account at once, so they are announced publicly rather than per account.
+Every one is emitted **[built, tested]**; the announcements are
+**[specified]** (alert service).
+
+| Event (topic 0) | Topic 1 | Announcement |
+| --- | --- | --- |
+| `key_proposed` | domain | **Required:** a key was proposed for the domain, with its modulus, so anyone can compare it with DNS; for an addition, the earliest ledger it can activate (`eligible_at` once approved) |
+| `proposal_approved` | proposal id | Informational: approvals collected; when `approved`, the addition's timelock is running |
+| `dns_attested` | domain | Informational; **required** when `observed_live = 0` on an addition: an attester did not see the proposed key in DNS |
+| `key_activated` | domain | **Required:** the key is now accepted |
+| `key_retired` | domain | Informational: the key leaves acceptance after the grace period |
+| `key_revoked` | domain | **Required:** the key and every root holding it are refused |
+
 ## 11. Properties and their obligations
 
 ### 11.1 Assumptions
@@ -756,7 +1011,7 @@ passkey device) is required (§9.3 rule 2).
 | A2 | SHA-256 is collision resistant. |
 | A3 | `P2` is collision resistant; for the hiding claims (privacy, the blinded Subject, the salted pin) it is modelled as a random function. |
 | A4 | The UltraHonk proof system with Perch's zero-knowledge flavor is knowledge sound and zero-knowledge, and the verifier contract embeds the email circuit's key. |
-| A5 | The registry holds a leaf `(domain, key_hash)` only for a key that domain's operator controls, except for at most the timelock window after an addition, during which the addition is public; revocation is applied when a compromise is known. |
+| A5 | The registry holds a leaf `(domain, key_hash)` only for a key that domain's operator controls. The registry contract reduces this to its governance (§7.6): a key enters only with `threshold` member approvals, after a public timelock (72 hours if `attest_threshold` attesters vouched it live in DNS, 7 days otherwise) during which `revoke_threshold` members can stop it; revocation is applied when a compromise is known. |
 | A6 | `account_code` and `rho` come from a secure generator and stay with the user and the user's browser. |
 | A7 | The enrolling wallet is honest at enrollment (it computes `C` and the pin from the real enrollment email). |
 
@@ -809,7 +1064,7 @@ proven yet.
 
 | Property | Circuit obligations | Contract obligations (guardian) | Perch obligations | Assumptions | Status |
 | --- | --- | --- | --- | --- | --- |
-| 1 Soundness | C1, C2, C3, C4, C5, C6 | §8.3 checks 1 to 12; §8.2 wiring check | Statement construction from controller state (Perch §4) | A1, A2, A3 (collision), A4 (soundness), A5, A7 | Guardian checks tested; circuit specified; assumptions assumed |
+| 1 Soundness | C1, C2, C3, C4, C5, C6 | §8.3 checks 1 to 12; §8.2 wiring check; registry: §7.3 rules 1 to 5 and the same tree hashing as C6 (§7.2, §7.6 cross-check) | Statement construction from controller state (Perch §4) | A1, A2, A3 (collision), A4 (soundness), A5, A7 | Guardian checks and registry rules tested; registry hashing tested against Noir; circuit specified; assumptions assumed |
 | 2 Privacy | Public inputs are exactly §6.1; nothing else is exposed | Stores `C` and a salted pin root, never an address or key hash; emits nothing | — | A3 (random function), A4 (zero-knowledge), A6 | Guardian storage tested; circuit specified |
 | 3 Replay | C5 binds `d` | Checks 1, 2, 5, 6, 8, 12 | One vote per guardian per attempt and domain, or per change digest (Perch §6.3 T2, §5); attempt ids never reused (T1); epochs only grow (§3.3) | A2, A3, A4 | Tested (unit and integration) |
 | 4 One-factor safety | — | The guardian is one address | Quorum (T4), delay (T5), cancellation (T6, T7) | — | On-chain part tested; wallet policy specified |
@@ -822,14 +1077,34 @@ network measurement.
 | Figure | Value | Source |
 | --- | --- | --- |
 | Guardian wasm, optimized | 32,547 bytes | `just build-contracts` output for `nido_email_guardian.wasm` (local build; the CLI version recorded in the wasm metadata can change it by a few bytes) **[measured]** |
-| One `submit_guardian` with an email approval, whole invocation | 1,526,849 instructions; 602,256 bytes of memory; 12 entries read; 2 entries and 1,208 bytes written | `email_approval_plumbing_cost`, `cost_estimate().resources()` **[measured]** |
+| Registry wasm, optimized | 67,337 bytes | `just build-contracts` output for `nido_dkim_registry.wasm` (same caveat) **[measured]** |
+| One `submit_guardian` with an email approval, whole invocation | 2,118,851 instructions; 905,658 bytes of memory; 13 entries read; 2 entries and 1,208 bytes written | `email_approval_plumbing_cost`, `cost_estimate().resources()` **[measured]** |
 | The guardian's authorization entry (16,224-byte proof) | 16,784 bytes of XDR | same test **[measured]** |
+| `is_accepted_root`, accepted or refused | 565,446 / 568,058 instructions; 286,222 bytes of memory; 2 entries read; nothing written; no events; fee without rent 396 / 398 stroops | `dkim_registry_costs` **[measured]** |
+| `propose_add` (computes the key hash over the 2048-bit modulus) | 9,348,283 instructions; 533,605 bytes of memory; 6 entries read; 3 entries and 1,588 bytes written; 744 event bytes; fee without rent 23,723 stroops | same test **[measured]** |
+| `approve` | 666,915 instructions; 300,965 bytes of memory; 5 entries read; 2 entries and 492 bytes written; 208 event bytes; fee without rent 10,030 stroops | same test **[measured]** |
+| `attest` (parse, checks, Ed25519 verification) | 1,159,121 instructions; 291,157 bytes of memory; 3 entries read; 1 entry and 436 bytes written; 412 event bytes; fee without rent 7,260 stroops | same test **[measured]** |
+| `execute` of an addition (the leaf and the 16-level root recomputation) | 22,787,215 instructions; 1,077,800 bytes of memory; 37 entries read; 20 entries and 4,384 bytes written; 348 event bytes; fee without rent 102,659 stroops | same test **[measured]** |
+| The approval that executes a revocation (removal, root recomputation, refusals) | 20,051,676 instructions; 883,550 bytes of memory; 39 entries read; 21 entries and 1,944 bytes written; 516 event bytes; fee without rent 103,542 stroops | same test **[measured]** |
 
-The instruction figure is a plumbing figure: Perch's controller and account
-and the guardian run as wasm, but the verifier and registry are the
-test-only stand-ins, which do no cryptography. It contains no proof
-verification. Real verification cost is measured once the circuit and its
-verifier exist. Fee estimation through RPC simulation needs care: Soroban's
+The `submit_guardian` figure is a plumbing figure: Perch's controller and
+account, the guardian, and the registry run as wasm, but the verifier is
+the test-only stand-in, which does no cryptography. It contains no proof
+verification. The registry figures are the whole invocation of each entry
+point from the registry's wasm (no entry was read from disk, so ledger
+bytes read are 0 in every row), with the 3-of-5, 2-of-3 configuration of
+`crates/integration-tests/src/email.rs`; `dkim_registry_costs` also asserts
+loose ceilings on `is_accepted_root`, `attest`, and the activation. The fee
+figures are the SDK's `cost_estimate().fee()`, which prices the measured
+resources with a hardcoded snapshot of mainnet fee rates; they are not
+network measurements. Rent is left out of them: every registry write extends
+its entries to the maximum TTL, so the rent charged depends on the network's
+maximum TTL (10,000,000 ledgers in this test ledger) and on how recently an
+entry was last extended, and the SDK prices rent above the network's rate on
+purpose. Fees on testnet are not measured here.
+
+Real verification cost is measured once the circuit and its verifier exist.
+Fee estimation through RPC simulation needs care: Soroban's
 recording-mode simulation does not run custom accounts' `__check_auth`
 (`vendor/perch/AGENTS.md`), so a simulated `submit_guardian` omits the
 guardian's checks and the proof verification.
@@ -856,10 +1131,22 @@ guardian's checks and the proof verification.
    in the enrollment email (best recoverability; the provider can compute
    `C` and link the inbox to the account), or a recovery kit only (no copy
    at the provider; lost if the kit is lost).
-5. **Registry parameters.** The grace period after supersession, the
-   revocation procedure and who may trigger it, the multisig membership,
-   and the DNS attestation format are the registry contract's to fix
-   (§7.3).
+5. **Registry parameters.** The registry is built with the defaults of §7.6;
+   each is a constructor parameter.
+   - *Grace period.* Built with 17,280 ledgers (24 hours), capped at
+     120,960. Alternatives: 120,960 ledgers (7 days), which strands fewer
+     proofs made against a previous root but keeps a key its provider has
+     blanked in DNS acceptable for a week unless it is revoked; or 720
+     ledgers (1 hour), which shortens that window but can strand a user whose
+     proof was made against the previous root.
+   - *Revocation threshold.* Built with an emergency threshold of 2 of 5
+     members, paired with the rule that a revoked key returns only through a
+     new full-threshold addition on the 7-day path. Alternative: the full
+     threshold (3 of 5), under which two members cannot block a provider's
+     live key, and also cannot stop a key a threshold of members planted
+     during its timelock or cut off a leaked key without a third approval.
+   - *Who.* The five members, the three attester operators, and the
+     resolvers each attester queries are not named.
 6. **Provider details.** The exact domain allowlist per launch provider
    (for example whether secondary domains sign with their own `d=`), the
    `HEADER_MAX` bound, and whether each provider's stored or received copy

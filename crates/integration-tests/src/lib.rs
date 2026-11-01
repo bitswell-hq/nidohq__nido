@@ -26,6 +26,10 @@ pub const PREAUTH_SWEEP_POLICY_WASM: &[u8] =
 pub const EMAIL_GUARDIAN_WASM: &[u8] =
     include_bytes!("../../../target/wasm32v1-none/contract/nido_email_guardian.wasm");
 
+/// The DKIM key registry (`contracts/dkim-registry`).
+pub const DKIM_REGISTRY_WASM: &[u8] =
+    include_bytes!("../../../target/wasm32v1-none/contract/nido_dkim_registry.wasm");
+
 /// The factory embeds the same Perch account wasm as [`PERCH_ACCOUNT_WASM`]
 /// (`contracts/factory/build.rs`), so uploading [`PERCH_ACCOUNT_WASM`] before
 /// `create_account` satisfies its `deploy_v2` hash lookup.

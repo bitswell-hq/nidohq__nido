@@ -1,0 +1,26 @@
+[package]
+name = "nido-dkim-registry"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+# `lib` as well as `cdylib`: the integration tests and the DNS attestation
+# mock link the crate for its types, client, and hash functions while the
+# contract itself runs from its wasm.
+[lib]
+crate-type = ["lib", "cdylib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = { workspace = true }
+# The host's Poseidon2 sponge, the one Perch's pool and primitives call.
+soroban-poseidon = { workspace = true }
+# Perch's empty-subtree table (`ZERO_HASHES`, built with the same untagged
+# `P2(left, right)` interior node) and its contract-id helper.
+perch-zk-primitives = { workspace = true }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+# Test-only attester keys.
+ed25519-dalek = "2.2"

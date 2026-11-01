@@ -1138,6 +1138,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "nido-dkim-registry"
+version = "0.1.0"
+dependencies = [
+ "ed25519-dalek",
+ "perch-zk-primitives",
+ "soroban-poseidon",
+ "soroban-sdk",
+]
+
+[[package]]
+name = "nido-dns-attestation-mock"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "ed25519-dalek",
+ "hex",
+ "nido-dkim-registry",
+ "perch-zk-primitives",
+ "serde",
+ "serde_json",
+ "sha2",
+ "soroban-sdk",
+]
+
+[[package]]
 name = "nido-email-guardian"
 version = "0.1.0"
 dependencies = [
@@ -1161,6 +1186,8 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "hex",
+ "nido-dkim-registry",
+ "nido-dns-attestation-mock",
  "nido-email-guardian",
  "nido-preauth-sweep-policy",
  "p256",
@@ -1180,6 +1207,7 @@ dependencies = [
  "soroban-sdk",
  "soroban-sdk-tools",
  "stellar-accounts",
+ "wasmparser",
 ]
 
 [[package]]
