@@ -93,7 +93,7 @@ pub struct AgentFile {
 /// A chain caveat, one key per caveat:
 /// `{"contract_in": ["C…"]}`, `{"function_in": ["transfer"]}`,
 /// `{"arg_i128_at_most": [2, "1000"]}`, `{"arg_eq": [0, {"address": "G…"}]}`.
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum ChainCaveatFile {
     ContractIn(Vec<String>),
@@ -104,7 +104,7 @@ pub enum ChainCaveatFile {
 
 /// An `i128` as a JSON integer or a decimal string (JSON numbers lose
 /// precision past 2^53 in many readers).
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(untagged)]
 pub enum I128Text {
     Number(i64),
@@ -115,7 +115,7 @@ pub enum I128Text {
 /// `{"bytes": "<hex>"}`, `{"address": "G…"}`, `{"symbol": "name"}`, or
 /// `{"other": "<hex>"}`: the `ScVal` XDR of an argument whose type has no
 /// variant of its own (`u32`, `string`, `vec`, …).
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum ValFile {
     I128(I128Text),
@@ -268,7 +268,12 @@ fn account_key(strkey: &str) -> Result<[u8; 32], String> {
         .map_err(|_| format!("{strkey} is not a G… account address"))
 }
 
-fn chain_caveat(c: &ChainCaveatFile) -> Result<chain::Caveat, String> {
+/// A chain caveat as the evaluator takes it.
+///
+/// # Errors
+///
+/// A `contract_in` entry that is not a `C…` address, or a malformed value.
+pub fn chain_caveat(c: &ChainCaveatFile) -> Result<chain::Caveat, String> {
     Ok(match c {
         ChainCaveatFile::ContractIn(list) => {
             for c in list {

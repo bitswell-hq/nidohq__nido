@@ -12,8 +12,10 @@
 //!   caller's does.
 //!
 //! Every file, fetch and signing call is checked through the evaluator
-//! component before it acts, against the caller's grant. A revoked agent, or
-//! one under a revoked ancestor, is denied everything.
+//! component before it acts, against the caller's grant; a signature over a
+//! transaction or an authorization entry is also checked against the chain
+//! grant, context by context. A revoked agent, or one under a revoked
+//! ancestor, is denied everything.
 
 use std::path::{Path, PathBuf};
 
@@ -61,6 +63,7 @@ pub enum Vocabulary {
     Files,
     Network,
     Signing,
+    Chain,
 }
 
 /// Why a tool call did not act.
@@ -260,11 +263,13 @@ impl<K: KeyKeeper> Host<K> {
     }
 
     fn sign(&mut self, grant: &Lowered, request: &sign::Request) -> Result<Output, CallError> {
-        let prepared = sign::prepare(request).map_err(CallError::Failed)?;
+        // The signing action is the request's key, network and payload kind,
+        // checked before the payload is decoded.
+        let kind = request.payload.kind();
         let action = wit::signing::Action {
-            key: prepared.key.as_str().as_bytes().to_vec(),
-            network: prepared.network.as_bytes().to_vec(),
-            payload: grant::lower_payload(prepared.kind),
+            key: request.key.as_bytes().to_vec(),
+            network: request.network.as_bytes().to_vec(),
+            payload: grant::lower_payload(kind),
         };
         let allowed = self
             .evaluator
@@ -274,15 +279,51 @@ impl<K: KeyKeeper> Host<K> {
             return Err(CallError::Denied {
                 vocabulary: Vocabulary::Signing,
                 action: format!(
-                    "{:?} signature by {} on {:?}",
-                    prepared.kind, prepared.key, prepared.network
+                    "{kind:?} signature by {} on {:?}",
+                    request.key, request.network
                 ),
+            });
+        }
+        let prepared = sign::prepare(request).map_err(CallError::Failed)?;
+        let chain = |evaluator: &mut Evaluator, actions: &[wit::chain::Action]| {
+            evaluator
+                .chain_all(&grant.chain, actions)
+                .map_err(|e| CallError::Failed(e.to_string()))
+        };
+        if !chain(&mut self.evaluator, &prepared.chain)? {
+            // The batch check denied; name the first context that fails alone.
+            let mut action = format!("{:?} signature's authorization", prepared.kind);
+            for (i, context) in prepared.chain.iter().enumerate() {
+                if !chain(&mut self.evaluator, std::slice::from_ref(context))? {
+                    action = format!(
+                        "{} (context {i} of the {:?} signature's {})",
+                        describe(context),
+                        prepared.kind,
+                        prepared.chain.len()
+                    );
+                    break;
+                }
+            }
+            return Err(CallError::Denied {
+                vocabulary: Vocabulary::Chain,
+                action,
             });
         }
         self.keeper
             .sign(&prepared.key, &prepared.payload)
             .map(|s| Output::Signature(s.0))
             .map_err(|e| CallError::Failed(format!("keeper: {e}")))
+    }
+}
+
+fn describe(action: &wit::chain::Action) -> String {
+    match action {
+        wit::chain::Action::Invoke(call) => format!(
+            "{}.{}",
+            String::from_utf8_lossy(&call.contract),
+            String::from_utf8_lossy(&call.function)
+        ),
+        wit::chain::Action::CreateContract(_) => "a contract deployment".into(),
     }
 }
 
