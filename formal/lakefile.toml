@@ -1,0 +1,8 @@
+name = "attenuating-grants"
+defaultTargets = ["AttenuatingGrants"]
+
+[leanOptions]
+autoImplicit = false
+
+[[lean_lib]]
+name = "AttenuatingGrants"
