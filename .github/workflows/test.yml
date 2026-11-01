@@ -62,6 +62,12 @@ jobs:
       - name: Build contract wasms
         run: just build-contracts
 
+      # The grant evaluator (crates/grant-eval) is a no_std library, not a
+      # contract, so the scaffold build skips it; it must still compile for
+      # the contract target the smart account links it into.
+      - name: Build grant-eval for wasm32v1-none
+        run: cargo build -p grant-eval --target wasm32v1-none --release
+
       # The vendored Perch stack can't silently diverge from what Nido
       # consumes: submodule pin and branch, Cargo's Perch rev, the fetched
       # wasm, build-time pins, and factory embed against the manifest

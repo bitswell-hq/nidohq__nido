@@ -71,6 +71,7 @@ limited-scope signing.
 | Contract bindings | `packages/contract-bindings/` | Generated TypeScript clients for the Soroban contracts |
 | Smart contracts | `contracts/` | Factory, name registry, status message, and pre-Perch policy contracts |
 | Perch | `vendor/perch/` | Submodule: the account, WebAuthn verifier, recovery controller, ZK pool and adapter, doc compiler, and the testnet deployment manifest Nido builds on |
+| Grant evaluator | `crates/grant-eval/` | `no_std` evaluator for agent grants (caveat lists over chain, file, network and signing actions), built for the host and `wasm32v1-none` |
 | Integration tests | `crates/integration-tests/` | Cross-contract Rust tests with synthetic WebAuthn assertions |
 | End-to-end tests | `tests/` | Browser, support, and testnet test harnesses |
 | Example dApp | `examples/status-message-dapp/` | React/Vite dApp showing wallet selector integration |

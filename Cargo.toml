@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/grant-eval",
     "crates/integration-tests",
     "contracts/*",
 ]
