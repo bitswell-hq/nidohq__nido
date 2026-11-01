@@ -128,7 +128,7 @@ action says:
 | Payload | Agent supplies | Keeper signs |
 | - | - | - |
 | `transaction` | `TransactionEnvelope` XDR (base64) | the transaction hash on the named network, so the signature is valid there only |
-| `auth_entry` | `HashIdPreimage` XDR (base64), type `SorobanAuthorization` | `SHA-256` of the preimage, after the host checks the preimage's network id is `SHA-256` of the named passphrase |
+| `auth_entry` | `HashIdPreimage` XDR (base64), type `SorobanAuthorization`, or `SorobanAuthorizationWithAddress` for a delegated signer such as a grant signer holder | `SHA-256` of the preimage, after the host checks the preimage's network id is `SHA-256` of the named passphrase |
 | `message` | UTF-8 text | the SEP-53 hash `SHA-256("Stellar Signed Message:\n" ‖ message)` |
 
 A message signature is not bound to a network: for `message`, a
