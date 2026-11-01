@@ -900,6 +900,134 @@ claims:
       context the transaction's signatures authorize.
     status: unproven
 
+  - id: relay-fee-margin
+    statement: >-
+      The relay declares the simulated minimum resource fee plus a margin of
+      it (20 percent by default), and stays within its fee cap.
+    status: tested
+    evidence:
+      - test: an_allowed_transfer_is_signed_submitted_and_confirmed
+        file: crates/grant-relay/tests/relay.rs
+      - test: the_resource_fee_margin_stays_within_the_cap
+        file: crates/grant-relay/tests/relay.rs
+
+  # ---------------------------------------------------------------------------
+  # The relay on a local Stellar network (evaluation/README.md, "The local
+  # network")
+  - id: network-attack-suite
+    statement: >-
+      On a local Stellar network, with every agent call sent through the
+      relay, the 44 escalation attempts the network can run (16
+      self-escalation, 8 nested-call smuggling, 17 delegation workarounds, 3
+      allowance oversubscription) are refused with balances, grants, the
+      account's configuration and every channel's sequence number unchanged,
+      both with relay grants mirroring the on-chain grants and with relay
+      grants allowing every call, and the 8 allowed controls are confirmed on
+      chain.
+    status: measured
+    evidence:
+      file: evaluation/results/network-attacks.json
+
+  - id: network-relay-checks
+    statement: >-
+      With relay grants mirroring the on-chain grants, 19 of the 44 attempts
+      stop at the relay's own checks, before a channel is leased or the
+      custody key signs; the other 25 are refused in the relay's simulations.
+    status: measured
+    evidence:
+      file: evaluation/results/network-attacks.json
+
+  - id: network-as-simulation
+    statement: >-
+      With relay grants allowing every call, every attempt the network runs
+      is refused by the same component with the same error as in the Soroban
+      simulation, except the contract deployment, which the recording
+      simulation refuses first.
+    status: measured
+    evidence:
+      file: evaluation/results/network-attacks.json
+
+  - id: network-root-recording
+    statement: >-
+      The relay cannot submit a call whose first request for an account's
+      authorization is made below the root invocation: Soroban RPC's
+      recording simulation refuses it before any account's check.
+    status: measured
+    evidence:
+      file: evaluation/results/network-attacks.json
+
+  - id: network-workloads
+    statement: >-
+      Through the relay on the local network, all 17 workload calls meet
+      their expected outcome in both relay-grant modes, and every refused
+      call leaves state unchanged.
+    status: measured
+    evidence:
+      file: evaluation/results/network-workloads.json
+
+  - id: network-cost-ratio
+    statement: >-
+      The workloads' 18 confirmed transactions cost 1.09 to 1.12 times the
+      CPU instructions the Soroban simulation measures for the same calls.
+    status: measured
+    evidence:
+      - file: evaluation/results/network-workloads.json
+      - file: evaluation/results/soroban-workloads.json
+
+  - id: network-cost-general
+    statement: >-
+      The Soroban simulation's costs track the network's beyond the
+      workloads' confirmed calls, metered by one network version.
+    status: unproven
+
+  - id: network-race
+    statement: >-
+      In each of 3 rounds, 8 sibling grants delegated 100 each from a root
+      grant of 100 send a transfer of 30 at once through a relay with 8
+      channels; all 8 pass the relay and are submitted, 3 are confirmed and 5
+      fail on chain with the grant signer's Overdrawn, the root is charged 90
+      of 100, and each sibling exactly its confirmed transfer.
+    status: measured
+    evidence:
+      file: evaluation/results/network-race.json
+
+  - id: relay-throughput
+    statement: >-
+      One agent's transfers through the relay confirm at 1.01, 2.04, 3.91 and
+      7.65 transactions per second with 1, 2, 4 and 8 channels, one
+      transaction per channel per ledger, with ledgers closing every 1.0 s.
+    status: measured
+    evidence:
+      file: evaluation/results/network-throughput.json
+
+  - id: relay-answer-time
+    statement: >-
+      The relay answers a call its own checks refuse in a median 0.3 ms and
+      one its enforcing simulation refuses in a median 24.6 ms.
+    status: measured
+    evidence:
+      - file: evaluation/results/network-attacks.json
+      - file: evaluation/results/network-workloads.json
+
+  - id: network-times-general
+    statement: >-
+      The local network's times hold beyond the one recorded run of a
+      single-node network closing a ledger every second, in Docker on the
+      relay's machine.
+    status: unproven
+
+  - id: snapshot-coverage
+    statement: >-
+      A refused attempt changes no ledger entry, including those the
+      snapshots do not read, such as the channels' balances.
+    status: unproven
+
+  - id: relay-grants-in-step
+    statement: >-
+      A relay deployment keeps its agents' grants in step with the grants on
+      chain.
+    status: unproven
+
   - id: testnet-channel
     statement: >-
       On Stellar testnet, channel-sourced classic, Soroban and fee-bump

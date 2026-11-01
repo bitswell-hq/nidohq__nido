@@ -31,7 +31,8 @@ Agent host, \file{crates/agent-host/src} & \LocHost &
 Relay, \file{crates/grant-relay/src} & \LocRelay &
   XDR-to-action mapping (\file{actions.rs}, \LocRelayActions), configuration,
   the request pipeline, channels and RPC. Tested in process, against Nido's
-  TypeScript client, and on a local Stellar network. \\
+  TypeScript client, and on a local Stellar network, where the attack suite
+  and the workloads run through it. \\
 \midrule
 \multicolumn{3}{@{}l}{\textbf{Trusted, not proven}} \\
 \multicolumn{3}{@{}>{\raggedright\arraybackslash}p{\linewidth}@{}}{%
@@ -84,6 +85,9 @@ No caveat binds a signed transaction's fee, sequence number, time bounds or
 memo. & \S\ref{sec:host} \\
 Network caveats bind names, not resolved addresses. & \S\ref{sec:host} \\
 Renames after the descriptor check, and hard links. & \S\ref{sec:host} \\
+The relay cannot submit a call that first asks for an account's authorization
+below the root invocation. & \S\ref{sec:relay} \\
+The relay's grants are not linked to the chain's. & \S\ref{sec:relay} \\
 \bottomrule
 \end{tabularx}
 \end{table}

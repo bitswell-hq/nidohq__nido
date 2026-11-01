@@ -288,32 +288,92 @@ theorem extracted_allows (g : Slice grant_eval.chain.Caveat)
     \item End to end on a local network\claim{relay-local-network}; coverage
       of every authorized context rests on the host\claim{trees-cover}. The
       ungated \file{infra/relayer} is out of scope.
+    \item Its grants are configuration, not linked to the chain's; keeping
+      them in step is the deployment's job\claim{relay-grants-in-step}.
   \end{itemize}
 \end{frame}
 
 \begin{frame}{Attack suite: every attempt refused, state unchanged}
-  \small
-  \begin{tabular}{@{}llrrr@{}}
-    \toprule
-    \textbf{Boundary} & \textbf{Category} & \textbf{Attempts} & \textbf{Refused} & \textbf{Controls} \\
-    \midrule
-    Soroban simulation & self-escalation & 16 & 16 & 0 \\
-     & nested-call smuggling & 8 & 8 & 1 \\
-     & delegation workarounds & 18 & 18 & 6 \\
-     & oversubscription & 3 & 3 & 2 \\
-    Agent host & self-escalation & 10 & 10 & 0 \\
-     & delegation workarounds & 21 & 21 & 3 \\
-    \bottomrule
-  \end{tabular}
-  \medskip
-  \begin{itemize}
-    \item Soroban\claim{attack-suite-soroban} and host\claim{attack-suite-host}:
-      state snapshots before and after (balances, grants, account
-      configuration; file tree, request counts, signature log) are equal.
-    \item Found a fail-closed defect in the host's wiring (delegated
-      preimages), now fixed\claim{host-delegated-preimage}.
-    \item Not yet on a local network, and not through the relay.
-  \end{itemize}
+  \footnotesize
+  \begin{columns}[T]
+    \begin{column}{0.5\linewidth}
+      \begin{tabular}{@{}llrr@{}}
+        \toprule
+        & \textbf{Category} & \textbf{Refused} & \textbf{Ctrl.} \\
+        \midrule
+        Soroban & self-escalation & 16/16 & 0 \\
+        simulation & nested calls & 8/8 & 1 \\
+         & delegation & 18/18 & 6 \\
+         & oversubscription & 3/3 & 2 \\
+        \midrule
+        Local & self-escalation & 16/16 & 0 \\
+        network, & nested calls & 8/8 & 1 \\
+        relay & delegation & 17/17 & 5 \\
+         & oversubscription & 3/3 & 2 \\
+        \midrule
+        Agent & self-escalation & 10/10 & 0 \\
+        host & delegation & 21/21 & 3 \\
+        \bottomrule
+      \end{tabular}
+    \end{column}
+    \begin{column}{0.48\linewidth}
+      \begin{itemize}
+        \item Snapshots before and after are equal: balances, grants, account
+          configuration, channels' sequence numbers; file tree, request
+          counts, signature
+          log\claim{attack-suite-soroban}\ \claim{network-attack-suite}\
+          \claim{attack-suite-host}.
+        \item Network, both relay-grant modes: mirrored, 19 stop at the
+          relay's checks\claim{network-relay-checks}; allowing every call,
+          the chain refuses each as the simulation
+          does\claim{network-as-simulation}.
+        \item Two rows need a direct \code{\_\_check\_auth}: simulation only.
+        \item Found a fail-closed defect in the host's wiring (delegated
+          preimages), now fixed\claim{host-delegated-preimage}.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Through the relay on a local network}
+  \footnotesize
+  \begin{columns}[T]
+    \begin{column}{0.4\linewidth}
+      \textbf{Throughput}\claim{relay-throughput}\\[2pt]
+      \begin{tabular}{@{}rrr@{}}
+        \toprule
+        channels & confirmed/s & per ledger \\
+        \midrule
+        1 & 1.01 & 1 \\
+        2 & 2.04 & 2 \\
+        4 & 3.91 & 4 \\
+        8 & 7.65 & 8 \\
+        \bottomrule
+      \end{tabular}\\[4pt]
+      One transaction per channel per 1.0\,s ledger. Refusal at the relay's
+      checks 0.3\,ms, in its enforcing simulation 24.6\,ms\claim{relay-answer-time}.
+    \end{column}
+    \begin{column}{0.58\linewidth}
+      \begin{itemize}
+        \item \textbf{Race}: 8 siblings $\times$ 30 against a root of 100, at
+          once. All pass the relay; on chain 3 confirmed, 5
+          \code{Overdrawn}, root charged 90 of 100\claim{network-race}.
+          The failures still cost fees.
+        \item \textbf{Cost}: 17 of 17 workload calls as
+          expected\claim{network-workloads}; on chain 1.09 to 1.12$\times$
+          the simulation's instructions\claim{network-cost-ratio}; beyond these
+          calls unproven\claim{network-cost-general}.
+        \item \textbf{Defect fixed}: the relay declared exactly the
+          simulated fee; growing rent failed a payment on chain. Now minimum
+          plus a margin, within the cap\claim{relay-fee-margin}.
+        \item \textbf{Limit}: recording simulation covers only the root
+          invocation, so a call first asking for authorization in a nested
+          call cannot be relayed\claim{network-root-recording}.
+        \item One run, single node\claim{network-times-general}; snapshots
+          not every entry\claim{snapshot-coverage}.
+      \end{itemize}
+    \end{column}
+  \end{columns}
 \end{frame}
 
 \begin{frame}{Cost: the evaluator follows the model's steps}
@@ -384,7 +444,9 @@ theorem extracted_allows (g : Slice grant_eval.chain.Caveat)
       network caveats bind names, not addresses.
     \item Holder keys are ed25519 only; one key per grant; archived grants
       fail closed until restored.
-    \item No relay cost, throughput or attack measurement yet.
+    \item The relay keeps no budget, cannot relay calls that first ask for
+      authorization below the root, and was measured on one local network
+      with a Dfns mock: not on testnet, mainnet or real Dfns.
   \end{itemize}
 \end{frame}
 
@@ -416,8 +478,9 @@ theorem extracted_allows (g : Slice grant_eval.chain.Caveat)
     \item CAP-0071 delegated signing gives the evaluator every context of the
       account's authorization: no hidden call that needs the account's
       authorization.
-    \item 76 escalation attempts refused, state unchanged; metered work
-      follows the model's step count.
+    \item 76 escalation attempts refused, state unchanged, and the Soroban
+      ones again on a local network through the relay; metered work follows
+      the model's step count.
     \item Each claim tagged: proven, tested, measured, assumed or unproven.
   \end{itemize}
 \end{frame}

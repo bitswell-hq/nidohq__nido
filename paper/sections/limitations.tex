@@ -60,10 +60,26 @@ only. Grants live in persistent contract storage, extended to the network
 maximum on every write; an archived grant fails authorization until it is
 restored, which fails closed.
 
-\paragraph{Evaluation.} The attack suite ran in Soroban simulation and at the
-host, not on a local network and not through the relay; the relay has
-functional tests only, with no cost, throughput or attack-suite measurement.
-Host timings are the medians of one run on one machine.
+\paragraph{The relay.} It cannot submit a call whose first request for an
+account's authorization is made below the root invocation, because Soroban
+RPC's recording simulation records authorization only for the
+root\claim{network-root-recording}. It keeps no budget, so siblings that
+together overdraw an ancestor all pass it, and the transactions the grant
+signer refuses on chain cost their channels a fee\claim{network-race}. Its
+grants are configuration with no link to the chain's, and keeping them in step
+is the deployment's job\claim{relay-grants-in-step}.
+
+\paragraph{Evaluation.} The network results are one run of a single-node
+local network closing a ledger every second, in Docker on the relay's machine,
+with the custody key in the Dfns mock; that its times hold beyond that run is
+unproven\claim{network-times-general}. Public networks, real Dfns, more than
+eight channels and the cost sweeps on chain are not measured
+(\S\ref{sec:eval-network}). On chain the workloads cost 9 to 12\% more than in
+the simulation, and that the simulation's costs track the network's beyond
+those calls is unproven\claim{network-cost-general}. The snapshots compare
+balances, grants, the account's configuration and channels' sequence numbers,
+not every ledger entry\claim{snapshot-coverage}. Host timings are the medians
+of one run on one machine.
 
 \paragraph{Dfns.} Whether real Dfns's \code{Transaction} kind signs a
 transaction whose source is a channel account\claim{dfns-transaction-source},
