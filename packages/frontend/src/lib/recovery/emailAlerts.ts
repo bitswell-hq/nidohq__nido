@@ -86,7 +86,7 @@ export async function registerAlertContact(p: {
   const assertion = (await navigator.credentials.get({
     publicKey: {
       challenge: new Uint8Array(challenge),
-      rpId: location.hostname,
+      rpId: window.location.hostname,
       allowCredentials: [{ type: 'public-key', id: new Uint8Array(cred.credentialId) }],
       userVerification: 'required',
       timeout: 60_000,

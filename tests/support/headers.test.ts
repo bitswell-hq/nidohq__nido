@@ -35,9 +35,19 @@ const SYNCED = [
   'Cross-Origin-Embedder-Policy',
 ];
 
+// The worker's testnet vars (frontend/worker-proxy-nido/wrangler.toml), whose
+// hosts the static origin's policy lists.
+const ENV = {
+  PAGES: 'nido-1am.pages.dev',
+  PAGES_PROJECT_ROOT: 'nido-1am.pages.dev',
+  CSP_SITE_HOSTS: 'https://*.nido.fyi',
+  CSP_NETWORK_HOSTS:
+    'https://nido.fly.dev https://soroban-testnet.stellar.org https://horizon-testnet.stellar.org https://friendbot.stellar.org',
+};
+
 async function proxied(path: string): Promise<Headers> {
   vi.stubGlobal('fetch', async () => new Response('<!doctype html>', { status: 200 }));
-  const res: Response = await proxy.fetch(new Request(`https://cabc.nido.fyi${path}`));
+  const res: Response = await proxy.fetch(new Request(`https://cabc.nido.fyi${path}`), ENV);
   return res.headers;
 }
 

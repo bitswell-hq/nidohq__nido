@@ -91,6 +91,8 @@ fn enroll_with_pin(
     let recovery = Recovery {
         profile,
         mode: Mode::Guardian,
+        controller: w.controller.clone(),
+        pool: w.pool.clone(),
         guardians,
         quorum,
         enrollment: None,

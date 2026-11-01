@@ -11,7 +11,6 @@ import {
 import type { ChainRule, ChainSigner, PolicyState } from '@nidohq/passkey-sdk';
 import { fetchRegistryAddress as sdkFetchRegistryAddress, perch } from '@nidohq/passkey-sdk';
 import { Client as SpendingLimitPolicyClient } from '@nidohq/spending-limit-policy';
-import { NETWORK_PASSPHRASE, RPC_URL } from './network.js';
 import { perchDeployment } from './recovery/deployment.js';
 import { RPC_URL, NETWORK_PASSPHRASE } from './network.js';
 
