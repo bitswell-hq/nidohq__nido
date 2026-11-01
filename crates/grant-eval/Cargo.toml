@@ -1,0 +1,12 @@
+[package]
+name = "grant-eval"
+description = "Grant evaluator: caveat lists over chain, file, network and signing actions"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+doctest = false
+
+[dependencies]
