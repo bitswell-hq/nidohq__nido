@@ -1,0 +1,51 @@
+name: Email-recovery circuits
+
+on:
+  pull_request:
+    paths:
+      - "circuits/email-recovery/**"
+      - "contracts/dkim-registry/vectors/**"
+      - "vendor/perch"
+      - ".github/workflows/email-recovery-circuits.yml"
+  push:
+    branches: [main]
+    paths:
+      - "circuits/email-recovery/**"
+      - "contracts/dkim-registry/vectors/**"
+      - "vendor/perch"
+      - ".github/workflows/email-recovery-circuits.yml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Noir tests (Perch's pinned nargo and bb)
+    runs-on: ubuntu-latest
+    steps:
+      # vendor/perch holds the toolchain pins and the vendored Poseidon2.
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # Perch's installer checks every download against a pinned SHA-256.
+      - name: Install the pinned toolchain
+        run: |
+          eval "$(circuits/email-recovery/scripts/toolchain.sh)"
+          echo "NARGO=$NARGO" >> "$GITHUB_ENV"
+          echo "BB=$BB" >> "$GITHUB_ENV"
+
+      - name: Check the toolchain against Perch's pins
+        run: circuits/email-recovery/scripts/check-toolchain.sh
+
+      - name: Check the vendored libraries
+        run: circuits/email-recovery/scripts/check-vendor.sh
+
+      - name: Check the generated test vectors and bench inputs
+        run: node circuits/email-recovery/scripts/gen-test-vectors.mjs --check
+
+      - name: Run the tests
+        working-directory: circuits/email-recovery
+        run: '"$NARGO" test --workspace'

@@ -1,0 +1,17 @@
+[workspace]
+members = [
+    "lib",
+    "tests",
+    "tools/blinded_value",
+    "bench/rsa_2048",
+    "bench/header_sha_1024",
+    "bench/header_scan_1024",
+    "bench/header_from_1024",
+    "bench/header_tags_1024",
+    "bench/header_parse_1024",
+    "bench/body_hash_1024",
+    "bench/body_hash_4096",
+    "bench/spec_hashes",
+    "bench/dkim_header_1024",
+]
+default-member = "lib"

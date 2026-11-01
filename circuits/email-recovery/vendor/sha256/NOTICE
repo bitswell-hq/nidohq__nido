@@ -1,0 +1,16 @@
+Vendored third-party dependency
+===============================
+
+  Library:  sha256 (Noir)
+  Upstream: https://github.com/noir-lang/sha256
+  Commit:   50f5fda729d94848aabcd9d54dc7751460e9143a (main, 2026-10-20)
+  License:  Apache License 2.0 (see LICENSE)
+
+Copied verbatim from the commit above (LICENSE, README.md, Nargo.toml,
+src/). It is the release tag v0.3.0 plus two later commits: one adds the
+LICENSE file (the tag carries none), the other fixes the partial-hash API,
+which this circuit does not use. `sha256_var`, the only function used, is
+unchanged from v0.3.0 apart from formatting.
+
+CHECKSUMS.sha256 pins every vendored file;
+`scripts/check-vendor.sh` fails on any drift.
