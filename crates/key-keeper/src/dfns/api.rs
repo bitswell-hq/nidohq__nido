@@ -6,6 +6,8 @@
 //!   [`GenerateSignatureRequest`], response [`SignatureRequest`].
 //! - `GET /keys/{keyId}/signatures/{signatureId}` (Get Signature): response
 //!   [`SignatureRequest`].
+//! - `POST /keys` (Create Key): request [`CreateKeyRequest`], response
+//!   [`Key`].
 //! - `POST /auth/action/init` (Create User Action Challenge): request
 //!   [`UserActionChallengeRequest`], response [`UserActionChallenge`].
 //! - `POST /auth/action` (Create User Action Signature): request
@@ -189,6 +191,80 @@ pub struct SignatureRequest {
     pub external_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub details: Option<Value>,
+}
+
+/// Create Key request body.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CreateKeyRequest {
+    /// `ECDSA`, `EdDSA` or `Schnorr`.
+    pub scheme: String,
+    /// `ed25519`, `secp256k1` or `stark`.
+    pub curve: String,
+    /// At most 100 characters.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub master_key: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub derive_from: Option<DeriveFrom>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub store_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delegate_to: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delay_delegation: Option<bool>,
+}
+
+impl CreateKeyRequest {
+    /// An Ed25519 key (`EdDSA` over `ed25519`), the kind Stellar accounts use.
+    #[must_use]
+    pub fn ed25519(name: Option<&str>) -> Self {
+        Self {
+            scheme: "EdDSA".to_owned(),
+            curve: "ed25519".to_owned(),
+            name: name.map(str::to_owned),
+            ..Self::default()
+        }
+    }
+}
+
+/// `deriveFrom`: hierarchical derivation from a master key.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DeriveFrom {
+    pub key_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+}
+
+/// `Key`: the Create Key response.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Key {
+    pub id: String,
+    pub scheme: String,
+    pub curve: String,
+    /// Hex-encoded public key.
+    pub public_key: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub master_key: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub derived_from: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// `Active` or `Archived`.
+    pub status: String,
+    pub custodial: bool,
+    pub date_created: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub imported: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exported: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub date_exported: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub date_deleted: Option<String>,
 }
 
 /// Create User Action Challenge request: the exact call the user action
@@ -471,3 +547,9 @@ pub const BLOCKCHAIN_KINDS: &[&str] = &[
     "Tron",
     "Xrpl",
 ];
+
+/// Every documented `KeyScheme`.
+pub const KEY_SCHEMES: &[&str] = &["ECDSA", "EdDSA", "Schnorr"];
+
+/// Every documented `KeyCurve`.
+pub const KEY_CURVES: &[&str] = &["ed25519", "secp256k1", "stark"];

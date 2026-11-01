@@ -1,0 +1,355 @@
+{
+  "accountsAfterRun": {
+    "channel-1": {
+      "account_id": "GAYV7XGB7HYIJ7FQEQUKLPGYW22VT6CPCGB5RRIU5OLAIJJL4HVXQOBU",
+      "sequence": "23614348668698629",
+      "signers": [
+        {
+          "key": "GDDSXOOHU4J47O57GF2474LWBZOQCEQGSDISIHYYV7NLSOPFXFOXMRK5",
+          "type": "ed25519_public_key",
+          "weight": 1
+        },
+        {
+          "key": "GAYV7XGB7HYIJ7FQEQUKLPGYW22VT6CPCGB5RRIU5OLAIJJL4HVXQOBU",
+          "type": "ed25519_public_key",
+          "weight": 0
+        }
+      ],
+      "thresholds": {
+        "high_threshold": 1,
+        "low_threshold": 1,
+        "med_threshold": 1
+      }
+    },
+    "channel-2": {
+      "account_id": "GCXPKHEF3FNKRX46BNDUFYSVDBXXYZVZWLHXWPVUMHOCHAURKSCXHMQJ",
+      "sequence": "23614357258633219",
+      "signers": [
+        {
+          "key": "GDDSXOOHU4J47O57GF2474LWBZOQCEQGSDISIHYYV7NLSOPFXFOXMRK5",
+          "type": "ed25519_public_key",
+          "weight": 1
+        },
+        {
+          "key": "GCXPKHEF3FNKRX46BNDUFYSVDBXXYZVZWLHXWPVUMHOCHAURKSCXHMQJ",
+          "type": "ed25519_public_key",
+          "weight": 0
+        }
+      ],
+      "thresholds": {
+        "high_threshold": 1,
+        "low_threshold": 1,
+        "med_threshold": 1
+      }
+    },
+    "fund": {
+      "account_id": "GDZIANBSF5YR7UMCV4QX2EPHAR3H6VH44ZKNFPAX77USZWG32ETPEU37",
+      "sequence": "23614340078764033",
+      "signers": [
+        {
+          "key": "GDDSXOOHU4J47O57GF2474LWBZOQCEQGSDISIHYYV7NLSOPFXFOXMRK5",
+          "type": "ed25519_public_key",
+          "weight": 1
+        },
+        {
+          "key": "GDZIANBSF5YR7UMCV4QX2EPHAR3H6VH44ZKNFPAX77USZWG32ETPEU37",
+          "type": "ed25519_public_key",
+          "weight": 0
+        }
+      ],
+      "thresholds": {
+        "high_threshold": 1,
+        "low_threshold": 1,
+        "med_threshold": 1
+      }
+    }
+  },
+  "accountsAfterSetup": {
+    "channel-1": {
+      "account_id": "GAYV7XGB7HYIJ7FQEQUKLPGYW22VT6CPCGB5RRIU5OLAIJJL4HVXQOBU",
+      "sequence": "23614348668698625",
+      "signers": [
+        {
+          "key": "GDDSXOOHU4J47O57GF2474LWBZOQCEQGSDISIHYYV7NLSOPFXFOXMRK5",
+          "type": "ed25519_public_key",
+          "weight": 1
+        },
+        {
+          "key": "GAYV7XGB7HYIJ7FQEQUKLPGYW22VT6CPCGB5RRIU5OLAIJJL4HVXQOBU",
+          "type": "ed25519_public_key",
+          "weight": 0
+        }
+      ],
+      "thresholds": {
+        "high_threshold": 1,
+        "low_threshold": 1,
+        "med_threshold": 1
+      }
+    },
+    "channel-2": {
+      "account_id": "GCXPKHEF3FNKRX46BNDUFYSVDBXXYZVZWLHXWPVUMHOCHAURKSCXHMQJ",
+      "sequence": "23614357258633217",
+      "signers": [
+        {
+          "key": "GDDSXOOHU4J47O57GF2474LWBZOQCEQGSDISIHYYV7NLSOPFXFOXMRK5",
+          "type": "ed25519_public_key",
+          "weight": 1
+        },
+        {
+          "key": "GCXPKHEF3FNKRX46BNDUFYSVDBXXYZVZWLHXWPVUMHOCHAURKSCXHMQJ",
+          "type": "ed25519_public_key",
+          "weight": 0
+        }
+      ],
+      "thresholds": {
+        "high_threshold": 1,
+        "low_threshold": 1,
+        "med_threshold": 1
+      }
+    },
+    "fund": {
+      "account_id": "GDZIANBSF5YR7UMCV4QX2EPHAR3H6VH44ZKNFPAX77USZWG32ETPEU37",
+      "sequence": "23614340078764033",
+      "signers": [
+        {
+          "key": "GDDSXOOHU4J47O57GF2474LWBZOQCEQGSDISIHYYV7NLSOPFXFOXMRK5",
+          "type": "ed25519_public_key",
+          "weight": 1
+        },
+        {
+          "key": "GDZIANBSF5YR7UMCV4QX2EPHAR3H6VH44ZKNFPAX77USZWG32ETPEU37",
+          "type": "ed25519_public_key",
+          "weight": 0
+        }
+      ],
+      "thresholds": {
+        "high_threshold": 1,
+        "low_threshold": 1,
+        "med_threshold": 1
+      }
+    }
+  },
+  "allAsExpected": true,
+  "cases": [
+    {
+      "asExpected": true,
+      "expected": "in ledger, success",
+      "hash": "0465c828fb3946c53abd2ee25d1e62d9e471eb3840c9fb02665ca14c73eb8997",
+      "horizon": {
+        "allSignaturesByCustodyKey": true,
+        "feeAccount": "GAYV7XGB7HYIJ7FQEQUKLPGYW22VT6CPCGB5RRIU5OLAIJJL4HVXQOBU",
+        "innerSignatures": null,
+        "signatures": 1,
+        "sourceAccount": "GAYV7XGB7HYIJ7FQEQUKLPGYW22VT6CPCGB5RRIU5OLAIJJL4HVXQOBU",
+        "successful": true
+      },
+      "id": "a-hash",
+      "ledger": 5498148,
+      "result": "TxSuccess",
+      "rpcStatus": "PENDING → SUCCESS",
+      "signedBy": "custody via Dfns `Hash`",
+      "source": "channel-1",
+      "sourceAddress": "GAYV7XGB7HYIJ7FQEQUKLPGYW22VT6CPCGB5RRIU5OLAIJJL4HVXQOBU",
+      "what": "classic payment, 1 XLM to fund"
+    },
+    {
+      "asExpected": true,
+      "expected": "in ledger, success",
+      "hash": "4e4e8d1e6e3c8f5221dbb530ad37879b89fb043bca91c84ef6d8e2748489c317",
+      "horizon": {
+        "allSignaturesByCustodyKey": true,
+        "feeAccount": "GCXPKHEF3FNKRX46BNDUFYSVDBXXYZVZWLHXWPVUMHOCHAURKSCXHMQJ",
+        "innerSignatures": null,
+        "signatures": 1,
+        "sourceAccount": "GCXPKHEF3FNKRX46BNDUFYSVDBXXYZVZWLHXWPVUMHOCHAURKSCXHMQJ",
+        "successful": true
+      },
+      "id": "b-hash",
+      "ledger": 5498149,
+      "result": "TxSuccess",
+      "rpcStatus": "PENDING → SUCCESS",
+      "signedBy": "custody via Dfns `Hash`",
+      "source": "channel-2",
+      "sourceAddress": "GCXPKHEF3FNKRX46BNDUFYSVDBXXYZVZWLHXWPVUMHOCHAURKSCXHMQJ",
+      "what": "Soroban InvokeHostFunction: native contract `transfer`, 1 XLM to fund"
+    },
+    {
+      "asExpected": true,
+      "expected": "in ledger, success",
+      "hash": "71d6270a5f4e96ac7850364bbb51812eedd0df468431d7e971566e336ae0c6b7",
+      "horizon": {
+        "allSignaturesByCustodyKey": true,
+        "feeAccount": "GDZIANBSF5YR7UMCV4QX2EPHAR3H6VH44ZKNFPAX77USZWG32ETPEU37",
+        "innerSignatures": 1,
+        "signatures": 1,
+        "sourceAccount": "GAYV7XGB7HYIJ7FQEQUKLPGYW22VT6CPCGB5RRIU5OLAIJJL4HVXQOBU",
+        "successful": true
+      },
+      "id": "c-hash",
+      "ledger": 5498150,
+      "result": "TxFeeBumpInnerSuccess (inner TxSuccess)",
+      "rpcStatus": "PENDING → SUCCESS",
+      "signedBy": "inner and outer: custody via Dfns `Hash`",
+      "source": "channel-1",
+      "sourceAddress": "GAYV7XGB7HYIJ7FQEQUKLPGYW22VT6CPCGB5RRIU5OLAIJJL4HVXQOBU",
+      "what": "fee bump (fee source fund) of a Soroban native `transfer`, 1 XLM to fund"
+    },
+    {
+      "asExpected": true,
+      "expected": "in ledger, success",
+      "hash": "1c97c776e6cbd078ab5c84b73f9fd273f3f84dafb1b0d4b86181d1fe6f13ee47",
+      "horizon": {
+        "allSignaturesByCustodyKey": true,
+        "feeAccount": "GAYV7XGB7HYIJ7FQEQUKLPGYW22VT6CPCGB5RRIU5OLAIJJL4HVXQOBU",
+        "innerSignatures": null,
+        "signatures": 1,
+        "sourceAccount": "GAYV7XGB7HYIJ7FQEQUKLPGYW22VT6CPCGB5RRIU5OLAIJJL4HVXQOBU",
+        "successful": true
+      },
+      "id": "a-transaction",
+      "ledger": 5498151,
+      "result": "TxSuccess",
+      "rpcStatus": "PENDING → SUCCESS",
+      "signedBy": "custody via Dfns `Transaction`",
+      "source": "channel-1",
+      "sourceAddress": "GAYV7XGB7HYIJ7FQEQUKLPGYW22VT6CPCGB5RRIU5OLAIJJL4HVXQOBU",
+      "what": "classic payment, 1 XLM to fund"
+    },
+    {
+      "asExpected": true,
+      "expected": "in ledger, success",
+      "hash": "9ee5c66eb6af1c9fca5959c6dd91828e59eeeed7a951ae28b39d3fab0a6ce164",
+      "horizon": {
+        "allSignaturesByCustodyKey": true,
+        "feeAccount": "GCXPKHEF3FNKRX46BNDUFYSVDBXXYZVZWLHXWPVUMHOCHAURKSCXHMQJ",
+        "innerSignatures": null,
+        "signatures": 1,
+        "sourceAccount": "GCXPKHEF3FNKRX46BNDUFYSVDBXXYZVZWLHXWPVUMHOCHAURKSCXHMQJ",
+        "successful": true
+      },
+      "id": "b-transaction",
+      "ledger": 5498152,
+      "result": "TxSuccess",
+      "rpcStatus": "PENDING → SUCCESS",
+      "signedBy": "custody via Dfns `Transaction`",
+      "source": "channel-2",
+      "sourceAddress": "GCXPKHEF3FNKRX46BNDUFYSVDBXXYZVZWLHXWPVUMHOCHAURKSCXHMQJ",
+      "what": "Soroban InvokeHostFunction: native contract `transfer`, 1 XLM to fund"
+    },
+    {
+      "asExpected": true,
+      "expected": "in ledger, success",
+      "hash": "fe1e655088f93d5496ba49b1d8972b0886e05abad5330853a16eb7b05920f374",
+      "horizon": {
+        "allSignaturesByCustodyKey": true,
+        "feeAccount": "GDZIANBSF5YR7UMCV4QX2EPHAR3H6VH44ZKNFPAX77USZWG32ETPEU37",
+        "innerSignatures": 1,
+        "signatures": 1,
+        "sourceAccount": "GAYV7XGB7HYIJ7FQEQUKLPGYW22VT6CPCGB5RRIU5OLAIJJL4HVXQOBU",
+        "successful": true
+      },
+      "id": "c-transaction",
+      "ledger": 5498153,
+      "result": "TxFeeBumpInnerSuccess (inner TxSuccess)",
+      "rpcStatus": "PENDING → SUCCESS",
+      "signedBy": "inner and outer: custody via Dfns `Transaction`",
+      "source": "channel-1",
+      "sourceAddress": "GAYV7XGB7HYIJ7FQEQUKLPGYW22VT6CPCGB5RRIU5OLAIJJL4HVXQOBU",
+      "what": "fee bump (fee source fund) of a Soroban native `transfer`, 1 XLM to fund"
+    },
+    {
+      "asExpected": true,
+      "expected": "refused",
+      "hash": "149ca07d3ab3e44cff6315b64a9043e48caed683692cf3628d48b85c1d9d295f",
+      "horizon": null,
+      "id": "n1",
+      "ledger": null,
+      "result": "TxBadAuth",
+      "rpcStatus": "ERROR",
+      "signedBy": "channel-1 master key (weight 0)",
+      "source": "channel-1",
+      "sourceAddress": "GAYV7XGB7HYIJ7FQEQUKLPGYW22VT6CPCGB5RRIU5OLAIJJL4HVXQOBU",
+      "what": "classic payment, 1 XLM to fund"
+    },
+    {
+      "asExpected": true,
+      "expected": "refused",
+      "hash": "149ca07d3ab3e44cff6315b64a9043e48caed683692cf3628d48b85c1d9d295f",
+      "horizon": null,
+      "id": "n2",
+      "ledger": null,
+      "result": "TxBadAuth",
+      "rpcStatus": "ERROR",
+      "signedBy": "unrelated via Dfns `Hash`",
+      "source": "channel-1",
+      "sourceAddress": "GAYV7XGB7HYIJ7FQEQUKLPGYW22VT6CPCGB5RRIU5OLAIJJL4HVXQOBU",
+      "what": "classic payment, 1 XLM to fund"
+    },
+    {
+      "asExpected": true,
+      "expected": "refused",
+      "hash": "e9a381cb8ad51829d2f0a31f415219aba9535b1d7a382a4891e9b5fdc6e31072",
+      "horizon": null,
+      "id": "n3",
+      "ledger": null,
+      "result": "TxBadAuth",
+      "rpcStatus": "ERROR",
+      "signedBy": "unrelated via Dfns `Transaction`",
+      "source": "channel-2",
+      "sourceAddress": "GCXPKHEF3FNKRX46BNDUFYSVDBXXYZVZWLHXWPVUMHOCHAURKSCXHMQJ",
+      "what": "Soroban InvokeHostFunction: native contract `transfer`, 1 XLM to fund"
+    },
+    {
+      "asExpected": true,
+      "expected": "refused",
+      "hash": "4c7fc6bbc244c6b9f319d4856c9bb75d34cd9b356482107f330c4a111fed4c31",
+      "horizon": null,
+      "id": "n4",
+      "ledger": null,
+      "result": "TxBadAuth",
+      "rpcStatus": "ERROR",
+      "signedBy": "inner: custody via Dfns `Hash`; outer: fund master key (weight 0)",
+      "source": "channel-1",
+      "sourceAddress": "GAYV7XGB7HYIJ7FQEQUKLPGYW22VT6CPCGB5RRIU5OLAIJJL4HVXQOBU",
+      "what": "fee bump (fee source fund) of a Soroban native `transfer`, 1 XLM to fund"
+    }
+  ],
+  "custodyKey": {
+    "address": "GDDSXOOHU4J47O57GF2474LWBZOQCEQGSDISIHYYV7NLSOPFXFOXMRK5",
+    "dfnsKeyId": "key-cqyir-j4bir-5287lmgwkb5gn0xc"
+  },
+  "horizon": "https://horizon-testnet.stellar.org",
+  "network": "Test SDF Network ; September 2015",
+  "protocolVersion": 29,
+  "rpc": "https://soroban-testnet.stellar.org",
+  "setup": [
+    {
+      "account": "fund",
+      "address": "GDZIANBSF5YR7UMCV4QX2EPHAR3H6VH44ZKNFPAX77USZWG32ETPEU37",
+      "hash": "22ba75a3b7823d678d2ac2866f835c68bb82711245a0f891d5101003d0a84cce",
+      "ledger": 5498143,
+      "result": "TxSuccess",
+      "rpcStatus": "PENDING → SUCCESS"
+    },
+    {
+      "account": "channel-1",
+      "address": "GAYV7XGB7HYIJ7FQEQUKLPGYW22VT6CPCGB5RRIU5OLAIJJL4HVXQOBU",
+      "hash": "c8437feeddd5bab8fbf60f3ee432e85d65bdc4c67f8bdd0f75bc24ca8208e586",
+      "ledger": 5498145,
+      "result": "TxSuccess",
+      "rpcStatus": "PENDING → SUCCESS"
+    },
+    {
+      "account": "channel-2",
+      "address": "GCXPKHEF3FNKRX46BNDUFYSVDBXXYZVZWLHXWPVUMHOCHAURKSCXHMQJ",
+      "hash": "e745bb5483b24705d4dc51be08e7b780122f6f750d300b5ac533ec174f8419a1",
+      "ledger": 5498147,
+      "result": "TxSuccess",
+      "rpcStatus": "PENDING → SUCCESS"
+    }
+  ],
+  "unrelatedKey": {
+    "address": "GCA2RXDNE4XZHN6W2QMGAS2JWXQOIWQ34TB4MXKWKNPIBP6JKK4ONDKH",
+    "dfnsKeyId": "key-oti8k-uj1g1-2v5u7lty8vnzbppb"
+  }
+}

@@ -374,3 +374,61 @@ fn unknown_keys_signatures_and_routes_are_404() {
         404,
     );
 }
+
+#[test]
+fn create_key_follows_the_documented_schema() {
+    let mock = start_mock();
+    let http = Http::new(mock.url());
+    let bearer = format!("Bearer {TOKEN}");
+    let create = |body: &str| {
+        let user_action = http.user_action(&credential_key(), CRED_ID, "/keys", body);
+        http.send(
+            "POST",
+            "/keys",
+            &[
+                ("Authorization", &bearer),
+                ("X-DFNS-USERACTION", &user_action),
+            ],
+            Some(body),
+        )
+    };
+
+    let (status, key) = create(r#"{"scheme":"EdDSA","curve":"ed25519","name":"custody"}"#);
+    assert_eq!(status, 200, "{key}");
+    for field in [
+        "id",
+        "scheme",
+        "curve",
+        "publicKey",
+        "status",
+        "dateCreated",
+    ] {
+        assert!(key[field].is_string(), "{field} in {key}");
+    }
+    assert_eq!(key["custodial"], true);
+    let public = key["publicKey"].as_str().unwrap();
+    assert_eq!(hex::decode(public).map(|b| b.len()).ok(), Some(32), "{key}");
+
+    // The new key signs.
+    let (status, signature) = http.generate(key["id"].as_str().unwrap(), HASH_BODY);
+    assert_eq!(status, 200, "{signature}");
+
+    assert_error(
+        &http.send(
+            "POST",
+            "/keys",
+            &[("Authorization", &bearer)],
+            Some(r#"{"scheme":"EdDSA","curve":"ed25519"}"#),
+        ),
+        403,
+    );
+    for body in [
+        r#"{"scheme":"EdDSA"}"#,
+        r#"{"scheme":"EdDSA","curve":"ed25519","seed":"00"}"#,
+        r#"{"scheme":"EdDSA","curve":"curve25519"}"#,
+        r#"{"scheme":"Schnorr","curve":"secp256k1"}"#,
+        r#"{"scheme":"EdDSA","curve":"ed25519","delegateTo":"us-aaaaa-bbbbb-cccccccccccccccc"}"#,
+    ] {
+        assert_error(&create(body), 400);
+    }
+}

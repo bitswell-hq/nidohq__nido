@@ -1,7 +1,9 @@
 //! A [`KeyKeeper`] backed by the Dfns Keys API.
 //!
 //! Signing is one state-changing call, `POST /keys/{keyId}/signatures`
-//! (Generate Signature), which Dfns authenticates with two headers:
+//! (Generate Signature). The client makes one other, `POST /keys` (Create
+//! Key), so a key can be generated inside Dfns and only its public half
+//! leave. Dfns authenticates both with two headers:
 //!
 //! - `Authorization: Bearer <token>`: a service account token, personal
 //!   access token or login token.
@@ -31,9 +33,9 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use self::api::{
-    ErrorBody, FirstFactor, GenerateSignatureRequest, KeyAssertion, SignatureComponents,
-    SignatureRequest, SignatureStatus, UserActionChallenge, UserActionChallengeRequest,
-    UserActionSignature, UserActionSignatureRequest,
+    CreateKeyRequest, ErrorBody, FirstFactor, GenerateSignatureRequest, Key, KeyAssertion,
+    SignatureComponents, SignatureRequest, SignatureStatus, UserActionChallenge,
+    UserActionChallengeRequest, UserActionSignature, UserActionSignatureRequest,
 };
 use crate::{KeyId, KeyKeeper, Payload, SignError, Signature};
 
@@ -108,16 +110,36 @@ impl DfnsKeyKeeper {
         request: &GenerateSignatureRequest,
     ) -> Result<SignatureRequest, SignError> {
         let path = format!("/keys/{}/signatures", key.as_str());
+        self.post_user_action(&path, request, Some(key))
+    }
+
+    /// Create Key. Dfns generates the key; only its id and public key come
+    /// back.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::generate_signature`].
+    pub fn create_key(&self, request: &CreateKeyRequest) -> Result<Key, SignError> {
+        self.post_user_action("/keys", request, None)
+    }
+
+    /// `POST` a state-changing request with its own user action token.
+    fn post_user_action<T: DeserializeOwned>(
+        &self,
+        path: &str,
+        request: &impl Serialize,
+        key: Option<&KeyId>,
+    ) -> Result<T, SignError> {
         let body = to_json(request)?;
-        let user_action = self.user_action("POST", &path, &body)?;
+        let user_action = self.user_action("POST", path, &body)?;
         let response = self
             .agent
-            .post(&self.url(&path))
+            .post(&self.url(path))
             .header("Authorization", &self.bearer())
             .header("X-DFNS-USERACTION", &user_action)
             .content_type("application/json")
             .send(&body);
-        read(response, Some(key))
+        read(response, key)
     }
 
     /// Get Signature.
