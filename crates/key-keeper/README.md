@@ -26,7 +26,7 @@ malformed response.
 | Implementation | What it is |
 | - | - |
 | `MemoryKeyKeeper` | Ed25519 keys in process. It records every request it receives, refused ones included, so tests of later components can check what reached the keeper. |
-| `dfns::DfnsKeyKeeper` | A client for the Dfns Keys API [Generate Signature][generate-signature] endpoint, with the user action signing flow that endpoint requires. |
+| `dfns::DfnsKeyKeeper` | A client for the Dfns Keys API [Generate Signature][generate-signature] and [Create Key][create-key] endpoints, with the user action signing flow both require. |
 | `dfns::mock` and the `dfns-mock` binary | A local HTTP server for the same endpoints, signing with Ed25519 keys it holds. The client's tests run against it. |
 
 `stellar` has the helpers they share: the transaction hash (`stellar-xdr`'s
@@ -52,7 +52,13 @@ Generate Signature is `POST /keys/{keyId}/signatures`. It needs two headers
      `firstFactor: {kind: "Key", credentialAssertion: {credId, clientData, signature}}`
      (base64url). The response's `userAction` is the header value.
 
-Request bodies by payload:
+Create Key is `POST /keys` with the same two headers. `DfnsKeyKeeper::create_key`
+sends a `CreateKeyRequest` (`CreateKeyRequest::ed25519` gives
+`{"scheme": "EdDSA", "curve": "ed25519"}`) and returns the `Key`: `id`,
+`publicKey` (hex), `status`, `custodial`, `dateCreated`. The private key stays
+with Dfns.
+
+Generate Signature request bodies by payload:
 
 ```json
 {"kind": "Hash", "hash": "0x<32 bytes>"}
@@ -93,13 +99,15 @@ cargo run -p nido-key-keeper --bin dfns-mock -- --config mock.json --listen 127.
 }
 ```
 
-On start it prints its URL and each key's `G…` address. Tests start it in
+On start it prints its URL and each configured key's `G…` address. `keys` may
+be empty: Create Key adds keys the mock generates itself. Tests start it in
 process with `MockServer::start(&config, "127.0.0.1:0")`.
 
 | Route | Auth |
 | - | - |
 | `POST /auth/action/init` | bearer |
 | `POST /auth/action` | bearer |
+| `POST /keys` | bearer + `X-DFNS-USERACTION` |
 | `POST /keys/{keyId}/signatures` | bearer + `X-DFNS-USERACTION` |
 | `GET /keys/{keyId}/signatures/{signatureId}` | bearer |
 
@@ -120,6 +128,9 @@ What follows the reference:
   record with `200` ([Idempotency][idempotency]).
 - A user action token authorizes one request: the bearer token, method, path
   and exact body named at `/auth/action/init`.
+- Create Key bodies are checked against the documented schema the same way
+  (`scheme` and `curve` enums, `name` at most 100 characters, no unknown
+  fields), and the response carries the documented `Key` fields.
 - Responses carry the documented `SignatureRequest` fields: `id`, `keyId`,
   `requester`, `requestBody`, `status`, `signature {r, s, encoded}`, `network`,
   `externalId`, `dateRequested`, `dateSigned`.
@@ -140,6 +151,13 @@ evidence of how Dfns behaves:
 - `Hash` signs the 32 bytes as the Ed25519 message, `Message` signs the bytes,
   and `Transaction` signs the envelope's transaction hash for `network`. The
   envelope's source account is not checked.
+- Create Key creates only `EdDSA` / `ed25519` keys, from OS randomness, and
+  answers any other documented scheme and curve with `400`. `masterKey: true`,
+  `deriveFrom`, `storeId`, `delegateTo` and `delayDelegation` also get `400`.
+  `publicKey` is bare hex, like the reference's one `publicKey` example.
+- A `Transaction` request may carry a fee-bump envelope; the mock signs the
+  fee-bump transaction hash. Whether Dfns accepts one under `Transaction` is
+  not stated.
 - Documented kinds that are not EdDSA kinds (`Eip191`, `Psbt`, …) get `400`.
   `StellarFeeBumpTransaction` is parsed and then refused with `400`, because the
   reference gives its fields (`innerTransaction`, `transactionReference`) but
@@ -149,6 +167,14 @@ evidence of how Dfns behaves:
   webhooks, and it omits `signedData`.
 - Hex response fields carry a `0x` prefix. The reference has no
   Generate Signature response example to copy.
+
+## Testnet check
+
+`examples/testnet_channel.rs` creates a custody key in the mock with Create
+Key, makes it the sole signer of fresh testnet channel accounts, and submits
+channel-sourced classic, Soroban and fee-bump transactions signed only through
+`DfnsKeyKeeper`. The recorded run and what it shows are in
+[`evaluation/testnet-channel`](../../evaluation/testnet-channel/README.md).
 
 ## Dfns signature kinds for Ed25519 / Stellar keys
 
@@ -205,13 +231,14 @@ request returns is unknown, so the client accepts either.
 
 The Dfns reference this crate follows (`OpenAPI` version 2.0.368):
 
-- Keys API: [Generate Signature][generate-signature], [Get Signature][get-signature], [OpenAPI document][openapi]
+- Keys API: [Create Key][create-key], [Generate Signature][generate-signature], [Get Signature][get-signature], [OpenAPI document][openapi]
 - Signing: [Sign][sign-index], [Stellar signing][sign-stellar], [Supported key formats][key-formats]
 - Authentication: [Required headers][auth-headers], [User Action Signing flows][signing-flows], [Credentials data][credentials-data], [Create User Action Challenge][user-action-challenge], [Create User Action Signature][user-action-signature]
 - Behavior: [API Errors][errors], [Idempotency][idempotency]
 - Policies: [Policies][policies], [Policies API][policies-api], [Policies for signature requests][signing-policies]
 - SDK: [TypeScript `AsymmetricKeySigner`][ts-keysigner]
 
+[create-key]: https://docs.dfns.co/api-reference/keys/create-key
 [generate-signature]: https://docs.dfns.co/api-reference/keys/generate-signature
 [get-signature]: https://docs.dfns.co/api-reference/keys/get-signature
 [user-action-challenge]: https://docs.dfns.co/api-reference/auth/create-user-action-challenge

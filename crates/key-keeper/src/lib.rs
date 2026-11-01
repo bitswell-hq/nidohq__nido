@@ -12,9 +12,9 @@
 //! - [`MemoryKeyKeeper`]: Ed25519 keys in process, for unit tests of the
 //!   components built on this interface.
 //! - [`dfns::DfnsKeyKeeper`]: a client for the Dfns Keys API Generate
-//!   Signature endpoint.
-//! - [`dfns::mock`]: a local HTTP server implementing that endpoint (and the
-//!   user action signing flow it requires) over local Ed25519 keys; the
+//!   Signature and Create Key endpoints.
+//! - [`dfns::mock`]: a local HTTP server implementing those endpoints (and
+//!   the user action signing flow they require) over local Ed25519 keys; the
 //!   `dfns-mock` binary runs it.
 //!
 //! [`stellar`] has the Stellar transaction hash and decorated-signature

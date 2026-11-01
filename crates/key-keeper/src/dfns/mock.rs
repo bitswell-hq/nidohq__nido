@@ -7,6 +7,7 @@
 //! | - | - |
 //! | `POST /auth/action/init` | bearer |
 //! | `POST /auth/action` | bearer |
+//! | `POST /keys` | bearer + `X-DFNS-USERACTION` |
 //! | `POST /keys/{keyId}/signatures` | bearer + `X-DFNS-USERACTION` |
 //! | `GET /keys/{keyId}/signatures/{signatureId}` | bearer |
 //!
@@ -19,8 +20,9 @@
 //!
 //! Where the reference states no behavior, the mock picks one and the crate
 //! README lists each choice: the status for an invalid (rather than missing)
-//! user action token or credential signature, the scope of its keys (Stellar
-//! networks only), and the kinds it does not implement.
+//! user action token or credential signature, the scope of its keys (Ed25519
+//! keys for Stellar networks only), and the signature kinds and Create Key
+//! options it does not implement.
 
 use std::collections::BTreeMap;
 use std::io::Read as _;
@@ -35,10 +37,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use super::api::{
-    AllowCredentials, AllowedCredential, ErrorBody, ErrorDetail, FirstFactor,
-    GenerateSignatureRequest, Requester, SignatureComponents, SignatureRequest, SignatureStatus,
-    SupportedCredentialKind, UserActionChallenge, UserActionChallengeRequest, UserActionSignature,
-    UserActionSignatureRequest, BLOCKCHAIN_KINDS, NETWORKS, SIGNATURE_KINDS,
+    AllowCredentials, AllowedCredential, CreateKeyRequest, ErrorBody, ErrorDetail, FirstFactor,
+    GenerateSignatureRequest, Key, Requester, SignatureComponents, SignatureRequest,
+    SignatureStatus, SupportedCredentialKind, UserActionChallenge, UserActionChallengeRequest,
+    UserActionSignature, UserActionSignatureRequest, BLOCKCHAIN_KINDS, KEY_CURVES, KEY_SCHEMES,
+    NETWORKS, SIGNATURE_KINDS,
 };
 use crate::{ed25519, stellar, Payload, SignError, StellarNetwork};
 
@@ -326,6 +329,7 @@ impl Mock {
         match (method, segments.as_slice()) {
             ("POST", ["auth", "action", "init"]) => self.create_challenge(&token, body),
             ("POST", ["auth", "action"]) => self.create_user_action(&token, body),
+            ("POST", ["keys"]) => self.create_key(&token, method, path, headers, body),
             ("POST", ["keys", key_id, "signatures"]) => {
                 self.generate_signature(&token, method, path, headers, key_id, body)
             }
@@ -464,6 +468,104 @@ impl Mock {
         Reply::ok(&UserActionSignature { user_action })
     }
 
+    /// Spend the request's `X-DFNS-USERACTION` token, which must authorize
+    /// exactly this call. A presented token is spent whether or not it
+    /// matches.
+    fn spend_user_action(
+        &mut self,
+        token: &str,
+        method: &str,
+        path: &str,
+        headers: &Headers,
+        body: &str,
+    ) -> Result<(), Reply> {
+        let Some(user_action) = headers.user_action.as_deref() else {
+            return Err(Reply::error(403, "User action signature is missing", None));
+        };
+        let authorized = self.user_actions.remove(user_action);
+        let presented = Action {
+            token: token.to_owned(),
+            method: method.to_owned(),
+            path: path.to_owned(),
+            payload: body.to_owned(),
+        };
+        if authorized.as_ref() != Some(&presented) {
+            return Err(Reply::error(
+                403,
+                "user action signature does not authorize this request",
+                None,
+            ));
+        }
+        Ok(())
+    }
+
+    /// Create Key: a fresh Ed25519 key from OS randomness. The seed never
+    /// leaves the mock.
+    fn create_key(
+        &mut self,
+        token: &str,
+        method: &str,
+        path: &str,
+        headers: &Headers,
+        body: &str,
+    ) -> Reply {
+        if let Err(reply) = self.spend_user_action(token, method, path, headers, body) {
+            return reply;
+        }
+        let request: CreateKeyRequest = match parse(body) {
+            Ok(r) => r,
+            Err(reply) => return reply,
+        };
+        if !KEY_SCHEMES.contains(&request.scheme.as_str()) {
+            return bad(&format!("unknown scheme {}", request.scheme));
+        }
+        if !KEY_CURVES.contains(&request.curve.as_str()) {
+            return bad(&format!("unknown curve {}", request.curve));
+        }
+        if (request.scheme.as_str(), request.curve.as_str()) != ("EdDSA", "ed25519") {
+            return bad(&format!(
+                "{} over {} is not supported by this mock's Stellar keys",
+                request.scheme, request.curve
+            ));
+        }
+        if request
+            .name
+            .as_ref()
+            .is_some_and(|n| n.chars().count() > 100)
+        {
+            return bad("name must be at most 100 characters");
+        }
+        if request.master_key == Some(true)
+            || request.derive_from.is_some()
+            || request.store_id.is_some()
+            || request.delegate_to.is_some()
+            || request.delay_delegation.is_some()
+        {
+            return bad(
+                "masterKey, deriveFrom, storeId, delegateTo and delayDelegation are not supported by this mock",
+            );
+        }
+        let signing_key = SigningKey::from_bytes(&random_bytes::<32>());
+        let key = Key {
+            id: dfns_id("key"),
+            scheme: request.scheme,
+            curve: request.curve,
+            public_key: hex::encode(signing_key.verifying_key().to_bytes()),
+            master_key: None,
+            derived_from: None,
+            name: request.name,
+            status: "Active".to_owned(),
+            custodial: true,
+            date_created: iso8601_now(),
+            imported: None,
+            exported: None,
+            date_exported: None,
+            date_deleted: None,
+        };
+        self.keys.insert(key.id.clone(), signing_key);
+        Reply::ok(&key)
+    }
+
     fn generate_signature(
         &mut self,
         token: &str,
@@ -473,23 +575,8 @@ impl Mock {
         key_id: &str,
         body: &str,
     ) -> Reply {
-        let Some(user_action) = headers.user_action.as_deref() else {
-            return Reply::error(403, "User action signature is missing", None);
-        };
-        // One-time: a presented token is spent whether or not it matches.
-        let authorized = self.user_actions.remove(user_action);
-        let presented = Action {
-            token: token.to_owned(),
-            method: method.to_owned(),
-            path: path.to_owned(),
-            payload: body.to_owned(),
-        };
-        if authorized.as_ref() != Some(&presented) {
-            return Reply::error(
-                403,
-                "user action signature does not authorize this request",
-                None,
-            );
+        if let Err(reply) = self.spend_user_action(token, method, path, headers, body) {
+            return reply;
         }
         if key_id.is_empty() || key_id.len() > 64 {
             return Reply::error(400, "keyId must be 1 to 64 characters", None);

@@ -6,7 +6,7 @@ mod common;
 
 use common::{client, client_with, key, key_public, payment_envelope, start_mock, xdr};
 use ed25519_dalek::{Signature as EdSignature, SigningKey, VerifyingKey};
-use nido_key_keeper::dfns::api::{GenerateSignatureRequest, SignatureStatus};
+use nido_key_keeper::dfns::api::{CreateKeyRequest, GenerateSignatureRequest, SignatureStatus};
 use nido_key_keeper::dfns::request_for;
 use nido_key_keeper::{
     stellar, KeyId, KeyKeeper, MemoryKeyKeeper, Payload, SignError, StellarNetwork,
@@ -339,4 +339,69 @@ fn the_memory_keeper_records_refused_requests_too() {
             .collect::<Vec<_>>(),
         [unknown, key()]
     );
+}
+
+#[test]
+fn a_created_key_signs_as_the_public_key_it_reports() {
+    let mock = start_mock();
+    let keeper = client(&mock);
+    let created = keeper
+        .create_key(&CreateKeyRequest::ed25519(Some("custody")))
+        .expect("mock creates the key");
+    assert_eq!(
+        (created.scheme.as_str(), created.curve.as_str()),
+        ("EdDSA", "ed25519")
+    );
+    assert_eq!(created.status, "Active");
+    assert_eq!(created.name.as_deref(), Some("custody"));
+    let public: [u8; 32] = hex::decode(&created.public_key)
+        .unwrap()
+        .try_into()
+        .unwrap();
+
+    let envelope = payment_envelope(&stellar::account_strkey(&public));
+    let tx_hash = independent_tx_hash("Test SDF Network ; September 2015", &envelope);
+    let signature = keeper
+        .sign(&KeyId::new(&created.id), &Payload::Hash(tx_hash))
+        .unwrap()
+        .to_ed25519()
+        .unwrap();
+    assert!(stellar::verify_decorated_signature(
+        &public,
+        &tx_hash,
+        &stellar::decorated_signature(&public, &signature)
+    ));
+
+    let second = keeper.create_key(&CreateKeyRequest::ed25519(None)).unwrap();
+    assert_ne!(second.id, created.id);
+    assert_ne!(second.public_key, created.public_key);
+}
+
+#[test]
+fn keys_the_mock_cannot_create_are_invalid_requests() {
+    let mock = start_mock();
+    let keeper = client(&mock);
+    let ecdsa = CreateKeyRequest {
+        scheme: "ECDSA".to_owned(),
+        curve: "secp256k1".to_owned(),
+        ..CreateKeyRequest::default()
+    };
+    let unknown = CreateKeyRequest {
+        scheme: "RSA".to_owned(),
+        ..CreateKeyRequest::ed25519(None)
+    };
+    let derived = CreateKeyRequest {
+        master_key: Some(true),
+        ..CreateKeyRequest::ed25519(None)
+    };
+    let long_name = CreateKeyRequest::ed25519(Some(&"n".repeat(101)));
+    for request in [ecdsa, unknown, derived, long_name] {
+        assert!(
+            matches!(
+                keeper.create_key(&request),
+                Err(SignError::InvalidRequest(_))
+            ),
+            "{request:?}"
+        );
+    }
 }
