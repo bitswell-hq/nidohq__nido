@@ -1,0 +1,8 @@
+name = "email-recovery"
+defaultTargets = ["EmailRecovery"]
+
+[leanOptions]
+autoImplicit = false
+
+[[lean_lib]]
+name = "EmailRecovery"

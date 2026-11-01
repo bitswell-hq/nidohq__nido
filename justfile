@@ -103,6 +103,12 @@ build-contracts:
 email-recovery-docs:
     bash research/email-recovery/build.sh
 
+# Needs elan, which fetches the Lean release lean-toolchain pins.
+# See research/email-recovery/formal/README.md.
+# Build and check the email-recovery Lean model and proofs
+email-recovery-formal:
+    cd research/email-recovery/formal && lake build
+
 build-ts:
     npx tsc -p ./packages/passkey-sdk/tsconfig.json
 

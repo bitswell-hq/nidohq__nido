@@ -1,0 +1,43 @@
+name: Email-recovery formal model
+
+on:
+  pull_request:
+    paths:
+      - "research/email-recovery/formal/**"
+      - ".github/workflows/email-recovery-formal.yml"
+  push:
+    branches: [main]
+    paths:
+      - "research/email-recovery/formal/**"
+      - ".github/workflows/email-recovery-formal.yml"
+  workflow_dispatch:
+
+jobs:
+  lean:
+    name: Lean (lake build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: research/email-recovery/formal
+    steps:
+      - uses: actions/checkout@v4
+
+      # elan reads lean-toolchain and installs that Lean release on the first
+      # `lake` call. The package has no Lake dependencies.
+      - name: Install elan
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/v4.2.4/elan-init.sh \
+            | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      # The proofs must not rely on escape hatches the kernel cannot check.
+      # EmailRecovery/Axioms.lean separately pins each theorem's axioms.
+      - name: Reject unchecked declarations
+        run: |
+          if grep -rnE '\b(partial|unsafe|sorry|admit|native_decide|implemented_by|extern)\b|^\s*((private|protected)\s+)?axiom\b' \
+              --include='*.lean' EmailRecovery EmailRecovery.lean; then
+            exit 1
+          fi
+
+      - name: lake build
+        run: lake build

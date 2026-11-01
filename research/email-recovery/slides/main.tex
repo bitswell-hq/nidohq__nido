@@ -53,6 +53,8 @@
         \item The registry lists only real provider keys.\claim{registry-correctness}
         \item UltraHonk is knowledge-sound and zero-knowledge.\claim{proof-system-security}
         \item The commitment hides the address.\claim{commitment-hiding}
+        \item The hashes are collision resistant.\claim{hash-collision-resistance}
+        \item The enrolling wallet is honest.\claim{honest-enrollment}
       \end{itemize}
   \end{itemize}
 \end{frame}
@@ -93,10 +95,15 @@
 \begin{frame}{Properties}
   \small
   \begin{description}[Soundness]
-    \item[Soundness] \claimstatement{email-factor-soundness}\claim{email-factor-soundness}
-    \item[Privacy] \claimstatement{address-privacy}\claim{address-privacy}
-    \item[Replay] \claimstatement{replay-resistance}\claim{replay-resistance}
-    \item[One factor] \claimstatement{one-factor-safety}\claim{one-factor-safety}
+    \item[Soundness] An accepted approval implies a DKIM-signed email from the
+      committed address whose Subject opens to the statement's
+      digest.\claim{email-factor-soundness}
+    \item[Privacy] The chain sees the address only through the salted
+      commitment and pin root.\claim{address-privacy}
+    \item[Replay] One approval counts once, for one account, attempt and
+      epoch.\claim{replay-resistance}
+    \item[One factor] Email alone authorizes only at quorum one, and
+      completion waits for the delay.\claim{one-factor-safety}
   \end{description}
 \end{frame}
 
@@ -127,7 +134,8 @@
   \begin{itemize}
     \item zkEmail proves statements about DKIM email~\cite{zkemail-nr};
       zkLogin uses OIDC tokens~\cite{zklogin}.
-    \item All four properties are unproven; the assumptions are stated.
+    \item The four properties are proven about a model; its agreement with
+      the code is tested.
     \item The provider learns that a recovery email was sent.
     \item A key rotation can stall recovery up to the registry timelock.
   \end{itemize}
