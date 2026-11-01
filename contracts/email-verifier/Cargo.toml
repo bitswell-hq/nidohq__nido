@@ -1,0 +1,27 @@
+[package]
+name = "nido-email-verifier"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+# `lib` as well as `cdylib`: the integration tests link the crate for its
+# client and constants while deploying the contract from its wasm.
+[lib]
+crate-type = ["lib", "cdylib"]
+doctest = false
+
+[dependencies]
+# `alloc`: the vendored verifier allocates (`extern crate alloc`), and only
+# soroban-sdk's `alloc` feature provides a global allocator on wasm32v1-none.
+soroban-sdk = { workspace = true, features = ["alloc"] }
+# `ProofVerifierError`, the error ABI of Perch's `ProofVerifierInterface`.
+perch-recovery-interface = { workspace = true }
+# Perch's vendored UltraHonk verifier (NethermindEth/rs-soroban-ultrahonk
+# plus Perch's UltraKeccakZKFlavor delta), from the same Perch commit as the
+# other Perch crates, so it is the one Perch's ZK adapter compiles in.
+ultrahonk_soroban_verifier = { git = "https://github.com/stellar-registry/perch", rev = "603f7d5504f2d4d9338c135771cea18ac70dbe0c" }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+sha2 = "0.10"

@@ -21,3 +21,15 @@ pub global RECOVERY_PHRASE: str<30> = "APPROVE NIDO ACCOUNT RECOVERY ";
 pub global ENROLLMENT_PHRASE: str<29> = "ENROLL NIDO ACCOUNT RECOVERY ";
 /// `hex(x)`: 64 lowercase hexadecimal characters (section 2).
 pub global HEX_FIELD_LEN: u32 = 64;
+
+/// Bound on the signed header block `H`, in bytes (section 6.2). Every
+/// launch provider's recovery email fits, with the longest address and a
+/// display name of at least 500 bytes (`circuits/email-recovery/README.md`,
+/// "Header bound").
+pub global HEADER_MAX: u32 = 1536;
+/// Bound on the canonicalized DKIM-Signature field inside `H`, in bytes.
+pub global DKIM_FIELD_MAX: u32 = 512;
+/// Bound on the number of tags in that field.
+pub global DKIM_TAGS_MAX: u32 = 16;
+/// Length of `RECOVERY_PHRASE` in bytes.
+pub global RECOVERY_PHRASE_LEN: u32 = 30;

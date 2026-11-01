@@ -6,15 +6,15 @@
 //! `require_auth_for_args((digest,))` runs the guardian's real
 //! `__check_auth`.
 //!
-//! The DKIM key registry is the real contract from its wasm
-//! (`contracts/dkim-registry`), governed in these tests by a 3-of-5 multisig
-//! of generated addresses (revocation 2-of-5) and fed by the TEST-ONLY DNS
-//! attester mock (`crates/dns-attestation-mock`) over the fixture key
-//! records. The proof verifier is a TEST-ONLY stand-in with no cryptography:
-//! [`TestOnlyVerifier`] accepts a "proof" exactly when it is [`test_proof`]
-//! of the public inputs the guardian hands it, which is enough to show which
-//! statement, commitment, and key root an approval binds. It is replaced by
-//! the email circuit's verifier when that exists.
+//! Every dependency is real: the proof verifier is `nido-email-verifier`
+//! from its wasm (Perch's vendored `UltraHonk` verifier with the email
+//! circuit's key compiled in), every approval carries a real proof
+//! ([`crate::email_proof`]), and the DKIM key registry is
+//! `contracts/dkim-registry` from its wasm, governed by a 3-of-5 multisig of
+//! generated addresses (revocation 2-of-5) and fed by the TEST-ONLY DNS
+//! attester mock (`crates/dns-attestation-mock`). [`EmailInfra::new`] has it
+//! admit every launch domain's TEST-ONLY provider key through the attested
+//! path.
 
 // A test harness: every helper either returns the contract's own result or
 // panics on a failed setup step (which fails the test).
@@ -26,20 +26,17 @@
 
 extern crate std;
 
+use crate::email_proof::{self, Inbox, KeyPath, ProviderKey};
 use crate::world::{contract_at, Account, RecoveryResult, World};
-use crate::{DKIM_REGISTRY_WASM, EMAIL_GUARDIAN_WASM};
-use nido_dkim_registry::hash::Hasher;
+use crate::{DKIM_REGISTRY_WASM, EMAIL_GUARDIAN_WASM, EMAIL_VERIFIER_WASM};
 use nido_dkim_registry::{
     DkimRegistryClient, RegistryConfig, LAUNCH_DOMAINS, TIMELOCK_ATTESTED_LEDGERS,
 };
 use nido_dns_attestation_mock::{
     fixture, key_hash, modulus_2048, observe, FixtureRecord, TestAttester,
 };
-use nido_email_guardian::{
-    EmailApproval, EmailGuardianError, GuardianConfig, KeyPin, PUBLIC_INPUTS_LEN,
-};
+use nido_email_guardian::{EmailApproval, EmailGuardianError, GuardianConfig, KeyPin};
 use perch_recovery::EvidenceDomain;
-use perch_recovery_interface::zk::{split_hi_lo, ProofVerifierError};
 use perch_recovery_interface::{RecoveryStatement, StatementSubject};
 use perch_zk_primitives::contract_id;
 use soroban_sdk::auth::{Context, ContractContext};
@@ -48,58 +45,10 @@ use soroban_sdk::xdr::{
     SorobanAddressCredentials, SorobanAuthorizationEntry, SorobanAuthorizedInvocation,
     SorobanCredentials,
 };
-use soroban_sdk::{contract, contractimpl, Address, Bytes, BytesN, Env, IntoVal, Symbol, Val, Vec};
+use soroban_sdk::{Address, Bytes, BytesN, Env, IntoVal, Symbol, Val, Vec};
 use std::cell::Cell;
 use std::format;
-
-/// The size of a zero-knowledge `UltraHonk` proof, so payload sizes are real.
-pub const TEST_PROOF_LEN: usize = 16_224;
-
-/// TEST ONLY: the "proof" [`TestOnlyVerifier`] accepts for `public_inputs`:
-/// `sha256("nido/email-recovery/test-only-verifier" || public_inputs)`,
-/// zero-padded to a real proof's length.
-pub fn test_proof(e: &Env, public_inputs: &Bytes) -> Bytes {
-    let mut pre = Bytes::from_slice(e, b"nido/email-recovery/test-only-verifier");
-    pre.append(public_inputs);
-    let mut proof = Bytes::from_array(e, &e.crypto().sha256(&pre).to_array());
-    proof.extend_from_slice(&[0u8; TEST_PROOF_LEN - 32]);
-    proof
-}
-
-/// TEST ONLY: the circuit id [`TestOnlyVerifier`] reports.
-pub fn test_circuit_id(e: &Env) -> BytesN<32> {
-    e.crypto()
-        .sha256(&Bytes::from_slice(e, b"nido/email-recovery/test-only-vk"))
-        .to_bytes()
-}
-
-/// TEST ONLY: a verifier with no cryptography (see [`test_proof`]).
-#[contract]
-pub struct TestOnlyVerifier;
-
-// `#[contractimpl]` entry points: the SDK ABI takes owned arguments.
-#[allow(clippy::needless_pass_by_value)]
-#[contractimpl]
-impl TestOnlyVerifier {
-    pub fn circuit_id(e: &Env) -> BytesN<32> {
-        test_circuit_id(e)
-    }
-
-    pub fn verify_proof(
-        e: Env,
-        public_inputs: Bytes,
-        proof_bytes: Bytes,
-    ) -> Result<(), ProofVerifierError> {
-        if public_inputs.len() != PUBLIC_INPUTS_LEN {
-            return Err(ProofVerifierError::ProofParseError);
-        }
-        if proof_bytes == test_proof(&e, &public_inputs) {
-            Ok(())
-        } else {
-            Err(ProofVerifierError::VerificationFailed)
-        }
-    }
-}
+use std::string::ToString;
 
 /// The DKIM key registry from its wasm, with test members and the mock's
 /// test attesters. Member calls are authorized by `mock_auths` for exactly
@@ -205,8 +154,8 @@ impl TestRegistry {
         self.as_member(w, member, "approve", args, |c| c.approve(&m, &id));
     }
 
-    /// Attester `attester`'s observation of fixture `record` (the record as
-    /// the attester resolved it) for proposal `id`, submitted by anyone.
+    /// Attester `attester`'s observation of `record` (the record as the
+    /// attester resolved it) for proposal `id`, submitted by anyone.
     pub fn attest(&self, w: &World, id: u32, attester: usize, record: &FixtureRecord) {
         let p = self.client(w).proposal(&id).expect("a proposal");
         let signed = self.attesters[attester].attest(
@@ -228,20 +177,42 @@ impl TestRegistry {
         );
     }
 
-    /// Propose fixture `name`'s key for its domain, approve it 3-of-5, and
-    /// have two attesters see it live: an addition on the 72-hour path,
-    /// not yet executed. Returns the proposal id and the key's leaf.
-    pub fn propose_attested(&self, w: &World, name: &str) -> (u32, BytesN<32>) {
-        let record = fixture(name);
-        let n = modulus_2048(&record.parse().unwrap()).expect("an RSA-2048 fixture");
+    /// Propose `record`'s key for its domain, approve it 3-of-5, and have two
+    /// attesters see it live: an addition on the 72-hour path, not yet
+    /// executed. Returns the proposal id.
+    pub fn propose_attested_record(&self, w: &World, record: &FixtureRecord) -> u32 {
+        let n = modulus_2048(&record.parse().unwrap()).expect("an RSA-2048 record");
         let id = self.propose_add(w, 0, &record.domain, &n);
         self.approve(w, 1, id);
         self.approve(w, 2, id);
-        self.attest(w, id, 0, &record);
-        self.attest(w, id, 1, &record);
+        self.attest(w, id, 0, record);
+        self.attest(w, id, 1, record);
+        id
+    }
+
+    /// [`Self::propose_attested_record`] for the DNS attester mock's
+    /// fixture record `name`. Returns the proposal id and the key's leaf.
+    pub fn propose_attested(&self, w: &World, name: &str) -> (u32, BytesN<32>) {
+        let record = fixture(name);
+        let n = modulus_2048(&record.parse().unwrap()).expect("an RSA-2048 fixture");
+        let id = self.propose_attested_record(w, &record);
         let kh = BytesN::from_array(&w.env, &key_hash(&n));
-        let leaf = Hasher::new(&w.env).leaf(record.domain.as_bytes(), &kh);
+        let leaf =
+            nido_dkim_registry::hash::Hasher::new(&w.env).leaf(record.domain.as_bytes(), &kh);
         (id, leaf)
+    }
+
+    /// [`Self::propose_attested_record`] for a provider key as the mock DNS
+    /// publishes it.
+    pub fn propose_attested_key(&self, w: &World, key: &ProviderKey) -> u32 {
+        let record = FixtureRecord {
+            name: format!("{}/{}", key.domain, key.selector),
+            domain: key.domain.clone(),
+            selector: key.selector.clone(),
+            note: "TEST-ONLY provider key of @nidohq/email-mocks".to_string(),
+            strings: key.strings().into_iter().map(ToString::to_string).collect(),
+        };
+        self.propose_attested_record(w, &record)
     }
 
     /// Revoke `(domain, key_hash)` with members 3 and 4.
@@ -254,43 +225,19 @@ impl TestRegistry {
 /// The test registry's grace period: 24 hours.
 pub const REGISTRY_GRACE: u32 = 17_280;
 
-/// The circuit's public inputs as `docs/email-recovery/spec.md` lays them
-/// out: `C || digest_hi || digest_lo || key_root`.
-pub fn public_inputs(
-    e: &Env,
-    commitment: &BytesN<32>,
-    digest: &BytesN<32>,
-    root: &BytesN<32>,
-) -> Bytes {
-    let (hi, lo) = split_hi_lo(&digest.to_array());
-    let mut out = Bytes::from_array(e, &commitment.to_array());
-    out.extend_from_array(&hi);
-    out.extend_from_array(&lo);
-    out.extend_from_array(&root.to_array());
-    out
-}
-
-/// A field element from a label: `sha256(label)` with its top byte cleared.
-pub fn field(e: &Env, label: &str) -> BytesN<32> {
-    let mut x = e
-        .crypto()
-        .sha256(&Bytes::from_slice(e, label.as_bytes()))
-        .to_array();
-    x[0] = 0;
-    BytesN::from_array(e, &x)
-}
-
-/// One account's email guardian.
+/// One account's email guardian and the inbox it commits to.
 #[derive(Clone)]
 pub struct EmailGuardian {
     pub address: Address,
     pub commitment: BytesN<32>,
+    pub inbox: Inbox,
 }
 
-/// The test-only verifier and the registry one world's email guardians
-/// share. At creation the registry admits one key (fixture `rsa2048-a`, for
-/// `gmail.com`) through the attested path, which advances the world 72
-/// hours; `root` is the root it produced.
+/// The verifier and the registry one world's email guardians share. At
+/// creation the registry admits, through the attested path, the current
+/// TEST-ONLY key of every launch domain (in the allowlist's order, so leaf
+/// `i` is `LAUNCH_DOMAINS[i]`), which advances the world 72 hours; `root`
+/// is the root they produce.
 pub struct EmailInfra {
     pub verifier: Address,
     pub registry: TestRegistry,
@@ -301,31 +248,75 @@ pub struct EmailInfra {
 impl EmailInfra {
     #[must_use]
     pub fn new(w: &World) -> Self {
-        let verifier = contract_at(&w.env, "email/test-only-verifier");
-        w.env.register_at(&verifier, TestOnlyVerifier, ());
+        let verifier = contract_at(&w.env, "email/verifier");
+        w.env.register_at(&verifier, EMAIL_VERIFIER_WASM, ());
         let registry = TestRegistry::deploy(w, "infra");
-        let (id, _) = registry.propose_attested(w, "rsa2048-a");
+        let ids: std::vec::Vec<u32> = LAUNCH_DOMAINS
+            .iter()
+            .map(|d| registry.propose_attested_key(w, &email_proof::provider_key(d, "current")))
+            .collect();
         w.advance(TIMELOCK_ATTESTED_LEDGERS);
-        let root = registry.client(w).execute(&id);
+        let mut root = None;
+        for id in ids {
+            root = Some(registry.client(w).execute(&id));
+        }
         Self {
             verifier,
             registry,
-            root,
+            root: root.unwrap(),
             nonce: Cell::new(0),
         }
     }
 
-    /// Deploy `label`'s guardian for `account` from the guardian wasm, with
-    /// commitment `commitment` and the `ALLOW_*` bits `allowed_actions`.
+    /// The circuit id the verifier reports: `sha256` of its key.
+    #[must_use]
+    pub fn circuit_id(w: &World) -> BytesN<32> {
+        BytesN::from_array(&w.env, &email_proof::circuit_id())
+    }
+
+    /// `key`'s path in the registry's current tree, read from the registry
+    /// as a wallet reads it (`leaf`, `siblings`, `root`).
+    #[must_use]
+    pub fn registry_path(&self, w: &World, key: &ProviderKey) -> KeyPath {
+        let c = self.registry.client(w);
+        let record = c
+            .leaf(
+                &Bytes::from_slice(&w.env, key.domain.as_bytes()),
+                &BytesN::from_array(&w.env, &key.key_hash()),
+            )
+            .expect("the key is in the registry");
+        assert!(record.present, "the key's leaf is present");
+        KeyPath {
+            root: c.root().to_array(),
+            index: record.index,
+            siblings: c
+                .siblings(&record.index)
+                .iter()
+                .map(|s| s.to_array())
+                .collect(),
+        }
+    }
+
+    /// The leaves of the registry's tree as `new` builds it.
+    #[must_use]
+    pub fn launch_leaves() -> std::vec::Vec<[u8; 32]> {
+        LAUNCH_DOMAINS
+            .iter()
+            .map(|d| email_proof::provider_key(d, "current").leaf())
+            .collect()
+    }
+
+    /// Deploy `label`'s guardian for `account` from the guardian wasm,
+    /// committing to `inbox`, with the `ALLOW_*` bits `allowed_actions`.
     pub fn guardian(
         &self,
         w: &World,
         account: &Account,
         label: &str,
-        commitment: &BytesN<32>,
+        inbox: &Inbox,
         allowed_actions: u32,
     ) -> EmailGuardian {
-        self.guardian_with_pin(w, account, label, commitment, allowed_actions, None)
+        self.guardian_with_pin(w, account, label, inbox, allowed_actions, None)
     }
 
     /// [`Self::guardian`] with an optional key pin (spec §7.4).
@@ -334,7 +325,7 @@ impl EmailInfra {
         w: &World,
         account: &Account,
         label: &str,
-        commitment: &BytesN<32>,
+        inbox: &Inbox,
         allowed_actions: u32,
         pin: Option<KeyPin>,
     ) -> EmailGuardian {
@@ -343,6 +334,7 @@ impl EmailInfra {
         if let Some(pin) = pin {
             key_pin.push_back(pin);
         }
+        let commitment = BytesN::from_array(&w.env, &inbox.commitment());
         let config = GuardianConfig {
             account: account.address.clone(),
             controller: w.controller.clone(),
@@ -351,44 +343,46 @@ impl EmailInfra {
             key_pin,
             allowed_actions,
             verifier: self.verifier.clone(),
-            circuit_id: test_circuit_id(&w.env),
+            circuit_id: Self::circuit_id(w),
         };
         w.env.register_at(&address, EMAIL_GUARDIAN_WASM, (config,));
         EmailGuardian {
             address,
-            commitment: commitment.clone(),
+            commitment,
+            inbox: inbox.clone(),
         }
     }
 
     /// What the browser prover hands the wallet for `statement`: its bytes,
-    /// the registry root, and a proof for `guardian`'s public inputs.
+    /// the key root, and a real proof (fixture `name`) that `guardian`'s
+    /// inbox emailed its approval, signed by a key at `path`.
     pub fn approval(
         &self,
         w: &World,
         guardian: &EmailGuardian,
+        name: &str,
+        description: &str,
         statement: &RecoveryStatement,
+        path: &KeyPath,
     ) -> EmailApproval {
-        self.approval_against(w, guardian, statement, &self.root)
+        EmailApproval {
+            statement: statement.encode(&w.env).unwrap(),
+            key_root: BytesN::from_array(&w.env, &path.root),
+            proof: email_proof::proof(&w.env, name, description, &guardian.inbox, statement, path),
+        }
     }
 
-    /// [`Self::approval`] with a proof made against key root `root`.
-    pub fn approval_against(
+    /// [`Self::approval`] against the registry's current tree.
+    pub fn registry_approval(
         &self,
         w: &World,
         guardian: &EmailGuardian,
+        name: &str,
+        description: &str,
         statement: &RecoveryStatement,
-        root: &BytesN<32>,
     ) -> EmailApproval {
-        let bytes = statement.encode(&w.env).unwrap();
-        let digest = w.env.crypto().sha256(&bytes).to_bytes();
-        EmailApproval {
-            statement: bytes,
-            key_root: root.clone(),
-            proof: test_proof(
-                &w.env,
-                &public_inputs(&w.env, &guardian.commitment, &digest, root),
-            ),
-        }
+        let path = self.registry_path(w, &guardian.inbox.key());
+        self.approval(w, guardian, name, description, statement, &path)
     }
 
     /// The guardian's authorization entry for `root`, carrying `approval`.
@@ -491,5 +485,19 @@ impl EmailInfra {
                 .try_approve_change(&account.address, subject, &valid_until, &guardian.address)
                 .map(|r| r.unwrap())
         })
+    }
+}
+
+/// `approval` with its statement replaced by `statement`'s encoding: the
+/// bytes a splicing attacker submits with another approval's proof.
+#[must_use]
+pub fn with_statement(
+    env: &Env,
+    approval: &EmailApproval,
+    statement: &RecoveryStatement,
+) -> EmailApproval {
+    EmailApproval {
+        statement: statement.encode(env).unwrap(),
+        ..approval.clone()
     }
 }

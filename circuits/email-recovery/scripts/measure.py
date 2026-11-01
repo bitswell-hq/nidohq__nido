@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
-"""Measures the email-recovery components and writes the tables of
-MEASUREMENTS.md between its generated-block markers.
+"""Measures the email-recovery circuit and its components and writes the
+tables of MEASUREMENTS.md between its generated-block markers.
 
-For every bench package: ACIR opcodes and UltraHonk gates (`bb gates`). For
-the proved packages: native witness generation (`nargo execute`) and
-zero-knowledge proving (`bb prove --scheme ultra_honk --oracle_hash keccak
---zk`, the flavor Perch's verifier accepts), median wall time over RUNS runs
-and the largest peak resident set size, and `bb verify` of every proof.
+For the recovery circuit and every bench package: ACIR opcodes and UltraHonk
+gates (`bb gates`). For the proved packages: native witness generation
+(`nargo execute`) and zero-knowledge proving (`bb prove --scheme ultra_honk
+--oracle_hash keccak --zk`, the flavor Perch's verifier accepts), median
+wall time over RUNS runs and the largest peak resident set size, and
+`bb verify` of every proof. For the recovery circuit (and its 1024-byte
+comparison build) also bb.js, the prover a browser runs, with one worker
+thread and with one per core (packages/email-recovery/scripts/measure-bbjs.mjs
+on the committed Gmail fixture, one process per run).
 
 Run through scripts/measure.sh, which installs and checks the pinned
-toolchain and sets NARGO and BB. RUNS (default 3) sets the repetitions.
+toolchain, builds the TypeScript packages, and sets NARGO and BB. RUNS
+(default 3) sets the repetitions.
 """
 
 import json
@@ -30,7 +35,16 @@ BB = os.environ["BB"]
 RUNS = int(os.environ.get("RUNS", "3"))
 SCHEME = ["--scheme", "ultra_honk", "--oracle_hash", "keccak"]
 
-# (package, what it measures, proved)
+REPO = HERE.parent.parent
+GMAIL_FIXTURE = REPO / "crates/integration-tests/fixtures/email/provider-gmail-com"
+
+# (directory, package, what it measures, proved, header bound)
+RECOVERY = [
+    ("recovery", "recovery", "The recovery circuit: spec obligations C1 to C6 at 1536-byte headers", True, 1536),
+    ("bench/recovery_1024", "bench_recovery_1024", "The same relation at 1024-byte headers, for comparison", True, 1024),
+]
+
+# (package, what it measures, proved), each in bench/<package> as bench_<package>
 BENCHES = [
     ("rsa_2048", "RSA-2048 PKCS#1 v1.5 / SHA-256 of a given digest", True),
     ("header_sha_1024", "SHA-256 of a 1024-byte header block, zero past its length", True),
@@ -63,19 +77,19 @@ def timed(cmd, cwd):
     return elapsed, rss
 
 
-def gates(pkg):
-    out = run([BB, "gates", "-s", "ultra_honk", "-b", str(HERE / f"target/bench_{pkg}.json")])
+def gates(package):
+    out = run([BB, "gates", "-s", "ultra_honk", "-b", str(HERE / f"target/{package}.json")])
     f = json.loads(out.stdout)["functions"][0]
     return f["acir_opcodes"], f["circuit_size"]
 
 
-def prove(pkg, work):
-    artifact = HERE / f"target/bench_{pkg}.json"
+def prove(package, work):
+    artifact = HERE / f"target/{package}.json"
     run([BB, "write_vk", *SCHEME, "-b", str(artifact), "-o", str(work)])
     witness_times, prove_times, peak = [], [], 0
     for i in range(RUNS):
-        name = f"bench_{pkg}_{i}"
-        t, _ = timed([NARGO, "execute", "--package", f"bench_{pkg}", name], HERE)
+        name = f"{package}_{i}"
+        t, _ = timed([NARGO, "execute", "--package", package, name], HERE)
         witness_times.append(t)
         out = work / f"proof_{i}"
         out.mkdir()
@@ -91,6 +105,21 @@ def prove(pkg, work):
         (HERE / f"target/{name}.gz").unlink()
     proof_bytes = (work / "proof_0" / "proof").stat().st_size
     return statistics.median(witness_times), statistics.median(prove_times), peak, proof_bytes
+
+
+def bbjs(package, header_max, threads):
+    """Median prove and witness times and the largest peak RSS of bb.js."""
+    rows = []
+    for _ in range(RUNS):
+        out = run(["node", str(REPO / "packages/email-recovery/scripts/measure-bbjs.mjs"),
+                   str(GMAIL_FIXTURE), str(threads),
+                   "--circuit", str(HERE / f"target/{package}.json"), "--header-max", str(header_max)],
+                  cwd=REPO)
+        rows.append(json.loads(out.stdout.strip().splitlines()[-1]))
+    return (statistics.median(r["execute_ms"] for r in rows),
+            statistics.median(r["prove_ms"] for r in rows),
+            max(r["peak_rss_mib"] for r in rows),
+            rows[0]["proof_bytes"])
 
 
 def machine():
@@ -110,20 +139,30 @@ def machine():
 def main():
     load = os.getloadavg()[0]
     rows_gates, rows_prove = [], []
+    packages = [r[:4] for r in RECOVERY] + [(f"bench/{p}", f"bench_{p}", what, proved) for p, what, proved in BENCHES]
     with tempfile.TemporaryDirectory() as tmp:
-        for pkg, what, proved in BENCHES:
-            opcodes, size = gates(pkg)
+        for path, package, what, proved in packages:
+            opcodes, size = gates(package)
             log2 = (size - 1).bit_length()
-            rows_gates.append(f"| `bench/{pkg}` | {what} | {opcodes:,} | {size:,} | 2^{log2} |")
+            rows_gates.append(f"| `{path}` | {what} | {opcodes:,} | {size:,} | 2^{log2} |")
             if proved:
-                work = Path(tmp) / pkg
+                work = Path(tmp) / package
                 work.mkdir()
-                w, p, rss, proof_bytes = prove(pkg, work)
+                w, p, rss, proof_bytes = prove(package, work)
                 rows_prove.append(
-                    f"| `bench/{pkg}` | 2^{log2} | {w * 1000:,.0f} ms | {p * 1000:,.0f} ms | "
+                    f"| `{path}` | 2^{log2} | {w * 1000:,.0f} ms | {p * 1000:,.0f} ms | "
                     f"{rss / 2**20:,.0f} MiB | {proof_bytes:,} |"
                 )
-            print(f"measured {pkg}", file=sys.stderr)
+            print(f"measured {package}", file=sys.stderr)
+        rows_bbjs = []
+        cores = os.cpu_count()
+        for path, package, _, _, header_max in RECOVERY:
+            for threads in (1, cores):
+                w, p, rss, proof_bytes = bbjs(package, header_max, threads)
+                rows_bbjs.append(
+                    f"| `{path}` | {header_max:,} | {threads} | {w:,.0f} ms | {p:,.0f} ms | {rss:,} MiB | {proof_bytes:,} |"
+                )
+                print(f"measured bb.js, {package}, {threads} threads", file=sys.stderr)
     load_after = os.getloadavg()[0]
 
     nargo_v = run([NARGO, "--version"]).stdout.splitlines()[0]
@@ -140,6 +179,12 @@ def main():
         "| Package | Padded size | `nargo execute` (witness) | `bb prove --zk` | `bb prove` peak RSS | Proof bytes |",
         "| --- | --- | --- | --- | --- | --- |",
         *rows_prove,
+        "",
+        "bb.js 0.87.0 on the recovery circuit (Node, the Gmail fixture; `keccakZK`):",
+        "",
+        "| Package | Header bound | Threads | noir_js witness | bb.js prove | Peak RSS (process) | Proof bytes |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+        *rows_bbjs,
     ])
 
     doc = HERE / "MEASUREMENTS.md"

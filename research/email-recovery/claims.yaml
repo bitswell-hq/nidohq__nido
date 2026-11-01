@@ -123,6 +123,72 @@ claims:
       test: "rule 4: refuses narrower allowed actions when the quorum needs the email vote"
       file: packages/passkey-sdk/src/perch/recoverySpec.test.ts
 
+  # The recovery circuit and its on-chain verification.
+  - id: circuit-accepts-launch-providers
+    statement: >-
+      The recovery circuit accepts an honest recovery email from every launch
+      domain in its provider's signing format, including an address of the
+      maximum length, 124 bytes, with a 500-byte display name.
+    status: tested
+    evidence:
+      test: "the circuit accepts the longest address with a long display name at %s"
+      file: packages/email-recovery/test/recoveryInputs.test.ts
+
+  - id: circuit-refuses-attacks
+    statement: >-
+      Every adversarial email of the provider mocks that a standard DKIM
+      verifier accepts but whose claim must not be provable (display-name,
+      comment, quoted and folded From spoofing; unsigned From or Subject
+      fields; a misaligned or extra signature; an RSA-1024 key; an l= body;
+      encoded, folded or split Subjects; replay into another statement or
+      account) is refused by the recovery circuit, each at a named check.
+    status: tested
+    evidence:
+      test: "valid-dkim-but-must-be-rejected-by-circuit"
+      file: packages/email-recovery/test/attacks.test.ts
+
+  - id: circuit-binds-public-inputs
+    statement: >-
+      Changing any public input of the recovery circuit (the commitment, a
+      half of the statement digest, or the key-tree root), or any private
+      value that links the email to them, makes the proof fail.
+    status: tested
+    evidence:
+      test: a_commitment_under_another_account_code_is_refused
+      file: circuits/email-recovery/tests/src/recovery_tests.nr
+
+  - id: onchain-email-vote
+    statement: >-
+      A real proof of a launch provider's recovery email verifies on chain
+      through Perch's UltraHonk verifier with the circuit's key, is refused
+      with any public input changed, and counts as exactly one guardian vote.
+    status: tested
+    evidence:
+      test: gmail_com_approval_counts_one_vote
+      file: crates/integration-tests/tests/it/email_proofs.rs
+
+  - id: onchain-verification-cost
+    statement: >-
+      One submit_guardian carrying an email approval with a real proof uses
+      about 122 million of the 400 million instructions a Soroban transaction
+      may use, reads 14 ledger entries and writes 2 (1,208 bytes); as a
+      signed transaction it is 18,148 bytes with a resource fee of about
+      178,000 stroops before rent, at the mainnet fee rates the Soroban SDK
+      records. Measured on the test host, not on a network.
+    status: measured
+    evidence:
+      file: research/email-recovery/eval/onchain.md
+
+  - id: desktop-proving-cost
+    statement: >-
+      On a shared 18-core desktop, the recovery circuit proves in under one
+      second with the native prover, and in about 14 seconds on one thread
+      and 3.3 seconds on 18 threads with bb.js in Node, using at most about
+      1.7 GiB; phone-class devices are not measured.
+    status: measured
+    evidence:
+      file: circuits/email-recovery/MEASUREMENTS.md
+
   # The assumptions the properties rest on.
   - id: dkim-unforgeability
     statement: >-

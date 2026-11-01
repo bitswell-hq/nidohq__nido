@@ -37,6 +37,12 @@ nido-email-guardian = { path = "../../contracts/email-guardian" }
 # feeds it.
 nido-dkim-registry = { path = "../../contracts/dkim-registry" }
 nido-dns-attestation-mock = { path = "../dns-attestation-mock" }
+# The host's Poseidon2 sponge, for the email circuit's public inputs computed
+# natively (`email_proof`).
+soroban-poseidon = { workspace = true }
+# The host soroban-sdk runs (the version it locks), for its recording-mode
+# invocation and fee functions (`transaction`).
+soroban-env-host = { version = "=27.0.1", features = ["recording_mode"] }
 # The enclave-image registry's client; the contract runs from its wasm
 # (`ENCLAVE_IMAGE_REGISTRY_WASM`).
 nido-enclave-image-registry = { path = "../../contracts/enclave-image-registry" }

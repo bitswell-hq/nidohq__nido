@@ -33,14 +33,14 @@ export const SOURCES = {
   rfc8301: 'https://www.rfc-editor.org/rfc/rfc8301',
 } as const;
 
-const PHRASE_PLACEHOLDER = 'Account recovery';
-
 export function defaultAttackInput(): AttackInput {
   const recoveryValue = 'TEST-ONLY-0123456789abcdef';
+  const phrase = 'Account recovery';
   return {
     victim: 'victim@gmail.com',
     attacker: 'attacker@gmail.com',
-    subject: `${PHRASE_PLACEHOLDER} ${recoveryValue}`,
+    phrase,
+    subject: `${phrase} ${recoveryValue}`,
     recoveryValue,
     otherRecoveryValue: 'TEST-ONLY-fedcba9876543210',
     account: 'TEST-ACCOUNT-A',
@@ -194,7 +194,7 @@ function unsignedInsertions(input: AttackInput): AttackCase[] {
     const from = `${localOf(input.attacker)}@${profile.domains[0]}`;
     const send = { provider: profile.id, from, subject: input.subject, body: input.body, date: input.date };
     const injections: Array<[string, string, Claim]> = [
-      ['subject', `Subject: ${PHRASE_PLACEHOLDER} ${input.otherRecoveryValue}`, { from, recoveryValue: input.otherRecoveryValue }],
+      ['subject', `Subject: ${input.phrase} ${input.otherRecoveryValue}`, { from, recoveryValue: input.otherRecoveryValue }],
       ['from', `From: <${input.victim}>`, { from: input.victim, recoveryValue: input.recoveryValue }],
     ];
     for (const [name, raw, claim] of injections) {
@@ -316,7 +316,7 @@ function signatureCases(input: AttackInput): AttackCase[] {
           signer: (_i, signInput, s) =>
             s === signer ? { ...signInput, bodyLength: Buffer.byteLength(input.body.replace(/\r?\n/g, '\r\n')) } : signInput,
         },
-        afterSign: (m) => ({ ...m, body: `${m.body}\r\n${PHRASE_PLACEHOLDER} ${input.otherRecoveryValue}\r\n` }),
+        afterSign: (m) => ({ ...m, body: `${m.body}\r\n${input.phrase} ${input.otherRecoveryValue}\r\n` }),
       }),
       claim: { from: input.victim, recoveryValue: input.otherRecoveryValue },
       dkim: ['pass'],
@@ -382,7 +382,7 @@ function subjectCases(input: AttackInput): AttackCase[] {
   const withSubject = (raw: string) => (m: Message) => replaceHeader(m, 'Subject', raw);
   const value = input.recoveryValue;
   const half = Math.floor(value.length / 2);
-  const phraseOnly = PHRASE_PLACEHOLDER;
+  const phraseOnly = input.phrase;
   const at = input.subject.indexOf(' ');
   const firstWord = input.subject.slice(0, at);
 

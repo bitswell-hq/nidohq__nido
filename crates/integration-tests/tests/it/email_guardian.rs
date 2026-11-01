@@ -4,11 +4,12 @@
 //! wasm, all under enforcing authorization (`docs/email-recovery/spec.md`,
 //! "One-factor safety").
 //!
-//! The key registry is the real contract from its wasm, fed by the DNS
-//! attester mock; the proof verifier is the test-only stand-in of
-//! [`nido_integration_tests::email`]: these tests pin how approvals are
-//! counted, bound, and refused, and which key roots they may use, not the
-//! email circuit.
+//! Every approval carries a real proof of the email circuit over a
+//! DKIM-signed recovery email from the TEST-ONLY provider mocks, checked by
+//! the real verifier from its wasm; the key registry is the real contract
+//! from its wasm, fed by the DNS attester mock
+//! ([`nido_integration_tests::email`]). The committed proofs are
+//! `fixtures/email/guardian-*` (`just gen-email-proofs`).
 //!
 //! An approval the guardian refuses fails the host's authorization check, so
 //! the controller call fails with a host error rather than a
@@ -17,9 +18,9 @@
 
 use nido_dkim_registry::hash::Hasher;
 use nido_dkim_registry::{root_of, DkimRegistryError, TIMELOCK_ATTESTED_LEDGERS};
-use nido_dns_attestation_mock::{fixture, key_hash, modulus_2048};
 use nido_email_guardian::{EmailApproval, EmailGuardianError, KeyPin, ALLOW_ALL};
-use nido_integration_tests::email::{field, EmailGuardian, EmailInfra};
+use nido_integration_tests::email::{with_statement, EmailGuardian, EmailInfra};
+use nido_integration_tests::email_proof::{provider_key, Inbox, KeyPath};
 use nido_integration_tests::world::{
     err, world, Account, Mode, Passkey, Profile, Recovery, World, DELAY, EXPIRY,
 };
@@ -28,7 +29,6 @@ use perch_recovery::EvidenceDomain::{self, Cancel, Initiate};
 use perch_recovery::RecoveryError;
 use perch_recovery_interface::statement::ConfigChange;
 use perch_recovery_interface::{RecoveryAction, StatementSubject};
-use soroban_sdk::xdr::{Limits, WriteXdr};
 use soroban_sdk::{Bytes, BytesN};
 
 /// An account whose recovery lists its email guardian first, then `friends`
@@ -40,6 +40,15 @@ struct Setup {
     recovery: Recovery,
 }
 
+/// A Gmail inbox for `label`, signed with Gmail's current key.
+fn gmail(label: &str) -> Inbox {
+    Inbox::new(
+        label,
+        &format!("{}@gmail.com", label.replace('-', ".")),
+        Some("Test User"),
+    )
+}
+
 fn enroll(
     w: &World,
     infra: &EmailInfra,
@@ -47,9 +56,9 @@ fn enroll(
     profile: Profile,
     friends: usize,
     quorum: u32,
-    commitment: &BytesN<32>,
+    inbox: &Inbox,
 ) -> Setup {
-    enroll_with_pin(w, infra, label, profile, friends, quorum, commitment, None)
+    enroll_with_pin(w, infra, label, profile, friends, quorum, inbox, None)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -60,7 +69,7 @@ fn enroll_with_pin(
     profile: Profile,
     friends: usize,
     quorum: u32,
-    commitment: &BytesN<32>,
+    inbox: &Inbox,
     pin: Option<KeyPin>,
 ) -> Setup {
     let account = w.mint(
@@ -68,7 +77,7 @@ fn enroll_with_pin(
         Passkey::labelled(&format!("{label}/owner")),
         vec![("device", Passkey::labelled(&format!("{label}/device")))],
     );
-    let email = infra.guardian_with_pin(w, &account, label, commitment, ALLOW_ALL, pin);
+    let email = infra.guardian_with_pin(w, &account, label, inbox, ALLOW_ALL, pin);
     let friends: std::vec::Vec<Account> = (0..friends)
         .map(|i| {
             w.guardian(
@@ -114,8 +123,23 @@ fn begin(w: &World, s: &Setup, label: &str) -> (u64, Bytes) {
     (attempt, target)
 }
 
-fn email_approval(w: &World, infra: &EmailInfra, s: &Setup, attempt: u64) -> EmailApproval {
-    infra.approval(w, &s.email, &w.statement(&s.account, attempt, Initiate))
+/// The email approval of `s`'s attempt, proven against the registry's
+/// current root (fixture `name`).
+fn email_approval(
+    w: &World,
+    infra: &EmailInfra,
+    s: &Setup,
+    attempt: u64,
+    name: &str,
+    description: &str,
+) -> EmailApproval {
+    infra.registry_approval(
+        w,
+        &s.email,
+        name,
+        description,
+        &w.statement(&s.account, attempt, Initiate),
+    )
 }
 
 fn authorized(w: &World, s: &Setup) -> Option<u64> {
@@ -164,26 +188,19 @@ fn email_approval_counts_as_exactly_one_guardian_vote() {
     let w = world();
     let infra = EmailInfra::new(&w);
     let label = "email-one-vote";
-    let s = enroll(
-        &w,
-        &infra,
-        label,
-        Profile::Loss,
-        2,
-        2,
-        &field(&w.env, "c/one-vote"),
-    );
+    let s = enroll(&w, &infra, label, Profile::Loss, 2, 2, &gmail(label));
     let (attempt, target) = begin(&w, &s, label);
 
+    let approval = email_approval(
+        &w,
+        &infra,
+        &s,
+        attempt,
+        "guardian-one-vote",
+        "one email approval is one vote of a 2-of-3 quorum",
+    );
     infra
-        .try_submit(
-            &w,
-            &s.account,
-            &s.email,
-            attempt,
-            Initiate,
-            &email_approval(&w, &infra, &s, attempt),
-        )
+        .try_submit(&w, &s.account, &s.email, attempt, Initiate, &approval)
         .expect("the email approval is accepted");
     assert_eq!(votes(&w, &s, attempt), vec![s.email.address.clone()]);
     assert_eq!(authorized(&w, &s), None, "one vote of a 2-of-3 quorum");
@@ -209,17 +226,16 @@ fn the_same_email_approval_is_not_counted_twice() {
     let w = world();
     let infra = EmailInfra::new(&w);
     let label = "email-twice";
-    let s = enroll(
+    let s = enroll(&w, &infra, label, Profile::Loss, 2, 3, &gmail(label));
+    let (attempt, _) = begin(&w, &s, label);
+    let approval = email_approval(
         &w,
         &infra,
-        label,
-        Profile::Loss,
-        2,
-        3,
-        &field(&w.env, "c/twice"),
+        &s,
+        attempt,
+        "guardian-twice",
+        "an approval submitted twice counts once",
     );
-    let (attempt, _) = begin(&w, &s, label);
-    let approval = email_approval(&w, &infra, &s, attempt);
 
     infra
         .try_submit(&w, &s.account, &s.email, attempt, Initiate, &approval)
@@ -239,19 +255,18 @@ fn an_email_approval_cannot_be_replayed_into_another_attempt() {
     let w = world();
     let infra = EmailInfra::new(&w);
     let label = "email-replay-attempt";
-    let s = enroll(
-        &w,
-        &infra,
-        label,
-        Profile::Loss,
-        2,
-        2,
-        &field(&w.env, "c/replay-attempt"),
-    );
+    let s = enroll(&w, &infra, label, Profile::Loss, 2, 2, &gmail(label));
     let (first, _) = begin(&w, &s, label);
     let (second, _) = begin(&w, &s, &format!("{label}/second"));
     assert_ne!(first, second);
-    let for_first = email_approval(&w, &infra, &s, first);
+    let for_first = email_approval(
+        &w,
+        &infra,
+        &s,
+        first,
+        "guardian-replay-attempt",
+        "an approval of one attempt, replayed into another",
+    );
 
     // The first attempt's approval, as is, for the second attempt.
     let mismatch = EmailGuardianError::DigestMismatch;
@@ -259,8 +274,11 @@ fn an_email_approval_cannot_be_replayed_into_another_attempt() {
         &w, &infra, &s, &s.email, second, Initiate, &for_first, mismatch,
     );
     // The second attempt's statement with the first attempt's proof.
-    let mut spliced = email_approval(&w, &infra, &s, second);
-    spliced.proof = for_first.proof.clone();
+    let spliced = with_statement(
+        &w.env,
+        &for_first,
+        &w.statement(&s.account, second, Initiate),
+    );
     let rejected = EmailGuardianError::ProofRejected;
     refused(
         &w, &infra, &s, &s.email, second, Initiate, &spliced, rejected,
@@ -284,12 +302,20 @@ fn an_email_approval_cannot_be_replayed_into_another_attempt() {
 fn an_email_approval_cannot_be_replayed_into_another_account() {
     let w = world();
     let infra = EmailInfra::new(&w);
-    let shared = field(&w.env, "c/shared");
+    let shared = gmail("email-replay-shared");
     let a = enroll(&w, &infra, "email-replay-a", Profile::Loss, 2, 2, &shared);
     let b = enroll(&w, &infra, "email-replay-b", Profile::Loss, 2, 2, &shared);
+    assert_eq!(a.email.commitment, b.email.commitment);
     let (attempt_a, _) = begin(&w, &a, "email-replay-a");
     let (attempt_b, _) = begin(&w, &b, "email-replay-b");
-    let for_a = email_approval(&w, &infra, &a, attempt_a);
+    let for_a = email_approval(
+        &w,
+        &infra,
+        &a,
+        attempt_a,
+        "guardian-replay-account",
+        "an approval for account A, replayed into account B with the same commitment",
+    );
 
     // A's statement is not the preimage of B's digest (and names A, which
     // the account check would catch next).
@@ -298,8 +324,11 @@ fn an_email_approval_cannot_be_replayed_into_another_account() {
         &w, &infra, &b, &b.email, attempt_b, Initiate, &for_a, mismatch,
     );
     // B's statement with A's proof: the proof binds A's digest.
-    let mut spliced = email_approval(&w, &infra, &b, attempt_b);
-    spliced.proof = for_a.proof.clone();
+    let spliced = with_statement(
+        &w.env,
+        &for_a,
+        &w.statement(&b.account, attempt_b, Initiate),
+    );
     let rejected = EmailGuardianError::ProofRejected;
     refused(
         &w, &infra, &b, &b.email, attempt_b, Initiate, &spliced, rejected,
@@ -326,25 +355,18 @@ fn email_approvals_alone_never_complete_a_recovery() {
     let infra = EmailInfra::new(&w);
 
     let label = "email-alone-quorum";
-    let s = enroll(
+    let s = enroll(&w, &infra, label, Profile::Loss, 1, 2, &gmail(label));
+    let (attempt, target) = begin(&w, &s, label);
+    let approval = email_approval(
         &w,
         &infra,
-        label,
-        Profile::Loss,
-        1,
-        2,
-        &field(&w.env, "c/alone-quorum"),
+        &s,
+        attempt,
+        "guardian-alone-quorum",
+        "the email vote alone under a 2-of-2 quorum",
     );
-    let (attempt, target) = begin(&w, &s, label);
     infra
-        .try_submit(
-            &w,
-            &s.account,
-            &s.email,
-            attempt,
-            Initiate,
-            &email_approval(&w, &infra, &s, attempt),
-        )
+        .try_submit(&w, &s.account, &s.email, attempt, Initiate, &approval)
         .unwrap();
     assert_eq!(authorized(&w, &s), None);
     w.advance(DELAY);
@@ -354,17 +376,16 @@ fn email_approvals_alone_never_complete_a_recovery() {
     );
 
     let label = "email-alone-delay";
-    let s = enroll(
+    let s = enroll(&w, &infra, label, Profile::Loss, 0, 1, &gmail(label));
+    let (attempt, target) = begin(&w, &s, label);
+    let approval = email_approval(
         &w,
         &infra,
-        label,
-        Profile::Loss,
-        0,
-        1,
-        &field(&w.env, "c/alone-delay"),
+        &s,
+        attempt,
+        "guardian-alone-delay",
+        "the email guardian as the only guardian: the attempt the owner cancels",
     );
-    let (attempt, target) = begin(&w, &s, label);
-    let approval = email_approval(&w, &infra, &s, attempt);
     infra
         .try_submit(&w, &s.account, &s.email, attempt, Initiate, &approval)
         .unwrap();
@@ -385,15 +406,16 @@ fn email_approvals_alone_never_complete_a_recovery() {
     refused(
         &w, &infra, &s, &s.email, next, Initiate, &approval, mismatch,
     );
+    let fresh = email_approval(
+        &w,
+        &infra,
+        &s,
+        next,
+        "guardian-alone-next",
+        "the email guardian as the only guardian: the next attempt, completed after the delay",
+    );
     infra
-        .try_submit(
-            &w,
-            &s.account,
-            &s.email,
-            next,
-            Initiate,
-            &email_approval(&w, &infra, &s, next),
-        )
+        .try_submit(&w, &s.account, &s.email, next, Initiate, &fresh)
         .unwrap();
     assert!(
         w.complete(&s.account, &next_target).is_err(),
@@ -411,15 +433,7 @@ fn email_approval_counts_toward_a_protected_reconfiguration() {
     let w = world();
     let infra = EmailInfra::new(&w);
     let label = "email-reconfigure";
-    let s = enroll(
-        &w,
-        &infra,
-        label,
-        Profile::Protected,
-        1,
-        2,
-        &field(&w.env, "c/reconfigure"),
-    );
+    let s = enroll(&w, &infra, label, Profile::Protected, 1, 2, &gmail(label));
     let mut next = s.recovery.clone();
     next.delay = DELAY + 1;
     let doc = w.doc(&s.account, Some(next));
@@ -429,7 +443,13 @@ fn email_approval_counts_toward_a_protected_reconfiguration() {
     let statement = w
         .ctl()
         .change_statement(&s.account.address, &subject, &until);
-    let approval = infra.approval(&w, &s.email, &statement);
+    let approval = infra.registry_approval(
+        &w,
+        &s.email,
+        "guardian-reconfigure",
+        "the email vote toward a Protected reconfiguration",
+        &statement,
+    );
     infra
         .try_approve_change(&w, &s.account, &s.email, &subject, until, &approval)
         .expect("the email approval is recorded");
@@ -448,80 +468,31 @@ fn email_approval_counts_toward_a_protected_reconfiguration() {
     );
 }
 
-/// Resources of one `submit_guardian` carrying an email approval, with the
-/// test-only verifier and the registry from its wasm: a plumbing figure for
-/// the guardian's own checks, the registry's root check, the controller, and
-/// the auth-entry size. Real proof verification is not in it.
-#[test]
-fn email_approval_plumbing_cost() {
-    let w = world();
-    let infra = EmailInfra::new(&w);
-    let label = "email-cost";
-    let s = enroll(
-        &w,
-        &infra,
-        label,
-        Profile::Protected,
-        2,
-        2,
-        &field(&w.env, "c/cost"),
-    );
-    let (attempt, _) = begin(&w, &s, label);
-    let approval = email_approval(&w, &infra, &s, attempt);
-    let digest = w.digest(&w.statement(&s.account, attempt, Initiate));
-    let root = w.invocation(&w.controller, "submit_guardian", vec![w.sc(digest)]);
-    let entry = infra.entry(&w, &s.email, root, &approval);
-    let entry_bytes = entry.to_xdr(Limits::none()).unwrap().len();
-
-    w.with_auths(&[entry], || {
-        w.ctl()
-            .submit_guardian(&s.account.address, &attempt, &Initiate, &s.email.address);
-    });
-    let r = w.env.cost_estimate().resources();
-    println!(
-        "{{\"case\":\"submit_guardian with an email approval (test-only verifier, registry from its wasm)\",\"instructions\":{},\"mem_bytes\":{},\"read_entries\":{},\"write_entries\":{},\"write_bytes\":{},\"auth_entry_bytes\":{entry_bytes}}}",
-        r.instructions,
-        r.mem_bytes,
-        r.memory_read_entries + r.disk_read_entries,
-        r.write_entries,
-        r.write_bytes,
-    );
-    assert_eq!(votes(&w, &s, attempt), vec![s.email.address.clone()]);
-}
-
-/// The key hash and leaf of fixture `name`'s key.
-fn fixture_key(w: &World, name: &str) -> (BytesN<32>, BytesN<32>) {
-    let record = fixture(name);
-    let n = modulus_2048(&record.parse().unwrap()).unwrap();
-    let kh = BytesN::from_array(&w.env, &key_hash(&n));
-    let leaf = Hasher::new(&w.env).leaf(record.domain.as_bytes(), &kh);
-    (kh, leaf)
-}
-
 /// A key the registry admits through the attested path: an approval proven
 /// against the root that will hold it is refused until the 72-hour timelock
 /// has passed and accepted from the ledger the addition executes in.
+///
+/// The inbox's mail is signed with Gmail's key at its previous selector
+/// (still published), which the registry does not hold until this addition;
+/// the earlier root holds Gmail's current key, and the same inbox's email
+/// signed with that key is accepted against it during its grace period.
 #[test]
 fn a_key_added_through_the_attested_path_is_refused_before_72_hours_and_accepted_after() {
     let w = world();
     let infra = EmailInfra::new(&w);
     let registry = infra.registry.client(&w);
     let label = "email-new-key";
-    let s = enroll(
-        &w,
-        &infra,
-        label,
-        Profile::Loss,
-        1,
-        2,
-        &field(&w.env, "c/new-key"),
-    );
+    let inbox = gmail(label).signed_by("gmail-previous");
+    let s = enroll(&w, &infra, label, Profile::Loss, 1, 2, &inbox);
 
-    let (id, new_leaf) = infra.registry.propose_attested(&w, "rsa2048-b");
-    // The root a prover computes from the pending addition: the current leaf
-    // at index 0, the new one at index 1.
-    let (_, first_leaf) = fixture_key(&w, "rsa2048-a");
-    let next_root = root_of(&w.env, &[first_leaf, new_leaf]);
+    let previous = provider_key("gmail.com", "gmail-previous");
+    let id = infra.registry.propose_attested_key(&w, &previous);
+    // The tree a prover computes from the pending addition: the launch
+    // leaves, then the new one.
+    let mut leaves = EmailInfra::launch_leaves();
+    leaves.push(previous.leaf());
+    let next = KeyPath::of(&leaves, leaves.len() - 1);
+    let next_root = BytesN::from_array(&w.env, &next.root);
     assert!(!registry.is_accepted_root(&next_root));
 
     w.advance(TIMELOCK_ATTESTED_LEDGERS - 1);
@@ -531,7 +502,14 @@ fn a_key_added_through_the_attested_path_is_refused_before_72_hours_and_accepted
     );
     let (attempt, _) = begin(&w, &s, label);
     let statement = w.statement(&s.account, attempt, Initiate);
-    let approval = infra.approval_against(&w, &s.email, &statement, &next_root);
+    let approval = infra.approval(
+        &w,
+        &s.email,
+        "guardian-new-key",
+        "an approval proven against the root a pending addition produces",
+        &statement,
+        &next,
+    );
     let unknown = EmailGuardianError::UnknownRoot;
     refused(
         &w, &infra, &s, &s.email, attempt, Initiate, &approval, unknown,
@@ -543,8 +521,22 @@ fn a_key_added_through_the_attested_path_is_refused_before_72_hours_and_accepted
         .try_submit(&w, &s.account, &s.email, attempt, Initiate, &approval)
         .expect("accepted once the addition has executed");
     assert_eq!(votes(&w, &s, attempt), vec![s.email.address.clone()]);
+
     // The previous root is still in its grace period.
-    let earlier = infra.approval(&w, &s.email, &statement);
+    let earlier_path = KeyPath::of(&EmailInfra::launch_leaves(), 0);
+    assert_eq!(earlier_path.root, infra.root.to_array());
+    let current = EmailGuardian {
+        inbox: s.email.inbox.clone().signed_by("current"),
+        ..s.email.clone()
+    };
+    let earlier = infra.approval(
+        &w,
+        &current,
+        "guardian-new-key-earlier",
+        "the same inbox's approval under Gmail's current key, against the previous root in its grace period",
+        &statement,
+        &earlier_path,
+    );
     assert_eq!(
         infra.check_auth(&w, &s.account, &s.email, attempt, Initiate, &earlier),
         Ok(())
@@ -558,23 +550,22 @@ fn a_revoked_keys_root_is_refused_at_once() {
     let w = world();
     let infra = EmailInfra::new(&w);
     let label = "email-revoked-key";
-    let s = enroll(
+    let s = enroll(&w, &infra, label, Profile::Loss, 1, 2, &gmail(label));
+    let (attempt, _) = begin(&w, &s, label);
+    let approval = email_approval(
         &w,
         &infra,
-        label,
-        Profile::Loss,
-        1,
-        2,
-        &field(&w.env, "c/revoked"),
+        &s,
+        attempt,
+        "guardian-revoked",
+        "an approval whose key is revoked before it is submitted",
     );
-    let (attempt, _) = begin(&w, &s, label);
-    let approval = email_approval(&w, &infra, &s, attempt);
     assert_eq!(
         infra.check_auth(&w, &s.account, &s.email, attempt, Initiate, &approval),
         Ok(())
     );
 
-    let (kh, _) = fixture_key(&w, "rsa2048-a");
+    let kh = BytesN::from_array(&w.env, &provider_key("gmail.com", "current").key_hash());
     infra.registry.revoke(&w, "gmail.com", &kh);
     assert!(!infra.registry.client(&w).is_accepted_root(&infra.root));
     let unknown = EmailGuardianError::UnknownRoot;
@@ -582,6 +573,40 @@ fn a_revoked_keys_root_is_refused_at_once() {
         &w, &infra, &s, &s.email, attempt, Initiate, &approval, unknown,
     );
     assert!(votes(&w, &s, attempt).is_empty());
+}
+
+/// A root the registry never produced is refused before the proof is
+/// checked: a tree an attacker builds with the launch keys and one more
+/// leaf, and the empty tree.
+#[test]
+fn a_root_the_registry_does_not_accept_is_refused() {
+    let w = world();
+    let infra = EmailInfra::new(&w);
+    let label = "email-foreign-root";
+    let s = enroll(&w, &infra, label, Profile::Loss, 1, 2, &gmail(label));
+    let (attempt, _) = begin(&w, &s, label);
+    let approval = email_approval(
+        &w,
+        &infra,
+        &s,
+        attempt,
+        "guardian-foreign-root",
+        "an approval whose key root is replaced by roots the registry never produced",
+    );
+    let mut leaves = EmailInfra::launch_leaves();
+    leaves.push(provider_key("gmail.com", "gmail-previous").leaf());
+    let foreign = KeyPath::of(&leaves, 0).root;
+    for root in [foreign, perch_zk_primitives::ZERO_HASHES[16]] {
+        let moved = EmailApproval {
+            key_root: BytesN::from_array(&w.env, &root),
+            ..approval.clone()
+        };
+        let unknown = EmailGuardianError::UnknownRoot;
+        refused(&w, &infra, &s, &s.email, attempt, Initiate, &moved, unknown);
+    }
+    infra
+        .try_submit(&w, &s.account, &s.email, attempt, Initiate, &approval)
+        .expect("the registry's own root is accepted");
 }
 
 /// The pin is the guardian's own: a pinned key the registry never admitted
@@ -592,34 +617,41 @@ fn the_pin_path_works_independently_of_the_registry() {
     let w = world();
     let infra = EmailInfra::new(&w);
     let label = "email-pinned";
-    // The enrollment email was signed by fixture rsa2048-c's key, which the
-    // registry has never seen.
-    let (kh, leaf) = fixture_key(&w, "rsa2048-c");
-    let code = field(&w.env, "nido-it/email/account-code");
+    // The enrollment email was signed with Gmail's key at its previous
+    // selector, which the registry has never admitted.
+    let inbox = gmail(label).signed_by("gmail-previous");
+    let previous = provider_key("gmail.com", "gmail-previous");
+    let kh = BytesN::from_array(&w.env, &previous.key_hash());
+    let code = BytesN::from_array(&w.env, &inbox.account_code);
     let salt = Hasher::new(&w.env).pin_salt(&code);
-    let pin_root = root_of(&w.env, &[salt, leaf]);
+    let leaf = BytesN::from_array(&w.env, &previous.leaf());
+    let pin_root = root_of(&w.env, &[salt.clone(), leaf.clone()]);
+    let pin_path = KeyPath::of(&[salt.to_array(), leaf.to_array()], 1);
+    assert_eq!(
+        pin_path.root,
+        pin_root.to_array(),
+        "the wallet's pin tree is the registry's formula"
+    );
     let until = w.ledger() + 1_000;
     let pin = KeyPin {
         root: pin_root.clone(),
         valid_until_ledger: until,
     };
-    let s = enroll_with_pin(
-        &w,
-        &infra,
-        label,
-        Profile::Loss,
-        1,
-        2,
-        &field(&w.env, "c/pinned"),
-        Some(pin),
-    );
+    let s = enroll_with_pin(&w, &infra, label, Profile::Loss, 1, 2, &inbox, Some(pin));
     let registry = infra.registry.client(&w);
     assert!(!registry.is_accepted_root(&pin_root));
 
     let (attempt, _) = begin(&w, &s, label);
     let statement = w.statement(&s.account, attempt, Initiate);
-    let approval = infra.approval_against(&w, &s.email, &statement, &pin_root);
-    infra.registry.revoke(&w, "fastmail.com", &kh);
+    let approval = infra.approval(
+        &w,
+        &s.email,
+        "guardian-pinned",
+        "an approval proven against the guardian's key pin",
+        &statement,
+        &pin_path,
+    );
+    infra.registry.revoke(&w, "gmail.com", &kh);
     infra
         .try_submit(&w, &s.account, &s.email, attempt, Initiate, &approval)
         .expect("the pin accepts a key the registry revoked");
@@ -627,8 +659,7 @@ fn the_pin_path_works_independently_of_the_registry() {
 
     w.advance(until + 1 - w.ledger());
     let (next, _) = begin(&w, &s, &format!("{label}/next"));
-    let statement = w.statement(&s.account, next, Initiate);
-    let late = infra.approval_against(&w, &s.email, &statement, &pin_root);
+    let late = with_statement(&w.env, &approval, &w.statement(&s.account, next, Initiate));
     let unknown = EmailGuardianError::UnknownRoot;
     refused(&w, &infra, &s, &s.email, next, Initiate, &late, unknown);
 }

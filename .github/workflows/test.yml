@@ -101,6 +101,27 @@ jobs:
       - name: Cross-check the DKIM registry hashing against Noir
         run: just dkim-registry-vectors
 
+      # The email proofs (crates/integration-tests/fixtures/email/) need the
+      # provider mocks and the encoder, which run on Node.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install npm dependencies
+        run: npm install
+
+      # Re-prove every email fixture from source: compile the recovery circuit
+      # with Perch's pinned nargo/bb, write its key, rebuild the verifier,
+      # generate each recovery email with the provider mocks, encode and prove
+      # it, and verify it through the deployed verifier. The proofs differ on
+      # every run; the circuit artifact, the key, the provider keys, every
+      # email and every fixture's statement, inputs and key path must not.
+      - name: Reproduce the email proof fixtures
+        run: |
+          just gen-email-proofs
+          git diff --exit-code -- circuits/email-recovery/artifacts contracts/email-verifier/vk \
+            circuits/email-recovery/recovery/Prover.toml crates/integration-tests/fixtures/email/keys.json \
+            'crates/integration-tests/fixtures/email/*/fixture.json' 'crates/integration-tests/fixtures/email/*/message.eml'
+
   agent-host:
     name: Agent host (${{ matrix.os }})
     # crates/agent-host is its own workspace (its README says why), so the

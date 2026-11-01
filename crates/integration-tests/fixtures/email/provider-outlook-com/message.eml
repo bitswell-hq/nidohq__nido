@@ -1,0 +1,65 @@
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=outlook.com;
+ s=selector1;
+ h=From:Date:Subject:Message-ID:Content-Type:MIME-Version:X-MS-Exchange-SenderADCheck;
+ bh=5CXcKRQs2qcNFxtSzVHKqX8kZk03YLfU9ulk2Wcmlss=;
+ b=eTp8RKh8nXNRVcNZilJ4Z9s3lLbc+48lvpewcYhuxxQiGgs5OrZwQ5kMuXuOQKXBRJP6+fifl2343F//0obQyiBoxs7Gi3YkqfD1jfMaF2YcMDQNmqS1B8XXgu8IBkdzCdeEJJt7Eq9THeY2U8P6WEVEEWPWFlyUJINoNpgYVmwBterbf3HddBENDjhsgBPmgyrcIoaRNk/yFkiWdBq7T+Unh7fQDfOSkkgKqaEhfxLYsL0vKlgJhYwjKyHFFYAbJSl1TU1kI4Atn7Yy+YLwgAarr9RaI+SccigkOgi6Pyca3feW1djeSkPFtLjx8llpSHdOqg2WymckZiAdWr3oBw==
+Received: from AM9PR02MB3428.eurprd02.prod.outlook.com (2603:10a6:20b:276::d0)
+ by AM9PR02MB3428.eurprd02.prod.outlook.com (2603:10a6:20b:276::d0) with
+ Microsoft SMTP Server (version=TLS1_2,
+ cipher=TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384) id 15.20.9253.17; Thu, 15 Oct 2026 09:30:00 +0000
+Received: from AM9PR02MB3428.eurprd02.prod.outlook.com ([fe80::a41e:ec7c:b197:f4fb]) by
+ AM9PR02MB3428.eurprd02.prod.outlook.com ([fe80::a41e:ec7c:b197:f4fb%5]) with mapi id
+ 15.20.9253.017; Thu, 15 Oct 2026 09:30:00 +0000
+From: First Last <first.last@outlook.com>
+To: recover@recovery.test
+Subject: APPROVE NIDO ACCOUNT RECOVERY 1341f284267e1220fc2f00fa30611033b1d55c851d5ee606aff04d1299ba9754
+Thread-Topic: APPROVE NIDO ACCOUNT RECOVERY 1341f284267e1220fc2f00fa30611033b1d55c851d5ee606aff04d1299ba9754
+Thread-Index: AQHcOr0kFpEUY/yqVMCteIJzO6uxDl/v==
+Date: Thu, 15 Oct 2026 09:30:00 +0000
+Message-ID: <AM9PR02MB3428EBCDAD1C67C2C87C1CA302065@AM9PR02MB3428.eurprd02.prod.outlook.com>
+Accept-Language: en-US
+Content-Language: en-US
+X-MS-Has-Attach:
+X-MS-TNEF-Correlator:
+x-ms-exchange-messagesentrepresentingtype: 1
+x-ms-publictraffictype: Email
+x-ms-traffictypediagnostic: AM9PR02MB3428:EE_|AM9PR01MB3428:EE_
+x-ms-office365-filtering-correlation-id: 808ba522-14f1-4734-ab5f-76aa05496974
+x-microsoft-antispam: BCL:0;ARA:14566002|8060799015|15080799012|19110799012|1182261935;
+x-microsoft-antispam-message-info:
+ gRTWK7gfaCgKQo7S1mZt7Spqz6vR8lmk/+7h2c24BuF02ag2oAWBRH73GwTF4z8EA49W6k7IBOSi
+ zAGmQt6RIIiRMLHBa9Lp2AIPq6jD5+laI1wKBP5Bj11/BZ5LxC80Rzu+alxqb0pK19XTqGBAl8QG
+ gZiSVWj1YoK6B4O/LJr4drJTl8rYN6tMqQG3MgrtoXUoa0nh/JBID60N4P3ko3oIB3SC4OuQWvsk
+ PyIkd8CRh5rT7L5MCd/BQdJb4Y+aBn+BL43OzeJZxudBRHFoARIp1NVEoiG15GqScwCdPjbnfjnz
+ IjW0xh+6Ze8CmFpGkprv3wo/+bfygyahT33KTgLtJExtyQFO2oJnmmw60CCnzaheVZjNmc35GaGU
+ soXQ63HOKo1fVyyBUeDidGNriZcCSmXw8+4DDKl9gFfZDwgMNDl/b2TXK/OEUSXUKb/tOjAQJsVC
+ wheuy/i7MwdHpSPsLl2r86Z9QzA5esgUcGuNcnrLx3wD1Xm+GhOkdV0Z2wrwbvPSVT3+AIqNnBTB
+ zvftW2a/tL7gyVKSQknM5npvYslOUKSyISJtPVqsasG6elUn2b+QlWbsdvZQcxmYGZPn
+x-ms-exchange-antispam-messagedata-chunkcount: 1
+x-ms-exchange-antispam-messagedata-0:
+ PaZDvfbEUxdREkhij3UZJ/2IBVcbxBXkBKYKb36p5JiSpyzcZ4iHwVgJmFZpQcdWr+FtbyQo6ltk
+ cP2fKV0AuWSAiP1GgTEntIVdWkw4U+cVWV/vP90fH2chE7XY4x/nC3CJSjjB9u7q+BgafXo4Zxeo
+ MCyCNq06jYgcF/BgVxGEnP4D+DSO/UhFe9e0mdybBWxKlg6h/MgQwdyvbpKJz95kVDtC1IlJeTWl
+ nnpMXa40VULATBIa87x1NdIQAUn1MwP93X+ALonlizXWSNn9FRAwqsBt1GsWHu2kvuMPyYpkkz6+
+ hbzNtisejwARJleU2r7lh74BxLgbpYSudbDLSeQlPce9G8ibyX0JbjBGwGFGm5QyogMzUShLSdsV
+ vhCY4boa2AszIWuKWURQFj5zJLRo3q1xl5op++dU0FRcMXjvzfwvVPmoho3DJkYjoepDAUAEYAfy
+ F80YkfHN77H8iRcbmuPHfM/guBbnSvr5Yrk2nyrfFQaYx9ietTk5KM9418Sh5JOEbokSafm8YOVD
+ DByWBGNei+77wk83Ot0BKJOuLZynT0mbjf0gW4+jr8huwt/zcVhX2DXdez8mr5vH3goPfKra3SX3
+ xqaIJALe1p9QpNKF1NrIidMQUwHP/oCyxw01/B07PtVA54ye5odNp7ivKWkdZpeYMaDaVqVHdu/U
+ ZPZvV24NVIsQzDf9GkqaH+7MDT8OdWIyLvwk0A1HdDrC3fve+ApeeCC1nhg+4/hE7RSuL7T/4V3M
+ 6cSpBVWF5grFDOaMvc0NzH5tJI4hrbC+Gb6+Qim3leRZBdqYQj4MFb3sAAsYHSo8HVZ743s4Oh9O
+ HoZy6QgggcdPs06jQUxJvezR62J28j3WkcB8XwrGuqW0V3JzTqhZjc4hu4z9Nttv
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: quoted-printable
+MIME-Version: 1.0
+X-OriginatorOrg: outlook.com
+X-MS-Exchange-CrossTenant-AuthAs: Internal
+X-MS-Exchange-CrossTenant-AuthSource: AM9PR02MB3428.eurprd02.prod.outlook.com
+X-MS-Exchange-CrossTenant-RMS-PersistedConsumerOrg: 00000000-0000-0000-0000-000000000000
+X-MS-Exchange-CrossTenant-Network-Message-Id: 808ba522-14f1-4734-ab5f-76aa05496974
+X-MS-Exchange-CrossTenant-originalarrivaltime: 15 Oct 2026 09:30:00.1503 (UTC)
+X-MS-Exchange-CrossTenant-fromentityheader: Hosted
+X-MS-Exchange-CrossTenant-id: 84df9e7f-e9f6-40af-b435-aaaaaaaaaaaa
+X-MS-Exchange-Transport-CrossTenantHeadersStamped: AM9PR02MB3428
+
+Approving the recovery of my account.

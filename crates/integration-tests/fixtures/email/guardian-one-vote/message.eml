@@ -1,0 +1,40 @@
+Received: by mail-lf1-f25.google.com with SMTP id 2adb3069b0e04-9a697ddc24d
+        for <recover@recovery.test>; Thu, 15 Oct 2026 02:30:00 -0700 (PDT)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=gmail.com; s=20260707; t=1792056600; x=1792661400; darn=recovery.test;
+        h=content-type:to:subject:message-id:date:from:mime-version:from:to
+         :cc:subject:date:message-id:reply-to:content-type;
+        bh=5CXcKRQs2qcNFxtSzVHKqX8kZk03YLfU9ulk2Wcmlss=;
+        b=VljklglAmzhvjyw4fuqYQb1DV5tViV7k+gQKi9GuCd34VzwOkjj+8k3qc90YNIZwnL
+         2vgDlLidW9Co5aHX4EnEilWwy5bvD3H+kZRBHKrP4oKzrdeccmz75SIipCimcLcq1M/F
+         XnbzkzW3zDTHI0kyiIido95lyaYTAx/A5JBoSf8cP2mLfaarmy5956bOBmkVjce/jD/J
+         xy3cFPen6uw956RgFP+cqU8N7SbZ9otOv3tMvAN4zj3SnKmbvJ8DyC9EVltjSAzKHaMR
+         VOf+0uy0/8DZECRT9y7kPMHbciO6j9zltX1X6bmldZOFk6rXRLUxTruMUnnjR/OAUVLg
+         LkSw==
+X-Google-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=1e100.net; s=20260707; t=1792056600; x=1792661400;
+        h=content-type:to:subject:message-id:date:from:mime-version:x-gm-gg
+         :x-gm-message-state:from:to:cc:subject:date:message-id:reply-to
+         :content-type;
+        bh=5CXcKRQs2qcNFxtSzVHKqX8kZk03YLfU9ulk2Wcmlss=;
+        b=HRXmU5XPuWxx4jlQ4HzkNwV6ONeR5nTGYVTbWN0jt4Qt3Eb4pW7MzEBOO+pibRRgQU
+         +LcQVl4YeYYJlDF3PvCtxp/1Y3s5z8IqOy1yuq+CQzkkz2+7TbnMUzGl1Pg4/w2iC7Rc
+         8gRE1cQmN0t7NkWpANa7Mq5M7/AKtr5yLPrkI2GxUohaPhNck1P2l8JHRnKhYP8MNQ4y
+         +alCxanh/1mp7jrjxubFWXBPXZe8p5QqpjU55aGaj2hBaO9Rx4f6GgV4omIb8VWaggzE
+         OlUoJlEoiwRcVdNUluLXWHkoJ4v8jKDjK2MmSSTjULaTShiNAjI+FpL/nFxBBQiz9GtD
+         HZPg==
+X-Gm-Message-State: AOJu0Y/eivCZfFw4bJMQUyrqTOZ7qoFPTfEO9S01BETPjlNn4xCQOarWOs1AvcRY8KBN8Bhn
+X-Gm-Gg: F36CPxI+MYMH95KNwXZ99gFuJLaarxa5g1DUWiRXMJZySvJBBjk2sbnTPfRk
+	zYrEF893d1TQh7UYKpAoYsRW0mzhCC19qbVefZhWj8aTIAUoJ/FcwvCeGEoH
+X-Received: by 2002:a05:6512:84aa:b0:899:485b with SMTP id
+ 2adb3069b0e04-8c1a258b7femr3047026e87.75.3054628824447; Thu, 15 Oct 2026 09:30:00 +0000
+MIME-Version: 1.0
+From: Test User <email.one.vote@gmail.com>
+Date: Thu, 15 Oct 2026 09:30:00 +0000
+X-Gm-Features: AWmQ_b83LFpmN51MyDKfIHinC7_nVwjvtIL7__IllSNkIQxUzlEi5pBapYEHgxM
+Message-ID: <CAuppqMJmR2qBqotYcPhusr2WHx1R1jY1+jNW0h_2TKMNGstL30@mail.gmail.com>
+Subject: APPROVE NIDO ACCOUNT RECOVERY 173863e95b87295f4e41c8d0d97424aa68ad58a543caa0bb13b5e8f65eb07f09
+To: recover@recovery.test
+Content-Type: text/plain; charset="UTF-8"
+
+Approving the recovery of my account.

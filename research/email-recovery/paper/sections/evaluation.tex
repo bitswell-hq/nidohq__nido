@@ -7,4 +7,27 @@ forged and replayed emails, a wrong account or key in the statement, stale or
 malicious registry keys, a compromised inbox, provider header quirks, and
 front-running.
 
-\pending{no measurements have been taken.}
+\paragraph{On-chain cost.}
+Each launch domain's recovery email was proved with Perch's pinned prover
+and submitted as one guardian approval on Nido's integration-test stack,
+with Perch's controller and every contract running from its WebAssembly.
+\claimstatement{onchain-verification-cost}\claim{onchain-verification-cost}
+The cost does not depend on the provider: the proof, its public inputs and
+the circuit's size are the same for every email. The signed transaction is
+dominated by the 16{,}224-byte proof inside the guardian's authorisation
+entry.
+
+\paragraph{Proving.}
+\claimstatement{desktop-proving-cost}\claim{desktop-proving-cost}
+A browser without cross-origin isolation proves on one thread; the recovery
+origin's isolation headers let bb.js use one worker per core.
+
+\paragraph{Attacks.}
+The circuit-level attack suite is part of the implementation
+(\S\ref{sec:impl}); its cases cover forged and replayed emails, a wrong
+account or statement, and provider header quirks, against the circuit with
+mocked provider emails.
+
+\pending{phone-class proving, costs and fees on a network, and the
+registry, compromised-inbox and front-running attacks on a network are not
+yet measured.}

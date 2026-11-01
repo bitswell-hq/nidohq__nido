@@ -16,6 +16,7 @@
 //!   address commitment and the key hash;
 //! - `registry`: the DKIM key registry's leaf and Merkle root;
 //! - `dkim`: the header-only composition of all of the above;
+//! - `recovery`: the recovery relation, spec obligations C1 to C6;
 //! - `spec`: the constants `docs/email-recovery/spec.md` fixes.
 //!
 //! Every function takes the canonicalized bytes the signature covers; the
@@ -33,3 +34,4 @@ pub mod body;
 pub mod pack;
 pub mod registry;
 pub mod dkim;
+pub mod recovery;

@@ -9,6 +9,8 @@ use stellar_accounts::policies::spending_limit::SpendingLimitAccountParams;
 use stellar_accounts::smart_account::{ContextRule, ContextRuleType, Signer};
 
 pub mod email;
+pub mod email_proof;
+pub mod transaction;
 pub mod world;
 pub mod zk;
 
@@ -25,6 +27,11 @@ pub const PREAUTH_SWEEP_POLICY_WASM: &[u8] =
 /// The per-account email guardian (`contracts/email-guardian`).
 pub const EMAIL_GUARDIAN_WASM: &[u8] =
     include_bytes!("../../../target/wasm32v1-none/contract/nido_email_guardian.wasm");
+
+/// The email-recovery circuit's proof verifier (`contracts/email-verifier`):
+/// Perch's vendored `UltraHonk` verifier with the circuit's key compiled in.
+pub const EMAIL_VERIFIER_WASM: &[u8] =
+    include_bytes!("../../../target/wasm32v1-none/contract/nido_email_verifier.wasm");
 
 /// The DKIM key registry (`contracts/dkim-registry`).
 pub const DKIM_REGISTRY_WASM: &[u8] =

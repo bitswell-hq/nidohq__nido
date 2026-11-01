@@ -1,24 +1,24 @@
-# Email-recovery circuit components
+# Email-recovery circuit
 
-Noir components that prove, in zero knowledge, what a DKIM-signed recovery
-email says: that a mail provider's RSA-2048 key signed a header block whose
-From address, signing domain and Subject are the ones the email-recovery
-interface specification (`docs/email-recovery/spec.md`) requires. They are
-built and proven with exactly Perch's pinned toolchain (nargo
-1.0.0-beta.9, bb 0.87.0, zero-knowledge UltraHonk with the keccak
-transcript), so a circuit made from them verifies with Perch's Soroban
-verifier.
-
-The top-level recovery circuit, which fixes the public inputs of spec §6.1
-and composes these components, is not built yet.
+The recovery circuit (`recovery/`) proves, in zero knowledge, what a
+DKIM-signed recovery email says: that a mail provider's RSA-2048 key, whose
+leaf is in a key tree with a given root, signed a header block whose From
+address opens the account's commitment and whose Subject opens to the
+recovery statement's digest (`docs/email-recovery/spec.md` §6). It is built
+from the Noir components in `lib/`, and built and proven with exactly
+Perch's pinned toolchain (nargo 1.0.0-beta.9, bb 0.87.0, zero-knowledge
+UltraHonk with the keccak transcript), so its proofs verify with Perch's
+Soroban verifier (`contracts/email-verifier`).
 
 ## Layout
 
 | Path | What it is |
 | --- | --- |
+| `recovery/` | The recovery circuit: its public inputs, in spec §6.1's order, and a call to `email_recovery::recovery`; `Prover.toml` holds the Gmail fixture's inputs |
+| `artifacts/recovery.json` | The compiled circuit without debug paths, what noir_js and bb.js run (`scripts/recovery-artifact.mjs` writes and checks it) |
 | `lib/` | The library `email_recovery`; each module's header states its grammar and checks |
-| `tests/` | `email_recovery_tests`: 104 tests, including one negative test per publicly documented soundness issue class (`src/soundness.nr`) and parity with the DKIM key registry's host hashing (`src/registry_parity.nr`) |
-| `bench/` | One binary package per component, for gate counts and proving measurements |
+| `tests/` | `email_recovery_tests`: 123 tests, including the recovery relation with every public input and linking witness changed (`src/recovery_tests.nr`), one negative test per publicly documented soundness issue class (`src/soundness.nr`), and parity with the DKIM key registry's host hashing (`src/registry_parity.nr`) |
+| `bench/` | One binary package per component, and the recovery relation at a 1024-byte header bound (`bench/recovery_1024`), for gate counts and proving measurements |
 | `tools/blinded_value/` | Computes the Subject value `T` for the test-vector generator |
 | `vendor/` | Vendored noir-bignum and sha256 (`THIRD_PARTY.md`) |
 | `scripts/` | Toolchain install and check, vector generation, measurements, vendor check |
@@ -38,10 +38,66 @@ and composes these components, is not built yet.
 | `registry` | The registry leaf `P2(DOM_LEAF, len, pack(domain, 62), key_hash)` and the depth-16 Merkle root | C6 |
 | `body` | `bh=` against the SHA-256 of a bounded canonicalized body, refusing `l=`; for uses that bind the body (the recovery proof does not, spec §4.4) | |
 | `dkim` | `verify_dkim_header`: all of the above over one header block, with the prover's hints computed by `find_hints` and checked | C1 to C5, key hash of C6 |
-| `spec` | The constants the spec fixes: domain tags, `ADDR_MAX`, the 62-byte leaf domain, the registry depth, the Subject phrases | |
+| `recovery` | `verify_recovery_email`: `verify_dkim_header` at `HEADER_MAX`, then `C` opened by the signed address and `account_code`, the Subject opened by the digest and `rho`, and the leaf `(lowercase d=, key hash)` at the leaf index of the tree with root `key_root` | C1 to C6 |
+| `spec` | The constants the spec fixes: domain tags, `ADDR_MAX`, the 62-byte leaf domain, the registry depth, the Subject phrases, `HEADER_MAX` and the DKIM-Signature field bounds | |
 
 The circuit takes the canonicalized bytes the signature covers and never
 canonicalizes. Positions in the header are prover hints, always checked.
+
+## The recovery circuit
+
+| | |
+| --- | --- |
+| Public inputs | `commitment` (`C`), `digest_hi`, `digest_lo`, `key_root`: the 128 bytes the email guardian hands its verifier |
+| Private inputs | `header` (the signed header block, at most `HEADER_MAX` = 1536 bytes), `modulus`, `redc` (noir-bignum's Barrett hint, read only by unconstrained code), `signature`, `rho`, `account_code`, `key_index`, `key_siblings` (16) |
+| Size | 251,561 UltraHonk gates, padded to 2^18 (`MEASUREMENTS.md`); `bench/recovery_1024` is the same relation at 1024-byte headers, 189,503 gates, also 2^18 |
+| Verification key | `contracts/email-verifier/vk/email_recovery.vk` (`bb write_vk --scheme ultra_honk --oracle_hash keccak`), compiled into the verifier contract |
+
+The leaf's domain is the lowercase `d=` value the circuit reads from `H`,
+which `dkim_signature` proves equal to the lowercase From domain, so C4 holds
+by construction. Positions inside `H` are computed by `find_hints` in
+unconstrained code and checked.
+
+`packages/email-recovery` turns a raw `.eml` into these inputs
+(`encodeRecoveryEmail`), and its `test/attacks.test.ts` runs every
+adversarial email of `packages/email-mocks` through the committed circuit
+with noir_js. `just gen-email-proofs` compiles the circuit, writes the
+artifact and the key, and proves one recovery email per launch domain plus
+the integration tests' approvals, all generated by the provider mocks
+(`crates/integration-tests/fixtures/email/`).
+
+### Header bound
+
+`HEADER_MAX` = 1536 bytes. The signed header blocks of the committed
+launch-domain fixtures (`first.last@<domain>`, with or without a 10-byte
+display name), in the provider mocks' formats
+(`packages/email-mocks/PROVIDERS.md`):
+
+| Domain | Signed block | DKIM-Signature field | Tags | Longest display name with a 124-byte address |
+| --- | --- | --- | --- | --- |
+| gmail.com | 645 | 296 | 11 | 797 |
+| outlook.com | 558 | 218 | 8 | 886 |
+| hotmail.com | 545 | 218 | 8 | 886 |
+| icloud.com | 601 | 230 | 10 | 842 |
+| yahoo.com | 477 | 197 | 9 | 965 |
+| proton.me | 653 | 278 | 10 | 789 |
+| protonmail.com | 655 | 283 | 10 | 779 |
+| fastmail.com | 660 | 304 | 10 | 785 |
+| gmx.net | 795 | 355 | 11 | 539 |
+| gmx.de | 779 | 353 | 11 | 540 |
+| web.de | 796 | 353 | 11 | 536 |
+
+The last column is the longest display name whose block still fits with the
+longest address the spec allows (124 bytes), found by generating the mock
+email for each length. GMX and WEB.DE are the tightest because their signed
+fields carry the address twice. At 1024 bytes those two would leave only 24
+to 28 bytes for a display name with a 124-byte address; 1536 keeps the
+circuit at 2^18, like 1024 (`MEASUREMENTS.md` compares the two). The field
+and tag bounds (512 bytes, 16 tags) hold every launch format. The
+integration test `email_proofs.rs::long_address_at_web_de_counts_one_vote`
+proves a 124-byte address with a 299-byte display name at WEB.DE. All of
+these figures come from the mocks' formats; real provider mail is not
+measured.
 
 ## Build and test
 
@@ -79,11 +135,13 @@ NARGO=... node scripts/gen-test-vectors.mjs --check   # fail if anything is stal
 ```
 
 These vectors are the minimum the circuit's tests need. Fixtures that match
-each launch provider's real signing format live in `packages/email-mocks`.
+each launch provider's signing format live in `packages/email-mocks`; the
+recovery circuit's proofs are made from them (`just gen-email-proofs`).
 
 ## Measurements
 
 `scripts/measure.sh` installs and checks the toolchain, compiles every
-package, counts gates with `bb gates`, proves each proved bench package
-with `bb prove --zk` (and verifies every proof), and rewrites the tables in
-`MEASUREMENTS.md`.
+package, counts gates with `bb gates`, proves the recovery circuit and each
+proved bench package with `bb prove --zk` (and verifies every proof), proves
+the recovery circuit with bb.js on one thread and on every core, and
+rewrites the tables in `MEASUREMENTS.md`.

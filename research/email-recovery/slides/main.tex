@@ -110,24 +110,30 @@
 \begin{frame}{Implementation}
   \begin{itemize}
     \item Recovery statement format and the email-guardian contract on Perch.
-    \item A Noir DKIM circuit with header and body constraints for the
-      launch providers, fixing the issues public audits report~\cite{audit-consensys-2024,audit-veridise-2024}.
-    \item Browser prover, DKIM key registry, mocks of every third party.
+    \item A Noir DKIM circuit with header constraints for the launch
+      providers, fixing the issues public audits report~\cite{audit-consensys-2024,audit-veridise-2024}:
+      251{,}561 gates ($2^{18}$), headers up to 1536 bytes.
+      \claim{circuit-accepts-launch-providers}\claim{circuit-refuses-attacks}
+    \item On-chain: Perch's UltraHonk verifier with the circuit's key; one
+      real proof is one guardian vote.\claim{onchain-email-vote}
+    \item DKIM key registry, mocks of every third party.
   \end{itemize}
   \bigskip
-  \pending{not yet built.}
+  \pending{browser prover not yet built.}
 \end{frame}
 
 \begin{frame}{Evaluation}
   \begin{itemize}
-    \item Proving time and memory, desktop and phone-class devices.
-    \item On-chain instructions, bytes and fees, local network and testnet.
-    \item Attack suite: forged and replayed emails, wrong account or key,
-      stale or malicious registry keys, compromised inbox, header quirks,
-      front-running.
+    \item On chain: about 122M of 400M instructions, an 18\,KB transaction,
+      about 178{,}000 stroops before rent.\claim{onchain-verification-cost}
+    \item Proving, desktop: under 1\,s native; bb.js 14\,s on one thread,
+      3.3\,s on 18.\claim{desktop-proving-cost}
+    \item Attack suite on the circuit: forged and replayed emails, wrong
+      account, header quirks.\claim{circuit-refuses-attacks}
   \end{itemize}
   \bigskip
-  \pending{no measurements yet.}
+  \pending{phone-class devices, network costs, registry and front-running
+  attacks.}
 \end{frame}
 
 \begin{frame}{Related work, limitations and open questions}

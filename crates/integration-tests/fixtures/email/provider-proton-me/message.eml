@@ -1,0 +1,23 @@
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=proton.me;
+	s=protonmail2; t=1792056600; x=1792315800;
+	bh=5CXcKRQs2qcNFxtSzVHKqX8kZk03YLfU9ulk2Wcmlss=;
+	h=Date:To:From:Subject:Message-ID:Feedback-ID:From:To:Cc:Date:
+	 Subject:Reply-To:Feedback-ID:Message-ID:BIMI-Selector;
+	b=OwkXRqazfyn9DYsqM1OC9ddlSfnLYmjICFKIyhQEzuH6qsZGASjZ4V4U4OHuqZXGF
+	 14JJy0CPd3GftQvp11CvlijZfrEGfJBGMvMMOvuqQLxOEKpmHF1cFpxWGlutmtNHmy
+	 VVz8GBCS+/QALqSunI/35RNohbS4uu4FhgYgm41vuw+IYfmX4QxwSMoxpfiJSYDaCn
+	 i9XVU3isVCZNTAc8QhUbMAQz+gVQE7N+DQc1junenAuRcrUIjfI5TU9GeYRSQly7Te
+	 5opjFXs9vWysQrf4D20aAj/dLMZ3m9Wpaz12xa0TTKwLdII7jx/QJmmTlNq8TTujqW
+	 p7iq+EWJU4PGw==
+Date: Thu, 15 Oct 2026 09:30:00 +0000
+To: recover@recovery.test
+From: First Last <first.last@proton.me>
+Subject: APPROVE NIDO ACCOUNT RECOVERY 03698b47e7f759a1d3766085aa6ae4a853a9df8c9fd8868d7e99d474a3b5baff
+Message-ID: <3iARJPOwoS_7GfeLGabL6C2hhtTxuvN_fkpj5XZf-5pF9zkF1m7IYSbh0EeQ1HD63LvkUvnvoaGnQWSDgYFN0mtfMe9wuVp0m6Jb2B473Mm=@proton.me>
+Feedback-ID: 46198366:user:proton
+X-Pm-Message-ID: XHHmC8DE0W1tMsnWfBnBp2y5vZ1F7yZ7z26U8MSX
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+Approving the recovery of my account.

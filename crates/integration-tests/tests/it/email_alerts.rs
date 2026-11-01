@@ -18,7 +18,8 @@
 
 use nido_email_guardian::ALLOW_ALL;
 use nido_enclave_image_registry::{EnclaveImageRegistryClient, TIMELOCK_LEDGERS};
-use nido_integration_tests::email::{field, EmailInfra};
+use nido_integration_tests::email::EmailInfra;
+use nido_integration_tests::email_proof::Inbox;
 use nido_integration_tests::world::{
     contract_at, strkey, world, Account, Mode, Passkey, Profile, Recovery, World, DELAY, EXPIRY,
     NETWORK,
@@ -167,7 +168,8 @@ fn alert_fixture_matches_the_chain() {
         owner.clone(),
         std::vec![("device", Passkey::labelled(&format!("{label}/device")))],
     );
-    let email = infra.guardian(&w, &account, label, &field(&w.env, "c/alerts"), ALLOW_ALL);
+    let inbox = Inbox::new(label, "alerts.user@gmail.com", Some("Test User"));
+    let email = infra.guardian(&w, &account, label, &inbox, ALLOW_ALL);
     let friend = w.guardian(
         &format!("{label}/friend"),
         Passkey::labelled(&format!("{label}/friend")),
@@ -200,7 +202,13 @@ fn alert_fixture_matches_the_chain() {
     rec.take(&w);
     let target = w.target_bytes(&account, RecoveryAction::LostKey, &source, &replacements);
     w.advance(1);
-    let approval = infra.approval(&w, &email, &w.statement(&account, attempt, Initiate));
+    let approval = infra.registry_approval(
+        &w,
+        &email,
+        "alerts",
+        "the email approval of the recovery the alert fixture records",
+        &w.statement(&account, attempt, Initiate),
+    );
     infra
         .try_submit(&w, &account, &email, attempt, Initiate, &approval)
         .expect("the email approval");
