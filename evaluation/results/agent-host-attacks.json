@@ -84,6 +84,18 @@
     "changes": []
   },
   {
+    "id": "ah-se-sub-agent-wider-chain",
+    "category": "self-escalation",
+    "attempt": "a sub-agent of the payer, delegated another contract, signs a transaction calling it",
+    "boundary": "agent-host",
+    "control": false,
+    "outcome": "refused",
+    "component": "agent-host",
+    "error": "Chain grant denies CABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAFNSZ.transfer (context 0 of the Transaction signature's 2)",
+    "state_unchanged": true,
+    "changes": []
+  },
+  {
     "id": "ah-se-revoked-agent",
     "category": "self-escalation",
     "attempt": "a revoked agent reads its own work file",
@@ -407,6 +419,204 @@
     "state_unchanged": false,
     "changes": [
       "keeper signatures 0 -> 1"
+    ]
+  },
+  {
+    "id": "ah-dw-sign-tx-other-contract",
+    "category": "delegation workarounds",
+    "attempt": "the payer signs a transaction calling a contract its chain grant leaves out",
+    "boundary": "agent-host",
+    "control": false,
+    "outcome": "refused",
+    "component": "agent-host",
+    "error": "Chain grant denies CABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAFNSZ.transfer (context 0 of the Transaction signature's 2)",
+    "state_unchanged": true,
+    "changes": []
+  },
+  {
+    "id": "ah-dw-sign-tx-over-bound",
+    "category": "delegation workarounds",
+    "attempt": "the payer signs a transfer over its chain grant's amount bound",
+    "boundary": "agent-host",
+    "control": false,
+    "outcome": "refused",
+    "component": "agent-host",
+    "error": "Chain grant denies CAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQC526.transfer (context 0 of the Transaction signature's 2)",
+    "state_unchanged": true,
+    "changes": []
+  },
+  {
+    "id": "ah-dw-sign-fee-bump",
+    "category": "delegation workarounds",
+    "attempt": "the payer signs a fee-bump envelope around an allowed transaction",
+    "boundary": "agent-host",
+    "control": false,
+    "outcome": "refused",
+    "component": "agent-host",
+    "error": "failed: only a transaction envelope of type Tx is signed",
+    "state_unchanged": true,
+    "changes": []
+  },
+  {
+    "id": "ah-dw-sign-add-signer",
+    "category": "delegation workarounds",
+    "attempt": "the payer signs a transaction adding a signer to its account, an operation the chain vocabulary cannot express",
+    "boundary": "agent-host",
+    "control": false,
+    "outcome": "refused",
+    "component": "agent-host",
+    "error": "failed: only a transaction of one InvokeHostFunction operation is signed",
+    "state_unchanged": true,
+    "changes": []
+  },
+  {
+    "id": "ah-dw-sign-payment-beside-call",
+    "category": "delegation workarounds",
+    "attempt": "the payer signs an allowed transfer with a payment as a second operation",
+    "boundary": "agent-host",
+    "control": false,
+    "outcome": "refused",
+    "component": "agent-host",
+    "error": "failed: only a transaction of one InvokeHostFunction operation is signed",
+    "state_unchanged": true,
+    "changes": []
+  },
+  {
+    "id": "ah-dw-sign-deploy",
+    "category": "delegation workarounds",
+    "attempt": "the payer signs a transaction deploying a contract",
+    "boundary": "agent-host",
+    "control": false,
+    "outcome": "refused",
+    "component": "agent-host",
+    "error": "failed: a contract deployment is never signed",
+    "state_unchanged": true,
+    "changes": []
+  },
+  {
+    "id": "ah-dw-sign-deploy-nested",
+    "category": "delegation workarounds",
+    "attempt": "the payer signs an authorization entry whose allowed transfer nests a contract deployment",
+    "boundary": "agent-host",
+    "control": false,
+    "outcome": "refused",
+    "component": "agent-host",
+    "error": "failed: a contract deployment is never signed",
+    "state_unchanged": true,
+    "changes": []
+  },
+  {
+    "id": "ah-dw-sign-tx-control",
+    "category": "delegation workarounds",
+    "attempt": "control: the payer signs an allowed transfer",
+    "boundary": "agent-host",
+    "control": true,
+    "outcome": "allowed",
+    "component": "",
+    "error": "",
+    "state_unchanged": false,
+    "changes": [
+      "keeper signatures 1 -> 2"
+    ]
+  },
+  {
+    "id": "ah-dw-sign-auth-entry-control",
+    "category": "delegation workarounds",
+    "attempt": "control: the payer signs an authorization entry whose transfer nests an allowed transfer at the bound",
+    "boundary": "agent-host",
+    "control": true,
+    "outcome": "allowed",
+    "component": "",
+    "error": "",
+    "state_unchanged": false,
+    "changes": [
+      "keeper signatures 2 -> 3"
+    ]
+  },
+  {
+    "id": "ah-dw-sign-deploy-no-chain-caveats",
+    "category": "delegation workarounds",
+    "attempt": "the research agent, whose grant has no chain caveats, signs an authorization entry deploying a contract",
+    "boundary": "agent-host",
+    "control": false,
+    "outcome": "refused",
+    "component": "agent-host",
+    "error": "failed: a contract deployment is never signed",
+    "state_unchanged": true,
+    "changes": []
+  },
+  {
+    "id": "ah-nc-tx-entry-other-contract",
+    "category": "nested-call smuggling",
+    "attempt": "the payer signs a transaction whose allowed transfer nests a call on a contract its grant leaves out",
+    "boundary": "agent-host",
+    "control": false,
+    "outcome": "refused",
+    "component": "agent-host",
+    "error": "Chain grant denies CABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAFNSZ.drain (context 2 of the Transaction signature's 3)",
+    "state_unchanged": true,
+    "changes": []
+  },
+  {
+    "id": "ah-nc-tx-entry-over-bound-depth-3",
+    "category": "nested-call smuggling",
+    "attempt": "the payer signs a transaction whose tree nests, at depth 3, a transfer over the amount bound",
+    "boundary": "agent-host",
+    "control": false,
+    "outcome": "refused",
+    "component": "agent-host",
+    "error": "Chain grant denies CAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQC526.transfer (context 3 of the Transaction signature's 4)",
+    "state_unchanged": true,
+    "changes": []
+  },
+  {
+    "id": "ah-nc-tx-second-entry",
+    "category": "nested-call smuggling",
+    "attempt": "the payer signs a transaction whose second authorization entry, signed by another address, calls a contract its grant leaves out",
+    "boundary": "agent-host",
+    "control": false,
+    "outcome": "refused",
+    "component": "agent-host",
+    "error": "Chain grant denies CABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAFNSZ.transfer (context 2 of the Transaction signature's 3)",
+    "state_unchanged": true,
+    "changes": []
+  },
+  {
+    "id": "ah-nc-auth-entry-other-contract",
+    "category": "nested-call smuggling",
+    "attempt": "the payer signs an authorization entry whose allowed transfer nests a call on another contract",
+    "boundary": "agent-host",
+    "control": false,
+    "outcome": "refused",
+    "component": "agent-host",
+    "error": "Chain grant denies CABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAFNSZ.drain (context 1 of the AuthEntry signature's 2)",
+    "state_unchanged": true,
+    "changes": []
+  },
+  {
+    "id": "ah-nc-delegated-over-bound",
+    "category": "nested-call smuggling",
+    "attempt": "the payer signs a delegated signer's preimage whose allowed transfer nests a transfer over the amount bound",
+    "boundary": "agent-host",
+    "control": false,
+    "outcome": "refused",
+    "component": "agent-host",
+    "error": "Chain grant denies CAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQC526.transfer (context 1 of the AuthEntry signature's 2)",
+    "state_unchanged": true,
+    "changes": []
+  },
+  {
+    "id": "ah-nc-control",
+    "category": "nested-call smuggling",
+    "attempt": "control: the payer signs a transaction whose transfer nests an allowed transfer at the bound",
+    "boundary": "agent-host",
+    "control": true,
+    "outcome": "allowed",
+    "component": "",
+    "error": "",
+    "state_unchanged": false,
+    "changes": [
+      "keeper signatures 3 -> 4"
     ]
   }
 ]

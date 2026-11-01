@@ -56,15 +56,16 @@ Network & self-escalation & 16 & 16 & 0 \\
  & nested-call smuggling & 8 & 8 & 1 \\
  & delegation workarounds & 17 & 17 & 5 \\
  & oversubscription & 3 & 3 & 2 \\
-Host & self-escalation & 10 & 10 & 0 \\
- & delegation workarounds & 21 & 21 & 3 \\
+Host & self-escalation & 11 & 11 & 0 \\
+ & nested-call smuggling & 5 & 5 & 1 \\
+ & delegation workarounds & 29 & 29 & 5 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 In Soroban simulation all 45 attempts are refused with state unchanged and
-the 9 controls pass\claim{attack-suite-soroban}; at the host all 31 are, and
-its 3 controls pass\claim{attack-suite-host} (Table~\ref{tab:attacks}). The
+the 9 controls pass\claim{attack-suite-soroban}; at the host all 45 are, and
+its 6 controls pass\claim{attack-suite-host} (Table~\ref{tab:attacks}). The
 Soroban attempts include the grant signer's admin functions through the
 account and as the grant signer itself; the account's \code{apply\_doc},
 \code{execute} and \code{schedule\_upgrade}; documents that wrongly scope an
@@ -84,7 +85,16 @@ sub-agents using a wider grant than their parent's, revoked agents, paths that
 name the work directory and reach outside it, URLs that name the allowed host
 and reach another (another port or scheme, an address literal, a trailing
 dot, userinfo, redirects), and signing requests for another key, network or
-payload kind. Section~\ref{sec:eval-network} runs the Soroban attempts again
+payload kind. A payer agent whose chain grant allows \code{transfer} on one
+token up to an amount exercises the chain check on signatures: transactions
+calling another contract or over the bound; a call on another contract, or a
+transfer over the bound, nested in a transaction's entry, in a second entry
+another address signs, in an authorization preimage and in a delegated
+signer's preimage; a fee bump, a new signer on the account and a payment
+beside the call, which the chain vocabulary cannot express; a sub-agent
+signing for a contract its parent's grant leaves out; and contract
+deployments, as a transaction, nested in an entry, and by an agent with no
+chain caveats. The host refuses each before the keeper signs. Section~\ref{sec:eval-network} runs the Soroban attempts again
 on a local Stellar network, through the relay.
 
 The suite found two things. A muxed address (\code{M\ldots}) of a recipient
@@ -115,17 +125,26 @@ the number of caveats; the length of a byte-string argument, compared by an
 \code{argEq} and not compared; the number of contexts; and the length of a
 \code{contractIn} list. Every point is measured twice on the same stored
 grant: passing, with every caveat holding, and failing, with the first caveat
-failing on the first context, so the evaluator stops at once. Loading the
+failing on the first context. A failing \code{argEq}, \code{contractIn} of
+one entry or caveat count stops the evaluator at once; a failing
+\code{contractIn} list is scanned whole first. Loading the
 grant, verifying the signature and mapping contexts to actions cost the same
 in both, so the difference is the evaluator's own work. For every point the
 harness writes the grant and actions in the evaluator's form, and the Lean
 package evaluates its own counted evaluator and bound on them.
 
 The contract, the native evaluator and the Lean model agree on every verdict.
-Over the 28 pairs, the evaluator's work is 96 to 164 CPU instructions per Lean
-step, and a least-squares fit through the origin of the instruction
-difference on the step difference gives 99.4 instructions per step with
-$R^2 = 0.986$\claim{deployed-cost}. The fit is through the origin over
+Over the 27 of 28 pairs whose step counts differ by at least 10, the
+evaluator's work is 96 to 164 CPU instructions per Lean step, and a
+least-squares fit through the origin of the instruction difference on the
+step difference, over all 28, gives 99.4 instructions per step with
+$R^2 = 0.986$\claim{deployed-cost}. The 28th pair disagrees in sign: with a
+64-entry \code{contractIn} list, both checks scan the whole list, and the
+failing one takes 9 more Lean steps but 620 fewer instructions. A likely
+cause, not isolated, is the byte comparison: the counted model walks the two
+strkeys pairwise, while the Rust compares lengths first and then the bytes,
+so the model's count need not follow the cost where the two checks differ by
+a few comparisons. The fit is through the origin over
 differences, so it prices evaluator work only; the mapping of contexts to
 actions, which grows with argument size, is outside it: with an argument that
 no caveat compares, the whole check grows from 1.072M to 1.255M instructions

@@ -1,6 +1,8 @@
 //! The evaluation at the agent host (`crates/agent-host`): a research agent
 //! that reads and writes files, calls an API and signs, with a sub-agent; the
-//! attack suite, each attempt checked for clean failure; the per-check cost
+//! attack suite, each attempt checked for clean failure, including
+//! transactions and authorization entries whose contexts a payer agent's
+//! chain grant checks; the per-check cost
 //! through the evaluator component against native `grant-eval`; and tool-call
 //! throughput.
 //!
@@ -22,7 +24,9 @@ use std::process::ExitCode;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use agent_host::grant::{FileCaveat, Grants, Mode, NetworkCaveat, Payload, Scheme, SigningCaveat};
+use agent_host::grant::{
+    ChainCaveat, FileCaveat, Grants, I128Text, Mode, NetworkCaveat, Payload, Scheme, SigningCaveat,
+};
 use agent_host::net::{Method, Request};
 use agent_host::sign::{Request as SignRequest, RequestPayload};
 use agent_host::{bench, workload, AgentId, CallError, Host, Output, ToolCall};
@@ -32,9 +36,16 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use stellar_xdr::{
-    ContractId, Hash, HashIdPreimage, HashIdPreimageSorobanAuthorizationWithAddress,
-    InvokeContractArgs, Limits, ScAddress, ScSymbol, SorobanAuthorizedFunction,
-    SorobanAuthorizedInvocation, VecM, WriteXdr,
+    AccountId, Asset, ContractExecutable, ContractId, ContractIdPreimage,
+    ContractIdPreimageFromAddress, CreateContractArgs, FeeBumpTransaction,
+    FeeBumpTransactionEnvelope, FeeBumpTransactionExt, FeeBumpTransactionInnerTx, Hash,
+    HashIdPreimage, HashIdPreimageSorobanAuthorization,
+    HashIdPreimageSorobanAuthorizationWithAddress, HostFunction, Int128Parts, InvokeContractArgs,
+    InvokeHostFunctionOp, Limits, Memo, MuxedAccount, Operation, OperationBody, PaymentOp,
+    Preconditions, PublicKey, ScAddress, ScSymbol, ScVal, SequenceNumber, SetOptionsOp, Signer,
+    SignerKey, SorobanAddressCredentials, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
+    SorobanAuthorizedInvocation, SorobanCredentials, Transaction, TransactionEnvelope,
+    TransactionExt, TransactionV1Envelope, Uint256, VecM, WriteXdr,
 };
 
 /// The local network's passphrase, which the research agent may sign for.
@@ -42,6 +53,11 @@ const STANDALONE: &str = "Standalone Network ; February 2017";
 const TESTNET: &str = "Test SDF Network ; September 2015";
 const KEY: &str = "research-key";
 const OTHER_KEY: &str = "other-key";
+/// The contract the payer's chain grant allows, and one it does not.
+const TOKEN: [u8; 32] = [1; 32];
+const OTHER_CONTRACT: [u8; 32] = [2; 32];
+/// The payer's bound on `transfer`'s amount (argument 2).
+const MAX_AMOUNT: i64 = 1_000;
 
 // --- the environment ---------------------------------------------------------
 
@@ -208,28 +224,212 @@ fn summarizer_add() -> Grants {
     }
 }
 
+/// The payer's grant: transactions and authorization entries on testnet with
+/// the research key, for `transfer` on `TOKEN` of at most `MAX_AMOUNT`; its
+/// work directory read only, and no host.
+fn payer_grant(sb: &Sandbox) -> Grants {
+    Grants {
+        files: vec![
+            FileCaveat::PathUnder(sb.at("work")),
+            FileCaveat::ModeIn(vec![Mode::Read]),
+        ],
+        network: vec![NetworkCaveat::HostIn(vec![])],
+        signing: vec![
+            SigningCaveat::KeyIn(vec![KEY.into()]),
+            SigningCaveat::NetworkIn(vec![TESTNET.into()]),
+            SigningCaveat::PayloadIn(vec![Payload::Transaction, Payload::AuthEntry]),
+        ],
+        chain: vec![
+            ChainCaveat::ContractIn(vec![contract(TOKEN).to_string()]),
+            ChainCaveat::FunctionIn(vec!["transfer".into()]),
+            ChainCaveat::ArgI128AtMost(2, I128Text::Number(MAX_AMOUNT)),
+        ],
+    }
+}
+
+// --- signing payloads -------------------------------------------------------------
+
+fn base64_xdr(value: &impl WriteXdr) -> String {
+    base64::engine::general_purpose::STANDARD.encode(value.to_xdr(Limits::none()).expect("XDR"))
+}
+
+fn contract(id: [u8; 32]) -> ScAddress {
+    ScAddress::Contract(ContractId(Hash(id)))
+}
+
+fn account(id: u8) -> ScAddress {
+    ScAddress::Account(AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(
+        [id; 32],
+    ))))
+}
+
+fn call(id: [u8; 32], function: &str, args: Vec<ScVal>) -> InvokeContractArgs {
+    InvokeContractArgs {
+        contract_address: contract(id),
+        function_name: ScSymbol(function.try_into().expect("a symbol")),
+        args: args.try_into().expect("arguments"),
+    }
+}
+
+/// `transfer(from, to, amount)` on `id`.
+fn transfer(id: [u8; 32], amount: i64) -> InvokeContractArgs {
+    call(
+        id,
+        "transfer",
+        vec![
+            ScVal::Address(account(7)),
+            ScVal::Address(account(8)),
+            ScVal::I128(Int128Parts {
+                hi: 0,
+                lo: amount.unsigned_abs(),
+            }),
+        ],
+    )
+}
+
+fn node(
+    args: InvokeContractArgs,
+    sub_invocations: Vec<SorobanAuthorizedInvocation>,
+) -> SorobanAuthorizedInvocation {
+    SorobanAuthorizedInvocation {
+        function: SorobanAuthorizedFunction::ContractFn(args),
+        sub_invocations: sub_invocations.try_into().expect("sub-invocations"),
+    }
+}
+
+/// A deployment of the wasm `[3; 32]` by `account(7)`.
+fn deployment() -> CreateContractArgs {
+    CreateContractArgs {
+        contract_id_preimage: ContractIdPreimage::Address(ContractIdPreimageFromAddress {
+            address: account(7),
+            salt: Uint256([0; 32]),
+        }),
+        executable: ContractExecutable::Wasm(Hash([3; 32])),
+    }
+}
+
+fn deploy_node() -> SorobanAuthorizedInvocation {
+    SorobanAuthorizedInvocation {
+        function: SorobanAuthorizedFunction::CreateContractHostFn(deployment()),
+        sub_invocations: VecM::default(),
+    }
+}
+
+/// An authorization entry the transaction's signature authorizes.
+fn source_entry(root: SorobanAuthorizedInvocation) -> SorobanAuthorizationEntry {
+    SorobanAuthorizationEntry {
+        credentials: SorobanCredentials::SourceAccount,
+        root_invocation: root,
+    }
+}
+
+/// An authorization entry `address` signs itself.
+fn address_entry(
+    address: ScAddress,
+    root: SorobanAuthorizedInvocation,
+) -> SorobanAuthorizationEntry {
+    SorobanAuthorizationEntry {
+        credentials: SorobanCredentials::Address(SorobanAddressCredentials {
+            address,
+            nonce: 1,
+            signature_expiration_ledger: 1_000,
+            signature: ScVal::Void,
+        }),
+        root_invocation: root,
+    }
+}
+
+fn operation(body: OperationBody) -> Operation {
+    Operation {
+        source_account: None,
+        body,
+    }
+}
+
+fn invoke(func: HostFunction, auth: Vec<SorobanAuthorizationEntry>) -> Operation {
+    operation(OperationBody::InvokeHostFunction(InvokeHostFunctionOp {
+        host_function: func,
+        auth: auth.try_into().expect("authorization entries"),
+    }))
+}
+
+fn payment() -> Operation {
+    operation(OperationBody::Payment(PaymentOp {
+        destination: MuxedAccount::Ed25519(Uint256([6; 32])),
+        asset: Asset::Native,
+        amount: 10_000_000,
+    }))
+}
+
+fn v1_envelope(operations: Vec<Operation>) -> TransactionV1Envelope {
+    TransactionV1Envelope {
+        tx: Transaction {
+            source_account: MuxedAccount::Ed25519(Uint256([7; 32])),
+            fee: 100,
+            seq_num: SequenceNumber(1),
+            cond: Preconditions::None,
+            memo: Memo::None,
+            operations: operations.try_into().expect("operations"),
+            ext: TransactionExt::V0,
+        },
+        signatures: VecM::default(),
+    }
+}
+
+/// A `TransactionEnvelope` of `operations`, base64.
+fn transaction(operations: Vec<Operation>) -> RequestPayload {
+    RequestPayload::Transaction(base64_xdr(&TransactionEnvelope::Tx(v1_envelope(
+        operations,
+    ))))
+}
+
+/// A transaction calling `func`, with the authorization entries `auth`.
+fn invoke_transaction(
+    func: InvokeContractArgs,
+    auth: Vec<SorobanAuthorizationEntry>,
+) -> RequestPayload {
+    transaction(vec![invoke(HostFunction::InvokeContract(func), auth)])
+}
+
+/// An allowed transfer of 5 on `TOKEN`, which the source account authorizes.
+fn allowed_transfer() -> Operation {
+    invoke(
+        HostFunction::InvokeContract(transfer(TOKEN, 5)),
+        vec![source_entry(node(transfer(TOKEN, 5), vec![]))],
+    )
+}
+
+/// A `SorobanAuthorization` preimage of `invocation` on `passphrase`'s
+/// network, base64.
+fn auth_entry(passphrase: &str, invocation: SorobanAuthorizedInvocation) -> RequestPayload {
+    RequestPayload::AuthEntry(base64_xdr(&HashIdPreimage::SorobanAuthorization(
+        HashIdPreimageSorobanAuthorization {
+            network_id: Hash(Sha256::digest(passphrase.as_bytes()).into()),
+            nonce: 7,
+            signature_expiration_ledger: 1_000,
+            invocation,
+        },
+    )))
+}
+
 /// A delegated signer's authorization preimage (what a grant signer holder
-/// signs) on `passphrase`'s network.
-fn delegated_preimage(passphrase: &str) -> String {
-    let xdr = HashIdPreimage::SorobanAuthorizationWithAddress(
+/// signs) of `invocation` on `passphrase`'s network, base64.
+fn delegated_preimage_of(passphrase: &str, invocation: SorobanAuthorizedInvocation) -> String {
+    base64_xdr(&HashIdPreimage::SorobanAuthorizationWithAddress(
         HashIdPreimageSorobanAuthorizationWithAddress {
             network_id: Hash(Sha256::digest(passphrase.as_bytes()).into()),
             address: ScAddress::Contract(ContractId(Hash([9; 32]))),
             nonce: 7,
             signature_expiration_ledger: 1_000,
-            invocation: SorobanAuthorizedInvocation {
-                function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
-                    contract_address: ScAddress::Contract(ContractId(Hash([1; 32]))),
-                    function_name: ScSymbol("transfer".try_into().expect("a symbol")),
-                    args: VecM::default(),
-                }),
-                sub_invocations: VecM::default(),
-            },
+            invocation,
         },
-    )
-    .to_xdr(Limits::none())
-    .expect("XDR");
-    base64::engine::general_purpose::STANDARD.encode(xdr)
+    ))
+}
+
+/// A delegated signer's authorization preimage of a `transfer` on `TOKEN`
+/// with no arguments, on `passphrase`'s network.
+fn delegated_preimage(passphrase: &str) -> String {
+    delegated_preimage_of(passphrase, node(call(TOKEN, "transfer", vec![]), vec![]))
 }
 
 fn fetch(url: &str) -> ToolCall {
@@ -477,11 +677,29 @@ fn run_attacks(sb: &Sandbox, api: &Server, other: &Server) -> Result<Vec<AttackR
         other => return Err(format!("delegation gave {other:?}")),
     };
     host.revoke(doomed);
+    let payer = host.issue(&payer_grant(sb))?;
+    let payer_child = match host
+        .call(
+            payer,
+            &ToolCall::Delegate {
+                add: Grants {
+                    chain: vec![ChainCaveat::ContractIn(vec![
+                        contract(OTHER_CONTRACT).to_string()
+                    ])],
+                    ..Grants::default()
+                },
+            },
+        )
+        .map_err(|e| e.to_string())?
+    {
+        Output::Agent(id) => id,
+        other => return Err(format!("delegation gave {other:?}")),
+    };
     let mut a = Attacks {
         sb,
         other,
         ports: [(api.port, "API_PORT"), (other.port, "OTHER_PORT")],
-        agents: vec![research, reader, doomed, doomed_child],
+        agents: vec![research, reader, doomed, doomed_child, payer, payer_child],
         host,
         rows: Vec::new(),
     };
@@ -563,6 +781,25 @@ fn run_attacks(sb: &Sandbox, api: &Server, other: &Server) -> Result<Vec<AttackR
                     KEY,
                     STANDALONE,
                     RequestPayload::AuthEntry(delegated_preimage(STANDALONE)),
+                ),
+            )
+        },
+    );
+    a.attempt(
+        "ah-se-sub-agent-wider-chain",
+        se,
+        "a sub-agent of the payer, delegated another contract, signs a transaction calling it",
+        false,
+        |h| {
+            h.call(
+                payer_child,
+                &sign(
+                    KEY,
+                    TESTNET,
+                    invoke_transaction(
+                        transfer(OTHER_CONTRACT, 5),
+                        vec![source_entry(node(transfer(OTHER_CONTRACT, 5), vec![]))],
+                    ),
                 ),
             )
         },
@@ -780,6 +1017,198 @@ fn run_attacks(sb: &Sandbox, api: &Server, other: &Server) -> Result<Vec<AttackR
     ];
     for (id, what, call, agent, control) in signs {
         a.attempt(id, dw, what, control, |h| h.call(agent, &call));
+    }
+    let allowed = v1_envelope(vec![allowed_transfer()]);
+    let add_signer = operation(OperationBody::SetOptions(SetOptionsOp {
+        inflation_dest: None,
+        clear_flags: None,
+        set_flags: None,
+        master_weight: None,
+        low_threshold: None,
+        med_threshold: None,
+        high_threshold: None,
+        home_domain: None,
+        signer: Some(Signer {
+            key: SignerKey::Ed25519(Uint256([6; 32])),
+            weight: 255,
+        }),
+    }));
+    let payer_signs: [(&'static str, &str, RequestPayload, bool); 9] = [
+        (
+            "ah-dw-sign-tx-other-contract",
+            "the payer signs a transaction calling a contract its chain grant leaves out",
+            invoke_transaction(
+                transfer(OTHER_CONTRACT, 5),
+                vec![source_entry(node(transfer(OTHER_CONTRACT, 5), vec![]))],
+            ),
+            false,
+        ),
+        (
+            "ah-dw-sign-tx-over-bound",
+            "the payer signs a transfer over its chain grant's amount bound",
+            invoke_transaction(
+                transfer(TOKEN, MAX_AMOUNT + 1),
+                vec![source_entry(node(transfer(TOKEN, MAX_AMOUNT + 1), vec![]))],
+            ),
+            false,
+        ),
+        (
+            "ah-dw-sign-fee-bump",
+            "the payer signs a fee-bump envelope around an allowed transaction",
+            RequestPayload::Transaction(base64_xdr(&TransactionEnvelope::TxFeeBump(
+                FeeBumpTransactionEnvelope {
+                    tx: FeeBumpTransaction {
+                        fee_source: MuxedAccount::Ed25519(Uint256([7; 32])),
+                        fee: 1_000_000,
+                        inner_tx: FeeBumpTransactionInnerTx::Tx(allowed),
+                        ext: FeeBumpTransactionExt::V0,
+                    },
+                    signatures: VecM::default(),
+                },
+            ))),
+            false,
+        ),
+        (
+            "ah-dw-sign-add-signer",
+            "the payer signs a transaction adding a signer to its account, an operation the chain vocabulary cannot express",
+            transaction(vec![add_signer]),
+            false,
+        ),
+        (
+            "ah-dw-sign-payment-beside-call",
+            "the payer signs an allowed transfer with a payment as a second operation",
+            transaction(vec![allowed_transfer(), payment()]),
+            false,
+        ),
+        (
+            "ah-dw-sign-deploy",
+            "the payer signs a transaction deploying a contract",
+            transaction(vec![invoke(HostFunction::CreateContract(deployment()), vec![])]),
+            false,
+        ),
+        (
+            "ah-dw-sign-deploy-nested",
+            "the payer signs an authorization entry whose allowed transfer nests a contract deployment",
+            auth_entry(TESTNET, node(transfer(TOKEN, 5), vec![deploy_node()])),
+            false,
+        ),
+        (
+            "ah-dw-sign-tx-control",
+            "control: the payer signs an allowed transfer",
+            transaction(vec![allowed_transfer()]),
+            true,
+        ),
+        (
+            "ah-dw-sign-auth-entry-control",
+            "control: the payer signs an authorization entry whose transfer nests an allowed transfer at the bound",
+            auth_entry(
+                TESTNET,
+                node(transfer(TOKEN, 5), vec![node(transfer(TOKEN, MAX_AMOUNT), vec![])]),
+            ),
+            true,
+        ),
+    ];
+    for (id, what, payload, control) in payer_signs {
+        a.attempt(id, dw, what, control, |h| {
+            h.call(payer, &sign(KEY, TESTNET, payload))
+        });
+    }
+    a.attempt(
+        "ah-dw-sign-deploy-no-chain-caveats",
+        dw,
+        "the research agent, whose grant has no chain caveats, signs an authorization entry deploying a contract",
+        false,
+        |h| {
+            h.call(
+                research,
+                &sign(KEY, STANDALONE, auth_entry(STANDALONE, deploy_node())),
+            )
+        },
+    );
+
+    // --- nested-call smuggling: a signature's tree hides a disallowed call
+    let nc = "nested-call smuggling";
+    let nested: [(&'static str, &str, RequestPayload, bool); 6] = [
+        (
+            "ah-nc-tx-entry-other-contract",
+            "the payer signs a transaction whose allowed transfer nests a call on a contract its grant leaves out",
+            invoke_transaction(
+                transfer(TOKEN, 5),
+                vec![source_entry(node(
+                    transfer(TOKEN, 5),
+                    vec![node(call(OTHER_CONTRACT, "drain", vec![]), vec![])],
+                ))],
+            ),
+            false,
+        ),
+        (
+            "ah-nc-tx-entry-over-bound-depth-3",
+            "the payer signs a transaction whose tree nests, at depth 3, a transfer over the amount bound",
+            invoke_transaction(
+                transfer(TOKEN, 5),
+                vec![source_entry(node(
+                    transfer(TOKEN, 5),
+                    vec![node(
+                        transfer(TOKEN, 5),
+                        vec![node(transfer(TOKEN, MAX_AMOUNT + 1), vec![])],
+                    )],
+                ))],
+            ),
+            false,
+        ),
+        (
+            "ah-nc-tx-second-entry",
+            "the payer signs a transaction whose second authorization entry, signed by another address, calls a contract its grant leaves out",
+            invoke_transaction(
+                transfer(TOKEN, 5),
+                vec![
+                    source_entry(node(transfer(TOKEN, 5), vec![])),
+                    address_entry(account(8), node(transfer(OTHER_CONTRACT, 5), vec![])),
+                ],
+            ),
+            false,
+        ),
+        (
+            "ah-nc-auth-entry-other-contract",
+            "the payer signs an authorization entry whose allowed transfer nests a call on another contract",
+            auth_entry(
+                TESTNET,
+                node(
+                    transfer(TOKEN, 5),
+                    vec![node(call(OTHER_CONTRACT, "drain", vec![]), vec![])],
+                ),
+            ),
+            false,
+        ),
+        (
+            "ah-nc-delegated-over-bound",
+            "the payer signs a delegated signer's preimage whose allowed transfer nests a transfer over the amount bound",
+            RequestPayload::AuthEntry(delegated_preimage_of(
+                TESTNET,
+                node(
+                    transfer(TOKEN, 5),
+                    vec![node(transfer(TOKEN, MAX_AMOUNT + 1), vec![])],
+                ),
+            )),
+            false,
+        ),
+        (
+            "ah-nc-control",
+            "control: the payer signs a transaction whose transfer nests an allowed transfer at the bound",
+            invoke_transaction(
+                transfer(TOKEN, 5),
+                vec![source_entry(node(
+                    transfer(TOKEN, 5),
+                    vec![node(transfer(TOKEN, MAX_AMOUNT), vec![])],
+                ))],
+            ),
+            true,
+        ),
+    ];
+    for (id, what, payload, control) in nested {
+        a.attempt(id, nc, what, control, |h| {
+            h.call(payer, &sign(KEY, TESTNET, payload))
+        });
     }
     Ok(a.rows)
 }

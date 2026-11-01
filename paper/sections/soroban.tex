@@ -61,8 +61,11 @@ ed25519 signature, and every context, and refuses at the first failure:
   \code{budget::spend}, refusing if any node would be overdrawn, and only then
   store the new \code{spent} values.
 \end{enumerate}
-A refusal fails the account's authorization, and with it the transaction, so
-no state changes. The holder's ed25519 signature covers the host's payload,
+The grant signer writes nothing before it refuses. A refusal fails the
+account's authorization, and with it the call that asked for it; a calling
+contract can catch that failure and go on, so the transaction need not fail.
+Soroban then rolls back the failed call's storage writes and authorization
+state, so either way the refusal changes nothing. The holder's ed25519 signature covers the host's payload,
 not the grant id carried beside it, so a key that holds two grants produces
 signatures usable under either; one key per grant avoids this.
 
@@ -106,9 +109,17 @@ own delegation are refused; and the caveats bound every other call. A
 signature in the second role authorizes nothing for the account, which
 accepts the grant signer only through
 \code{delegate\_account\_auth}\claim{signer-own-address}. One consequence is
-stated rather than enforced: under an empty grant a holder can authorize any
-call on another contract as the grant signer's address, which holds nothing
-the deployment gives it, so nothing should be sent to it.
+stated rather than enforced. Any contract can call \code{require\_auth} on an
+address it is given, so a holder can have any contract it can call ask for
+the grant signer's own authorization, and under an empty grant the holder
+can authorize whatever that contract does as the grant signer's address. That
+includes moving what the address holds; a transfer of the budget asset is
+still charged to the grant, and one of any other asset is bounded by nothing.
+The deployment gives the address no balance: a contract's balance in a
+Stellar Asset Contract, the native one included, is absent until something
+is sent to it, and storage rent is paid in fees by the transaction's
+submitter. But the address is published in the account's document, and
+whatever is sent to it is reachable this way.
 
 \subsection{Threat coverage}
 
@@ -156,7 +167,7 @@ Hand off the budget asset (\code{approve}, \code{burn}) &
 Overspend through siblings or several transfers &
   Every transfer in the authorization is charged to the spender and every
   ancestor; the first overdrawn node refuses and nothing is stored. &
-  \claim{signer-oversubscribed}\ \claim{signer-all-charged}\ \claim{budget-total} \\
+  \claim{signer-oversubscribed}\ \claim{signer-all-charged}\ \claim{signer-budget-total} \\
 Keep acting after revocation, or with a rotated-out key &
   Revocation of any ancestor refuses; rotation replaces the key. &
   \claim{signer-revocation}\ \claim{signer-rotation} \\
@@ -190,8 +201,15 @@ at the first failure, and only if every spend succeeded writes the changed
 these steps. Spending on the lineage ledger has the whole ledger's outcome at
 the signing grant, an error naming the same grant, and afterwards the whole
 ledger's lineage, and the spend loop over the extracted \code{spend} computes
-it\claim{lineage-ledger}. One authorization's spends are all or nothing, so
-every sequence of the grant signer's calls is a run of the model on the
+it\claim{lineage-ledger}. One authorization's spends are all or nothing:
+the contract stores them only after every spend succeeds, and it does so in
+the \code{require\_auth} of the authorization's root, inside the call that
+encloses every call the authorization allows. When that call fails, whether
+or not a caller catches the failure, the host rolls back its storage writes,
+the charge included, and a charge stays only with the root call it was made
+in. A test catches a refused authorization and an authorization whose
+nested transfer fails after the charge, and finds the budget unchanged both
+times\claim{host-frame-rollback}. So every sequence of the grant signer's calls is a run of the model on the
 ledger of every grant\claim{budget-batch-as-run}, and Theorem~\ref{thm:budget}'s
 bound holds for it: the total spent at or under any grant never exceeds that
 grant's allowance, with no hypothesis on the

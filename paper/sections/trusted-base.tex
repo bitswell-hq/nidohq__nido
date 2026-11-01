@@ -51,14 +51,20 @@ Relay, \file{crates/grant-relay/src} & \LocRelay &
 \end{tabularx}
 \end{table*}
 
-The trust in the translation is narrower than it looks: it covers Aeneas's
-models of the Rust \code{core} and \code{alloc} items the evaluator calls,
-since the evaluator calls nothing else: \code{Vec} with \code{deref},
-\code{deref\_mut}, \code{len} and \code{push}; slices with indexing,
+Trusting the translation means trusting three things for every function
+the evaluator defines: Charon's extraction of rustc's MIR, Aeneas's symbolic
+translation of it into pure Lean (borrows, loops, early returns, matches), and
+Aeneas's models of the library items it calls. Aeneas's symbolic semantics has
+a soundness proof~\cite{aeneasSymbolic}, but for a formalized subset of the
+language, not for the tool's implementation. Only the library part is narrow:
+the evaluator calls no Rust \code{core} or \code{alloc} items but \code{Vec}
+with \code{deref}, \code{len} and \code{push}; slices with indexing,
 \code{get}, \code{get\_mut} and \code{len}; checked \code{usize} and
 \code{u128} addition and unchecked \code{u128} addition; \code{u32 as usize};
 scalar comparison; and \code{usize::BITS}, read by a compile-time assertion
-the proofs do not use. The same evaluator source reaches all three
+the proofs do not use. The Lean driver of Theorem~\ref{thm:budget}'s run-level
+statement, written in Lean rather than translated, also uses Aeneas's model of
+\code{Vec::deref\_mut}. The same evaluator source reaches all three
 deployments, but each deploys its own compiled artifact: the grant signer
 embeds it in a Soroban contract built by rustc for \code{wasm32v1-none}, the
 agent host runs a separately built \code{wasm32v1-none} component, and the
@@ -74,8 +80,9 @@ the paper states, each in the section that describes it.
 \toprule
 \textbf{Gap} & \textbf{Where} \\
 \midrule
-Under an empty grant, the grant signer's own address can authorize any call
-on another contract. & \S\ref{sec:soroban} \\
+Under an empty grant, the grant signer's own address can authorize whatever
+a contract that asks for its authorization does, moving anything sent to that
+address. & \S\ref{sec:soroban} \\
 The holder's signature does not cover the grant id. & \S\ref{sec:soroban} \\
 That the grant signer's storage, lineage and loops are the Lean definitions
 of its budget path is trusted. & \S\ref{sec:soroban} \\

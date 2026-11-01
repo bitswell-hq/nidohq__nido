@@ -136,7 +136,17 @@ In order, returning the first failure ([`GrantError`](src/error.rs)):
    node would pass its allowance. Only if every spend succeeds are the new
    `spent` values stored.
 
-A refused authorization fails the transaction, so no state changes.
+The contract writes nothing before it refuses. A refused authorization fails
+the call that asked for it; a calling contract can catch that failure with
+`try_invoke_contract` and go on, so the transaction need not fail. The host
+then rolls back the failed call's storage writes and authorization state.
+The charge is written during the `require_auth` of the authorization's root,
+inside the call that encloses every call the authorization allows, so if
+that call fails, caught or not, the charge is rolled back with it, and a
+charge stays only with the root call it was made in.
+`a_caught_refusal_or_failure_leaves_the_budget_as_if_the_call_never_ran`
+(`crates/integration-tests/tests/it/grant_signer.rs`) catches a refusal and a
+failure after the charge, and finds the budget unchanged both times.
 
 ## The two roles of `__check_auth`
 
@@ -169,11 +179,18 @@ itself, such as a transfer from its own balance.
 
 Two consequences are stated, not enforced:
 
-- Under an empty grant, which allows every context the guards let through,
-  a holder can authorize any call on another contract as this address.
-- The address holds nothing the deployment gives it, but anyone can send it
-  assets, and any holder whose grant allows the transfer can move them. So
-  nothing should be sent to it.
+- Any contract can call `require_auth` on an address it is given. Under an
+  empty grant, which allows every context the guards let through, a holder
+  can have any contract it can call ask for this address's authorization,
+  and authorize whatever that contract does as this address, including
+  moving what the address holds. A transfer of the budget asset is still
+  charged to the grant; one of any other asset is bounded by nothing.
+- The deployment gives the address no balance: its balance in a Stellar
+  Asset Contract, the native one included, is a contract-data entry that is
+  absent until something is sent, and storage rent is paid in fees by each
+  transaction's submitter. But the address is published in the account's
+  document, and whatever anyone sends to it can be moved this way, by any
+  holder whose grant allows the transfer. So nothing should be sent to it.
 
 Contract creation is refused whatever the grant because in the second role
 no account document applies, so under the empty grant no other check would
@@ -280,8 +297,10 @@ grant in both roles of `__check_auth`, what a holder can and cannot
 authorize as this contract's own address, every escalation in the table
 above (including documents that wrongly scope agent rules to the account or
 to this contract), delegation that narrows and cannot widen, oversubscribed
-siblings with an overdrawn ancestor changing nothing, transfers charged
-across one authorization, cascading revocation, key rotation, and the
+siblings with an overdrawn ancestor changing nothing, a refused
+authorization and one failing after its charge, both caught by a calling
+contract, leaving the budget unchanged, transfers charged across one
+authorization, cascading revocation, key rotation, and the
 agreement of this contract's mapping with the relay's. Each refusal is
 asserted by the contract that refused and its error, read from the host's
 event log.
