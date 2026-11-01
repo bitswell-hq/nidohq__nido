@@ -1,12 +1,13 @@
 # Attenuating Grants: Lean model
 
-The readable Lean specification of attenuating grants and its first three
-theorems. An AI agent's authority is a grant: a list of caveats over actions.
-A grant holder can only add caveats and pass narrower copies to sub-agents;
-issuing, revoking and key rotation live in a separate admin document that
-agents never hold. One evaluator enforces grants at two boundaries, the
-agent's WebAssembly host and the Soroban smart account, and this package is
-the specification that evaluator is proven against.
+The readable Lean specification of attenuating grants, its first three
+theorems, and a step-counting evaluator with a proven cost bound. An AI
+agent's authority is a grant: a list of caveats over actions. A grant holder
+can only add caveats and pass narrower copies to sub-agents; issuing,
+revoking and key rotation live in a separate admin document that agents never
+hold. One evaluator enforces grants at two boundaries, the agent's
+WebAssembly host and the Soroban smart account, and this package is the
+specification that evaluator is proven against.
 
 ## Build
 
@@ -67,9 +68,53 @@ Every Chain caveat is false on `createContract`, so any chain grant with at
 least one caveat denies contract deployment. Paths are component lists, so
 `["home", "a"]` is not a prefix of `["home", "ab"]`.
 
+## Cost model
+
+`AttenuatingGrants/Cost/` gives each vocabulary a counted evaluator,
+`Caveat.holdsCounted : Caveat → Action → Bool × Nat`, which returns the same
+`Bool` as `Caveat.holds` paired with a step count, and lifts it to a grant
+check over a list of caveats (`allowsCounted`) and a batch check over a list
+of actions (`allowsAllCounted`). Both checks stop at the first failure, as
+`List.all` does.
+
+A step is one primitive comparison or one traversal of a list cell:
+
+- comparing two bytes, two scalars (ports, schemes, modes, payload kinds,
+  `i128`/`u64`/`bool` values) or two `i128`s by signed order;
+- testing a constructor (the kind of a Chain action, an `Option`, or a `Val`);
+- visiting one cell of a list: a caveat in the grant, an action in a batch, a
+  candidate in a membership list, an argument while indexing, a component of
+  a path.
+
+Reaching the end of a list costs nothing. Byte strings are compared pairwise
+until the first mismatch or the end of the shorter one.
+
+| Vocabulary | `Action.size` | `Caveat.size` |
+|---|---|---|
+| Chain | `invoke`: contract length + function length + `Σ (arg.size + 1)`, where a scalar `Val` has size 1 and a byte-carrying one its length + 1; `createContract`: wasm hash length | `contractIn`, `functionIn`: `Σ (length + 1)` over the list; `argI128AtMost`: 2; `argEq _ val`: `1 + val.size` |
+| Files | `Σ (length + 1)` over the path's components | `pathUnder p`: `Σ (length + 1)` over `p`; `modeIn`: list length |
+| Network | host length | `hostIn`: `Σ (length + 1)` over the hosts; `portIn`, `schemeIn`: list length |
+| Signing | key length + network id length | `keyIn`, `networkIn`: `Σ (length + 1)` over the list; `payloadIn`: list length |
+
+Reading argument `i` of an invocation walks at most every argument cell, so an
+index past the end costs no more than the argument list, and `argI128AtMost`
+has constant size whatever its index.
+
+`AttenuatingGrants/Cost/Basic.lean` holds the counted primitives
+(`bytesEq`, `scalarEq`, `mem`, `get?`), each with a lemma that its `Bool` is
+the readable one (`bytesEq_fst`, `mem_fst`, `get?_fst`, ...) and a step bound
+(`bytesEq_snd_le`, `mem_snd_le`, `get?_snd_le`, ...), and the generic grant
+and batch checks with `allowsCounted_fst`, `allowsAllCounted_fst`,
+`allowsCounted_steps_le` and `allowsAllCounted_steps_le`. Each vocabulary
+module proves its per-caveat bound and instantiates the generic ones.
+
+The step count measures this model, not the deployed evaluator. A real call
+also pays a fixed overhead (entering the function, decoding the grant) that
+the model counts as zero.
+
 ## Theorems
 
-### 1. Termination
+### 1. Termination and cost
 
 Evaluation is total. `Grant.allows`, `Grant.allowsAll` and every
 vocabulary's `Caveat.holds` (and `Files.isPrefix`) are ordinary Lean
@@ -77,7 +122,28 @@ definitions by structural recursion or `List.all`, with no `partial` or
 `unsafe` anywhere in the package, so Lean's kernel checks that each one
 terminates on every input.
 
-The cost bound on evaluation is **stated later**: it is not in this package.
+The cost bound is stated and proven over the step-counting evaluators
+described in [Cost model](#cost-model). For each vocabulary `V`:
+
+| Lean name | Statement |
+|---|---|
+| `V.AllowsCostBound` (proven by `V.allows_cost_bound`) | `(V.allowsCounted cs a).2 ≤ 2 * (cs.length + Σ c.size) * (a.size + 1)` |
+| `V.AllowsAllCostBound` (proven by `V.allowsAll_cost_bound`) | `(V.allowsAllCounted cs actions).2 ≤ 2 * (cs.length + Σ c.size + 1) * Σ (a.size + 1)` |
+| `V.allowsCounted_fst` | `(V.allowsCounted cs a).1 = (V.grant cs).allows a` |
+| `V.allowsAllCounted_fst` | `(V.allowsAllCounted cs actions).1 = (V.grant cs).allowsAll actions` |
+| `V.holdsCounted_fst` | `(c.holdsCounted a).1 = c.holds a` |
+| `V.holdsCounted_steps_le` | `(c.holdsCounted a).2 + 1 ≤ 2 * (1 + c.size) * (a.size + 1)` |
+
+`Σ c.size` is `(cs.map Caveat.size).sum` and `Σ (a.size + 1)` is
+`(actions.map (·.size + 1)).sum`. The constant is `k = 2` in every
+vocabulary.
+
+The batch bound carries `+ 1` in its grant factor. Visiting each action's
+list cell costs one step whatever the grant, so the empty grant checks a batch
+of `n` actions in exactly `n` steps (`Cost.allowsAllCounted_nil_steps`), and a
+grant factor of `cs.length + Σ c.size` alone, which is `0` for the empty
+grant, would be false for every non-empty batch. The single-action bound has
+no such term: the empty grant checks one action in zero steps.
 
 ### 2. Attenuation
 
@@ -122,14 +188,19 @@ fails if any of them gains a dependency (such as `sorryAx`).
 
 ## Proven and unproven
 
-Proven, and checked by `lake build`: every theorem in the tables above, and the
-totality of every evaluation function.
+Proven, and checked by `lake build`: every theorem in the tables above, the
+totality of every evaluation function, and the cost bounds
+`V.AllowsCostBound` and `V.AllowsAllCostBound` for all four vocabularies.
 
 Stated but unproven, or not yet stated:
 
-- **Cost bound** (theorem 1): stated later.
+- **Cost of the deployed evaluator**: the bound is proven for the counted Lean
+  evaluators. That the Rust evaluator's work is proportional to these step
+  counts is not proven; it is to be cross-checked against Soroban CPU
+  instruction counts.
 - **Evaluator equivalence**: the Rust evaluator, its Charon + Aeneas
-  translation, and the proof that the translation agrees with this model are
-  not in this package. Until that proof exists, these theorems are about the
-  model, not the deployed evaluator.
+  translation, and the proof that the translation agrees with this model
+  (including that it never diverges) are not in this package. Until that
+  proof exists, these theorems are about the model, not the deployed
+  evaluator.
 - **Budgets** (theorem 4): not in this package.
