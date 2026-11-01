@@ -1,0 +1,41 @@
+{
+  "network_passphrase": "Standalone Network ; February 2017",
+  "rpc_url": "http://localhost:8000/rpc",
+  "custody": {
+    "key_id": "key-01snl-t56gb-j8tsok0vn802p80i",
+    "public_key": "GDVEU3DD4KOFECV66VIHWEZOYX4ZKR3WV27L464SIIPOU2IUI3JCZA57"
+  },
+  "channels": [
+    "GBTL47RTFR5EKMZSXWOQU735WBK7LRPPDIDK3JTNTCZZ7NUBBRDTVSK2",
+    "GAFVCOWZWSJEAFOKBEBO2B4QITJ2YXN6YIYG6BUURQINVDVW4OPS3OL6"
+  ],
+  "inclusion_fee": 100,
+  "max_fee": 10000000,
+  "validity_seconds": 60,
+  "min_auth_expiry_ledgers": 2,
+  "poll_interval_ms": 1000,
+  "agents": [
+    {
+      "name": "dev-agent",
+      "api_key_sha256": "768d431c7599a91b58ae5747e08e9aa96dcb4eef45e029c87e3e060e521dcead",
+      "chain": [
+        { "contract_in": ["CAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQC526"] },
+        { "function_in": ["transfer"] },
+        { "arg_i128_at_most": [2, "10000000"] }
+      ],
+      "signing": [
+        { "key_in": ["key-01snl-t56gb-j8tsok0vn802p80i"] },
+        { "network_in": ["Standalone Network ; February 2017"] },
+        { "payload_in": ["transaction"] }
+      ]
+    }
+  ],
+  "keeper": {
+    "dfns": {
+      "base_url": "http://127.0.0.1:8787",
+      "token_env": "DFNS_TOKEN",
+      "credential_id": "cr-6tq9a-1m2kd-8s7f0d3l5p2h4j6k",
+      "credential_seed_env": "DFNS_CREDENTIAL_SEED"
+    }
+  }
+}

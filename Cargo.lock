@@ -851,6 +851,24 @@ name = "grant-eval"
 version = "0.1.0"
 
 [[package]]
+name = "grant-relay"
+version = "0.1.0"
+dependencies = [
+ "ed25519-dalek",
+ "getrandom",
+ "grant-eval",
+ "hex",
+ "nido-key-keeper",
+ "serde",
+ "serde_json",
+ "sha2",
+ "stellar-strkey 0.0.13",
+ "stellar-xdr",
+ "tiny_http",
+ "ureq",
+]
+
+[[package]]
 name = "group"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

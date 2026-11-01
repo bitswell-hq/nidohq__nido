@@ -1,0 +1,28 @@
+# A test contract for the grant-relay local-network test: one call whose
+# authorization tree has a nested token transfer. It is its own workspace so it
+# builds for wasm32v1-none on its own and stays out of `cargo test --workspace`.
+[package]
+name = "grant-relay-forwarder"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = "27.0.2"
+
+[profile.release]
+opt-level = "z"
+overflow-checks = true
+debug = 0
+strip = "symbols"
+debug-assertions = false
+panic = "abort"
+codegen-units = 1
+lto = true
+
+[workspace]
