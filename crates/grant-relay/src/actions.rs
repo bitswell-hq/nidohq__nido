@@ -41,13 +41,14 @@ pub fn host_function(func: &HostFunction) -> Result<Action, UnsupportedHostFunct
 
 /// Every context of `entry`'s authorization tree, root first, depth first.
 pub fn authorization_tree(entry: &SorobanAuthorizationEntry, out: &mut Vec<Action>) {
-    tree(&entry.root_invocation, out);
+    invocation_tree(&entry.root_invocation, out);
 }
 
-fn tree(node: &SorobanAuthorizedInvocation, out: &mut Vec<Action>) {
+/// Every context of the tree under `node`, `node` first, depth first.
+pub fn invocation_tree(node: &SorobanAuthorizedInvocation, out: &mut Vec<Action>) {
     out.push(authorized_function(&node.function));
     for sub in &node.sub_invocations {
-        tree(sub, out);
+        invocation_tree(sub, out);
     }
 }
 

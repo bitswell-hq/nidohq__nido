@@ -56,12 +56,17 @@ uses:
 {
   "files":   [{"path_under": "/srv/work"}, {"mode_in": ["read"]}],
   "network": [{"host_in": ["api.example.com"]}, {"port_in": [443]}, {"scheme_in": ["https"]}],
-  "signing": [{"key_in": ["key-a"]}, {"network_in": ["Test SDF Network ; September 2015"]}, {"payload_in": ["transaction"]}]
+  "signing": [{"key_in": ["key-a"]}, {"network_in": ["Test SDF Network ; September 2015"]}, {"payload_in": ["transaction"]}],
+  "chain":   [{"contract_in": ["C…"]}, {"function_in": ["transfer"]}, {"arg_i128_at_most": [2, "1000"]}]
 }
 ```
 
-An empty list allows every action of that vocabulary, as an empty grant does
-in the evaluator.
+The chain list is the one `grant-relay` checks, parsed by its code: it is
+checked when the agent asks for a transaction or an authorization entry to be
+signed (see Signing below). An empty list allows every action of that
+vocabulary, as an empty grant does in the evaluator, so a grant whose signing
+list allows `transaction` or `auth_entry` and whose chain list is empty lets
+the agent have its key authorize any contract call.
 
 ## Wiring
 
@@ -120,16 +125,41 @@ trusted part of this crate, kept to three modules.
 ### Signing (`src/sign.rs`)
 
 The agent names a key, a network passphrase and a payload. The host checks
-the signing action (key id, passphrase, payload kind), and only then calls
-the `KeyKeeper`. The agent holds no key. A denied request never reaches the
-keeper. Each payload kind is signed so the signature is bound to what the
-action says:
+the signing action (key id, passphrase, payload kind) against the signing
+grant and, for a transaction or an authorization entry, every context the
+signature authorizes against the chain grant with `allows_all`. Only then
+does it call the `KeyKeeper`. The agent holds no key. A denied or refused
+request never reaches the keeper.
 
-| Payload | Agent supplies | Keeper signs |
-| - | - | - |
-| `transaction` | `TransactionEnvelope` XDR (base64) | the transaction hash on the named network, so the signature is valid there only |
-| `auth_entry` | `HashIdPreimage` XDR (base64), type `SorobanAuthorization`, or `SorobanAuthorizationWithAddress` for a delegated signer such as a grant signer holder | `SHA-256` of the preimage, after the host checks the preimage's network id is `SHA-256` of the named passphrase |
-| `message` | UTF-8 text | the SEP-53 hash `SHA-256("Stellar Signed Message:\n" ‖ message)` |
+| Payload | Agent supplies | Chain actions checked | Keeper signs |
+| - | - | - | - |
+| `transaction` | `TransactionEnvelope` XDR (base64) | the operation's host function, and every context of every authorization entry it carries | the transaction hash on the named network, so the signature is valid there only |
+| `auth_entry` | `HashIdPreimage` XDR (base64), type `SorobanAuthorization`, or `SorobanAuthorizationWithAddress` for a delegated signer such as a grant signer holder | every context of the preimage's invocation tree | `SHA-256` of the preimage, after the host checks the preimage's network id is `SHA-256` of the named passphrase |
+| `message` | UTF-8 text | none | the SEP-53 hash `SHA-256("Stellar Signed Message:\n" ‖ message)` |
+
+- **Only what the chain vocabulary describes is signed.** A transaction must
+  be a `Tx` envelope with exactly one operation, an `InvokeHostFunction`.
+  The host refuses fee-bump and `TxV0` envelopes, every other operation (a
+  payment, a new account, a new signer, a trustline, …), a second operation
+  beside the contract call, and an `UploadContractWasm` host function. An
+  authorization preimage of any other type is refused.
+- **The mapping is the relay's.** Host functions and authorization contexts
+  become chain actions through `grant_relay::actions`, the code `grant-relay`
+  checks with: a contract by its strkey, a function by its symbol, arguments
+  as `I128`, `U64`, `Bool`, `Bytes`, `Address`, `Symbol` or `Other` (the
+  full `ScVal` XDR), and a deployment as `CreateContract`, which every chain
+  caveat denies.
+- **Every authorization entry is checked.** That includes entries with
+  `Address` credentials, which other addresses sign: the transaction carries
+  them, and its execution runs the calls they authorize. Under enforcing
+  authorization, a call that requires the authorization of the account the
+  transaction's signature stands for fails unless it matches a node of a
+  `SourceAccount` entry, so a call the transaction signature authorizes
+  cannot sit outside the checked trees.
+- **The keeper gets the checked value.** The host decodes the payload,
+  checks the decoded value, and gives the keeper that value's XDR encoding
+  (the envelope for `StellarTransaction`, the preimage's hash for an
+  authorization entry). The bytes signed are the bytes checked.
 
 A message signature is not bound to a network: for `message`, a
 `network_in` caveat restricts only the label the agent gives. The SEP-53
@@ -137,6 +167,13 @@ prefix keeps a message signature from being a transaction or
 authorization-entry signature, whose signed hashes begin from a network id
 and an envelope type. The host never offers the keeper's raw `Hash` payload
 to an agent.
+
+**Not bound by a grant.** No caveat covers the transaction's fee, sequence
+number, time bounds, memo or source account, an authorization entry's nonce
+or expiration ledger, or which account a key id stands for. An agent allowed
+to sign transactions can have its key pay any fee the network charges for an
+allowed call. Calls a contract makes that need no authorization from anyone
+are the contract's own and are not checked.
 
 ## Trusted, not proven
 
@@ -148,8 +185,11 @@ to an agent.
 - The Charon/Aeneas translation that `formal/` proves its theorems about
   (see `crates/grant-eval/README.md`).
 - The wiring above: path resolution, the descriptor-path check, URL parsing
-  and redirect handling, payload decoding, and the operating system calls
+  and redirect handling, payload decoding and the mapping from Soroban XDR
+  to chain actions (`grant_relay::actions`), and the operating system calls
   they rely on (`realpath`, `F_GETPATH`, `/proc/self/fd`, DNS).
+- The Soroban host's enforcing authorization: that a call requiring an
+  account's authorization succeeds only when it matches a checked tree.
 - The key keeper's own refusals and its signing.
 
 **Grants control access, not information flow.** A grant decides which
@@ -217,7 +257,15 @@ before any connection, a redirect to a disallowed host or port denied with
 the target never contacted, an allowed redirect followed, and a redirect
 loop stopped. `tests/signing.rs` signs with `MemoryKeyKeeper` and checks
 that a disallowed key, network or payload kind is denied before the keeper
-is called. `tests/delegation.rs` checks that delegation narrows, that a
+is called, and that a transaction or authorization entry is denied, with
+nothing reaching the keeper, when it calls a contract or function the chain
+grant does not allow, exceeds an amount bound, hides a disallowed call
+inside an authorization tree (of a source-account entry, another entry, or a
+preimage), deploys a contract, or comes from a sub-agent whose inherited
+caveats exclude it. It also checks that fee-bump envelopes, classic
+operations (a new signer, a new account, a payment), a second operation and
+code uploads are refused, and that the keeper signs exactly the envelope that
+was checked. `tests/delegation.rs` checks that delegation narrows, that a
 sub-agent asking for more gets nothing more, that every child allows a
 subset of its parent over every pair of caveat lists from a small universe,
 that revocation reaches sub-agents, and that no tool call reads or edits a
