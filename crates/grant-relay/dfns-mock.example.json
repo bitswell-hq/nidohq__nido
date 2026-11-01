@@ -1,0 +1,20 @@
+{
+  "tokens": [
+    {
+      "token": "dev-token",
+      "userId": "us-3k8s2-q0pde-4hn2bq7k4u1c8a9f",
+      "credentials": [
+        {
+          "credId": "cr-6tq9a-1m2kd-8s7f0d3l5p2h4j6k",
+          "publicKey": "197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d61"
+        }
+      ]
+    }
+  ],
+  "keys": [
+    {
+      "keyId": "key-01snl-t56gb-j8tsok0vn802p80i",
+      "seed": "0707070707070707070707070707070707070707070707070707070707070707"
+    }
+  ]
+}

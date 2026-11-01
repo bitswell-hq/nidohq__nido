@@ -1,0 +1,28 @@
+[package]
+name = "grant-relay"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "A /relay service that checks an agent's grants against a Soroban call's authorization tree before a key keeper signs the transaction."
+
+[lib]
+doctest = false
+
+[[bin]]
+name = "grant-relay"
+path = "src/bin/grant-relay.rs"
+
+[dependencies]
+grant-eval = { path = "../grant-eval" }
+nido-key-keeper = { path = "../key-keeper" }
+stellar-xdr = { version = "27", default-features = false, features = ["std", "base64"] }
+stellar-strkey = "0.0.13"
+ed25519-dalek = "2"
+sha2 = "0.10"
+hex = "0.4"
+getrandom = "0.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ureq = "3"
+tiny_http = "0.12"

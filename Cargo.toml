@@ -4,6 +4,7 @@ members = [
     "crates/grant-eval",
     "crates/integration-tests",
     "crates/key-keeper",
+    "crates/grant-relay",
     "contracts/*",
 ]
 # examples/* are self-contained stellar-scaffold projects with their own

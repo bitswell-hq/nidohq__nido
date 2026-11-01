@@ -7,6 +7,12 @@ default:
 test:
     cargo test --workspace
 
+# The grant relay's opt-in suites: Nido's TypeScript relay client against the
+# relay (needs Node 22.6+), and the relay end to end on a local Stellar network
+# with the Dfns mock (needs Docker). See crates/grant-relay/README.md.
+test-relay-local:
+    cargo test -p grant-relay --test frontend_client --test local_network -- --ignored --nocapture
+
 # Build all crates (native)
 build:
     cargo build --workspace
