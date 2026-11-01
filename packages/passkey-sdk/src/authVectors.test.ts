@@ -7,9 +7,10 @@
 // SDK's wrappers reproduce Perch's account-bound digest and payload byte for
 // byte.
 
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { signingDigest } from '@stellar-registry/perch';
+import { ruleIdsXdr } from '@stellar-registry/perch';
 import { computeAuthDigest } from './auth.js';
 import { buildAuthPayloadScVal } from './multiSigner.js';
 
@@ -46,7 +47,7 @@ describe('Perch auth vectors', () => {
     // binding — it is the raw OZ rule-id layer over the bare payload, so it
     // differs from the bound digest and does not depend on the account.
     const unbound = computeAuthDigest(v.account, payload, v.rule_ids, 'oz_rule_ids');
-    expect(unbound).toEqual(Buffer.from(signingDigest(payload, v.rule_ids)));
+    expect(unbound).toEqual(createHash('sha256').update(payload).update(ruleIdsXdr(v.rule_ids)).digest());
     expect(unbound.toString('hex')).not.toBe(v.digest);
     const other = 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4';
     expect(computeAuthDigest(other, payload, v.rule_ids, 'oz_rule_ids')).toEqual(unbound);
