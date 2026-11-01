@@ -32,6 +32,7 @@ jobs:
           - email-guardian
           - enclave-image-registry
           - factory
+          - grant-signer
           - multisig-policy
           - name-registry
           - spending-limit-policy

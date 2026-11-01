@@ -6,6 +6,7 @@ mod costs;
 mod dkim_registry;
 mod email_alerts;
 mod email_guardian;
+mod grant_signer;
 mod multisig_recovery;
 mod name_registry;
 mod name_registry_passkey_auth;

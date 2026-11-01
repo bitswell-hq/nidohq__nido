@@ -74,6 +74,7 @@ limited-scope signing.
 | Grant evaluator | `crates/grant-eval/` | `no_std` evaluator for agent grants (caveat lists over chain, file, network and signing actions) and their budgets (allowances charged up the delegation tree), built for the host and `wasm32v1-none` |
 | Grant evaluator component | `crates/grant-component/` | `grant-eval` behind a WIT interface, built for `wasm32v1-none` and wrapped as a WebAssembly component |
 | Agent host | `crates/agent-host/` | Wasmtime host that holds agents' grants and checks every file, network and signing tool call through the evaluator component; replays scripted workloads |
+| Grant signer | `contracts/grant-signer/` | Per-account contract that holds agents' grants and budgets; the account delegates an agent's authentication to its `__check_auth`, which checks every context of the authorization with the grant evaluator |
 | Grant relay | `crates/grant-relay/` | `/relay` service for the browser's relay protocol that checks an agent's grants against the call's authorization trees before a key keeper signs, submitting from a pool of custody-key channel accounts |
 | Testnet checks | `evaluation/` | Runs against Stellar testnet with their recorded results, e.g. channel-account transactions signed by a custody key in the Dfns mock |
 | Integration tests | `crates/integration-tests/` | Cross-contract Rust tests with synthetic WebAuthn assertions |

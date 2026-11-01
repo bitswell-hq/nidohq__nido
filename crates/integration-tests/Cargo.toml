@@ -57,6 +57,14 @@ serde_json = "1"
 # crate is not a `#[contract]`/cdylib, so linking the rlib causes no wasm-export
 # collision; the policy under test is still deployed from its wasm bytes.
 nido-preauth-sweep-policy = { path = "../../contracts/preauth-sweep-policy" }
+# The grant signer's types, errors and client; the contract runs from its
+# wasm (`GRANT_SIGNER_WASM`). ed25519-dalek signs as the agents' grant keys.
+nido-grant-signer = { path = "../../contracts/grant-signer" }
+ed25519-dalek = "2.2"
+# The relay's XDR-to-action mapping (the agent-host boundary's wiring), which
+# the grant signer's mapping must agree with byte for byte.
+grant-relay = { path = "../grant-relay" }
+grant-eval = { path = "../grant-eval" }
 # Reads the registry wasm's imports and exports for the immutability test
 # (the version soroban-env-host already locks).
 wasmparser = "0.116"

@@ -1,0 +1,20 @@
+[package]
+name = "nido-grant-signer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+# `lib` as well as `cdylib`: the integration tests link the crate for its
+# types and client while deploying the contract from its wasm.
+[lib]
+crate-type = ["lib", "cdylib"]
+doctest = false
+
+[dependencies]
+# `alloc`: the evaluator's actions and caveats are `alloc` vectors.
+soroban-sdk = { workspace = true, features = ["alloc"] }
+grant-eval = { path = "../../crates/grant-eval" }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils", "alloc"] }

@@ -4,8 +4,9 @@ The evaluator for attenuating grants. An agent's authority is a **grant**: a
 list of **caveats** over one action type. The holder of a grant can only add
 caveats and pass narrower copies on; issuing, revoking and key rotation live in
 a separate admin document that agents never hold. The same evaluator runs at
-two boundaries: inside the Soroban smart account's `__check_auth`, and in the
-agent's WebAssembly host.
+two boundaries: inside the Soroban smart account's authorization check (the
+grant signer, `contracts/grant-signer`, whose `__check_auth` the account
+delegates agents' authentication to), and in the agent's WebAssembly host.
 
 `#![no_std]` (with `alloc`), `#![forbid(unsafe_code)]`, no dependencies.
 Builds for the host and for `wasm32v1-none`.
@@ -192,8 +193,8 @@ the host wiring that builds actions. The wiring stays small and auditable:
 - Network caveats check the host name the agent requested; the runtime does
   the DNS lookup and the connecting. An HTTP redirect is a new action and is
   checked again.
-- The Soroban integration turns each authorization context into a `chain`
-  action.
+- The Soroban integration (`contracts/grant-signer/src/actions.rs`) turns
+  each authorization context into a `chain` action.
 - Budget wiring passes the node of the grant actually being spent under,
   appends a node under the delegator's when a grant is delegated, and exposes
   `refill` and root issuing (`append` with no parent) only to the admin

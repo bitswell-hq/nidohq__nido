@@ -1241,15 +1241,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "nido-grant-signer"
+version = "0.1.0"
+dependencies = [
+ "grant-eval",
+ "soroban-sdk",
+]
+
+[[package]]
 name = "nido-integration-tests"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "ed25519-dalek",
+ "grant-eval",
+ "grant-relay",
  "hex",
  "nido-dkim-registry",
  "nido-dns-attestation-mock",
  "nido-email-guardian",
  "nido-enclave-image-registry",
+ "nido-grant-signer",
  "nido-preauth-sweep-policy",
  "p256",
  "perch-account",
