@@ -136,6 +136,13 @@ jobs:
       - name: cargo test
         run: cargo test --manifest-path crates/agent-host/Cargo.toml
 
+      # The evaluation's agent-host program (evaluation/agent-host) is its own
+      # workspace beside this one; it shares this target directory.
+      - name: Evaluation program (fmt, clippy pedantic)
+        run: |
+          cargo fmt --manifest-path evaluation/agent-host/Cargo.toml --all -- --check
+          cargo clippy --manifest-path evaluation/agent-host/Cargo.toml --target-dir crates/agent-host/target --all --tests -- -Dclippy::pedantic
+
   unit:
     name: Unit (TestAuthenticator)
     runs-on: ubuntu-latest

@@ -1,0 +1,98 @@
+[
+  {
+    "case": "denied fetch (check only)",
+    "calls_per_batch": 4096,
+    "micros_per_call": {
+      "samples": 31,
+      "median": 0.67774462890625,
+      "median_ci95": [
+        0.672841552734375,
+        0.67962646484375
+      ],
+      "p10": 0.66619873046875,
+      "p90": 0.687601806640625,
+      "min": 0.652811767578125,
+      "max": 0.693623779296875
+    }
+  },
+  {
+    "case": "denied read outside the grant (resolve and check)",
+    "calls_per_batch": 64,
+    "micros_per_call": {
+      "samples": 31,
+      "median": 36.884109375,
+      "median_ci95": [
+        36.732421875,
+        37.32290625
+      ],
+      "p10": 36.578125,
+      "p90": 37.651046875,
+      "min": 36.48828125,
+      "max": 38.33071875
+    }
+  },
+  {
+    "case": "allowed read of a 15-byte file",
+    "calls_per_batch": 64,
+    "micros_per_call": {
+      "samples": 31,
+      "median": 46.96615625,
+      "median_ci95": [
+        46.735015625,
+        47.182953125
+      ],
+      "p10": 46.324859375,
+      "p90": 47.755203125,
+      "min": 45.36784375,
+      "max": 51.222
+    }
+  },
+  {
+    "case": "allowed message signature",
+    "calls_per_batch": 256,
+    "micros_per_call": {
+      "samples": 31,
+      "median": 10.41048046875,
+      "median_ci95": [
+        10.3740234375,
+        10.45003125
+      ],
+      "p10": 10.34749609375,
+      "p90": 10.50471875,
+      "min": 10.3274765625,
+      "max": 10.63590625
+    }
+  },
+  {
+    "case": "allowed authorization-entry signature",
+    "calls_per_batch": 256,
+    "micros_per_call": {
+      "samples": 31,
+      "median": 10.8837890625,
+      "median_ci95": [
+        10.86539453125,
+        10.92366796875
+      ],
+      "p10": 10.82975390625,
+      "p90": 10.980140625,
+      "min": 10.812828125,
+      "max": 11.06119921875
+    }
+  },
+  {
+    "case": "allowed fetch from the local API",
+    "calls_per_batch": 16,
+    "micros_per_call": {
+      "samples": 31,
+      "median": 160.458375,
+      "median_ci95": [
+        158.2239375,
+        161.78125
+      ],
+      "p10": 154.890625,
+      "p90": 166.34375,
+      "min": 151.3958125,
+      "max": 176.315125
+    }
+  }
+]

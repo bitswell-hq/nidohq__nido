@@ -1231,6 +1231,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "nido-evaluation"
+version = "0.1.0"
+dependencies = [
+ "ed25519-dalek",
+ "getrandom",
+ "grant-eval",
+ "grant-relay",
+ "hex",
+ "nido-grant-signer",
+ "nido-integration-tests",
+ "nido-key-keeper",
+ "p256",
+ "perch-account",
+ "serde",
+ "serde_json",
+ "sha2",
+ "soroban-sdk",
+ "stellar-accounts",
+ "stellar-strkey 0.0.13",
+ "ureq",
+]
+
+[[package]]
 name = "nido-factory"
 version = "0.1.0"
 dependencies = [

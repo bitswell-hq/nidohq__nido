@@ -9,7 +9,7 @@
 //! | Payload | Agent supplies | Keeper signs |
 //! | - | - | - |
 //! | `transaction` | `TransactionEnvelope` XDR (base64) | the transaction hash on the action's network (`KeyKeeper` payload `StellarTransaction`), so the signature is valid on that network only |
-//! | `auth_entry` | `HashIdPreimage` XDR (base64) of type `SorobanAuthorization` | `SHA-256` of the preimage, after the host checks the preimage's network id is `SHA-256` of the action's passphrase |
+//! | `auth_entry` | `HashIdPreimage` XDR (base64) of type `SorobanAuthorization` or `SorobanAuthorizationWithAddress` | `SHA-256` of the preimage, after the host checks the preimage's network id is `SHA-256` of the action's passphrase |
 //! | `message` | UTF-8 text | the SEP-53 message hash, `SHA-256("Stellar Signed Message:\n" ‖ message)` |
 //!
 //! A message signature is not bound to a network: the action's network is
@@ -18,6 +18,11 @@
 //! transaction or authorization-entry signature, whose signed hashes start
 //! from a network id and an envelope type instead. The host never offers the
 //! keeper's raw `Hash` payload to an agent.
+//!
+//! `SorobanAuthorizationWithAddress` is the preimage a delegated signer signs
+//! (`AddressWithDelegates` credentials): the grant signer's holder key
+//! authorizes for a Nido account over it, and the preimage names that
+//! account.
 
 use base64::Engine as _;
 use nido_key_keeper::{KeyId, Payload as KeeperPayload, StellarNetwork};
@@ -94,14 +99,19 @@ pub fn prepare(request: &Request) -> Result<Prepared, String> {
         }
         RequestPayload::AuthEntry(preimage) => {
             let xdr = base64_xdr(preimage)?;
-            let HashIdPreimage::SorobanAuthorization(auth) =
-                HashIdPreimage::from_xdr(&xdr, Limits::none())
+            let preimage_network =
+                match HashIdPreimage::from_xdr(&xdr, Limits::none())
                     .map_err(|e| format!("not a HashIdPreimage: {e}"))?
-            else {
-                return Err("not a SorobanAuthorization preimage".into());
-            };
+                {
+                    HashIdPreimage::SorobanAuthorization(auth) => auth.network_id,
+                    HashIdPreimage::SorobanAuthorizationWithAddress(auth) => auth.network_id,
+                    _ => return Err(
+                        "not a SorobanAuthorization or SorobanAuthorizationWithAddress preimage"
+                            .into(),
+                    ),
+                };
             let network_id: [u8; 32] = Sha256::digest(request.network.as_bytes()).into();
-            if auth.network_id.0 != network_id {
+            if preimage_network.0 != network_id {
                 return Err(format!(
                     "the preimage's network id is not that of {:?}",
                     request.network

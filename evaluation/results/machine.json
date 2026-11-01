@@ -1,0 +1,13 @@
+{
+  "cpu": "Apple M5 Max",
+  "memory": "128 GiB",
+  "os": "macOS 26.5.2",
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "soroban-env-host": "27.0.1",
+  "soroban-sdk": "27.0.5",
+  "wasmtime": "49.0.5",
+  "lean": "leanprover/lean4:v4.35.0",
+  "nido_grant_signer.wasm sha256": "023f6b1791e6de332f93d26063c112c24a47df0a15332dfcb4fb796b00d6212a",
+  "perch_account.wasm sha256": "d99d56fc2d07a14c2259f0994d97316d23ae90db26835f4c977939c2b3b593aa",
+  "nido_eval_dapp.wasm sha256": "d8d01d8e8af6e10a237080335c2984e82a9e094b1a2c827adf0fad481db34cbd"
+}

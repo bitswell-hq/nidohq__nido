@@ -10,10 +10,11 @@ use nido_key_keeper::stellar::{transaction_hash, MAINNET_PASSPHRASE, TESTNET_PAS
 use nido_key_keeper::{KeyId, MemoryKeyKeeper, StellarNetwork};
 use sha2::{Digest, Sha256};
 use stellar_xdr::{
-    ContractId, Hash, HashIdPreimage, HashIdPreimageSorobanAuthorization, InvokeContractArgs,
-    Limits, Memo, MuxedAccount, Preconditions, ScAddress, ScSymbol, SequenceNumber,
-    SorobanAuthorizedFunction, SorobanAuthorizedInvocation, Transaction, TransactionEnvelope,
-    TransactionExt, TransactionV1Envelope, Uint256, VecM, WriteXdr,
+    ContractId, Hash, HashIdPreimage, HashIdPreimageSorobanAuthorization,
+    HashIdPreimageSorobanAuthorizationWithAddress, InvokeContractArgs, Limits, Memo, MuxedAccount,
+    Preconditions, ScAddress, ScSymbol, SequenceNumber, SorobanAuthorizedFunction,
+    SorobanAuthorizedInvocation, Transaction, TransactionEnvelope, TransactionExt,
+    TransactionV1Envelope, Uint256, VecM, WriteXdr,
 };
 
 fn b64(bytes: &[u8]) -> String {
@@ -38,6 +39,27 @@ fn envelope() -> TransactionEnvelope {
 fn auth_preimage(passphrase: &str) -> Vec<u8> {
     HashIdPreimage::SorobanAuthorization(HashIdPreimageSorobanAuthorization {
         network_id: Hash(Sha256::digest(passphrase.as_bytes()).into()),
+        nonce: 42,
+        signature_expiration_ledger: 1000,
+        invocation: SorobanAuthorizedInvocation {
+            function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
+                contract_address: ScAddress::Contract(ContractId(Hash([1; 32]))),
+                function_name: ScSymbol("transfer".try_into().unwrap()),
+                args: VecM::default(),
+            }),
+            sub_invocations: VecM::default(),
+        },
+    })
+    .to_xdr(Limits::none())
+    .unwrap()
+}
+
+/// The preimage a delegated signer (a grant signer holder) signs: it names
+/// the account it authorizes for.
+fn delegated_auth_preimage(passphrase: &str) -> Vec<u8> {
+    HashIdPreimage::SorobanAuthorizationWithAddress(HashIdPreimageSorobanAuthorizationWithAddress {
+        network_id: Hash(Sha256::digest(passphrase.as_bytes()).into()),
+        address: ScAddress::Contract(ContractId(Hash([9; 32]))),
         nonce: 42,
         signature_expiration_ledger: 1000,
         invocation: SorobanAuthorizedInvocation {
@@ -138,6 +160,34 @@ fn an_allowed_auth_entry_is_signed_over_the_preimage_hash() {
         ),
     ));
     f.public.verify(&Sha256::digest(&preimage), &sig).unwrap();
+}
+
+#[test]
+fn a_delegated_signers_auth_entry_is_signed_over_the_preimage_hash() {
+    let mut f = fixture();
+    let preimage = delegated_auth_preimage(TESTNET_PASSPHRASE);
+    let sig = signature(f.host.call(
+        f.agent,
+        &sign(
+            "key-a",
+            TESTNET_PASSPHRASE,
+            RequestPayload::AuthEntry(b64(&preimage)),
+        ),
+    ));
+    f.public.verify(&Sha256::digest(&preimage), &sig).unwrap();
+
+    // Named for testnet, built for mainnet: refused before the keeper.
+    let requests = f.host.keeper().requests().len();
+    let result = f.host.call(
+        f.agent,
+        &sign(
+            "key-a",
+            TESTNET_PASSPHRASE,
+            RequestPayload::AuthEntry(b64(&delegated_auth_preimage(MAINNET_PASSPHRASE))),
+        ),
+    );
+    assert!(matches!(result, Err(CallError::Failed(_))), "{result:?}");
+    assert_eq!(f.host.keeper().requests().len(), requests);
 }
 
 #[test]
