@@ -1,12 +1,17 @@
 \section{Properties}\label{sec:properties}
 
-We state the four properties informally. Each will be stated formally, in
-Lean where it fits, with the obligations it places on the circuit and the
-contracts named; until then each is \emph{unproven}. In Perch's terms the
-recovery statement's account is its \texttt{account} field, the new key is
-the replacement set the target document declares, the nonce is the attempt
-id together with the configuration epoch, and the expiry is the validity
-deadline.
+Each of the four properties is stated and proven in Lean, over a model of
+the guardian's checks, the circuit's relation and Perch's recovery controller
+(\nolinkurl{research/email-recovery/formal}). In Perch's terms the recovery
+statement's account is its \texttt{account} field, the new key is the
+replacement set the target document declares, the nonce is the attempt id
+together with the configuration epoch, and the expiry is the validity
+deadline. The steps the proofs leave to the assumptions of
+\S\ref{sec:threat} are explicit: soundness takes the proof system's knowledge
+soundness, the registry and the enrollment as hypotheses and names any
+Poseidon2 collision as an alternative; replay resistance names any SHA-256
+collision; and privacy becomes indistinguishability only with a hiding
+commitment and zero-knowledge proofs.
 
 \begin{description}
   \item[Soundness of the email factor.]
@@ -17,4 +22,9 @@ deadline.
     \claimstatement{replay-resistance}\claim{replay-resistance}
   \item[One-factor safety.]
     \claimstatement{one-factor-safety}\claim{one-factor-safety}
+    \claimstatement{wallet-policy-one-factor}\claim{wallet-policy-one-factor}
 \end{description}
+
+The model follows the guardian's and the controller's code check for check;
+their agreement is tested, not proven.
+\claimstatement{model-code-agreement}\claim{model-code-agreement}

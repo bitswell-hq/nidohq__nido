@@ -13,33 +13,77 @@
 #   unproven  (none)
 
 claims:
-  # The four properties of the email factor.
+  # The four properties of the email factor, proven in Lean
+  # (research/email-recovery/formal/README.md).
   - id: email-factor-soundness
     statement: >-
-      An accepted email proof implies a DKIM signature, under a key the
-      registry lists for the enrolled domain, over an email whose From
-      address opens the account's commitment and whose Subject binds the
-      exact recovery statement: the account, the replacement credential, the
-      attempt and epoch, and the expiry.
-    status: unproven
+      If the email guardian accepts an approval and the proof system is
+      knowledge sound, there is an email whose signed header carries a valid RSA-2048 DKIM signature under a key whose leaf for
+      the From domain is in the tree of the unexpired pin or of a root the
+      registry accepts; whose From address, with the account code, opens the
+      account's commitment; and whose Subject opens to the digest of a recovery
+      statement naming this account, controller and network, an allowed action
+      and an unexpired bound. With an honest registry and enrollment, the From
+      address is the enrolled one and the key is a listed key, unless Poseidon2
+      collides or maps an input to zero.
+    status: proven
+    evidence:
+      lean: EmailRecovery.soundness
+      file: research/email-recovery/formal/EmailRecovery/Soundness.lean
 
   - id: address-privacy
     statement: >-
-      The guardian's on-chain state and the proofs it accepts reveal nothing
-      about the enrolled address beyond the salted commitment.
-    status: unproven
+      Everything the chain holds or computes about an email guardian (its
+      configuration, its verdict on every approval, and the controller's state
+      and events over every run) depends on the enrolled address only through
+      the salted commitment and the salted pin root.
+    status: proven
+    evidence:
+      lean: EmailRecovery.privacy_noninterference
+      file: research/email-recovery/formal/EmailRecovery/Privacy.lean
 
   - id: replay-resistance
     statement: >-
-      An accepted proof is bound to one account, one recovery statement and
-      one attempt, so a replayed or front-run copy approves nothing else.
-    status: unproven
+      An approval is accepted only in a context naming its own statement
+      digest, which fixes one account, network, controller, action, attempt or
+      request id and epoch unless SHA-256 collides; the controller counts the
+      email guardian at most once per attempt and domain or per change digest,
+      so a copy submitted by anyone records the same single vote.
+    status: proven
+    evidence:
+      lean: EmailRecovery.Perch.email_vote_replay
+      file: research/email-recovery/formal/EmailRecovery/Replay.lean
 
   - id: one-factor-safety
     statement: >-
-      No sequence of email-factor approvals alone completes a recovery;
-      completion still requires the recovery delay and the policy quorum.
-    status: unproven
+      With approvals by the email guardian as the only evidence, an attempt is
+      authorized only under a guardian-only configuration with quorum one, and
+      a recovery completes only after a positive delay has passed since its
+      authorization.
+    status: proven
+    evidence:
+      lean: EmailRecovery.Perch.one_factor_safety
+      file: research/email-recovery/formal/EmailRecovery/OneFactor.lean
+
+  - id: wallet-policy-one-factor
+    statement: >-
+      Under the wallet policy, the email guardian alone reaches the quorum only
+      under the loss profile, with a delay of at least seven days (120,960
+      ledgers) and a second alert channel.
+    status: proven
+    evidence:
+      lean: EmailRecovery.Perch.one_factor_under_wallet_policy
+      file: research/email-recovery/formal/EmailRecovery/WalletPolicy.lean
+
+  - id: model-code-agreement
+    statement: >-
+      The Lean model's statement encoding matches the code: Perch's encoder
+      reproduces independent vectors, and the guardian's parser reads every
+      statement shape that encoder produces.
+    status: tested
+    evidence:
+      test: statement_parser_reads_perch_encodings
+      file: contracts/email-guardian/src/test.rs
 
   # Nido's wallet rules for an email guardian (spec section 9.3).
   - id: wallet-one-email-guardian
@@ -134,3 +178,27 @@ claims:
       assumption: >-
         Poseidon2 behaves as a random oracle on its inputs, and the account
         code carries at least 128 bits of entropy that only the user holds.
+
+  - id: hash-collision-resistance
+    statement: >-
+      Nobody can find a SHA-256 collision, a Poseidon2 collision, or a
+      Poseidon2 input that hashes to zero.
+    status: assumed
+    evidence:
+      assumption: >-
+        SHA-256 and Poseidon2 (noir-lang/poseidon v0.2.0 over the BN254 scalar
+        field) are collision resistant, and Poseidon2 behaves as a random
+        function, so no input is known that it maps to zero, the empty leaf of
+        the key trees.
+
+  - id: honest-enrollment
+    statement: >-
+      The wallet that enrolls the account commits to the exact From address of
+      the DKIM-signed enrollment email with a fresh account code, and pins only
+      keys it has checked.
+    status: assumed
+    evidence:
+      assumption: >-
+        The enrolling wallet is honest at enrollment: it computes the
+        commitment and the pin root from the real enrollment email and the
+        keys it verified.

@@ -43,6 +43,7 @@ both PDFs as the `email-recovery-pdfs` artifact.
 | `shared/macros.tex` | Notation used by both documents |
 | `shared/claims.sty` | `\claim`, `\claimstatement`, `\ClaimTable` |
 | `shared/figures/` | TikZ figures used by both documents |
+| `formal/` | The Lean model and proofs of the four properties (`formal/README.md`) |
 | `claims.yaml` | The claim ledger |
 | `check-claims.pl`, `claims-to-tex.pl` | Ledger checker and LaTeX generator |
 | `tests/check-claims/` | Checker self-tests |
@@ -87,10 +88,11 @@ the evidence; the tag in both documents follows on the next build.
 
 ## Current state
 
-The documents are a skeleton. The four properties of the email factor are
-`unproven`, and the assumptions they rest on are `assumed`. The
-implementation and evaluation sections state what will be built and
-measured; they contain no results.
+The four properties of the email factor are `proven` in Lean
+(`formal/`, built by `just email-recovery-formal`), about a model whose
+agreement with the contracts is `tested`; the assumptions they rest on are
+`assumed`. The implementation and evaluation sections state what will be
+built and measured; they contain no results.
 
 Bibliography entries were checked against their primary sources: the IETF
 datatracker for the RFCs, the IACR ePrint and arXiv records and Crossref for

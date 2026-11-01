@@ -437,8 +437,9 @@ leaf     = P2(DOM_LEAF, len(domain), d_0, d_1, key_hash)
 | Leaf index | decomposed in the circuit into 16 little-endian bits; bit `i` set means the node at level `i` is a right child |
 
 A membership proof starts from a leaf the circuit computes itself as the
-five-input `DOM_LEAF` hash above, so no interior node, empty value, or pin
-salt leaf (§7.4) can stand in for a key leaf without a `P2` collision.
+five-input `DOM_LEAF` hash above, so no interior node or pin salt leaf
+(§7.4) can stand in for a key leaf without a `P2` collision, and no empty
+leaf can without a `DOM_LEAF` input that `P2` maps to `0`.
 `P2`'s initial state is the input count times `2^64`
 (`noir-lang/poseidon` v0.2.0, `poseidon2.nr`), so hashes with different
 input counts start from different states.
@@ -1026,7 +1027,7 @@ Every one is emitted **[built, tested]**; the announcements are
 | --- | --- |
 | A1 | RSASSA-PKCS1-v1_5 with SHA-256 and 2048-bit moduli is existentially unforgeable, and providers keep their DKIM private keys secret. |
 | A2 | SHA-256 is collision resistant. |
-| A3 | `P2` is collision resistant; for the hiding claims (privacy, the blinded Subject, the salted pin) it is modelled as a random function. |
+| A3 | `P2` is collision resistant, and no input is known that it maps to `0` (the empty leaf); for the hiding claims (privacy, the blinded Subject, the salted pin) it is modelled as a random function. |
 | A4 | The UltraHonk proof system with Perch's zero-knowledge flavor is knowledge sound and zero-knowledge, and the verifier contract embeds the email circuit's key. |
 | A5 | The registry holds a leaf `(domain, key_hash)` only for a key that domain's operator controls. The registry contract reduces this to its governance (§7.6): a key enters only with `threshold` member approvals, after a public timelock (72 hours if `attest_threshold` attesters vouched it live in DNS, 7 days otherwise) during which `revoke_threshold` members can stop it; revocation is applied when a compromise is known. |
 | A6 | `account_code` and `rho` come from a secure generator and stay with the user and the user's browser. |
@@ -1076,15 +1077,18 @@ Let `G` be an email guardian with configuration
 ### 11.3 Obligation table
 
 Status: **proven** (formal proof), **tested** (this repository's tests),
-**specified** (normative, not built), **assumed**. Nothing is formally
-proven yet.
+**specified** (normative, not built), **assumed**. The proofs are Lean
+theorems in `research/email-recovery/formal` about a model of the guardian's
+checks (§8.3), the circuit relation (C1 to C6), and Perch's controller; the
+model's agreement with the contracts is tested, not proven
+(`research/email-recovery/formal/README.md`).
 
 | Property | Circuit obligations | Contract obligations (guardian) | Perch obligations | Assumptions | Status |
 | --- | --- | --- | --- | --- | --- |
-| 1 Soundness | C1, C2, C3, C4, C5, C6 | §8.3 checks 1 to 12; §8.2 wiring check; registry: §7.3 rules 1 to 5 and the same tree hashing as C6 (§7.2, §7.6 cross-check) | Statement construction from controller state (Perch §4) | A1, A2, A3 (collision), A4 (soundness), A5, A7 | Guardian checks and registry rules tested; registry hashing tested against Noir; circuit specified; assumptions assumed |
-| 2 Privacy | Public inputs are exactly §6.1; nothing else is exposed | Stores `C` and a salted pin root, never an address or key hash; emits nothing | — | A3 (random function), A4 (zero-knowledge), A6 | Guardian storage tested; circuit specified |
-| 3 Replay | C5 binds `d` | Checks 1, 2, 5, 6, 8, 12 | One vote per guardian per attempt and domain, or per change digest (Perch §6.3 T2, §5); attempt ids never reused (T1); epochs only grow (§3.3) | A2, A3, A4 | Tested (unit and integration) |
-| 4 One-factor safety | — | The guardian is one address | Quorum (T4), delay (T5), cancellation (T6, T7) | — | On-chain part tested; wallet policy tested (§9.3) |
+| 1 Soundness | C1, C2, C3, C4, C5, C6 | §8.3 checks 1 to 12; §8.2 wiring check; registry: §7.3 rules 1 to 5 and the same tree hashing as C6 (§7.2, §7.6 cross-check) | Statement construction from controller state (Perch §4) | A1, A2, A3 (collision), A4 (soundness), A5, A7 | Proven from the circuit relation with A4, A5, A7 as hypotheses and A3's breaks named (`EmailRecovery.soundness`); A1 assumed; guardian checks and registry rules tested; registry hashing tested against Noir; circuit specified |
+| 2 Privacy | Public inputs are exactly §6.1; nothing else is exposed | Stores `C` and a salted pin root, never an address or key hash; emits nothing | — | A3 (random function), A4 (zero-knowledge), A6 | Noninterference proven (`EmailRecovery.privacy_noninterference`); indistinguishability rests on A3, A4, A6, assumed; guardian storage tested; circuit specified |
+| 3 Replay | C5 binds `d` | Checks 1, 2, 5, 6, 8, 12 | One vote per guardian per attempt and domain, or per change digest (Perch §6.3 T2, §5); attempt ids never reused (T1); epochs only grow (§3.3) | A2, A3, A4 | Proven with A2's break named (`EmailRecovery.Perch.email_vote_replay`); tested (unit and integration) |
+| 4 One-factor safety | — | The guardian is one address | Quorum (T4), delay (T5), cancellation (T6, T7) | — | Proven over all controller traces (`EmailRecovery.Perch.one_factor_safety`) and for the wallet policy (`one_factor_under_wallet_policy`); on-chain part tested; wallet policy tested (§9.3) |
 
 ## 12. Measurements
 
