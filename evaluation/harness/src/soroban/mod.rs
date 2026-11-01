@@ -28,13 +28,14 @@ pub fn run(dapp_wasm: &[u8], out: &Path) -> Result<(), String> {
     record::write(out, "lean-cases.json", &json!({ "cases": cases }))?;
     eprintln!("soroban: {} cost points", points.len());
 
-    let rows = attacks::run(dapp_wasm);
+    let fixture = |label: &str, dapps, extra| fixture::Fixture::new(label, dapp_wasm, dapps, extra);
+    let rows = attacks::run(&fixture);
     eprintln!("soroban: {} attack rows", rows.len());
     record::write(out, "soroban-attacks.json", &rows)?;
 
     let mut all = Vec::new();
     for w in crate::workloads::all() {
-        all.extend(workloads::run(dapp_wasm, &w));
+        all.extend(workloads::run(&fixture, &w));
     }
     eprintln!("soroban: {} workload calls", all.len());
     record::write(out, "soroban-workloads.json", &all)?;

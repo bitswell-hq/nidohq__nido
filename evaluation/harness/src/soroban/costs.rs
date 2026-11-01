@@ -155,7 +155,10 @@ pub fn run(f: &Fixture) -> (std::vec::Vec<Point>, std::vec::Vec<Value>) {
     // One unmeasured check first, so every measured one finds the contract
     // in the same state of the host's module cache.
     let warm = f.issue(&key, &[], 0);
-    assert!(f.verdict(warm, &key, &[context(f, 0, 32)]).is_ok());
+    assert!(f
+        .verdict(warm, &key, &[context(f, 0, 32)])
+        .expect("the simulation calls __check_auth")
+        .is_ok());
     for (i, s) in shapes(f).into_iter().enumerate() {
         let grant = f.issue(&key, &s.caveats, 0);
         let eval_caveats: std::vec::Vec<_> = s.caveats.iter().map(chain::caveat).collect();
@@ -179,7 +182,9 @@ pub fn run(f: &Fixture) -> (std::vec::Vec<Point>, std::vec::Vec<Value>) {
                 .collect();
             let mut budget = f.env().cost_estimate().budget();
             budget.reset_unlimited();
-            let verdict = f.verdict(grant, &key, &contexts);
+            let verdict = f
+                .verdict(grant, &key, &contexts)
+                .expect("the simulation calls __check_auth");
             let point = Point {
                 id: format!("cost-{i:02}-{}-{variant}", s.sweep),
                 sweep: s.sweep,

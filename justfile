@@ -23,6 +23,15 @@ test-relay-local:
 eval:
     evaluation/scripts/eval.sh
 
+# The evaluation's local-network stage: the attack suite and the workloads
+# through the relay to a local Stellar network, relay throughput against the
+# channel pool's size, and concurrent sibling spends against a shared
+# allowance. Rewrites evaluation/results/network-*.json and the result
+# tables. Needs Docker, the Stellar CLI, `just perch-infra` and
+# `just build-contracts`. See evaluation/README.md.
+eval-network:
+    evaluation/scripts/eval-network.sh
+
 # Build all crates (native)
 build:
     cargo build --workspace

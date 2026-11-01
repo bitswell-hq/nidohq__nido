@@ -14,6 +14,7 @@ use std::path::Path;
 use serde::Serialize;
 use serde_json::Value;
 
+use crate::network::report as network;
 use crate::record;
 
 /// The README region the report rewrites.
@@ -424,6 +425,9 @@ fn summary(out: &mut String, sets: &[(&str, &Value)]) {
     for (boundary, set) in sets {
         let mut by: BTreeMap<String, (usize, usize, usize, usize)> = BTreeMap::new();
         for r in set.as_array().cloned().unwrap_or_default() {
+            if s(&r, "outcome") == "not_run" {
+                continue;
+            }
             let e = by.entry(s(&r, "category")).or_default();
             if r["control"].as_bool().unwrap_or(false) {
                 e.3 += 1;
@@ -685,7 +689,13 @@ fn bench_tables(out: &mut String, bench: &Value, throughput: &Value) {
 }
 
 /// The headline numbers, each from the table it summarizes.
-fn headline(out: &mut String, sets: &[(&str, &Value)], fit: &Fit, bench: &Value) {
+fn headline(
+    out: &mut String,
+    sets: &[(&str, &Value)],
+    fit: &Fit,
+    bench: &Value,
+    network: Option<(&network::Results, &Value)>,
+) {
     let _ = writeln!(
         out,
         "### Summary
@@ -744,12 +754,16 @@ fn headline(out: &mut String, sets: &[(&str, &Value)], fit: &Fit, bench: &Value)
         .collect();
     let _ = writeln!(
         out,
-        "- Agent host, per check (medians): {} µs through the component, {}x native `grant-eval`, {}x the host-side check without Wasm; the component compiles and instantiates in {:.1} ms.\n",
+        "- Agent host, per check (medians): {} µs through the component, {}x native `grant-eval`, {}x the host-side check without Wasm; the component compiles and instantiates in {:.1} ms.",
         range(&comp, 2),
         range(&ratio, 0),
         range(&host, 1),
         median(&bench["instantiate_ms"])
     );
+    if let Some((n, sim_workloads)) = network {
+        network::headline(out, n, sim_workloads);
+    }
+    out.push('\n');
 }
 
 fn machine(out: &mut String, m: &Value) {
@@ -788,6 +802,14 @@ pub fn run(dir: &Path, readme: &Path) -> Result<(), String> {
     let soroban_attacks = record::read(dir, "soroban-attacks.json")?;
     let host_attacks = record::read(dir, "agent-host-attacks.json")?;
     let bench = record::read(dir, "agent-host-bench.json")?;
+    let net = network::Results::read(dir)?;
+    let soroban_workloads = record::read(dir, "soroban-workloads.json")?;
+    let net_sets = net.as_ref().map(network::summary_sets).unwrap_or_default();
+    let mut sets = vec![
+        ("Soroban simulation", &soroban_attacks),
+        ("Agent host", &host_attacks),
+    ];
+    sets.extend(net_sets.iter().map(|(l, v)| (*l, v)));
     let mut out = String::new();
     let _ = writeln!(out, "{BEGIN}\n");
     headline(
@@ -798,19 +820,14 @@ pub fn run(dir: &Path, readme: &Path) -> Result<(), String> {
         ],
         &fit,
         &bench,
+        net.as_ref().map(|n| (n, &soroban_workloads)),
     );
     let _ = writeln!(out, "### Machine and versions\n");
     machine(&mut out, &record::read(dir, "machine.json")?);
     let _ = writeln!(out, "### Cost per check and the Lean bound\n");
     cost_tables(&mut out, &rows, &fit);
     let _ = writeln!(out, "### Attack suite\n");
-    summary(
-        &mut out,
-        &[
-            ("Soroban simulation", &soroban_attacks),
-            ("Agent host", &host_attacks),
-        ],
-    );
+    summary(&mut out, &sets);
     let _ = writeln!(
         out,
         "**Soroban simulation: the grant signer on a factory-minted Perch account**\n"
@@ -821,9 +838,12 @@ pub fn run(dir: &Path, readme: &Path) -> Result<(), String> {
     let _ = writeln!(out, "### Workloads\n");
     workload_tables(
         &mut out,
-        &record::read(dir, "soroban-workloads.json")?,
+        &soroban_workloads,
         &record::read(dir, "agent-host-workload.json")?,
     );
+    if let Some(n) = &net {
+        network::section(&mut out, n, &soroban_attacks, &soroban_workloads);
+    }
     let _ = writeln!(out, "### Agent host: cost per check and throughput\n");
     bench_tables(
         &mut out,

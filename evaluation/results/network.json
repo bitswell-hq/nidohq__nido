@@ -1,0 +1,14 @@
+{
+  "channels": 8,
+  "core_version": "v29.0.0",
+  "docker": "29.4.0 on OrbStack, 18 CPUs, 16818024448 bytes",
+  "factory": "CBHPYY6LTNU36SPEYIESJC5WASV2VEDCVDTWNA2EHEH574LE2OS2MUY3",
+  "machine_cpu": "Apple M5 Max",
+  "network_passphrase": "Standalone Network ; February 2017",
+  "protocol_version": 28,
+  "quickstart": "stellar/quickstart@sha256:487fe637ba48c972d5be0ed8965f8df1dcbc3e8e1ee53d24d915b25b6f2b6d99",
+  "registry": "CDRA6IDNXBPMNHPWE7GKKAV4ZGOGU3WNYU4X4XBSF36UBR36IBLJ3WKZ",
+  "rpc_version": "29.0.1",
+  "setup_seconds": 56.671413041,
+  "verifier": "CBYPAPUEXCV4LBEJSZIEIINELNP6ZVAXS2PZPHFYJEGFV5554JAL62E4"
+}

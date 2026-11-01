@@ -1,5 +1,6 @@
 //! The attack suite against the grant signer on a factory-minted Perch
-//! account, in the Soroban host under enforcing authorization.
+//! account, run on either of the fixture's backends: the Soroban host under
+//! enforcing authorization, or the local network through the relay.
 //!
 //! Every attempt is made by an agent the owner authorized and records the
 //! component that refused it, its error, and whether balances, grants (and
@@ -21,6 +22,7 @@ use soroban_sdk::{
 };
 
 use super::fixture::{agent, pubkey, Fixture, Misrule};
+use crate::network::relay::Reply;
 use crate::outcome::Outcome;
 
 /// Deploys a wasm with `deployer` as the deploying address, which needs
@@ -51,16 +53,20 @@ pub struct Row {
     pub outcome: Outcome,
     pub state_unchanged: bool,
     pub changes: std::vec::Vec<String>,
-    /// CPU instructions of the whole invocation (allowed or refused).
-    pub cpu_instructions: i64,
+    /// CPU instructions of the whole invocation (allowed or refused), where
+    /// the backend meters them.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cpu_instructions: Option<i64>,
+    /// The relay's reply, on the network.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub relay: Option<Reply>,
 }
 
-struct Suite<'a> {
+struct Suite {
     rows: std::vec::Vec<Row>,
-    wasm: &'a [u8],
 }
 
-impl Suite<'_> {
+impl Suite {
     fn record(
         &mut self,
         f: &Fixture,
@@ -72,19 +78,24 @@ impl Suite<'_> {
     ) -> Outcome {
         let before = f.snapshot();
         let outcome = run();
-        let cpu = f.env().cost_estimate().resources().instructions;
+        let cpu = f.resources().map(|(cpu, _)| cpu);
+        let relay = f.take_reply();
         let after = f.snapshot();
         let changes = before.diff(&after);
+        if relay.is_some() {
+            eprintln!("{}: {id}: {outcome:?}", f.boundary());
+        }
         self.rows.push(Row {
             id: id.to_owned(),
             category,
             attempt: attempt.to_owned(),
-            boundary: "soroban-simulation",
+            boundary: f.boundary(),
             control,
             state_unchanged: changes.is_empty(),
             changes,
             outcome: outcome.clone(),
             cpu_instructions: cpu,
+            relay,
         });
         outcome
     }
@@ -137,7 +148,7 @@ fn transfer(
 }
 
 /// `delegate(parent, child, caveats, allowance)` authorized as the grant
-/// signer by `signer`'s holder `key`.
+/// signer by `signer`'s holder `key`: an agent's attempt.
 pub fn delegate(
     f: &Fixture,
     signer: u32,
@@ -147,6 +158,34 @@ pub fn delegate(
     caveats: &[Caveat],
     allowance: u128,
 ) -> Outcome {
+    let (args, entry) = delegation(f, signer, key, parent, child, caveats, allowance);
+    f.call(&[entry], &f.signer, "delegate", &args)
+}
+
+/// The same delegation as a step that sets up a scenario
+/// (`Fixture::setup_call`).
+pub fn delegate_setup(
+    f: &Fixture,
+    signer: u32,
+    key: &SigningKey,
+    parent: u32,
+    child: &SigningKey,
+    caveats: &[Caveat],
+    allowance: u128,
+) -> Outcome {
+    let (args, entry) = delegation(f, signer, key, parent, child, caveats, allowance);
+    f.setup_call(&[entry], &f.signer, "delegate", &args)
+}
+
+fn delegation(
+    f: &Fixture,
+    signer: u32,
+    key: &SigningKey,
+    parent: u32,
+    child: &SigningKey,
+    caveats: &[Caveat],
+    allowance: u128,
+) -> (Vec<Val>, soroban_sdk::xdr::SorobanAuthorizationEntry) {
     let e = f.env();
     let args = Vec::from_array(
         e,
@@ -159,7 +198,7 @@ pub fn delegate(
     );
     let root = f.node(&f.signer, "delegate", &args, std::vec![]);
     let entry = f.signer_entry(signer, key, root);
-    f.call(&[entry], &f.signer, "delegate", &args)
+    (args, entry)
 }
 
 /// Delegate and return the child's id.
@@ -173,7 +212,7 @@ fn child(
 ) -> u32 {
     let id = f.next_id();
     assert_eq!(
-        delegate(f, signer, key, signer, child_key, caveats, allowance),
+        delegate_setup(f, signer, key, signer, child_key, caveats, allowance),
         Outcome::Allowed,
         "delegation"
     );
@@ -188,9 +227,14 @@ fn verdict(
     context: soroban_sdk::auth::Context,
 ) -> Outcome {
     match f.verdict(grant, key, &[context]) {
-        Ok(()) => Outcome::Allowed,
-        Err(Ok(err)) => Outcome::refused("grant-signer", crate::outcome::grant_error(err as u32)),
-        Err(Err(err)) => Outcome::refused("host", format!("{err:?}")),
+        None => Outcome::NotRun {
+            reason: "a direct call of __check_auth, which only the simulation can make".into(),
+        },
+        Some(Ok(())) => Outcome::Allowed,
+        Some(Err(Ok(err))) => {
+            Outcome::refused("grant-signer", crate::outcome::grant_error(err as u32))
+        }
+        Some(Err(Err(err))) => Outcome::refused("host", format!("{err:?}")),
     }
 }
 
@@ -205,19 +249,18 @@ fn sc_to_val(env: &Env, v: &ScVal) -> Val {
     Val::try_from_val(env, v).expect("a host value")
 }
 
-/// Run the suite. `wasm` is the evaluation dApp.
+/// Run the suite on fixtures `fixture(label, dapps, extra)` makes.
 #[must_use]
 #[allow(
     clippy::too_many_lines,
     clippy::similar_names,
     clippy::many_single_char_names
 )]
-pub fn run(wasm: &[u8]) -> std::vec::Vec<Row> {
+pub fn run(fixture: &dyn Fn(&str, usize, Option<Misrule>) -> Fixture) -> std::vec::Vec<Row> {
     let mut s = Suite {
         rows: std::vec::Vec::new(),
-        wasm,
     };
-    let f = Fixture::new("attacks", s.wasm, 5, None);
+    let f = fixture("attacks", 5, None);
     let e = f.env();
     let (pay, open, hop, router) = (agent(1), agent(4), agent(3), agent(2));
     let g_pay = f.issue(
@@ -385,7 +428,7 @@ pub fn run(wasm: &[u8]) -> std::vec::Vec<Row> {
 
     // The same escalations against documents that wrongly give agents a rule
     // for the account or for the grant signer.
-    let fs = Fixture::new("attacks-self-rule", s.wasm, 1, Some(Misrule::SelfAdmin));
+    let fs = fixture("attacks-self-rule", 1, Some(Misrule::SelfAdmin));
     let fs_open = agent(4);
     let gs = fs.issue(&fs_open, &[], 10);
     let es = fs.env();
@@ -423,7 +466,7 @@ pub fn run(wasm: &[u8]) -> std::vec::Vec<Row> {
             || direct(&fs, gs, &fs_open, &fs.account.address, name, args),
         );
     }
-    let fg = Fixture::new("attacks-signer-rule", s.wasm, 1, Some(Misrule::Signer));
+    let fg = fixture("attacks-signer-rule", 1, Some(Misrule::Signer));
     let fg_open = agent(4);
     let gg = fg.issue(&fg_open, &[], 10);
     let eg = fg.env();
@@ -521,13 +564,9 @@ pub fn run(wasm: &[u8]) -> std::vec::Vec<Row> {
 
     // --- delegation workarounds -------------------------------------------
     let cat = "delegation workarounds";
-    let w = &f.w;
-    let wasm_hash = w
-        .env
-        .deployer()
-        .upload_contract_wasm(nido_integration_tests::GRANT_SIGNER_WASM);
-    let salt = BytesN::from_array(&w.env, &[3; 32]);
-    let deployer = w.env.register(Deployer, ());
+    let wasm_hash = f.upload(nido_integration_tests::GRANT_SIGNER_WASM);
+    let salt = BytesN::from_array(e, &[3; 32]);
+    let deployer = f.deployer();
     s.record(
         &f,
         "dw-deploy-contract",
@@ -546,7 +585,7 @@ pub fn run(wasm: &[u8]) -> std::vec::Vec<Row> {
                     executable: soroban_sdk::xdr::ContractExecutable::Wasm(soroban_sdk::xdr::Hash(
                         wasm_hash.to_array(),
                     )),
-                    constructor_args: std::vec![w.sc(f.account.address.clone())]
+                    constructor_args: std::vec![f.sc(f.account.address.clone())]
                         .try_into()
                         .unwrap(),
                 }),
@@ -582,10 +621,9 @@ pub fn run(wasm: &[u8]) -> std::vec::Vec<Row> {
             verdict(&f, g_hop, &hop, create)
         },
     );
-    let fresh = w.mint(
+    let fresh = f.mint(
         "attacks/mallory-account",
         nido_integration_tests::world::Passkey::labelled("mallory"),
-        std::vec![],
     );
     s.record(
         &f,
@@ -603,7 +641,7 @@ pub fn run(wasm: &[u8]) -> std::vec::Vec<Row> {
         false,
         || transfer(&f, g_open, &open, &f.asset, &fresh.address, 11),
     );
-    let exp = f.w.ledger() + 100;
+    let exp = f.ledger() + 100;
     let approve = Vec::from_array(
         e,
         [
@@ -665,6 +703,10 @@ pub fn run(wasm: &[u8]) -> std::vec::Vec<Row> {
 
     // Type confusion: an argument of another type with the same bytes.
     let (dave, dave_key) = account_address(e, 77);
+    // On the network the relay's recording simulation runs the transfer
+    // without authorization, so the pinned recipient holds a trustline for
+    // the budget asset there and the call reaches the grant signer's check.
+    f.trustline(&agent(77));
     let typed = agent(14);
     let g_dave = f.issue(
         &typed,

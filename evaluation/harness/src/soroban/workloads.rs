@@ -1,4 +1,5 @@
-//! The workloads of `crate::workloads`, replayed in the Soroban host.
+//! The workloads of `crate::workloads`, replayed on either of the fixture's
+//! backends.
 
 use std::collections::BTreeMap;
 
@@ -7,8 +8,9 @@ use serde::Serialize;
 use soroban_sdk::xdr::SorobanAuthorizedInvocation;
 use soroban_sdk::Address;
 
-use super::attacks::delegate;
+use super::attacks::delegate_setup;
 use super::fixture::{agent, Fixture};
+use crate::network::relay::Reply;
 use crate::outcome::Outcome;
 use crate::workloads::{Call, CaveatSpec, Expect, Step, Target, Who, Workload};
 
@@ -24,9 +26,15 @@ pub struct Row {
     pub as_expected: bool,
     /// Contexts in the call's authorization tree.
     pub contexts: usize,
-    pub cpu_instructions: i64,
-    pub mem_bytes: i64,
+    /// Where the backend meters them.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cpu_instructions: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mem_bytes: Option<i64>,
     pub state_unchanged_if_refused: Option<bool>,
+    /// The relay's reply, on the network.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub relay: Option<Reply>,
 }
 
 fn target(f: &Fixture, t: Target) -> Address {
@@ -75,11 +83,23 @@ pub fn expected(e: Expect) -> Outcome {
     }
 }
 
-/// Run `w` on a fresh account.
+/// On the network, a refusal by the relay's chain grant meets a `NotAllowed`
+/// expectation: with the relay's grant mirroring the account's, the relay
+/// evaluates the same caveats before the grant signer would.
+fn refused_by_relay_grant(outcome: &Outcome, expect: Expect) -> bool {
+    expect == Expect::NotAllowed
+        && matches!(outcome, Outcome::Refused { component, error }
+            if component == "relay" && error.starts_with("GRANT_DENIED (chain grant"))
+}
+
+/// Run `w` on a fresh account, made by `fixture(label, dapps, extra)`.
 #[must_use]
 #[allow(clippy::too_many_lines)]
-pub fn run(wasm: &[u8], w: &Workload) -> std::vec::Vec<Row> {
-    let f = Fixture::new(&format!("workload/{}", w.name), wasm, 3, None);
+pub fn run(
+    fixture: &dyn Fn(&str, usize, Option<super::fixture::Misrule>) -> Fixture,
+    w: &Workload,
+) -> std::vec::Vec<Row> {
+    let f = fixture(&format!("workload/{}", w.name), 3, None);
     let mut grants: BTreeMap<&str, u32> = BTreeMap::new();
     let mut rows = std::vec::Vec::new();
     for (step, s) in w.steps.iter().enumerate() {
@@ -104,7 +124,7 @@ pub fn run(wasm: &[u8], w: &Workload) -> std::vec::Vec<Row> {
             } => {
                 let parent = grants[from];
                 let id = f.next_id();
-                let out = delegate(
+                let out = delegate_setup(
                     &f,
                     parent,
                     &agent(crate::workloads::seed(from)),
@@ -183,7 +203,8 @@ pub fn run(wasm: &[u8], w: &Workload) -> std::vec::Vec<Row> {
                     tree,
                 );
                 let outcome = f.call(&[entry], &contract, func, &args);
-                let r = f.env().cost_estimate().resources();
+                let resources = f.resources();
+                let relay = f.take_reply();
                 let unchanged =
                     (!outcome.is_allowed()).then(|| f.snapshot().diff(&before).is_empty());
                 let want = expected(*expect);
@@ -193,12 +214,13 @@ pub fn run(wasm: &[u8], w: &Workload) -> std::vec::Vec<Row> {
                     agent: name,
                     action,
                     expected: format!("{expect:?}"),
-                    as_expected: outcome == want,
+                    as_expected: outcome == want || refused_by_relay_grant(&outcome, *expect),
                     outcome,
                     contexts,
-                    cpu_instructions: r.instructions,
-                    mem_bytes: r.mem_bytes,
+                    cpu_instructions: resources.map(|r| r.0),
+                    mem_bytes: resources.map(|r| r.1),
                     state_unchanged_if_refused: unchanged,
+                    relay,
                 });
             }
         }

@@ -5,10 +5,12 @@
 //! nido-eval soroban --dapp <wasm> --out <dir>
 //! nido-eval report --results <dir> --readme <README.md>
 //! nido-eval local-registry
+//! nido-eval network --fixtures <dir> --local-stack <dir> --out <dir> [--quick]
 //! ```
 
 mod chain;
 mod local_stack;
+mod network;
 mod outcome;
 mod record;
 mod report;
@@ -44,15 +46,29 @@ fn run(args: &[String]) -> Result<(), String> {
             println!("{}", local_stack::registry());
             Ok(())
         }
-        _ => Err("usage: nido-eval soroban --dapp <wasm> --out <dir> | report --results <dir> --readme <README.md> | local-registry".into()),
+        Some("network") => {
+            let wasm = network::Wasm::load(
+                &PathBuf::from(required(args, "--fixtures")?),
+                &PathBuf::from(required(args, "--local-stack")?),
+            )?;
+            network::run(
+                &wasm,
+                &PathBuf::from(required(args, "--out")?),
+                args.iter().any(|a| a == "--quick"),
+            )
+        }
+        _ => Err("usage: nido-eval soroban --dapp <wasm> --out <dir> | report --results <dir> --readme <README.md> | local-registry | network --fixtures <dir> --local-stack <dir> --out <dir> [--quick]".into()),
     }
 }
 
 fn main() -> ExitCode {
-    // A refused call unwinds out of the Soroban host; the outcome is read from
-    // the panic payload, so the default hook's report would only be noise.
-    std::panic::set_hook(Box::new(|_| {}));
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some("soroban") {
+        // A refused call unwinds out of the Soroban host; the outcome is read
+        // from the panic payload, so the default hook's report would only be
+        // noise.
+        std::panic::set_hook(Box::new(|_| {}));
+    }
     match run(&args) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {

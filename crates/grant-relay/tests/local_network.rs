@@ -26,7 +26,10 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use ed25519_dalek::{Signer as _, SigningKey};
-use grant_relay::rpc::{AuthMode, HttpRpc, Lookup, Send, SorobanRpc};
+use grant_relay::local::{
+    self, contract_id, hand_to_custody, http, network_id, pk, tx, Quickstart, PASSPHRASE,
+};
+use grant_relay::rpc::{AuthMode, HttpRpc, Lookup, SorobanRpc};
 use grant_relay::{Config, ConfigFile, Relay, Server};
 use nido_key_keeper::dfns::mock::{MockConfig, MockServer};
 use nido_key_keeper::dfns::{DfnsConfig, DfnsKeyKeeper, KeyCredential};
@@ -35,19 +38,12 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use stellar_xdr::{
     Asset, ContractExecutable, ContractIdPreimage, ContractIdPreimageFromAddress,
-    CreateContractArgs, CreateContractArgsV2, Hash, HashIdPreimage, HashIdPreimageContractId,
+    CreateContractArgs, CreateContractArgsV2, Hash, HashIdPreimage,
     HashIdPreimageSorobanAuthorization, HostFunction, Int128Parts, InvokeContractArgs,
-    InvokeHostFunctionOp, Limits, Memo, MuxedAccount, Operation, OperationBody, Preconditions,
-    ReadXdr, ScAddress, ScBytes, ScMap, ScMapEntry, ScSymbol, ScVal, ScVec, SequenceNumber,
-    SetOptionsOp, Signer, SignerKey, SorobanAuthorizationEntry, SorobanCredentials, Transaction,
-    TransactionEnvelope, TransactionExt, TransactionV1Envelope, Uint256, WriteXdr,
+    InvokeHostFunctionOp, Limits, OperationBody, ReadXdr, ScAddress, ScBytes, ScMap, ScMapEntry,
+    ScSymbol, ScVal, ScVec, SorobanAuthorizationEntry, SorobanCredentials, TransactionEnvelope,
+    TransactionExt, TransactionV1Envelope, Uint256, WriteXdr,
 };
-
-/// `stellar/quickstart` (core v29.0.0, RPC v29.0.1, protocol 28), pinned by
-/// its multi-platform index digest.
-const QUICKSTART: &str =
-    "stellar/quickstart@sha256:487fe637ba48c972d5be0ed8965f8df1dcbc3e8e1ee53d24d915b25b6f2b6d99";
-const PASSPHRASE: &str = "Standalone Network ; February 2017";
 
 const DFNS_TOKEN: &str = "local-service-account-token";
 const DFNS_USER: &str = "us-3k8s2-q0pde-4hn2bq7k4u1c8a9f";
@@ -65,266 +61,28 @@ fn seeded(n: u8) -> SigningKey {
     SigningKey::from_bytes(&seed)
 }
 
-fn pk(key: &SigningKey) -> [u8; 32] {
-    key.verifying_key().to_bytes()
-}
-
-fn network_id() -> [u8; 32] {
-    Sha256::digest(PASSPHRASE.as_bytes()).into()
-}
-
 // ---------------------------------------------------------------------------
-// The local network
+// The local network (`grant_relay::local`)
 
-struct Quickstart {
-    container: Option<String>,
-    base: String,
-}
-
-impl Quickstart {
-    fn start() -> Self {
-        if let Ok(base) = std::env::var("GRANT_RELAY_QUICKSTART_URL") {
-            let q = Self {
-                container: None,
-                base: base.trim_end_matches('/').to_owned(),
-            };
-            q.wait_ready(None);
-            return q;
-        }
+fn network() -> Quickstart {
+    if let Ok(base) = std::env::var("GRANT_RELAY_QUICKSTART_URL") {
+        Quickstart::existing(&base)
+    } else {
         let mut id = [0u8; 4];
         getrandom::getrandom(&mut id).unwrap();
-        let name = format!("grant-relay-e2e-{}", hex::encode(id));
-        let status = Command::new("docker")
-            .args([
-                "run",
-                "-d",
-                "--rm",
-                "--name",
-                &name,
-                "-p",
-                "127.0.0.1::8000",
-            ])
-            .args([QUICKSTART, "--local", "--enable", "rpc"])
-            .stdout(std::process::Stdio::null())
-            .status()
-            .expect("docker runs");
-        assert!(status.success(), "docker run failed");
-        let port = Command::new("docker")
-            .args(["port", &name, "8000"])
-            .output()
-            .expect("docker port");
-        let mapping = String::from_utf8(port.stdout).unwrap();
-        let port = mapping
-            .lines()
-            .next()
-            .and_then(|l| l.rsplit(':').next())
-            .expect("a mapped port")
-            .trim()
-            .to_owned();
-        let q = Self {
-            container: Some(name),
-            base: format!("http://127.0.0.1:{port}"),
-        };
-        q.wait_ready(q.container.as_deref());
-        q
+        Quickstart::start(&format!("grant-relay-e2e-{}", hex::encode(id)))
     }
-
-    fn rpc_url(&self) -> String {
-        format!("{}/rpc", self.base)
-    }
-
-    /// Wait for RPC health, the Soroban settings upgrade (when the test
-    /// started the container), and friendbot.
-    fn wait_ready(&self, container: Option<&str>) {
-        let deadline = Instant::now() + Duration::from_mins(5);
-        let agent = http();
-        loop {
-            assert!(
-                Instant::now() < deadline,
-                "the local network never became ready"
-            );
-            std::thread::sleep(Duration::from_secs(2));
-            let healthy = agent
-                .post(&self.rpc_url())
-                .content_type("application/json")
-                .send(json!({"jsonrpc": "2.0", "id": 1, "method": "getHealth"}).to_string())
-                .ok()
-                .and_then(|mut r| r.body_mut().read_to_string().ok())
-                .is_some_and(|b| b.contains("healthy"));
-            let upgraded = container.is_none_or(|c| {
-                Command::new("docker")
-                    .args(["logs", c])
-                    .output()
-                    .is_ok_and(|o| {
-                        String::from_utf8_lossy(&o.stdout).contains("soroban config done")
-                    })
-            });
-            let probe = stellar::account_strkey(&pk(&seeded(250)));
-            if healthy && upgraded && self.fund(&probe).is_ok() {
-                return;
-            }
-        }
-    }
-
-    fn fund(&self, account: &str) -> Result<(), String> {
-        let mut response = http()
-            .get(format!("{}/friendbot?addr={account}", self.base))
-            .call()
-            .map_err(|e| e.to_string())?;
-        let body = response.body_mut().read_to_string().unwrap_or_default();
-        if response.status().is_success() {
-            Ok(())
-        } else {
-            Err(body)
-        }
-    }
-}
-
-impl Drop for Quickstart {
-    fn drop(&mut self) {
-        if let Some(name) = &self.container {
-            let _ = Command::new("docker")
-                .args(["rm", "-f", name])
-                .stdout(std::process::Stdio::null())
-                .status();
-        }
-    }
-}
-
-fn http() -> ureq::Agent {
-    ureq::Agent::config_builder()
-        .http_status_as_error(false)
-        .timeout_global(Some(Duration::from_mins(1)))
-        .build()
-        .into()
-}
-
-// ---------------------------------------------------------------------------
-// Setup transactions, sent directly with the account's own key
-
-fn tx(
-    source: &[u8; 32],
-    seq: i64,
-    fee: u32,
-    body: OperationBody,
-    ext: TransactionExt,
-) -> Transaction {
-    Transaction {
-        source_account: MuxedAccount::Ed25519(Uint256(*source)),
-        fee,
-        seq_num: SequenceNumber(seq),
-        cond: Preconditions::None,
-        memo: Memo::None,
-        operations: vec![Operation {
-            source_account: None,
-            body,
-        }]
-        .try_into()
-        .unwrap(),
-        ext,
-    }
-}
-
-fn sign_and_send(rpc: &HttpRpc, key: &SigningKey, tx: Transaction) {
-    let mut envelope = TransactionEnvelope::Tx(TransactionV1Envelope {
-        tx,
-        signatures: Vec::new().try_into().unwrap(),
-    });
-    let hash = envelope.hash(network_id()).unwrap();
-    let sig = key.sign(&hash).to_bytes();
-    let TransactionEnvelope::Tx(v1) = &mut envelope else {
-        unreachable!()
-    };
-    v1.signatures = vec![stellar::decorated_signature(&pk(key), &sig)]
-        .try_into()
-        .unwrap();
-    let sent = rpc.send(&envelope).expect("sendTransaction answers");
-    assert!(
-        matches!(sent, Send::Pending),
-        "setup transaction refused: {sent:?}"
-    );
-    let deadline = Instant::now() + Duration::from_mins(1);
-    loop {
-        assert!(Instant::now() < deadline, "setup transaction never landed");
-        std::thread::sleep(Duration::from_millis(500));
-        match rpc.transaction(&hash).expect("getTransaction answers") {
-            Lookup::Success => return,
-            Lookup::Failed => panic!("setup transaction failed"),
-            Lookup::NotFound { .. } => {}
-        }
-    }
+    .expect("the local network starts")
 }
 
 fn sequence(rpc: &HttpRpc, account: &[u8; 32]) -> i64 {
-    rpc.account(account)
-        .expect("getLedgerEntries answers")
-        .expect("account exists")
-        .seq_num
-        .0
-}
-
-/// Make `channel` a relay channel: master weight 0, `custody` the only
-/// signer.
-fn hand_to_custody(rpc: &HttpRpc, channel: &SigningKey, custody: &[u8; 32]) {
-    let op = OperationBody::SetOptions(SetOptionsOp {
-        inflation_dest: None,
-        clear_flags: None,
-        set_flags: None,
-        master_weight: Some(0),
-        low_threshold: None,
-        med_threshold: None,
-        high_threshold: None,
-        home_domain: None,
-        signer: Some(Signer {
-            key: SignerKey::Ed25519(Uint256(*custody)),
-            weight: 1,
-        }),
-    });
-    let seq = sequence(rpc, &pk(channel)) + 1;
-    sign_and_send(
-        rpc,
-        channel,
-        tx(&pk(channel), seq, 100, op, TransactionExt::V0),
-    );
+    local::sequence(rpc, account).expect("the account exists")
 }
 
 /// Run `func` with `key`'s account as source, using the recorded
-/// authorization (source-account credentials for that account). An `Err` is
-/// the simulation's error.
+/// authorization. An `Err` is the simulation's error.
 fn invoke_as(rpc: &HttpRpc, key: &SigningKey, func: &HostFunction) -> Result<(), String> {
-    let seq = sequence(rpc, &pk(key)) + 1;
-    let body = |auth: Vec<SorobanAuthorizationEntry>| {
-        OperationBody::InvokeHostFunction(InvokeHostFunctionOp {
-            host_function: func.clone(),
-            auth: auth.try_into().unwrap(),
-        })
-    };
-    let draft = TransactionEnvelope::Tx(TransactionV1Envelope {
-        tx: tx(&pk(key), seq, 100, body(Vec::new()), TransactionExt::V0),
-        signatures: Vec::new().try_into().unwrap(),
-    });
-    let sim = rpc
-        .simulate(&draft, AuthMode::Record)
-        .expect("simulateTransaction answers")
-        .outcome?;
-    let mut data = sim.transaction_data;
-    data.resource_fee = sim.min_resource_fee;
-    let fee = 100 + u32::try_from(sim.min_resource_fee).unwrap();
-    sign_and_send(
-        rpc,
-        key,
-        tx(&pk(key), seq, fee, body(sim.auth), TransactionExt::V1(data)),
-    );
-    Ok(())
-}
-
-fn contract_id(preimage: ContractIdPreimage) -> String {
-    let preimage = HashIdPreimage::ContractId(HashIdPreimageContractId {
-        network_id: Hash(network_id()),
-        contract_id_preimage: preimage,
-    });
-    let id: [u8; 32] = Sha256::digest(preimage.to_xdr(Limits::none()).unwrap()).into();
-    stellar_strkey::Contract(id).to_string()
+    local::invoke(rpc, key, func, None).map(|_| ())
 }
 
 fn forwarder_wasm() -> Vec<u8> {
@@ -491,7 +249,7 @@ impl<K: KeyKeeper> KeyKeeper for Counting<K> {
 #[allow(clippy::too_many_lines)]
 fn relays_allowed_calls_to_confirmation_and_never_signs_denied_ones() {
     let wasm = forwarder_wasm();
-    let net = Quickstart::start();
+    let net = network();
     let rpc = HttpRpc::new(net.rpc_url());
 
     let custody = seeded(7);
@@ -504,7 +262,7 @@ fn relays_allowed_calls_to_confirmation_and_never_signs_denied_ones() {
             .expect("friendbot funds");
     }
     for c in &channels {
-        hand_to_custody(&rpc, c, &pk(&custody));
+        hand_to_custody(&rpc, c, &pk(&custody)).expect("the channel is handed over");
     }
 
     // The native asset contract and the forwarder.

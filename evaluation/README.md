@@ -1,9 +1,9 @@
 # Evaluation
 
-Agent workloads and an attack suite run against two of the boundaries that
-enforce attenuating grants, with the cost, throughput and clean-failure
-measurements the paper reports, and the Lean cost bound checked against
-measured Soroban CPU instruction counts:
+Agent workloads and an attack suite run against the boundaries that enforce
+attenuating grants, with the cost, throughput and clean-failure measurements
+the paper reports, and the Lean cost bound checked against measured Soroban
+CPU instruction counts:
 
 - **The Soroban boundary, in simulation**: the grant signer
   (`contracts/grant-signer`) as the delegated signer of a Perch account minted
@@ -16,9 +16,13 @@ measured Soroban CPU instruction counts:
   host that is an agent's only path to files, the network and the key keeper.
 - **The Lean model** (`formal/`): the step-counting chain evaluator and its
   proven bound, evaluated on every grant and action the simulation measures.
+- **The relay on a local Stellar network** (`crates/grant-relay`): the same
+  account and grant signer deployed on a private single-node network
+  (`stellar/quickstart` in local mode), every agent call sent through the
+  relay, which signs with a custody key the local Dfns mock holds and submits
+  from a pool of channel accounts.
 
-The relay and a local Stellar network are not part of this evaluation yet;
-[Not measured](#not-measured) lists what that leaves out.
+[Not measured](#not-measured) lists what the evaluation leaves out.
 
 ## Running it
 
@@ -30,8 +34,18 @@ just build-contracts
 just eval
 ```
 
-`just eval` runs `scripts/eval.sh`, which writes every file in `results/` and
-rewrites the tables under [Results](#results):
+`just eval` runs `scripts/eval.sh`, which writes every file in `results/`
+but the local network's and rewrites the tables under [Results](#results).
+The local-network stage needs Docker and the Stellar CLI, so it runs on its
+own:
+
+```sh
+just eval-network
+```
+
+`just eval-network` runs `scripts/eval-network.sh`, which writes the
+`network*` files and rewrites the same tables; `just eval` leaves those files
+as they are, and the report includes them when they are there.
 
 | Step | Command | Writes |
 | - | - | - |
@@ -41,11 +55,16 @@ rewrites the tables under [Results](#results):
 | Lean step counts | `cd formal && lake env lean --run ../evaluation/cost-bound/Steps.lean ../evaluation/results/lean-cases.json` | `lean-steps.jsonl` |
 | Agent host | `cargo run --release --manifest-path evaluation/agent-host/Cargo.toml -- --out evaluation/results` | `agent-host-workload.json`, `agent-host-attacks.json`, `agent-host-bench.json`, `agent-host-throughput.json` |
 | Report | `cargo run -p nido-evaluation -- report --results evaluation/results --readme evaluation/README.md` | `cost-bound.json` and `.csv`, the tables below |
+| The local network's fixtures and contracts (`eval-network.sh`) | the three fixtures as the dApp above; `scripts/local-stack.sh $(cargo run -p nido-evaluation -- local-registry)` | `target/eval-fixtures/…`, `target/eval-local/wasm/` |
+| Local network (`eval-network.sh`) | `cargo run --release -p nido-evaluation -- network --fixtures target/eval-fixtures/wasm32v1-none/release --local-stack target/eval-local/wasm --out evaluation/results` | `network.json`, `network-attacks.json`, `network-workloads.json`, `network-race.json`, `network-throughput.json` |
 
 Soroban CPU instructions and memory bytes are the host's metered costs, so
 they are the same on every machine and every run. Agent-host times are wall
 clock, from one recorded run whose method and conditions
-`agent-host-bench.json` records (see [Agent host](#agent-host)).
+`agent-host-bench.json` records (see [Agent host](#agent-host)). Local-network
+times are wall clock from one recorded run, on the machine `machine.json`
+names, with the network in Docker on the same machine (see
+[The local network](#the-local-network)).
 
 Every number under [Results](#results) is generated from a file in
 `results/`, and every file there is written by one of the commands above.
@@ -125,6 +144,9 @@ account's revision, document hash and pending upgrade. A refusal passes only
 if the two snapshots are equal. Control rows are allowed calls of the same
 shape as the attack next to them.
 
+The Soroban column's attempts also run on the local network, through the
+relay ([The local network](#the-local-network)).
+
 | Category | At the Soroban boundary | At the agent host |
 | - | - | - |
 | Self-escalation | `issue`, `refill` and `rotate` on the grant signer, through the account and as the grant signer; the account's `apply_doc`, `execute` and `schedule_upgrade`; an agent call through the owner's admin rule; delegating from a parent's grant, from a grant not held, or with a forged parent signature; documents that wrongly scope an agent rule to the account or to the grant signer | tool calls that issue, revoke or replace a grant; a sub-agent delegated a wider grant using it for files, mode, network and signing; revoked agents and their sub-agents |
@@ -135,8 +157,9 @@ shape as the attack next to them.
 ### Workloads
 
 `harness/src/workloads.rs` scripts two agent sessions with sub-agents,
-replayed in the simulation (`harness/src/soroban/workloads.rs`), each call
-one transaction through the account:
+replayed in the simulation and on the local network
+(`harness/src/soroban/workloads.rs`), each call one transaction through the
+account:
 
 - **payments**: a per-call cap of 100 and an allowance of 400, a payroll
   sub-agent pinned to one payee with an allowance of 150;
@@ -192,6 +215,93 @@ Timing (`agent_host::bench`, the method `agent-host bench` also runs):
   load average before and after. Other processes may run during it; the
   intervals and the load averages show how much that moved the result.
 
+## The local network
+
+`harness/src/network/` starts the pinned `stellar/quickstart` image in local
+mode (`grant_relay::local`, the module the relay's own end-to-end test uses)
+and deploys from wasm: the evaluation's stateless deployer
+(`fixtures/stateless-deployer`) at the address `nido-eval local-registry`
+derives; Perch's doc compiler, interpreter and spending limit through it (the
+bytes deployed on testnet); Perch's `WebAuthn` verifier; the Perch account
+`scripts/local-stack.sh` builds for this network and Nido's factory around it,
+pinned to that verifier; the grant signer; the dApp; and the attack suite's
+deployer (`fixtures/deployer`). Eight channel accounts are funded and handed
+to a custody key (master weight 0, the custody key their only signer) that
+the local Dfns mock holds; the relay signs through the Dfns client.
+
+The simulation's fixture (`harness/src/soroban/fixture.rs`) has a second
+backend on this network. The factory mints the account; the owner's passkey
+applies the same document and issues, revokes, rotates and refills grants
+through the account's `execute`, each a transaction sent from an operator
+account. The two Stellar Asset Contracts are credit assets of fresh issuers;
+Bob, Carol, the attacker and the agents' catch-all rule are contract
+addresses, which hold an asset without a trustline. The attack suite and the
+workloads run on this backend with the same attempts and the same agents. An
+agent call goes through the relay as Nido's browser client sends it: `{func,
+auth, skipWait: true}` posted to `/agents/{apiKey}/relay`, then
+`getTransaction` polled until the transaction settles. Steps that set up a
+scenario (the owner's, and a holder's delegation the scenario starts from) go
+straight to the chain.
+
+Each grant's holder is a relay agent with its own API key, in two runs on
+fresh accounts:
+
+- **Relay grant mirroring the grant.** The agent's chain grant is the
+  on-chain grant's caveats (a delegated grant stores its ancestors' caveats
+  too), written as the relay's configuration file writes them; a revoked
+  grant, or one under a revoked ancestor, has no agent. When a setup step
+  changes the grants, the relay restarts with the new configuration, as the
+  admin document's output would be redeployed.
+- **Relay grant allowing every call.** Every agent's chain grant has no
+  caveats, so every call reaches the network's simulation and the grant
+  signer.
+
+The refusing component is read from where the call stopped: the relay's own
+checks (its code, `GRANT_DENIED` or `UNAUTHORIZED`); the relay's recording or
+enforcing simulation (`SIMULATION_FAILED`, whose `details.authMode` says which
+and whose `details.error`, the network's host error with its event log, is
+read as the simulation reads the host's, `harness/src/outcome.rs`); or the
+chain, for a submitted transaction that failed, from its result and
+diagnostic events. The clean-failure snapshot is the simulation's (balances,
+every grant with its budget node, the account's revision, document hash and
+pending upgrade), read through the contracts' own views against the latest
+ledger, plus the sequence number of every channel account.
+
+Two rows are not run on the network: the grant signer's own verdict on a
+contract-creation context and on a payment to a pinned `G…` recipient, which
+call `__check_auth` directly, as only the simulation can. On the network the
+pinned recipient of `dw-type-muxed-recipient` holds a trustline for the
+budget asset: the relay's recording simulation runs the transfer without
+authorization, and without the trustline it would stop at the token before
+any account's check.
+
+### Concurrent siblings
+
+`harness/src/network/throughput.rs` (`race`), in three rounds on fresh
+accounts: a root grant with an allowance of 100, eight sub-agents delegated
+100 each with no caveats of their own, each with a transfer of 30 signed
+before the round. Eight client threads send the eight at the same instant
+through a relay with eight channels. Each relay simulation runs against the
+state before any of them lands, so the relay submits more than the root can
+pay for; the chain applies them in order. A round passes when the root's
+charge is within its allowance; the root's charge, the account's payment and
+Bob's receipt are 30 times the confirmed transfers; and each sibling's budget
+node is charged 30 if its transfer was confirmed and nothing otherwise.
+
+### Relay throughput
+
+`sweep`: one agent (a grant for `transfer` on the budget asset) sends
+transfers of 1 through relays with 1, 2, 4 and 8 channels, 15 per channel, by
+twice as many client threads as channels. A client sends its next call when
+its last one settles and retries after 20 ms when the relay answers
+`CHANNELS_BUSY`. Every transaction is built and signed before the clock
+starts. Throughput is confirmed transactions over the wall time from the
+first submission to the last settlement. The relay leases a channel until
+its transaction settles and polls RPC every 250 ms, so a channel carries at
+most one transaction per ledger; `network-throughput.json` records the
+network's ledger interval (from `getLedgers`) and every transaction's ledger.
+The relay runs in the harness's process (release build).
+
 ## Results
 
 <!-- results:begin (generated by `nido-eval report`; do not edit) -->
@@ -202,6 +312,11 @@ Timing (`agent_host::bench`, the method `agent-host bench` also runs):
 - Agent host: 31 attacks, 31 refused, 31 with state unchanged; 3 controls.
 - Cost bound: verdicts agree on every point; 96–164 CPU instructions per Lean step over the pairs ≥ 10 steps apart; least squares 99.4 (R² = 0.986); the whole check above the zero-caveat cost (972,392 instructions) is at most 8.3% of the bound priced at that constant.
 - Agent host, per check (medians): 0.30–1.01 µs through the component, 15–47x native `grant-eval`, 3.0–3.3x the host-side check without Wasm; the component compiles and instantiates in 22.0 ms.
+- Local network, relay grant mirroring the grant: 44 attacks, 44 refused (19 by the relay's own checks, the rest in its simulation), 44 with state unchanged, channel sequence numbers included; 8 controls confirmed on chain; 2 rows not run.
+- Local network, relay grant allowing every call: 44 attacks, 44 refused (0 by the relay's own checks, the rest in its simulation), 44 with state unchanged, channel sequence numbers included; 8 controls confirmed on chain; 2 rows not run.
+- On chain, the workloads' 18 confirmed transactions cost 1.09–1.12 times the CPU instructions the simulation measures for the same calls.
+- Relay throughput: 1.01 confirmed transactions per second with 1 channel, 7.65 with 8, ledgers closing every 1.0 s.
+- Concurrent siblings: in 3 rounds, the root's budget node was charged within its allowance in 3 and charges matched the confirmed transfers in 3.
 
 ### Machine and versions
 
@@ -297,6 +412,14 @@ Over 28 pairs: 99.4 CPU instructions per Lean step (least squares through the or
 | Soroban simulation | self-escalation | 16 | 16 | 16 | 0 |
 | Agent host | delegation workarounds | 21 | 21 | 21 | 3 |
 | Agent host | self-escalation | 10 | 10 | 10 | 0 |
+| Local network, relay grant mirroring the grant | allowance oversubscription | 3 | 3 | 3 | 2 |
+| Local network, relay grant mirroring the grant | delegation workarounds | 17 | 17 | 17 | 5 |
+| Local network, relay grant mirroring the grant | nested-call smuggling | 8 | 8 | 8 | 1 |
+| Local network, relay grant mirroring the grant | self-escalation | 16 | 16 | 16 | 0 |
+| Local network, relay grant allowing every call | allowance oversubscription | 3 | 3 | 3 | 2 |
+| Local network, relay grant allowing every call | delegation workarounds | 17 | 17 | 17 | 5 |
+| Local network, relay grant allowing every call | nested-call smuggling | 8 | 8 | 8 | 1 |
+| Local network, relay grant allowing every call | self-escalation | 16 | 16 | 16 | 0 |
 
 **Soroban simulation: the grant signer on a factory-minted Perch account**
 
@@ -440,6 +563,127 @@ Over 28 pairs: 99.4 CPU instructions per Lean step (least squares through the or
 | 13 | allowed | allowed | revoked research | 0 |
 | 14 | denied | denied | agent revoked | 0 |
 
+### Local network through the relay
+
+|  |  |
+| - | - |
+| machine | Apple M5 Max |
+| Docker | 29.4.0 on OrbStack, 18 CPUs, 16818024448 bytes |
+| image | stellar/quickstart@sha256:487fe637ba48c972d5be0ed8965f8df1dcbc3e8e1ee53d24d915b25b6f2b6d99 |
+| network | Standalone Network ; February 2017 |
+| protocol | 28 |
+| stellar-core | v29.0.0 |
+| Soroban RPC | 29.0.1 |
+| channel accounts | 8 |
+| mean ledger interval (s) | 1.00 |
+
+**Attack suite through the relay.** The same attempts as the simulation's, by the same agents. *Stopped at*: where the call ended, in the mirrored run / the pass-through run. *As in the simulation*: the pass-through run's refusal is the simulation's, component and error.
+
+| Attempt | Relay grant mirroring the grant | Relay grant allowing every call | Stopped at | As in the simulation | State unchanged |
+| - | - | - | - | - | - |
+| `se-issue-through-account` | account: UnvalidatedContext (#3002) | account: UnvalidatedContext (#3002) | the relay's enforcing simulation / the relay's enforcing simulation | yes | yes / yes |
+| `se-issue-as-grant-signer` | host: Error(Auth, InvalidAction): no authorization entry covers the call | host: Error(Auth, InvalidAction): no authorization entry covers the call | the relay's enforcing simulation / the relay's enforcing simulation | yes | yes / yes |
+| `se-refill-through-account` | account: UnvalidatedContext (#3002) | account: UnvalidatedContext (#3002) | the relay's enforcing simulation / the relay's enforcing simulation | yes | yes / yes |
+| `se-refill-as-grant-signer` | host: Error(Auth, InvalidAction): no authorization entry covers the call | host: Error(Auth, InvalidAction): no authorization entry covers the call | the relay's enforcing simulation / the relay's enforcing simulation | yes | yes / yes |
+| `se-rotate-through-account` | account: UnvalidatedContext (#3002) | account: UnvalidatedContext (#3002) | the relay's enforcing simulation / the relay's enforcing simulation | yes | yes / yes |
+| `se-rotate-as-grant-signer` | host: Error(Auth, InvalidAction): no authorization entry covers the call | host: Error(Auth, InvalidAction): no authorization entry covers the call | the relay's enforcing simulation / the relay's enforcing simulation | yes | yes / yes |
+| `se-account-apply_doc` | account: UnvalidatedContext (#3002) | account: UnvalidatedContext (#3002) | the relay's enforcing simulation / the relay's enforcing simulation | yes | yes / yes |
+| `se-account-execute` | account: UnvalidatedContext (#3002) | account: UnvalidatedContext (#3002) | the relay's enforcing simulation / the relay's enforcing simulation | yes | yes / yes |
+| `se-account-schedule_upgrade` | account: UnvalidatedContext (#3002) | account: UnvalidatedContext (#3002) | the relay's enforcing simulation / the relay's enforcing simulation | yes | yes / yes |
+| `se-select-admin-rule` | account: UnvalidatedContext (#3002) | account: UnvalidatedContext (#3002) | the relay's enforcing simulation / the relay's enforcing simulation | yes | yes / yes |
+| `se-delegate-from-parent` | relay: GRANT_DENIED (chain grant, supplied tree, action 0) | grant-signer: NotHolder (#3) | the relay's checks / the relay's enforcing simulation | yes | yes / yes |
+| `se-delegate-unheld` | relay: GRANT_DENIED (chain grant, supplied tree, action 0) | grant-signer: NotHolder (#3) | the relay's checks / the relay's enforcing simulation | yes | yes / yes |
+| `se-delegate-forged-signature` | relay: GRANT_DENIED (chain grant, supplied tree, action 0) | grant-signer: Error(Crypto, InvalidInput): holder signature does not verify | the relay's checks / the relay's enforcing simulation | yes | yes / yes |
+| `se-account-execute-agent-rule-on-account` | grant-signer: AccountCall (#4) | grant-signer: AccountCall (#4) | the relay's enforcing simulation / the relay's enforcing simulation | yes | yes / yes |
+| `se-account-schedule_upgrade-agent-rule-on-account` | grant-signer: AccountCall (#4) | grant-signer: AccountCall (#4) | the relay's enforcing simulation / the relay's enforcing simulation | yes | yes / yes |
+| `se-refill-agent-rule-on-grant-signer` | host: Error(Context, InvalidAction): contract re-entry | host: Error(Context, InvalidAction): contract re-entry | the relay's enforcing simulation / the relay's enforcing simulation | yes | yes / yes |
+| `ns-transfer-at-depth-2` | relay: GRANT_DENIED (chain grant, supplied tree, action 2) | grant-signer: NotAllowed (#6) | the relay's checks / the relay's enforcing simulation | yes | yes / yes |
+| `ns-transfer-at-depth-3` | relay: GRANT_DENIED (chain grant, supplied tree, action 3) | grant-signer: NotAllowed (#6) | the relay's checks / the relay's enforcing simulation | yes | yes / yes |
+| `ns-transfer-at-depth-4` | relay: GRANT_DENIED (chain grant, supplied tree, action 4) | grant-signer: NotAllowed (#6) | the relay's checks / the relay's enforcing simulation | yes | yes / yes |
+| `ns-transfer-at-depth-5` | relay: GRANT_DENIED (chain grant, supplied tree, action 5) | grant-signer: NotAllowed (#6) | the relay's checks / the relay's enforcing simulation | yes | yes / yes |
+| `ns-forward-other-token` | relay: GRANT_DENIED (chain grant, supplied tree, action 2) | grant-signer: NotAllowed (#6) | the relay's checks / the relay's enforcing simulation | yes | yes / yes |
+| `ns-forward-transfer-left-out-of-tree` | host: Error(Auth, InvalidAction): no authorization entry covers the call | host: Error(Auth, InvalidAction): no authorization entry covers the call | the relay's enforcing simulation / the relay's enforcing simulation | yes | yes / yes |
+| `ns-control-transfer-at-depth-3` | allowed (control) | allowed (control) | confirmed on chain / confirmed on chain | yes | – / – |
+| `ns-transfer-at-depth-3-left-out-of-tree` | host: Error(Auth, InvalidAction): no authorization entry covers the call | host: Error(Auth, InvalidAction): no authorization entry covers the call | the relay's enforcing simulation / the relay's enforcing simulation | yes | yes / yes |
+| `ns-transfer-at-depth-4-over-allowance` | grant-signer: Overdrawn (#7) | grant-signer: Overdrawn (#7) | the relay's enforcing simulation / the relay's enforcing simulation | yes | yes / yes |
+| `dw-deploy-contract` | host: Error(Auth, InvalidAction): recording simulation: authorization asked for below the root invocation | host: Error(Auth, InvalidAction): recording simulation: authorization asked for below the root invocation | the relay's recording simulation / the relay's recording simulation | **no** | yes / yes |
+| `dw-deploy-contract-grant-signer-verdict` | not run | not run | – / – | – | – / – |
+| `dw-new-account-pinned-recipient` | relay: GRANT_DENIED (chain grant, supplied tree, action 0) | grant-signer: NotAllowed (#6) | the relay's checks / the relay's enforcing simulation | yes | yes / yes |
+| `dw-new-account-over-allowance` | grant-signer: Overdrawn (#7) | grant-signer: Overdrawn (#7) | the relay's enforcing simulation / the relay's enforcing simulation | yes | yes / yes |
+| `dw-approve-budget-asset` | grant-signer: UnmeteredCall (#5) | grant-signer: UnmeteredCall (#5) | the relay's enforcing simulation / the relay's enforcing simulation | yes | yes / yes |
+| `dw-burn-budget-asset` | grant-signer: UnmeteredCall (#5) | grant-signer: UnmeteredCall (#5) | the relay's enforcing simulation / the relay's enforcing simulation | yes | yes / yes |
+| `dw-approve-other-token` | relay: GRANT_DENIED (chain grant, supplied tree, action 0) | grant-signer: NotAllowed (#6) | the relay's checks / the relay's enforcing simulation | yes | yes / yes |
+| `dw-sub-agent-wider-recipient` | relay: GRANT_DENIED (chain grant, supplied tree, action 0) | grant-signer: NotAllowed (#6) | the relay's checks / the relay's enforcing simulation | yes | yes / yes |
+| `dw-sub-agent-wider-amount` | relay: GRANT_DENIED (chain grant, supplied tree, action 0) | grant-signer: NotAllowed (#6) | the relay's checks / the relay's enforcing simulation | yes | yes / yes |
+| `dw-type-muxed-recipient` | relay: GRANT_DENIED (chain grant, supplied tree, action 0) | grant-signer: NotAllowed (#6) | the relay's checks / the relay's enforcing simulation | yes | yes / yes |
+| `dw-type-control-pinned-recipient` | not run | not run | – / – | – | – / – |
+| `dw-type-u64-for-i128-bound` | relay: GRANT_DENIED (chain grant, supplied tree, action 0) | grant-signer: NotAllowed (#6) | the relay's checks / the relay's enforcing simulation | yes | yes / yes |
+| `dw-type-control-u64-for-i128-bound` | allowed (control) | allowed (control) | confirmed on chain / confirmed on chain | yes | – / – |
+| `dw-type-u32-for-bytes-of-its-xdr` | relay: GRANT_DENIED (chain grant, supplied tree, action 0) | grant-signer: NotAllowed (#6) | the relay's checks / the relay's enforcing simulation | yes | yes / yes |
+| `dw-type-control-u32-for-bytes-of-its-xdr` | allowed (control) | allowed (control) | confirmed on chain / confirmed on chain | yes | – / – |
+| `dw-type-string-for-symbol` | relay: GRANT_DENIED (chain grant, supplied tree, action 0) | grant-signer: NotAllowed (#6) | the relay's checks / the relay's enforcing simulation | yes | yes / yes |
+| `dw-type-control-string-for-symbol` | allowed (control) | allowed (control) | confirmed on chain / confirmed on chain | yes | – / – |
+| `dw-type-address-for-bytes-of-its-strkey` | relay: GRANT_DENIED (chain grant, supplied tree, action 0) | grant-signer: NotAllowed (#6) | the relay's checks / the relay's enforcing simulation | yes | yes / yes |
+| `dw-type-control-address-for-bytes-of-its-strkey` | allowed (control) | allowed (control) | confirmed on chain / confirmed on chain | yes | – / – |
+| `dw-revoked-grant` | relay: UNAUTHORIZED: Unknown API key | grant-signer: Revoked (#2) | the relay's checks / the relay's enforcing simulation | yes | yes / yes |
+| `dw-revoked-ancestor` | relay: UNAUTHORIZED: Unknown API key | grant-signer: Revoked (#2) | the relay's checks / the relay's enforcing simulation | yes | yes / yes |
+| `dw-rotated-old-key` | grant-signer: Error(Crypto, InvalidInput): holder signature does not verify | grant-signer: Error(Crypto, InvalidInput): holder signature does not verify | the relay's enforcing simulation / the relay's enforcing simulation | yes | yes / yes |
+| `dw-control-signed-payment` | allowed (control) | allowed (control) | confirmed on chain / confirmed on chain | yes | – / – |
+| `dw-replay-signed-payment` | host: Error(Auth, ExistingValue): the entry's nonce was already used | host: Error(Auth, ExistingValue): the entry's nonce was already used | the relay's enforcing simulation / the relay's enforcing simulation | yes | yes / yes |
+| `ao-control-first-sibling` | allowed (control) | allowed (control) | confirmed on chain / confirmed on chain | yes | – / – |
+| `ao-second-sibling-over-root` | grant-signer: Overdrawn (#7) | grant-signer: Overdrawn (#7) | the relay's enforcing simulation / the relay's enforcing simulation | yes | yes / yes |
+| `ao-child-over-own` | grant-signer: Overdrawn (#7) | grant-signer: Overdrawn (#7) | the relay's enforcing simulation / the relay's enforcing simulation | yes | yes / yes |
+| `ao-grandchild-over-exhausted-parent` | grant-signer: Overdrawn (#7) | grant-signer: Overdrawn (#7) | the relay's enforcing simulation / the relay's enforcing simulation | yes | yes / yes |
+| `ao-control-second-sibling-within-root` | allowed (control) | allowed (control) | confirmed on chain / confirmed on chain | yes | – / – |
+
+**Workloads through the relay** (each call one transaction from a channel account; *CPU instructions*: the transaction's host function as the network metered it, in the run with the mirrored grant, and the same call in the simulation)
+
+| Workload | Agent | Call | Expected | Relay grant mirroring the grant | Relay grant allowing every call | Unchanged if refused | CPU instructions on chain | In the simulation |
+| - | - | - | - | - | - | - | - | - |
+| payments | payments | transfer 50 to Bob | Allowed | allowed | allowed | – / – | 2,776,525 | 2,500,465 |
+| payments | payments | transfer 80 to Carol | Allowed | allowed | allowed | – / – | 2,772,322 | 2,501,825 |
+| payments | payments | transfer 120 to Bob | NotAllowed | relay: GRANT_DENIED (chain grant, supplied tree, action 0) | grant-signer: NotAllowed (#6) | yes / yes | – | 2,175,243 |
+| payments | payroll | transfer 60 to Bob | Allowed | allowed | allowed | – / – | 3,010,808 | 2,695,733 |
+| payments | payroll | transfer 60 to Bob | Allowed | allowed | allowed | – / – | 3,010,808 | 2,694,945 |
+| payments | payroll | transfer 60 to Bob | Overdrawn | grant-signer: Overdrawn (#7) | grant-signer: Overdrawn (#7) | yes / yes | – | 2,276,804 |
+| payments | payroll | transfer 10 to Carol | NotAllowed | relay: GRANT_DENIED (chain grant, supplied tree, action 0) | grant-signer: NotAllowed (#6) | yes / yes | – | 2,270,632 |
+| payments | payments | transfer 100 to Bob | Allowed | allowed | allowed | – / – | 2,771,465 | 2,503,124 |
+| payments | payments | transfer 100 to Bob | Overdrawn | grant-signer: Overdrawn (#7) | grant-signer: Overdrawn (#7) | yes / yes | – | 2,180,379 |
+| defi-router | router | forward 40 of Asset to Bob | Allowed | allowed | allowed | – / – | 3,672,684 | 3,327,210 |
+| defi-router | router | hop through [0, 1], 30 to Bob | Allowed | allowed | allowed | – / – | 4,575,115 | 4,196,094 |
+| defi-router | router | hop through [0, 1, 2], 20 to Carol | Allowed | allowed | allowed | – / – | 5,480,369 | 5,044,867 |
+| defi-router | swapper | forward 50 of Asset to Bob | Allowed | allowed | allowed | – / – | 4,006,202 | 3,606,282 |
+| defi-router | swapper | hop through [0, 1], 10 to Bob | NotAllowed | relay: GRANT_DENIED (chain grant, supplied tree, action 0) | grant-signer: NotAllowed (#6) | yes / yes | – | 3,578,670 |
+| defi-router | swapper | forward 60 of Asset to Bob | Overdrawn | grant-signer: Overdrawn (#7) | grant-signer: Overdrawn (#7) | yes / yes | – | 3,100,561 |
+| defi-router | swapper | forward 5 of Other to Bob | NotAllowed | relay: GRANT_DENIED (chain grant, supplied tree, action 2) | grant-signer: NotAllowed (#6) | yes / yes | – | 3,058,971 |
+| defi-router | router | forward 200 of Asset to Carol | Overdrawn | grant-signer: Overdrawn (#7) | grant-signer: Overdrawn (#7) | yes / yes | – | 2,926,102 |
+
+**Relay answer time** (ms from posting a call to the relay's answer: a refusal, or `submitted` once the transaction is signed and sent; every attack and workload call of both runs)
+
+| Stopped at | Calls | Median | 90th percentile | Largest |
+| - | - | - | - | - |
+| the relay's checks | 23 | 0.3 | 0.4 | 0.4 |
+| the relay's recording simulation | 2 | 6.8 | 6.8 | 6.8 |
+| the relay's enforcing simulation | 79 | 24.6 | 29.7 | 73.7 |
+| confirmed on chain | 34 | 38.7 | 44.9 | 60.8 |
+
+**Concurrent siblings** (8 siblings delegated 100 each from a root grant of 100, each sending a transfer of 30 at the same instant through the relay, one channel each)
+
+| Round | Confirmed | Failed on chain (grant signer) | Refused by the relay | Ledgers | Root charged | Account paid | Within allowance; charges match transfers |
+| - | - | - | - | - | - | - | - |
+| 0 | 3 | 5 (Overdrawn (#7)) | 0 | 361 | 90 of 100 | 90 | yes |
+| 1 | 3 | 5 (Overdrawn (#7)) | 0 | 381 | 90 of 100 | 90 | yes |
+| 2 | 3 | 5 (Overdrawn (#7)) | 0 | 401 | 90 of 100 | 90 | yes |
+
+**Relay throughput** (one agent's budget-asset transfers through the grant signer, 15 per channel; twice as many clients as channels, each sending its next call when the last settles, retrying after 20 ms on `CHANNELS_BUSY`; the relay polls RPC every 250 ms, clients poll the relay every 100 ms)
+
+| Channels | Clients | Confirmed | `CHANNELS_BUSY` answers | Wall s | Confirmed per second | Ledgers with one | Most in one ledger | Submit to settled, median / p90 s |
+| - | - | - | - | - | - | - | - | - |
+| 1 | 2 | 15 / 15 | 579 | 14.8 | 1.01 | 15 | 1 | 1.07 / 1.09 |
+| 2 | 4 | 30 / 30 | 1126 | 14.7 | 2.04 | 15 | 2 | 1.07 / 1.08 |
+| 4 | 8 | 60 / 60 | 2402 | 15.3 | 3.91 | 15 | 4 | 1.07 / 1.09 |
+| 8 | 16 | 120 / 120 | 4871 | 15.7 | 7.65 | 15 | 8 | 1.08 / 1.11 |
+
 ### Agent host: cost per check and throughput
 
 One recorded run (`agent-host-bench.json`, `agent-host-throughput.json`). Build: release with overflow checks, `aarch64-macos`. Scheduling: the timing thread asked for `QOS_CLASS_USER_INTERACTIVE` (granted); macOS cannot pin a thread to a core. Every operation is warmed up for 200 ms and timed in batches of at least 2 ms. Check cases: 101 interleaved rounds, the variants' order rotating each round; ratios are taken within a round. Each cell is the median with its 95% confidence interval.
@@ -530,46 +774,110 @@ Compiling and instantiating the component: 22.0 (21.9–22.2) ms over 21 runs.
   Delegating from a grant the agent does not hold is the grant signer's
   (`NotHolder`, or a failed holder signature).
 
+- **Defect fixed: the relay paid exactly the simulated resource fee.** On
+  the local network, the payroll sub-agent's second payment, sent a ledger
+  after its first, failed on chain with `INSUFFICIENT_REFUNDABLE_FEE`
+  ("refundable resource fee was not sufficient to cover the events fee after
+  paying for ledger storage rent"), and its channel paid the fee and used a
+  sequence number. The grant signer extends every grant it
+  writes to the maximum TTL, so the rent of a write grows with every ledger
+  since the grant's last write, and the transaction landed a ledger later
+  than its simulation priced. The relay declares the simulated minimum
+  plus `resource_fee_margin_percent` of it (20 by default), within
+  `max_fee`; the refundable part not used is refunded. The regression tests
+  are `tests/relay.rs::an_allowed_transfer_is_signed_submitted_and_confirmed`
+  (the declared fee) and `the_resource_fee_margin_stays_within_the_cap`; on
+  the network every workload call meets its expectation in both runs.
+- **The relay's own checks refuse what its grant covers; budgets, account
+  rules and signatures are the chain's.** With relay grants mirroring the
+  grants, 19 of the 44 attacks stop at the relay's checks, before anything
+  is leased, simulated or signed (the relay answer time table). The others
+  pass them and are refused in the relay's enforcing simulation by the
+  component that refuses them in the simulation: the relay has no budget,
+  rule-selection or holder-signature vocabulary. A revoked grant has no relay
+  agent, so its holder is refused as an unknown API key.
+- **With every call let through to the chain, the chain refuses what the
+  simulation refuses.** Every attack the network runs is refused by the same
+  component with the same error as in the simulation, except
+  `dw-deploy-contract`.
+- **The relay cannot submit a call whose first authorization is asked for
+  below its root invocation.** Soroban RPC's recording simulation, which the
+  relay runs on every call (its step 6), records authorization only for the
+  root invocation, and the attack suite's deployer asks for the account's
+  authorization in a call it makes. The attempt is refused by the host in
+  that simulation, before the account's rule check, so on the network the
+  account's own refusal of it is not exercised; and a dApp whose entry point
+  asks for an account's authorization only in a nested call cannot be used
+  through the relay at all.
+- **Concurrent siblings oversubscribe the relay, not the allowance.** Every
+  sibling's relay simulation reads the ledger before any of them lands, so
+  all eight are signed and submitted; on chain the grant signer charges each
+  transfer to the whole lineage atomically and refuses the ones past the
+  root's allowance (`Overdrawn` in the failed transactions' diagnostic
+  events). The root was charged 90 of 100 in every round, and each sibling
+  exactly what its confirmed transfer moved. The refused transactions cost
+  their channels the fee and a sequence number; a relay with no budget
+  vocabulary cannot keep a race from costing fees, only the grant signer
+  keeps it from costing the allowance.
+- **Relay throughput is one transaction per channel per ledger.** A channel
+  is leased until its transaction settles, so confirmed transactions per
+  second follow the number of channels over the ledger interval: at every
+  pool size the confirmed transactions spread over the same number of
+  ledgers, each holding one per channel.
+- **On chain the same calls cost more CPU instructions than in the
+  simulation** (the ratio is in [Summary](#summary)). The network runs
+  stellar-core v29.0.0 at protocol 28 and the Perch account built for it
+  (another `stateless.id`, so other wasm); the simulation runs
+  `soroban-env-host` 27.0.1 and the testnet account's wasm. Which of these
+  accounts for the difference is not measured.
+- **The local network's RPC server answers some requests from a ledger it
+  has not finished reading** (`setting ContractComputeV0 is not present in
+  the snapshot`, `could not query captive core`). The relay passes the first
+  to its client as `SIMULATION_FAILED`, a refusal the call did not earn. The
+  harness sends such requests again (`grant_relay::local::transient`) and
+  records each resubmission in the reply's `rpc_retries`.
+
 ## Not measured
 
-Not measured in this change:
-
-- **The local Stellar network**: the Perch stack, a factory-minted account and
-  its grant signer deployed on `stellar/quickstart` in local mode with Soroban
-  RPC. `scripts/local-stack.sh` builds the Perch account for such a network:
-  the account source at the submodule's commit with `stateless.id` set to the
-  evaluation's stateless deployer (`fixtures/stateless-deployer`, at the
-  address `nido-eval local-registry` derives), and Nido's factory around that
-  account. `just eval` does not run it.
-- **The relay**: the workloads and the attack suite sent through
-  `crates/grant-relay`, with the relay's grant mirroring the on-chain grant
-  and with a relay grant that lets every call through to the grant signer.
-- **Relay throughput** against the size of the channel-account swarm.
-- **The concurrent overspend race**: sibling spends past an ancestor's
-  allowance submitted at once through the channel swarm. The simulation runs
-  sibling spends one after another.
-- **Channel sequence numbers** in the clean-failure checks.
-- **Instruction counts from a network's simulation**, against this host's.
-- **The agent host signing for a transaction on chain**: the host now signs
-  the delegated preimage; that its signature authorizes a call through the
-  grant signer is not exercised.
+- **Public networks**: the relay on testnet or mainnet, with other traffic,
+  ledger limits or ledgers slower than the local network's one second.
+  `testnet-channel/` checks channel signing on testnet only.
+- **Real Dfns**: the custody key is in the local Dfns mock.
+- **More than eight channels**, or several agents sharing the pool.
+- **The cost sweeps on chain**: the network meters CPU instructions only for
+  submitted transactions, and the evaluation records them for the workloads'
+  confirmed calls; a refused call is never submitted.
+- **The grant signer's own verdict on the network** for the two rows that
+  call `__check_auth` directly.
+- **The agent host signing for a transaction on chain**: the host signs the
+  delegated preimage; that its signature authorizes a call through the grant
+  signer is not exercised.
 
 ## Stated, not proven
 
 - That the deployed evaluator's work is proportional to the Lean step count.
   The fit and the ratios to the bound are measurements on the points above;
   `formal/` proves the bound only for the counted Lean evaluator.
-- That the simulation's costs are the network's: the simulation runs
-  `soroban-env-host` 27.0.1 (`machine.json`), the crate a network built from
-  that version runs; no network was measured.
+- That the simulation's costs track the network's beyond the calls compared:
+  only the workloads' confirmed calls were metered on chain, by one network
+  version.
 - That the evaluator's actions are what the grant signer sees: the Lean cases
   map contexts with `grant_relay::actions`, which the grant signer's mapping
   is tested to agree with on every argument type
   (`grant_signer::the_account_and_the_relay_map_actions_alike`); on every
   measured point the contract, the native evaluator and Lean agree.
 - That a refusal changes nothing beyond what the snapshots read: they cover
-  the balances, grants and account configuration listed above, not every
-  ledger entry.
+  the balances, grants and account configuration listed above and, on the
+  network, the channels' sequence numbers; not the channels' balances or
+  every ledger entry.
+- That the local network's times hold beyond the recorded run: they are one
+  run of a single-node network closing a ledger every second, in Docker on
+  the machine `network.json` names, with the relay in the same process as
+  its clients.
+- That a relay deployment keeps its agents' grants in step with the chain's:
+  the evaluation writes the relay's configuration from the grants it reads
+  on chain and restarts the relay when they change; the relay itself has no
+  link to the grant signer.
 - That the agent host's absolute times hold beyond the recorded run: they are
   one run on the machine and under the conditions it records; the ratios
   between variants, taken within each round, depend less on those

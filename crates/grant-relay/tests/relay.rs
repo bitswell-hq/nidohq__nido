@@ -37,9 +37,10 @@ fn an_allowed_transfer_is_signed_submitted_and_confirmed() {
     assert_eq!(seq, 101, "the channel's ledger sequence plus one");
     assert_eq!(
         fee(&sent[0]),
-        100 + 5_000,
-        "inclusion fee plus resource fee"
+        100 + 6_000,
+        "inclusion fee plus resource fee, with its 20% margin"
     );
+    assert_eq!(resource_fee(&sent[0]), 6_000);
     assert_eq!(net.simulations(), vec![AuthMode::Record, AuthMode::Enforce]);
     wait_idle(&relay);
 }
@@ -250,7 +251,11 @@ fn a_call_that_needs_the_channel_accounts_authorization_is_never_signed() {
 
 /// A failure after the lease: nothing sent (or nothing that can land),
 /// the channel freed, its sequence number unchanged.
-fn assert_fails_safely(net: &FakeNetwork, code: &str, keeper_calls: usize) {
+fn assert_fails_safely(
+    net: &FakeNetwork,
+    code: &str,
+    keeper_calls: usize,
+) -> grant_relay::RelayError {
     let (relay, keeper) = relay(net);
     let before: Vec<i64> = channels().iter().map(|c| net.sequence(c)).collect();
     let (func, auth) = transfer(5);
@@ -262,20 +267,23 @@ fn assert_fails_safely(net: &FakeNetwork, code: &str, keeper_calls: usize) {
     assert_eq!(relay.pool().in_use(), 0, "the channel was freed");
     let after: Vec<i64> = channels().iter().map(|c| net.sequence(c)).collect();
     assert_eq!(before, after, "no sequence number was used");
+    err
 }
 
 #[test]
 fn a_failed_recording_simulation_fails_safely() {
     let net = FakeNetwork::new();
     net.fail_record("HostError: Error(WasmVm, InvalidAction)");
-    assert_fails_safely(&net, "SIMULATION_FAILED", 0);
+    let err = assert_fails_safely(&net, "SIMULATION_FAILED", 0);
+    assert_eq!(err.details["authMode"], "record");
 }
 
 #[test]
 fn a_failed_enforcing_simulation_fails_safely() {
     let net = FakeNetwork::new();
     net.fail_enforce("HostError: Error(Auth, InvalidAction)");
-    assert_fails_safely(&net, "SIMULATION_FAILED", 0);
+    let err = assert_fails_safely(&net, "SIMULATION_FAILED", 0);
+    assert_eq!(err.details["authMode"], "enforce");
 }
 
 #[test]
@@ -283,6 +291,23 @@ fn an_unreachable_rpc_fails_safely() {
     let net = FakeNetwork::new();
     net.set_rpc_down(true);
     assert_fails_safely(&net, "RPC_UNAVAILABLE", 0);
+}
+
+#[test]
+fn the_resource_fee_margin_stays_within_the_cap() {
+    let net = FakeNetwork::new();
+    net.set_min_resource_fee(9_000_000);
+    let (relay, _) = relay(&net);
+    let (func, auth) = transfer(5);
+    relay.handle(Some(PAYER), submit(func, auth, true)).unwrap();
+    let sent = net.sent();
+    assert_eq!(
+        fee(&sent[0]),
+        10_000_000,
+        "the cap, not the minimum plus 20%"
+    );
+    assert_eq!(resource_fee(&sent[0]), 10_000_000 - 100);
+    wait_idle(&relay);
 }
 
 #[test]

@@ -262,7 +262,7 @@ where
             )
             .map_err(|e| RelayError::rpc(&e))?
             .outcome
-            .map_err(|e| simulation_failed(&e))?;
+            .map_err(|e| simulation_failed(&e, AuthMode::Record))?;
         let mut recorded_actions = Vec::new();
         for entry in &recorded.auth {
             if matches!(entry.credentials, SorobanCredentials::SourceAccount) {
@@ -283,13 +283,15 @@ where
                 AuthMode::Enforce,
             )
             .map_err(|e| RelayError::rpc(&e))?;
-        let simulated = simulation.outcome.map_err(|e| simulation_failed(&e))?;
+        let simulated = simulation
+            .outcome
+            .map_err(|e| simulation_failed(&e, AuthMode::Enforce))?;
         check_expiry(
             &auth,
             simulation.latest_ledger,
             config.min_auth_expiry_ledgers,
         )?;
-        let fee = i64::from(config.inclusion_fee)
+        let minimum = i64::from(config.inclusion_fee)
             .checked_add(simulated.min_resource_fee)
             .and_then(|f| u32::try_from(f).ok())
             .filter(|f| *f <= config.max_fee)
@@ -303,8 +305,20 @@ where
                     ),
                 )
             })?;
+        // The declared resource fee is the simulated minimum plus a margin,
+        // within `max_fee`. Rent depends on the ledger the transaction lands
+        // in (a contract that extends an entry's TTL to the maximum on every
+        // write pays rent for every ledger since the last write), so the
+        // minimum at simulation can fall short a ledger later; the
+        // refundable part not used is refunded.
+        let margin = u64::try_from(simulated.min_resource_fee).unwrap_or(0)
+            * u64::from(config.resource_fee_margin_percent)
+            / 100;
+        let fee = u32::try_from(u64::from(minimum) + margin)
+            .unwrap_or(u32::MAX)
+            .min(config.max_fee);
         let mut data = simulated.transaction_data;
-        data.resource_fee = simulated.min_resource_fee;
+        data.resource_fee = i64::from(fee - config.inclusion_fee);
         let mut envelope = draft(auth, fee, TransactionExt::V1(data))?;
 
         let hash = self.sign(&mut envelope)?;
@@ -594,9 +608,15 @@ fn signature_expiration(entry: &SorobanAuthorizationEntry) -> Option<u32> {
     }
 }
 
-fn simulation_failed(error: &str) -> RelayError {
+/// `SIMULATION_FAILED`, with the host's error and the simulation's
+/// `authMode`: `record` (step 6) or `enforce` (step 7).
+fn simulation_failed(error: &str, mode: AuthMode) -> RelayError {
+    let mode = match mode {
+        AuthMode::Record => "record",
+        AuthMode::Enforce => "enforce",
+    };
     RelayError::new(400, "SIMULATION_FAILED", "Simulation failed")
-        .with_details(json!({ "error": error }))
+        .with_details(json!({ "error": error, "authMode": mode }))
 }
 
 /// An unsigned single-operation `InvokeHostFunction` transaction from

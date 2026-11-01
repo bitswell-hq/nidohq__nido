@@ -147,7 +147,13 @@ impl HttpRpc {
         }
     }
 
-    fn call(&self, method: &str, params: &Value) -> Result<Value, RpcError> {
+    /// Call JSON-RPC `method` with `params`, returning its `result`.
+    ///
+    /// # Errors
+    ///
+    /// [`RpcError`] when the server gives no usable answer or answers with
+    /// an error.
+    pub fn call(&self, method: &str, params: &Value) -> Result<Value, RpcError> {
         let body = json!({ "jsonrpc": "2.0", "id": 1, "method": method, "params": params });
         let mut response = self
             .agent
