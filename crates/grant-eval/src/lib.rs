@@ -17,13 +17,15 @@
 //! invocations and contract creation), [`files`], [`network`] and
 //! [`signing`]. Each defines its action and caveat types and its own
 //! `allows` / `allows_all`. [`budget`] holds the allowances along the
-//! delegation tree and the transactional spend that charges them.
+//! delegation tree, the transactional spend that charges them, and the
+//! append that grows the tree.
 //!
 //! The code is written in a restricted Rust subset so Charon and Aeneas can
 //! translate it to Lean: plain structs and enums, `while` loops over bounds
 //! checked indices, no closures, iterator adaptors, trait objects, `unsafe`
-//! or derived equality, and no operation that can panic. `README.md` lists
-//! the rules and the trusted base.
+//! or derived equality, and no operation that can panic other than the
+//! allocation in [`budget::append`]. `README.md` lists the rules and the
+//! trusted base.
 #![no_std]
 #![forbid(unsafe_code)]
 

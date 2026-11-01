@@ -12,7 +12,14 @@
 //! the node a refill request goes to. [`refill`] raises one node's allowance
 //! and is an admin-document action, never an agent's.
 //!
+//! The tree grows by [`append`]: delegating a grant adds a node under the
+//! delegator's, with any allowance, and issuing a new root grant (an
+//! admin-document action) adds a node with no parent. A new node has nothing
+//! spent and the next index, so parents still precede their children.
+//!
 //! The readable Lean model is `formal/AttenuatingGrants/Budget.lean`.
+
+use alloc::vec::Vec;
 
 /// One grant's allowance.
 pub struct Node {
@@ -39,6 +46,12 @@ pub enum RefillError {
     NoSuchNode(usize),
     /// The raised allowance would not fit in a `u128`.
     Overflow(usize),
+}
+
+/// Why an append failed. The ledger is unchanged.
+pub enum AppendError {
+    /// No node has the parent's index.
+    NoSuchNode(usize),
 }
 
 /// Whether `node` can take `amount`: `spent + amount` exists and is at most
@@ -138,4 +151,34 @@ pub fn refill(ledger: &mut [Node], node: usize, extra: u128) -> Result<(), Refil
         }
         None => Err(RefillError::Overflow(node)),
     }
+}
+
+/// Add a node with `allowance` and nothing spent under `parent`, or as a new
+/// root for `None`, and return its index. The allowance may exceed the
+/// parent's: delegation can oversubscribe.
+///
+/// `Vec::push` allocates, and a failed allocation aborts; every other path
+/// returns.
+///
+/// # Errors
+///
+/// [`AppendError::NoSuchNode`] if `parent` is out of range. The ledger is
+/// then unchanged.
+pub fn append(
+    ledger: &mut Vec<Node>,
+    parent: Option<usize>,
+    allowance: u128,
+) -> Result<usize, AppendError> {
+    let index = ledger.len();
+    if let Some(p) = parent {
+        if p >= index {
+            return Err(AppendError::NoSuchNode(p));
+        }
+    }
+    ledger.push(Node {
+        parent,
+        allowance,
+        spent: 0,
+    });
+    Ok(index)
 }

@@ -150,7 +150,11 @@ The Rust evaluator is total too: for every input, the Lean translation of
 each vocabulary's `allows` and `allows_all` returns `ok`, never a failure
 (panic, overflow, out-of-bounds index) or divergence
 (`V.extracted_allows`, `V.extracted_allowsAll`; see
-[Extracted evaluator](#extracted-evaluator)).
+[Extracted evaluator](#extracted-evaluator)). So is the budget code:
+`check_spend`, `spend` and `refill` return `ok` on every ledger, and `append`
+on every ledger below `Usize.max` nodes (`Budget.extracted_check_spend`,
+`extracted_spend`, `extracted_refill`, `extracted_append`; see
+[Budgets](#budgets)).
 
 The cost bound is stated and proven over the step-counting evaluators
 described in [Cost model](#cost-model). For each vocabulary `V`:
@@ -222,12 +226,14 @@ delegation tree. The ledger is a list of nodes, one per grant:
 | `Ledger.walk`, `Ledger.chargePath` | walk from the spender to its root, failing at the first node that cannot take the amount, a missing node, or a parent link that does not point to an earlier node |
 | `Ledger.spend l i amount` | one transaction: the outcome and the ledger after it; success charges every node on the chain, failure returns `l` with `.overdrawn a`, `.noSuchNode a` or `.badParent a` |
 | `Ledger.refill l i extra` | raise node `i`'s allowance by `extra`; fails past `amountMax`; an admin-document action, never an agent's |
-| `Ledger.run l ops` | apply a list of spends and refills; returns the final ledger and the log of successful spends |
-| `spentUnder l log a` | the total of the logged spends made at or under `a` |
+| `Ledger.append l parent allowance` | add a node with nothing spent at index `l.length`, under `parent` (delegation, with any allowance) or as a new root for `none` (an admin-document action); fails with `.noSuchNode p` if `parent = some p` and `p ≥ l.length` |
+| `Ledger.run l ops` | apply a list of spends, refills and appends; returns the final ledger and the log of successful spends |
+| `spentUnder l log a` | the total of the logged spends made at or under `a` in the tree of `l` |
+| `Ledger.ParentsFirst l` | every parent link points to an earlier node |
 
 Allowances oversubscribe: children's allowances may sum to more than their
 parent's, and nothing restricts a child's allowance relative to its
-parent's. Because a spend charges every ancestor or fails changing nothing,
+parent's, at delegation (`append`) or later. Because a spend charges every ancestor or fails changing nothing,
 spending under a node still never exceeds that node's allowance. An
 `.overdrawn a` error names the first node on the chain, counting from the
 spender, that cannot take the amount; that node is where the refill request
@@ -242,21 +248,37 @@ goes, up the delegation chain to a human approver.
 | `Ledger.spend_overdrawn` | `.overdrawn a` names a node with `l.Within i a` and `allowance < spent + amount` |
 | `Ledger.mem_walk` | the walk returns exactly the nodes `a` with `l.Within i a` |
 | `Ledger.parentOf_spend`, `parentOf_refill` | spends and refills change no parent link |
-| `Ledger.spend_withinAllowance`, `refill_withinAllowance`, `run_withinAllowance` | every node's `spent ≤ allowance` is preserved |
+| `Ledger.append_ok_iff` | `l.append p x = (.ok k, l') ↔ (∀ q, p = some q → q < l.length) ∧ k = l.length ∧ l' = l ++ [⟨p, x, 0⟩]` |
+| `Ledger.append_error` | failure: `(l.append p x).1 = .error e → (l.append p x).2 = l` |
+| `Ledger.getElem?_append_of_lt` | `j < l.length → (l.append p x).2[j]? = l[j]?` |
+| `Ledger.spend_withinAllowance`, `refill_withinAllowance`, `append_withinAllowance`, `run_withinAllowance` | every node's `spent ≤ allowance` is preserved |
 | `Ledger.spend_bounded`, `refill_bounded` | every allowance `≤ amountMax` is preserved |
-| `Ledger.spent_run` | after a run, each node's spent is its starting spent plus `spentUnder` |
-| `Ledger.spentUnder_le_allowance` | from a ledger with nothing spent, after any run, `spentUnder l log a ≤` node `a`'s allowance |
+| `Ledger.append_bounded` | `l.Bounded → x ≤ amountMax → (l.append p x).2.Bounded` |
+| `Ledger.spend_parentsFirst`, `refill_parentsFirst`, `append_parentsFirst`, `run_parentsFirst` | `ParentsFirst` is preserved |
+| `Ledger.run_extends` | a run keeps every node and every existing node's parent link |
+| `Ledger.parentOf_run`, `spentUnder_run` | a run without appends changes no parent link, so `spentUnder` over its final ledger is `spentUnder` over its starting one |
+| `Ledger.within_of_walk` | a successful walk's chain is the same in every ledger that keeps the walked ledger's parent links |
+| `Ledger.spent_run` | after a run, each node's spent is its starting spent (`0` for an appended node) plus `spentUnder` over the final ledger |
+| `Ledger.spentUnder_le_allowance` | from a ledger with nothing spent, after any run, `spentUnder l' log a ≤` node `a`'s allowance, where `(l', log) = l.run ops` |
 
 `spentUnder_le_allowance` has no hypothesis on the allowances, so it holds
-however much a node's children oversubscribe it. Two `example`s at the end of
-the module check the oversubscribed-siblings case by `rfl`: a root of 10 with
-two children of 8 each; after the first child spends 8, the second child's
-spend of 3 fails as `.overdrawn 0`, and its spend of 2 succeeds.
+however much a node's children oversubscribe it, and covers runs that append
+nodes. It measures each logged spend against the final tree: an append adds a
+node and changes no existing parent link (`run_extends`), and a successful
+spend's chain lies inside the ledger it was made on (`within_of_walk`), so a
+spend is under `a` in the final tree exactly when it charged `a`. On a run
+without appends the final tree is the starting one (`spentUnder_run`).
 
-In the model, the failure half of theorem 4 holds by the shape of `spend`:
-the error branch returns its input ledger. The Rust evaluator mutates the
-ledger in place, so there the same statement is a property of the code,
-tested and still to be proven (see below).
+`example`s at the end of the module check by `rfl`: a root of 10 with two
+children of 8 each; after the first child spends 8, the second child's spend
+of 3 fails as `.overdrawn 0`, and its spend of 2 succeeds. The first child then
+delegates 20, more than its own 8, to a new node 3, whose spend of 9 fails at
+the first child and whose spend of 8 succeeds, charging node 3, the first
+child and the root.
+
+The failure half of theorem 4 holds in the model by the shape of `spend` (the
+error branch returns its input ledger), and in the Rust code by
+`Budget.extracted_spend_error` (see [Budgets](#budgets)).
 
 **Amounts.** The model uses unbounded `Nat`; the Rust evaluator uses `u128`.
 `amountMax` is `2 ^ 128 - 1`. A refill fails when the new allowance would
@@ -349,6 +371,61 @@ evaluator, proven by induction on the elements left), `Bytes.lean`
 `isPrefix`, and `Chain.val_eq_eq` the Rust value comparison to equality of
 denoted values.
 
+### Budgets
+
+`Equiv/Budget.lean` relates `grant_eval::budget` to `Budget.lean`.
+`denoteLedger` maps each Rust node to `⟨parent.map val, allowance.val,
+spent.val⟩`; it is injective (`denoteLedger_injective`), so the denotation of
+a returned ledger determines it. Every Rust ledger denotes a model ledger
+whose fields fit in `u128`, so the theorems hold for every Rust ledger, with
+`L = denoteLedger s.val`:
+
+| Lean name | Statement |
+|---|---|
+| `Budget.extracted_check_spend` | `check_spend s i x = ok r` with `r` denoting `(L.chargePath i x).map (fun _ => ())` |
+| `Budget.extracted_spend` | `spend s i x = ok (r, s')` with `denoteSpend r = (L.spend i x).1` and `denoteLedger s'.val = (L.spend i x).2` |
+| `Budget.extracted_spend_error` | `spend s i x = ok (.Err e, s') → s' = s` |
+| `Budget.extracted_refill`, `extracted_refill_error` | the same for `refill` |
+| `Budget.extracted_append` | `v.length < Usize.max →` `append v p x = ok (r, v')` with `r` and `v'` denoting `L.append (p.map val) x` |
+| `Budget.extracted_append_error` | `append v p x = ok (.Err e, v') → v' = v` |
+| `Budget.fits_eq` | `fits n x = ok (decide (n.spent.val + x.val ≤ n.allowance.val))` |
+| `Budget.check_spend_loop_eq` | the checking loop after `step` steps is `L.walk x (s.length - step)` |
+| `Budget.charge_loop_eq` | after `L.walk x fuel i = .ok path`, the charging loop returns `ok s'` with `denoteLedger s'.val = L.charge path x` |
+
+Each returns `ok` on every input (for `append`, on every vector below
+`Usize.max` nodes), so the extracted functions neither fail nor diverge. In
+particular the charging loop's plain `spent += amount` never overflows:
+`charge_loop_eq` discharges it from the walk, which found
+`spent + amount ≤ allowance ≤ u128::MAX` at each node of the path, and the
+path visits each node once. That loop follows the parent links of the ledger
+it is charging, which charging leaves unchanged, so it visits exactly the
+chain `check_spend` accepted.
+
+Budget safety restated about the extracted code:
+
+| Lean name | Statement |
+|---|---|
+| `Budget.extracted_spend_ok_charges` | `spend s i x = ok (.Ok (), s') → L.Within i a → (denoteLedger s'.val)[a]? = L[a]?.map (spent + x)` |
+| `Budget.extracted_spend_ok_unchanged` | `spend s i x = ok (.Ok (), s') → ¬ L.Within i a → s'.val[a]? = s.val[a]?` |
+| `Budget.extracted_spend_ok_length` | `spend s i x = ok (.Ok (), s') → s'.length = s.length` |
+| `Budget.extracted_spend_overdrawn` | `.Err (.Overdrawn a)` names a node with `L.Within i a` and `allowance < spent + x` |
+| `Budget.extracted_spend_withinAllowance`, `extracted_refill_withinAllowance`, `extracted_append_withinAllowance` | `∀ n ∈ s.val, n.spent.val ≤ n.allowance.val` is preserved |
+| `Budget.extracted_run` | `v.length + ops.length ≤ Usize.max →` `runExtracted v ops = ok (v', log)` with `v'` and `log` denoting `L.run (ops.map denote)` |
+| `Budget.extracted_run_withinAllowance` | the same bound, and spent within allowance at the start, keep it at the end |
+| `Budget.extracted_spentUnder_le_allowance` | the same bound, and nothing spent at the start: `runExtracted v ops = ok (v', log)` with `spentUnder (denoteLedger v'.val) log a ≤` node `a`'s allowance for every node of `v'` |
+
+`runExtracted` applies a list of `RustOp`s (spend, refill, append with Rust
+arguments) by calling the extracted functions as a Rust caller holding the
+ledger in a `Vec` does: `spend` and `refill` on the vector's slice
+(`Vec::deref_mut`), `append` on the vector. It is a Lean definition over the
+extracted functions, not extracted code.
+
+`Vec::push` is the one call in `budget` that Aeneas's model lets fail: it
+fails once a vector holds `Usize.max` elements. The append and run theorems
+assume the ledger stays below that many nodes. A real `Vec<Node>` cannot reach
+it (allocation fails long before, and a failed allocation aborts), but the
+model has no allocator, so the bound is stated rather than proven.
+
 ### Attenuation and chaining on Rust caveat slices
 
 `Extraction.Narrower allows g h` holds when every action the extracted
@@ -379,8 +456,10 @@ Proven: the Lean translation agrees with the model. Trusted, not proven:
 - **Charon and Aeneas**, that the Lean translation has the Rust code's
   semantics;
 - **Aeneas's Lean library**, its models of the Rust core and alloc items the
-  translation calls (`Slice`, `Vec` and `Vec::deref`, slice indexing and
-  `get`, `len`, checked `usize` addition, `u32 as usize`, scalar comparison);
+  translation calls (`Slice`, `Vec`, `Vec::deref`, `Vec::deref_mut`,
+  `Vec::len`, `Vec::push`, slice indexing, `get` and `get_mut`, `len`,
+  checked `usize` addition, checked and unchecked `u128` addition,
+  `u32 as usize`, scalar comparison);
 - the **Soroban SDK** and the **host wiring** that builds actions, as for the
   model.
 
@@ -399,7 +478,10 @@ Proven, and checked by `lake build`: every theorem in the tables above, the
 totality of every evaluation function, the cost bounds
 `V.AllowsCostBound` and `V.AllowsAllCostBound` for all four vocabularies, and
 the agreement of the Charon + Aeneas translation of `crates/grant-eval` with
-the model, with attenuation and chaining carried over to Rust caveat slices.
+the model, with attenuation and chaining carried over to Rust caveat slices
+and budget safety (theorem 4, spent within allowance, and total spent under a
+node within its allowance, over runs that grow the tree) carried over to the
+Rust budget code.
 
 Stated but unproven, or not yet stated:
 
@@ -411,17 +493,14 @@ Stated but unproven, or not yet stated:
   code's semantics (Charon, Aeneas and Aeneas's Lean library) and that rustc
   compiles that code faithfully are trusted, not proven
   ([Trusted base](#trusted-base)).
-- **Budget equivalence**: the extraction translates `grant_eval::budget`
-  into `Extracted/GrantEval.lean`, but the proof that the translation agrees
-  with `Budget.lean` is not in this package. That proof must show that
-  `spend` leaves the ledger unchanged on every error path, that its charging
-  walk visits exactly the chain `check_spend` accepted, and that the charging
-  addition never overflows. Until it exists, theorem 4 is about the model,
-  and the Rust budget code is tested, not proven.
-- **Growing the tree**: `Ledger.run` covers spends and refills over a fixed
-  ledger. Appending a node when a grant is delegated, and issuing a new root,
-  are not modelled, so `spentUnder_le_allowance` is not yet stated for runs
-  that add nodes.
+- **Ledger size**: the append and run theorems about the extracted code
+  assume the ledger holds fewer than `Usize.max` nodes, where Aeneas's model
+  of `Vec::push` fails ([Budgets](#budgets)). That a real ledger stays below
+  it is a property of the allocator, not proven here.
+- **Callers of the budget code**: `runExtracted` is a Lean definition of how a
+  caller sequences the extracted functions. That the deployed wiring calls
+  them that way, passes the node of the grant being spent under, and exposes
+  `refill` and root issuing only to the admin document is not proven.
 - **Ledger storage and approval**: where the ledger is stored (for example a
   Soroban contract) and how a refill request reaches its approver are outside
   this package.
