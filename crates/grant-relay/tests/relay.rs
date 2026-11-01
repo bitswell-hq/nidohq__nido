@@ -10,7 +10,8 @@ use common::*;
 use grant_relay::protocol::Status;
 use grant_relay::rpc::AuthMode;
 use stellar_xdr::{
-    CreateContractArgsV2, HostFunction, SorobanAuthorizedFunction, SorobanCredentials,
+    CreateContractArgsV2, HostFunction, Limits, ScVal, SorobanAuthorizedFunction,
+    SorobanCredentials, WriteXdr,
 };
 
 const WAIT: Duration = Duration::from_secs(5);
@@ -125,6 +126,53 @@ fn contract_creation_is_never_signed_under_a_chain_caveat() {
     });
     let err = assert_denied_before_signing(PAYER, func, vec![], "GRANT_DENIED");
     assert!(err.message.contains("deploying wasm"), "{}", err.message);
+}
+
+/// A `token.set(u32)` call whose argument the agent's grant pins with one
+/// `arg_eq` value, as written in the configuration file.
+fn set_u32_under(value: &serde_json::Value) -> (Result<Status, String>, usize) {
+    const SETTER: &str = "setter-api-key";
+    let mut json = config_json();
+    json["agents"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::json!({
+            "name": "setter",
+            "api_key_sha256": grant_relay::config::api_key_sha256(SETTER),
+            "chain": [
+                { "contract_in": [token()] },
+                { "function_in": ["set"] },
+                { "arg_eq": [0, value] }
+            ],
+            "signing": []
+        }));
+    let net = FakeNetwork::new();
+    let (relay, keeper) = relay_with(config_from(&json), &net);
+    let args = invoke_args(&token(), "set", vec![ScVal::U32(7)]);
+    let result = relay
+        .handle(
+            Some(SETTER),
+            submit(
+                HostFunction::InvokeContract(args.clone()),
+                vec![entry(call(args))],
+                false,
+            ),
+        )
+        .map(|r| r.status)
+        .map_err(|e| e.code.to_owned());
+    (result, keeper.requests())
+}
+
+#[test]
+fn a_u32_argument_never_satisfies_a_bytes_caveat_with_its_xdr() {
+    let xdr = hex::encode(ScVal::U32(7).to_xdr(Limits::none()).unwrap());
+    let (denied, signed) = set_u32_under(&serde_json::json!({ "bytes": xdr }));
+    assert_eq!(denied, Err("GRANT_DENIED".to_owned()));
+    assert_eq!(signed, 0, "the keeper was never asked");
+
+    let (allowed, signed) = set_u32_under(&serde_json::json!({ "other": xdr }));
+    assert_eq!(allowed, Ok(Status::Confirmed));
+    assert_eq!(signed, 1);
 }
 
 #[test]

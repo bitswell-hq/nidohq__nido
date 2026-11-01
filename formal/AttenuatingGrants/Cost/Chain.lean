@@ -5,9 +5,10 @@ import AttenuatingGrants.Vocab.Chain
 # Chain cost
 
 A scalar `Val` (`i128`, `u64`, `bool`) has size 1; a byte-carrying one
-(`bytes`, `address`, `symbol`) has its length plus 1. An invocation's size is
-the lengths of its contract id and function name plus, for each argument, the
-argument's size plus 1; a deployment's size is the length of its wasm hash.
+(`bytes`, `address`, `symbol`, `other`) has its length plus 1. An
+invocation's size is the lengths of its contract id and function name plus,
+for each argument, the argument's size plus 1; a deployment's size is the
+length of its wasm hash.
 
 `contractIn` and `functionIn` have their list size; `argI128AtMost` has size 2
 (an index and a bound); `argEq i val` has size `1 + val.size`.
@@ -23,7 +24,7 @@ open Cost
 
 def Val.size : Val → Nat
   | .i128 _ | .u64 _ | .bool _ => 1
-  | .bytes v | .address v | .symbol v => v.length + 1
+  | .bytes v | .address v | .symbol v | .other v => v.length + 1
 
 def Action.size : Action → Nat
   | .invoke contract function args =>
@@ -45,6 +46,7 @@ def valEq : Val → Val → Bool × Nat
   | .bytes x, .bytes y => let r := bytesEq x y; (r.1, r.2 + 1)
   | .address x, .address y => let r := bytesEq x y; (r.1, r.2 + 1)
   | .symbol x, .symbol y => let r := bytesEq x y; (r.1, r.2 + 1)
+  | .other x, .other y => let r := bytesEq x y; (r.1, r.2 + 1)
   | _, _ => (false, 1)
 
 def Caveat.holdsCounted : Caveat → Action → Bool × Nat
@@ -96,7 +98,7 @@ theorem holdsCounted_fst (c : Caveat) (a : Action) : (c.holdsCounted a).1 = c.ho
     | functionIn functions => simp [Caveat.holdsCounted, Caveat.holds, mem_bytesEq_fst]
     | argI128AtMost i n =>
       simp only [Caveat.holdsCounted, Caveat.holds, get?_fst]
-      rcases args[i]? with _ | (_ | _ | _ | _ | _ | _) <;> rfl
+      rcases args[i]? with _ | (_ | _ | _ | _ | _ | _ | _) <;> rfl
     | argEq i val =>
       simp only [Caveat.holdsCounted, Caveat.holds, get?_fst]
       rcases args[i]? with _ | w

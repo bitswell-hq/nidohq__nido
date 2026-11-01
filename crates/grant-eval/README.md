@@ -44,7 +44,16 @@ Each vocabulary module exports its `Action` and `Caveat` types, a monomorphic
 Action: `Invoke { contract, function, args: Vec<Val> }` or
 `CreateContract { wasm_hash }` (the contract-deploying host functions in a
 Soroban authorization context).
-`Val` is `I128(i128) | U64(u64) | Bool(bool) | Bytes(bytes) | Address(bytes) | Symbol(bytes)`.
+`Val` is `I128(i128) | U64(u64) | Bool(bool) | Bytes(bytes) | Address(bytes) | Symbol(bytes) | Other(bytes)`.
+`Other` is an argument of a type the other variants do not model (`u32`,
+`i64`, `string`, `vec`, `map`, …), carried as its full `ScVal` XDR. The XDR
+starts with the type's discriminant, so two `Other` values are equal only for
+arguments of the same type and value, and because values of different
+variants are never equal, an argument of one type never satisfies an `ArgEq`
+written for another: an `Other` argument never matches a `Bytes` caveat with
+the same bytes. One opaque variant, rather than a variant per Soroban type,
+keeps the vocabulary at the types its caveats inspect; `ArgEq` is the only
+caveat that reads an unmodeled argument, and it needs only equality.
 
 | Caveat | Holds iff |
 | --- | --- |

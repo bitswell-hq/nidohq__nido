@@ -201,8 +201,11 @@ A JSON file (`relay.example.json` is a complete one for a local network):
 - The fields after `channels` are optional, with the defaults shown.
 - `api_key_sha256` is the hex SHA-256 of the key (`grant_relay::config::api_key_sha256`); the file holds no API keys.
 - Caveats are one key each. `arg_eq` values are `{"i128": "…"}`, `{"u64": n}`,
-  `{"bool": b}`, `{"bytes": "<hex>"}`, `{"address": "G…|C…"}` or
-  `{"symbol": "…"}`; `i128` bounds and values are integers or decimal strings.
+  `{"bool": b}`, `{"bytes": "<hex>"}`, `{"address": "G…|C…"}`,
+  `{"symbol": "…"}` or `{"other": "<hex>"}`; `i128` bounds and values are
+  integers or decimal strings. `other` is the `ScVal` XDR of an argument
+  whose type has no value form of its own (`u32`, `string`, `vec`, …); XDR of
+  a type that has one (`{"other": "<u64 XDR>"}`) is refused at load.
 - `keeper` names the Dfns Generate Signature endpoint (or the local
   `dfns-mock`) and the environment variables holding the bearer token and the
   hex seed of the `Key` credential that signs user action challenges. The
@@ -220,9 +223,12 @@ Trusted, not checked by the evaluator:
 - **XDR to actions** (`src/actions.rs`). A contract is its `C…` strkey, a
   function its symbol's bytes, an `Address` argument its strkey.
   `ScVal::I128`, `U64`, `Bool`, `Bytes` and `Symbol` map to the `Val` variant
-  of the same name. Any other argument type becomes `Val::Bytes` of its full
-  `ScVal` XDR, keeping its position; an `arg_eq` caveat with a `bytes` value
-  therefore also matches a non-bytes argument whose XDR equals that value.
+  of the same name. Any other argument type (`u32`, `i64`, `string`, `vec`,
+  `map`, …) becomes `Val::Other` of its full `ScVal` XDR, discriminant
+  included, keeping its position. The evaluator never equates values of two
+  variants, so an `arg_eq` caveat with a `bytes` value never matches a `u32`,
+  `string` or `vec` argument whose XDR is those bytes; `{"other": "<hex>"}`
+  pins such an argument.
   Contract creation is `CreateContract` with the `Wasm` hash, or empty bytes
   for the Stellar Asset Contract executable.
 - **The configuration.** Whoever writes the file decides every agent's grants
@@ -289,6 +295,13 @@ keeper from the environment and stops when no network answers).
 
 Stated, not proven:
 
+- That the XDR-to-`Val` mapping keeps distinct arguments distinct: two
+  `ScVal` arguments map to equal `Val`s only when they are equal. Values of
+  different variants are never equal (proven for the evaluator,
+  `Chain.argEq_kind` in `formal/`); within `Val::Other` this rests on XDR
+  encoding being injective, and within `Val::Address` on a strkey naming one
+  address. The tests check it for `u32`, `i64`, `string` and `vec`
+  arguments; they do not prove it.
 - That the supplied and recorded trees cover every context the transaction's
   signatures authorize. This rests on the Soroban host matching each
   `require_auth` against an entry's tree; the tests exercise it on a local
