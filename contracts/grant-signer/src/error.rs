@@ -2,9 +2,10 @@ use soroban_sdk::contracterror;
 
 /// Why a call or an authorization was refused. Codes are part of the ABI.
 ///
-/// `__check_auth` returns the first failure in the order the variants from
-/// `NoSuchGrant` to `Overdrawn` are listed. A refused authorization changes
-/// no state.
+/// `__check_auth` returns the first failure: `NoSuchGrant` or `Revoked` for
+/// the lineage; then, context by context, `ContractCreation`, `NotHolder`,
+/// `AccountCall` or `UnmeteredCall`; then `NotAllowed`; then `Overdrawn`. A
+/// refused authorization changes no state.
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
@@ -31,4 +32,6 @@ pub enum GrantError {
     /// A refill would raise the allowance past `u128::MAX`, or the grant ids
     /// are exhausted.
     Overflow = 9,
+    /// A context creates a contract. No grant authorizes one.
+    ContractCreation = 10,
 }

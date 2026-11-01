@@ -198,7 +198,10 @@ the host wiring that builds actions. The wiring stays small and auditable:
 - Budget wiring passes the node of the grant actually being spent under,
   appends a node under the delegator's when a grant is delegated, and exposes
   `refill` and root issuing (`append` with no parent) only to the admin
-  document.
+  document. For the grant signer, `formal/AttenuatingGrants/Signer.lean`
+  follows its storage, lineage ledger and store loop and proves that they
+  keep budget safety on the whole ledger of grants; that the contract's code
+  is those definitions is assumed (`contracts/grant-signer/README.md`).
 
 **Grants control access, not information flow.** A grant decides which actions
 an agent may take. It does not track what the agent learns from an allowed
@@ -236,15 +239,16 @@ Proven in `formal/` about the Charon + Aeneas translation of this crate
   batch of actions, only what the root allows (`V.extracted_narrower_push`,
   `V.extracted_delegates_narrower`, `V.extracted_allowsAll_of_delegates`).
 
+For `budget`, the translations of `check_spend`, `spend`, `refill` and
+`append` are proven to compute `formal/AttenuatingGrants/Budget.lean`'s
+functions on the denoted ledger (`Budget.extracted_check_spend`,
+`extracted_spend`, `extracted_refill`, `extracted_append`), so a failed spend
+changes nothing, the charging walk visits exactly the chain `check_spend`
+accepted, and its addition never overflows.
+
 `formal/README.md` lists the theorems and the pinned tool versions. These are
 statements about the translation; that it has this code's semantics, and that
 rustc compiles the code faithfully, is the trusted base above.
-
-Stated, not proven: that the translation of `budget` agrees with
-`formal/AttenuatingGrants/Budget.lean`. The extraction translates the module,
-but no equivalence proof covers it yet; it must show that `spend` changes
-nothing on every error path, that the charging walk visits exactly the chain
-`check_spend` accepted, and that its addition never overflows.
 
 ## Commands
 

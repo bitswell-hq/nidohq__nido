@@ -1,4 +1,4 @@
-//! The trusted wiring between Soroban and the evaluator: each authorization
+//! The trusted wiring between Soroban and the evaluator: each contract-call
 //! context becomes a `grant_eval::chain::Action` and each stored caveat a
 //! `grant_eval::chain::Caveat`. The encoding is `crates/grant-relay`'s
 //! (`actions.rs` there), so one grant means the same at the relay and here:
@@ -8,7 +8,9 @@
 //! - `i128`, `u64`, `bool`, `Bytes` and `Symbol` arguments map onto the `Val`
 //!   variant of the same name. Any other argument becomes `Val::Other` with
 //!   its full `ScVal` XDR, discriminant included.
-//! - Creating a contract becomes `CreateContract` with its wasm hash.
+//!
+//! `__check_auth` refuses a contract-creation context before mapping, so
+//! only calls reach the evaluator.
 //!
 //! Each conversion below accepts exactly one kind of host value, so the
 //! order of the checks in [`val`] decides nothing except that an `Address`
@@ -16,7 +18,7 @@
 
 use alloc::vec::Vec as AVec;
 use grant_eval::chain;
-use soroban_sdk::auth::{Context, ContractContext, ContractExecutable};
+use soroban_sdk::auth::ContractContext;
 use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{
     symbol_short, Address, Bytes, Env, MuxedAddress, String, Symbol, SymbolStr, TryFromVal, Val,
@@ -25,24 +27,12 @@ use soroban_sdk::{
 
 use crate::{Arg, Caveat};
 
-/// The evaluator's action for one authorization context.
-pub fn action(e: &Env, context: &Context) -> chain::Action {
-    match context {
-        Context::Contract(c) => chain::Action::Invoke {
-            contract: address(&c.contract),
-            function: symbol(e, &c.fn_name),
-            args: c.args.iter().map(|v| val(e, v)).collect(),
-        },
-        Context::CreateContractHostFn(c) => create(&c.executable),
-        Context::CreateContractWithCtorHostFn(c) => create(&c.executable),
-    }
-}
-
-fn create(executable: &ContractExecutable) -> chain::Action {
-    match executable {
-        ContractExecutable::Wasm(hash) => chain::Action::CreateContract {
-            wasm_hash: hash.to_array().into(),
-        },
+/// The evaluator's action for one contract-call context.
+pub fn invoke(e: &Env, c: &ContractContext) -> chain::Action {
+    chain::Action::Invoke {
+        contract: address(&c.contract),
+        function: symbol(e, &c.fn_name),
+        args: c.args.iter().map(|v| val(e, v)).collect(),
     }
 }
 

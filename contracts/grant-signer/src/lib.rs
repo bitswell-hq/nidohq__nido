@@ -12,9 +12,12 @@
 //! 1. loads the signing grant and its ancestors, refusing if any of them is
 //!    revoked;
 //! 2. verifies the holder's ed25519 signature over the payload;
-//! 3. refuses any context that calls the account itself;
-//! 4. maps every other context to a `grant_eval::chain::Action` and refuses
-//!    unless `grant_eval::chain::allows_all` holds for the grant's caveats;
+//! 3. refuses any context that creates a contract or calls the account
+//!    itself, and any call on this contract other than the holder's own
+//!    delegation;
+//! 4. maps every other context, a contract call, to a
+//!    `grant_eval::chain::Action` and refuses unless
+//!    `grant_eval::chain::allows_all` holds for the grant's caveats;
 //! 5. charges every `transfer` on the grant's budget asset to the grant and
 //!    each ancestor with `grant_eval::budget::spend`, refusing the whole
 //!    authorization if any of them would be overdrawn, and refuses any other
@@ -26,10 +29,14 @@
 //! creates a child grant whose caveats are the parent's followed by the new
 //! ones, with its own budget node under the parent's. It is authorized by
 //! this contract's own address, whose `__check_auth` accepts a delegation
-//! only from the signing grant itself.
+//! only from the signing grant itself. So `__check_auth` is also the check of
+//! this contract's own address, a role the host calls it in with the same
+//! arguments.
 //!
-//! `README.md` states the integration, the threat model coverage, the trusted
-//! wiring and what is tested.
+//! `README.md` states the integration, both roles of `__check_auth`, the
+//! threat model coverage, the trusted wiring and what is tested.
+//! `formal/AttenuatingGrants/Signer.lean` proves that the budget path below
+//! keeps budget safety on the whole ledger of grants.
 #![no_std]
 
 extern crate alloc;

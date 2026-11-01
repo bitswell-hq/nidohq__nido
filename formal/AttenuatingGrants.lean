@@ -19,4 +19,6 @@ import AttenuatingGrants.Equiv.Files
 import AttenuatingGrants.Equiv.Network
 import AttenuatingGrants.Equiv.Signing
 import AttenuatingGrants.Equiv.Budget
+import AttenuatingGrants.Signer
+import AttenuatingGrants.Equiv.Signer
 import AttenuatingGrants.Axioms

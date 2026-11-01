@@ -53,8 +53,9 @@ fn create(e: &Env, grant: &Grant) -> Result<u32, Error> {
     Ok(id)
 }
 
-/// `id` and its ancestors, root first. Refuses if any of them is revoked,
-/// so revoking a grant revokes every grant delegated from it.
+/// `id` and its ancestors, root first (`Ledger.IsLineage` in `formal/`).
+/// Refuses if any of them is revoked, so revoking a grant revokes every grant
+/// delegated from it.
 fn lineage(e: &Env, id: u32) -> Result<AVec<(u32, Grant)>, Error> {
     let mut out = AVec::new();
     let mut current = id;
@@ -78,7 +79,8 @@ fn lineage(e: &Env, id: u32) -> Result<AVec<(u32, Grant)>, Error> {
 }
 
 /// The budget ledger of a lineage: one node per grant, root first, each
-/// node's parent the one before it.
+/// node's parent the one before it (`Ledger.chain` in `formal/`, which proves
+/// that spends on it are the whole ledger's, restricted to the lineage).
 fn ledger(lineage: &[(u32, Grant)]) -> AVec<budget::Node> {
     let mut out = AVec::new();
     for (i, (_, g)) in lineage.iter().enumerate() {
@@ -219,8 +221,9 @@ impl GrantSigner {
         Ok(())
     }
 
-    /// Raise grant `id`'s allowance by `extra`. Requires the account's
-    /// authorization.
+    /// Raise grant `id`'s allowance by `extra`, with `budget::refill` on a
+    /// ledger of the one grant (`Ledger.refillGrant` in `formal/`). Requires
+    /// the account's authorization.
     ///
     /// # Errors
     ///
@@ -267,7 +270,9 @@ impl CustomAccountInterface for GrantSigner {
     type Error = Error;
 
     /// Authorize `contexts` for the holder of `signature.grant`; see the
-    /// crate documentation for the checks, in order.
+    /// crate documentation for the checks, in order. The host calls this both
+    /// for the account, as its delegated signer, and for this contract's own
+    /// address, with the same arguments.
     #[allow(clippy::needless_pass_by_value)]
     fn __check_auth(
         e: Env,
@@ -288,21 +293,24 @@ impl CustomAccountInterface for GrantSigner {
         let mut acts = AVec::new();
         let mut spends = AVec::new();
         for context in contexts.iter() {
-            if let Context::Contract(c) = &context {
-                if c.contract == me {
-                    if !is_own_delegation(&e, c, signature.grant) {
-                        return Err(Error::NotHolder);
-                    }
-                    continue;
+            let Context::Contract(c) = &context else {
+                // A creation context: no grant authorizes one, whichever of
+                // this contract's two roles asks.
+                return Err(Error::ContractCreation);
+            };
+            if c.contract == me {
+                if !is_own_delegation(&e, c, signature.grant) {
+                    return Err(Error::NotHolder);
                 }
-                if c.contract == account {
-                    return Err(Error::AccountCall);
-                }
-                if c.contract == holder.asset {
-                    spends.push(actions::transfer_amount(&e, c).ok_or(Error::UnmeteredCall)?);
-                }
+                continue;
             }
-            acts.push(actions::action(&e, &context));
+            if c.contract == account {
+                return Err(Error::AccountCall);
+            }
+            if c.contract == holder.asset {
+                spends.push(actions::transfer_amount(&e, c).ok_or(Error::UnmeteredCall)?);
+            }
+            acts.push(actions::invoke(&e, c));
         }
         if !chain::allows_all(&actions::caveats(&holder.caveats), &acts) {
             return Err(Error::NotAllowed);
@@ -311,6 +319,7 @@ impl CustomAccountInterface for GrantSigner {
         if spends.is_empty() {
             return Ok(());
         }
+        // All or nothing: `Ledger.spendAll`, then `Ledger.writeBack`.
         let mut nodes = ledger(&lineage);
         let spender = nodes.len() - 1;
         for amount in spends {

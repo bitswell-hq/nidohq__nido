@@ -200,7 +200,7 @@ Timing (`agent_host::bench`, the method `agent-host bench` also runs):
 
 - Soroban simulation: 45 attacks, 45 refused, 45 with state unchanged; 9 controls.
 - Agent host: 31 attacks, 31 refused, 31 with state unchanged; 3 controls.
-- Cost bound: verdicts agree on every point; 96–164 CPU instructions per Lean step over the pairs ≥ 10 steps apart; least squares 99.4 (R² = 0.986); the whole check above the zero-caveat cost (974,554 instructions) is at most 8.3% of the bound priced at that constant.
+- Cost bound: verdicts agree on every point; 96–164 CPU instructions per Lean step over the pairs ≥ 10 steps apart; least squares 99.4 (R² = 0.986); the whole check above the zero-caveat cost (972,392 instructions) is at most 8.3% of the bound priced at that constant.
 - Agent host, per check (medians): 0.30–1.01 µs through the component, 15–47x native `grant-eval`, 3.0–3.3x the host-side check without Wasm; the component compiles and instantiates in 22.0 ms.
 
 ### Machine and versions
@@ -211,12 +211,12 @@ Timing (`agent_host::bench`, the method `agent-host bench` also runs):
 | lean | leanprover/lean4:v4.35.0 |
 | memory | 128 GiB |
 | nido_eval_dapp.wasm sha256 | d8d01d8e8af6e10a237080335c2984e82a9e094b1a2c827adf0fad481db34cbd |
-| nido_grant_signer.wasm sha256 | 023f6b1791e6de332f93d26063c112c24a47df0a15332dfcb4fb796b00d6212a |
+| nido_grant_signer.wasm sha256 | c4214c4c8172c2e69b55b7602e72f5260fdafe0aaf4df1468ebd186a61fe704a |
 | os | macOS 26.5.2 |
 | perch_account.wasm sha256 | d99d56fc2d07a14c2259f0994d97316d23ae90db26835f4c977939c2b3b593aa |
 | rustc | rustc 1.96.0 (ac68faa20 2026-05-25) |
 | soroban-env-host | 27.0.1 |
-| soroban-sdk | 27.0.5 |
+| soroban-sdk | 27.0.6 |
 | wasmtime | 49.0.5 |
 
 ### Cost per check and the Lean bound
@@ -225,66 +225,66 @@ Timing (`agent_host::bench`, the method `agent-host bench` also runs):
 
 | Caveats | CPU instructions | Memory bytes | CPU, first caveat failing | Lean steps | Lean bound |
 | - | - | - | - | - | - |
-| 0 | 974,554 | 415,988 | – | 1 | 308 |
-| 1 | 1,026,909 | 420,172 | 1,020,241 | 60 | 18,172 |
-| 2 | 1,072,078 | 424,403 | 1,062,718 | 68 | 20,328 |
-| 4 | 1,172,252 | 434,033 | 1,148,152 | 188 | 56,364 |
-| 8 | 1,360,082 | 451,853 | 1,315,858 | 324 | 96,712 |
-| 16 | 1,742,264 | 488,661 | 1,648,436 | 700 | 209,132 |
-| 32 | 2,500,738 | 560,837 | 2,317,058 | 1,348 | 402,248 |
-| 64 | 4,024,716 | 706,357 | 3,651,976 | 2,748 | 820,204 |
+| 0 | 972,392 | 416,582 | – | 1 | 308 |
+| 1 | 1,024,459 | 420,766 | 1,017,791 | 60 | 18,172 |
+| 2 | 1,069,340 | 424,997 | 1,059,980 | 68 | 20,328 |
+| 4 | 1,168,746 | 434,627 | 1,144,646 | 188 | 56,364 |
+| 8 | 1,355,424 | 452,447 | 1,311,200 | 324 | 96,712 |
+| 16 | 1,735,302 | 489,255 | 1,641,474 | 700 | 209,132 |
+| 32 | 2,489,168 | 561,431 | 2,305,488 | 1,348 | 402,248 |
+| 64 | 4,003,738 | 706,951 | 3,630,998 | 2,748 | 820,204 |
 
 **Argument bytes, compared by an `ArgEq`** (`arg_bytes_compared`)
 
 | Argument bytes, compared by an `ArgEq` | CPU instructions | Memory bytes | CPU, first caveat failing | Lean steps | Lean bound |
 | - | - | - | - | - | - |
-| 0 | 1,114,102 | 430,199 | 1,102,966 | 74 | 16,836 |
-| 64 | 1,124,200 | 430,969 | 1,106,920 | 138 | 49,476 |
-| 256 | 1,146,014 | 432,009 | 1,110,302 | 330 | 245,700 |
-| 1024 | 1,236,592 | 435,353 | 1,127,152 | 1,098 | 2,505,156 |
-| 4096 | 1,602,918 | 447,913 | 1,198,566 | 4,170 | 35,135,940 |
-| 16384 | 3,061,898 | 497,337 | 1,477,898 | 16,458 | 543,146,436 |
+| 0 | 1,110,692 | 430,793 | 1,099,556 | 74 | 16,836 |
+| 64 | 1,120,790 | 431,563 | 1,103,510 | 138 | 49,476 |
+| 256 | 1,142,604 | 432,603 | 1,106,892 | 330 | 245,700 |
+| 1024 | 1,233,182 | 435,947 | 1,123,742 | 1,098 | 2,505,156 |
+| 4096 | 1,600,276 | 448,507 | 1,195,924 | 4,170 | 35,135,940 |
+| 16384 | 3,059,256 | 497,931 | 1,475,256 | 16,458 | 543,146,436 |
 
 **Argument bytes, not compared** (`arg_bytes_uncompared`)
 
 | Argument bytes, not compared | CPU instructions | Memory bytes | CPU, first caveat failing | Lean steps | Lean bound |
 | - | - | - | - | - | - |
-| 0 | 1,075,164 | 425,355 | 1,065,804 | 68 | 16,104 |
-| 64 | 1,075,134 | 425,627 | 1,065,774 | 68 | 24,552 |
-| 256 | 1,076,666 | 425,899 | 1,067,306 | 68 | 49,896 |
-| 1024 | 1,086,808 | 426,171 | 1,077,448 | 68 | 151,272 |
-| 4096 | 1,121,052 | 426,443 | 1,111,692 | 68 | 556,776 |
-| 16384 | 1,257,700 | 426,715 | 1,248,340 | 68 | 2,178,792 |
+| 0 | 1,072,042 | 425,949 | 1,062,682 | 68 | 16,104 |
+| 64 | 1,072,012 | 426,221 | 1,062,652 | 68 | 24,552 |
+| 256 | 1,073,544 | 426,493 | 1,064,184 | 68 | 49,896 |
+| 1024 | 1,084,454 | 426,765 | 1,075,094 | 68 | 151,272 |
+| 4096 | 1,118,698 | 427,037 | 1,109,338 | 68 | 556,776 |
+| 16384 | 1,254,578 | 427,309 | 1,245,218 | 68 | 2,178,792 |
 
 **Contexts (4 caveats)** (`contexts`)
 
 | Contexts (4 caveats) | CPU instructions | Memory bytes | CPU, first caveat failing | Lean steps | Lean bound |
 | - | - | - | - | - | - |
-| 1 | 1,173,344 | 436,345 | 1,149,244 | 188 | 56,364 |
-| 2 | 1,271,758 | 437,047 | 1,220,890 | 376 | 112,728 |
-| 4 | 1,465,808 | 438,315 | 1,361,404 | 752 | 225,456 |
-| 8 | 1,858,228 | 440,715 | 1,646,752 | 1,504 | 450,912 |
-| 16 | 2,642,342 | 445,379 | 2,216,722 | 3,008 | 901,824 |
+| 1 | 1,169,646 | 436,939 | 1,145,546 | 188 | 56,364 |
+| 2 | 1,266,912 | 437,641 | 1,216,044 | 376 | 112,728 |
+| 4 | 1,458,666 | 438,909 | 1,354,262 | 752 | 225,456 |
+| 8 | 1,846,494 | 441,309 | 1,635,018 | 1,504 | 450,912 |
+| 16 | 2,621,424 | 445,973 | 2,195,804 | 3,008 | 901,824 |
 
 **`ContractIn` list length** (`contract_list`)
 
 | `ContractIn` list length | CPU instructions | Memory bytes | CPU, first caveat failing | Lean steps | Lean bound |
 | - | - | - | - | - | - |
-| 1 | 1,031,011 | 423,436 | 1,024,343 | 60 | 18,172 |
-| 4 | 1,060,304 | 426,878 | 1,053,924 | 69 | 70,840 |
-| 16 | 1,178,746 | 440,238 | 1,173,518 | 105 | 281,512 |
-| 64 | 1,646,924 | 493,270 | 1,646,304 | 249 | 1,124,200 |
+| 1 | 1,028,177 | 424,030 | 1,021,509 | 60 | 18,172 |
+| 4 | 1,056,606 | 427,472 | 1,050,226 | 69 | 70,840 |
+| 16 | 1,171,592 | 440,832 | 1,166,364 | 105 | 281,512 |
+| 64 | 1,625,946 | 493,864 | 1,625,326 | 249 | 1,124,200 |
 
 **Fit**
 
-Over 28 pairs: 99.4 CPU instructions per Lean step (least squares through the origin, R² = 0.9856). Lean, the native evaluator and the contract agree on every verdict. The zero-caveat check costs 974,554 instructions. Over every point with a caveat, the whole check's cost above that, as a share of the bound priced at the fitted constant (`(CPU − 974,554) / (99.4 × bound)`), is at most 0.083.
+Over 28 pairs: 99.4 CPU instructions per Lean step (least squares through the origin, R² = 0.9856). Lean, the native evaluator and the contract agree on every verdict. The zero-caveat check costs 972,392 instructions. Over every point with a caveat, the whole check's cost above that, as a share of the bound priced at the fitted constant (`(CPU − 972,392) / (99.4 × bound)`), is at most 0.083.
 
 | Sweep | CPU instructions per Lean step (pairs ≥ 10 steps apart) | Share of the bound, smallest parameter | Share of the bound, largest parameter | Largest share of the bound |
 | - | - | - | - | - |
 | `caveats` | 123.5–151.0 | 0.029 | 0.037 | 0.048 |
 | `arg_bytes_compared` | 96.3–163.8 | 0.083 | 0.000 | 0.083 |
-| `arg_bytes_uncompared` | 151.0 | 0.063 | 0.001 | 0.063 |
-| `contexts` | 132.4–141.8 | 0.035 | 0.019 | 0.035 |
+| `arg_bytes_uncompared` | 151.0 | 0.062 | 0.001 | 0.062 |
+| `contexts` | 132.4–141.8 | 0.035 | 0.018 | 0.035 |
 | `contract_list` | 123.5–134.1 | 0.031 | 0.006 | 0.031 |
 
 ### Attack suite
@@ -328,7 +328,7 @@ Over 28 pairs: 99.4 CPU instructions per Lean step (least squares through the or
 | `ns-transfer-at-depth-3-left-out-of-tree` | the same depth-3 transfer with the transfer left out of the signed tree | host | Error(Auth, InvalidAction): no authorization entry covers the call | yes |
 | `ns-transfer-at-depth-4-over-allowance` | a depth-4 transfer the caveats allow, larger than what is left of the allowance | grant-signer | Overdrawn (#7) | yes |
 | `dw-deploy-contract` | deploy a contract with the account as deployer, under a grant with no caveats | account | UnvalidatedContext (#3002) | yes |
-| `dw-deploy-contract-grant-signer-verdict` | the grant signer's own verdict on a contract-creation context, for a one-caveat grant | grant-signer | NotAllowed (#6) | yes |
+| `dw-deploy-contract-grant-signer-verdict` | the grant signer's own verdict on a contract-creation context, for a one-caveat grant | grant-signer | ContractCreation (#10) | yes |
 | `dw-new-account-pinned-recipient` | move the budget asset to a Nido account the attacker minted, under a grant that pins the recipient | grant-signer | NotAllowed (#6) | yes |
 | `dw-new-account-over-allowance` | move more than the allowance to the attacker's new account, under a grant with no caveats | grant-signer | Overdrawn (#7) | yes |
 | `dw-approve-budget-asset` | approve the attacker to spend the budget asset, under a grant with no caveats | grant-signer | UnmeteredCall (#5) | yes |
@@ -402,23 +402,23 @@ Over 28 pairs: 99.4 CPU instructions per Lean step (least squares through the or
 
 | Workload | Agent | Call | Expected | Outcome | Contexts | CPU instructions | Unchanged if refused |
 | - | - | - | - | - | - | - | - |
-| payments | payments | transfer 50 to Bob | Allowed | allowed | 1 | 2,500,465 | – |
-| payments | payments | transfer 80 to Carol | Allowed | allowed | 1 | 2,501,825 | – |
-| payments | payments | transfer 120 to Bob | NotAllowed | NotAllowed (#6) | 1 | 2,175,243 | yes |
-| payments | payroll | transfer 60 to Bob | Allowed | allowed | 1 | 2,695,733 | – |
-| payments | payroll | transfer 60 to Bob | Allowed | allowed | 1 | 2,694,945 | – |
-| payments | payroll | transfer 60 to Bob | Overdrawn | Overdrawn (#7) | 1 | 2,276,804 | yes |
-| payments | payroll | transfer 10 to Carol | NotAllowed | NotAllowed (#6) | 1 | 2,270,632 | yes |
-| payments | payments | transfer 100 to Bob | Allowed | allowed | 1 | 2,503,124 | – |
-| payments | payments | transfer 100 to Bob | Overdrawn | Overdrawn (#7) | 1 | 2,180,379 | yes |
-| defi-router | router | forward 40 of Asset to Bob | Allowed | allowed | 2 | 3,327,210 | – |
-| defi-router | router | hop through [0, 1], 30 to Bob | Allowed | allowed | 3 | 4,196,094 | – |
-| defi-router | router | hop through [0, 1, 2], 20 to Carol | Allowed | allowed | 4 | 5,044,867 | – |
-| defi-router | swapper | forward 50 of Asset to Bob | Allowed | allowed | 2 | 3,606,282 | – |
-| defi-router | swapper | hop through [0, 1], 10 to Bob | NotAllowed | NotAllowed (#6) | 3 | 3,578,670 | yes |
-| defi-router | swapper | forward 60 of Asset to Bob | Overdrawn | Overdrawn (#7) | 2 | 3,100,561 | yes |
-| defi-router | swapper | forward 5 of Other to Bob | NotAllowed | NotAllowed (#6) | 2 | 3,058,971 | yes |
-| defi-router | router | forward 200 of Asset to Carol | Overdrawn | Overdrawn (#7) | 2 | 2,926,102 | yes |
+| payments | payments | transfer 50 to Bob | Allowed | allowed | 1 | 2,497,586 | – |
+| payments | payments | transfer 80 to Carol | Allowed | allowed | 1 | 2,498,946 | – |
+| payments | payments | transfer 120 to Bob | NotAllowed | NotAllowed (#6) | 1 | 2,172,356 | yes |
+| payments | payroll | transfer 60 to Bob | Allowed | allowed | 1 | 2,692,566 | – |
+| payments | payroll | transfer 60 to Bob | Allowed | allowed | 1 | 2,691,778 | – |
+| payments | payroll | transfer 60 to Bob | Overdrawn | Overdrawn (#7) | 1 | 2,273,637 | yes |
+| payments | payroll | transfer 10 to Carol | NotAllowed | NotAllowed (#6) | 1 | 2,267,457 | yes |
+| payments | payments | transfer 100 to Bob | Allowed | allowed | 1 | 2,500,245 | – |
+| payments | payments | transfer 100 to Bob | Overdrawn | Overdrawn (#7) | 1 | 2,177,500 | yes |
+| defi-router | router | forward 40 of Asset to Bob | Allowed | allowed | 2 | 3,322,031 | – |
+| defi-router | router | hop through [0, 1], 30 to Bob | Allowed | allowed | 3 | 4,189,479 | – |
+| defi-router | router | hop through [0, 1, 2], 20 to Carol | Allowed | allowed | 4 | 5,037,104 | – |
+| defi-router | swapper | forward 50 of Asset to Bob | Allowed | allowed | 2 | 3,599,951 | – |
+| defi-router | swapper | hop through [0, 1], 10 to Bob | NotAllowed | NotAllowed (#6) | 3 | 3,570,895 | yes |
+| defi-router | swapper | forward 60 of Asset to Bob | Overdrawn | Overdrawn (#7) | 2 | 3,094,230 | yes |
+| defi-router | swapper | forward 5 of Other to Bob | NotAllowed | NotAllowed (#6) | 2 | 3,052,632 | yes |
+| defi-router | router | forward 200 of Asset to Carol | Overdrawn | Overdrawn (#7) | 2 | 2,920,923 | yes |
 
 **Agent host** (the research agent and its summarizer)
 
