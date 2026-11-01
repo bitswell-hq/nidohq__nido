@@ -1,9 +1,18 @@
 import { Asset, Networks, rpc } from "@stellar/stellar-sdk";
 
-/** Single source of truth for the network this build targets (currently testnet). */
+/** A network other than testnet, from `PUBLIC_STELLAR_NETWORK` at build time:
+ *  `{"passphrase": "...", "rpc": "https://...", "friendbot": "https://..."}`
+ *  (a local `stellar/quickstart` network for end-to-end tests). */
+const override = (() => {
+  const raw = import.meta.env.PUBLIC_STELLAR_NETWORK as string | undefined;
+  return raw ? (JSON.parse(raw) as { passphrase: string; rpc: string; friendbot: string }) : undefined;
+})();
+
+/** Single source of truth for the network this build targets (testnet unless overridden). */
 export const NETWORK_NAME = "testnet" as const;
-export const NETWORK_PASSPHRASE = Networks.TESTNET;
-export const RPC_URL = "https://soroban-testnet.stellar.org";
+export const NETWORK_PASSPHRASE = override?.passphrase ?? Networks.TESTNET;
+export const RPC_URL = override?.rpc ?? "https://soroban-testnet.stellar.org";
+export const FRIENDBOT_URL = override?.friendbot ?? "https://friendbot.stellar.org";
 
 /** The chain tip's ledger sequence, from the RPC's raw `getLatestLedger`
  *  answer. stellar-sdk's `getLatestLedger()` also decodes the tip's whole

@@ -44,6 +44,14 @@ export default defineConfig({
       testMatch: /\.cdp\.spec\.ts$/,
       use: { ...devices['Desktop Chrome'] },
     },
+    // Email recovery on a local Stellar network (scripts/email-recovery-e2e.sh
+    // deploys it and starts the services first); not part of @fast.
+    {
+      name: 'email-local',
+      testDir: 'tests/e2e/local',
+      retries: 0,
+      use: { ...devices['Desktop Chrome'], ignoreHTTPSErrors: true },
+    },
     // Quarantined real-testnet tier — separate dir, extra retries.
     {
       name: 'testnet-chromium',

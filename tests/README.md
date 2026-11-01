@@ -15,6 +15,19 @@ deterministic P-256 vault keyed by credentialId.
 
 dapp/SEP-7, multi-actor recovery, and TestingBot are added in later phases.
 
+## Email recovery on a local network (`email-local`)
+
+`just test-e2e-email-local` (`scripts/email-recovery-e2e.sh`) runs
+`tests/e2e/local/email-recovery.local.spec.ts` against `stellar/quickstart
+--local` (pinned by digest, needs Docker): it deploys Perch's stack built for
+that network and Nido's email contracts (`tests/support/emailLocalStack.mjs`),
+starts the alert service and every third-party mock with TLS in front of the
+RPC (`tests/support/emailServices.mjs`), builds the wallet for that network,
+and drives enrollment and recovery with the real in-browser proof. A
+TEST-ONLY allowlist contract (`tests/e2e/local/fixtures/image-allowlist`)
+stands in for the enclave-image registry, whose 14-day activation a local
+network cannot wait out.
+
 ## Testnet tier (`@testnet`, quarantined)
 
 `just test-e2e-testnet` — real Stellar testnet: creates + deploys a smart

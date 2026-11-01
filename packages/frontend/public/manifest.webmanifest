@@ -1,0 +1,11 @@
+{
+  "name": "Nido",
+  "short_name": "Nido",
+  "description": "A safe place for everything you own, secured by your passkey on Stellar.",
+  "start_url": "/account/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#FFF8F0",
+  "theme_color": "#FFF8F0",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

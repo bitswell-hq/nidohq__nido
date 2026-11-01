@@ -22,13 +22,54 @@ export {
   type VaultUserData,
   type VerifiedAttestation,
   type VerifyOptions,
+  claimedMeasurement,
   decodeVaultUserData,
   enclaveMeasurement,
   encodeVaultUserData,
   parseAttestationPayload,
   verifyAttestation,
 } from './attestation.js';
+export {
+  BACKUP_AAD_LABEL,
+  BACKUP_ARGON2,
+  BACKUP_BEGIN,
+  BACKUP_END,
+  BackupError,
+  PASSPHRASE_WORDS,
+  backupPayload,
+  decryptBackup,
+  encryptBackup,
+  generatePassphrase,
+  normalizePassphrase,
+  parseRecoveryKitCode,
+  recoveryKitCode,
+} from './backup.js';
 export * as bytes from './bytes.js';
+export {
+  DkimKeyError,
+  type KeyList,
+  type KeyListEntry,
+  dohTxtRecords,
+  keyCandidates,
+  parseDkimKeyRecord,
+  parseKeyList,
+  rsaPublicKeyFromDer,
+} from './dkimKey.js';
+export { EFF_LARGE_WORDLIST } from './effWordlist.js';
+export {
+  type CheckedEnrollment,
+  DOM_ENROLL,
+  ENROLL_PHRASE,
+  type EnrollmentEmailInput,
+  type PinTree,
+  type PinnedKey,
+  checkEnrollmentEmail,
+  enrollmentSubject,
+  enrollmentValue,
+  fieldBytes,
+  fromGrammarOk,
+  pinTree,
+} from './enrollmentEmail.js';
 export {
   type DkimSignatureField,
   DkimHeaderError,
@@ -98,7 +139,9 @@ export {
   addressCommitment,
   alignedSignedBlock,
   barrettHint,
+  bigIntToBytes,
   blindedDigest,
+  bytesToBigInt,
   emptySubtrees,
   encodeRecoveryEmail,
   fieldHex,
@@ -121,5 +164,65 @@ export {
   verifiesUnder,
 } from './recoveryInputs.js';
 export { HPKE_SUITE, type Sealed, hpkeSuite, open, rawPublicKeyFromSpki, seal, spkiFromRawPublicKey } from './hpke.js';
+export {
+  INBOUND_MESSAGE_INFO,
+  INBOUND_REQUEST_INFO,
+  type InboundRequest,
+  type InboxSecret,
+  decodeInboundRequest,
+  encodeInboundRequest,
+  inboundRegistration,
+  openInboundMessage,
+  openInboundRegistration,
+  sealInboundMessage,
+  subjectValues,
+} from './inbound.js';
+export {
+  type AssetCache,
+  AssetError,
+  CACHE_NAME,
+  CRS_BASE_URL,
+  CRS_G1_SHA256,
+  CRS_G2_SHA256,
+  type Crs,
+  RECOVERY_CRS_POINTS,
+  cacheKey,
+  cacheStorage,
+  defaultCache,
+  fetchAsset,
+  fetchCrs,
+  memoryCache,
+} from './prover/assets.js';
+export { type ProveOptions, RecoveryProver, type WorkerLike, moduleWorker, pageEnvironment } from './prover/client.js';
+export {
+  type CompiledCircuit,
+  PROOF_BYTES,
+  PUBLIC_INPUTS_BYTES,
+  type ProveDeps,
+  type UltraHonk,
+  barretenberg,
+  circuitIdOf,
+  proveRecoveryEmail,
+  solveWitness,
+} from './prover/prove.js';
+export {
+  type DoneEvent,
+  type ErrorEvent,
+  type ProgressEvent,
+  ProgressReporter,
+  type ProofResult,
+  type ProveInput,
+  type ProveRequest,
+  type ProverAssets,
+  ProverError,
+  type ProverErrorCode,
+  type ProverEvent,
+  STAGES,
+  type Stage,
+  isProveRequest,
+  isProverEvent,
+  proverThreads,
+} from './prover/protocol.js';
+export { type ProverPort, type ServeOptions, runRequest, serveProver } from './prover/serve.js';
 export { contractIdFromStrkey, strkeyFromContractId } from './strkey.js';
 export { type Certificate, parseCertificate, validateChain } from './x509.js';

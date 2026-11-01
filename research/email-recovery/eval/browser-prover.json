@@ -1,0 +1,625 @@
+{
+  "generated": "2026-11-01T21:01:08.682Z",
+  "browser": "Chrome/151.0.7922.34",
+  "host": {
+    "cpu": "Apple M5 Max",
+    "logical_cpus": 18,
+    "performance_cores": 6,
+    "efficiency_cores": 12,
+    "memory_gib": 128,
+    "os": "26.5.2",
+    "load_average_at_start": "4.50 5.14 5.19"
+  },
+  "page": "/security/recover/bench/ (packages/frontend), the Gmail fixture of crates/integration-tests/fixtures/email/provider-gmail-com",
+  "warm_runs_per_configuration": 3,
+  "results": [
+    {
+      "label": "desktop",
+      "cpu_throttling": 1,
+      "threads": 1,
+      "cross_origin_isolated": true,
+      "main_thread_probe_ms": 171,
+      "cold_run": {
+        "run": 1,
+        "threads": 1,
+        "wall_ms": 10237,
+        "stage_ms": {
+          "download": 957,
+          "witness": 806,
+          "proving": 8450,
+          "verifying": 11
+        },
+        "downloaded_bytes": 18790270,
+        "cached_bytes": 0,
+        "bb_wasm_memory_mib": 738,
+        "proof_bytes": 16224
+      },
+      "warm_runs": [
+        {
+          "run": 1,
+          "threads": 1,
+          "wall_ms": 10034,
+          "stage_ms": {
+            "download": 714,
+            "witness": 808,
+            "proving": 8489,
+            "verifying": 11
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 738,
+          "proof_bytes": 16224
+        },
+        {
+          "run": 2,
+          "threads": 1,
+          "wall_ms": 9985,
+          "stage_ms": {
+            "download": 719,
+            "witness": 809,
+            "proving": 8434,
+            "verifying": 11
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 738,
+          "proof_bytes": 16224
+        },
+        {
+          "run": 3,
+          "threads": 1,
+          "wall_ms": 10031,
+          "stage_ms": {
+            "download": 710,
+            "witness": 806,
+            "proving": 8492,
+            "verifying": 11
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 738,
+          "proof_bytes": 16224
+        }
+      ],
+      "warm_median_ms": {
+        "total": 10031,
+        "witness": 808,
+        "proving": 8489
+      },
+      "peak_renderer_rss_mib": 1459,
+      "bb_wasm_memory_mib": 738
+    },
+    {
+      "label": "desktop",
+      "cpu_throttling": 1,
+      "threads": 18,
+      "cross_origin_isolated": true,
+      "main_thread_probe_ms": 175,
+      "cold_run": {
+        "run": 1,
+        "threads": 18,
+        "wall_ms": 3094,
+        "stage_ms": {
+          "download": 757,
+          "witness": 806,
+          "proving": 1506,
+          "verifying": 11
+        },
+        "downloaded_bytes": 18790270,
+        "cached_bytes": 0,
+        "bb_wasm_memory_mib": 805,
+        "proof_bytes": 16224
+      },
+      "warm_runs": [
+        {
+          "run": 1,
+          "threads": 18,
+          "wall_ms": 3078,
+          "stage_ms": {
+            "download": 724,
+            "witness": 800,
+            "proving": 1531,
+            "verifying": 11
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 805,
+          "proof_bytes": 16224
+        },
+        {
+          "run": 2,
+          "threads": 18,
+          "wall_ms": 2855,
+          "stage_ms": {
+            "download": 639,
+            "witness": 755,
+            "proving": 1442,
+            "verifying": 7
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 805,
+          "proof_bytes": 16224
+        },
+        {
+          "run": 3,
+          "threads": 18,
+          "wall_ms": 3004,
+          "stage_ms": {
+            "download": 677,
+            "witness": 789,
+            "proving": 1517,
+            "verifying": 7
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 805,
+          "proof_bytes": 16224
+        }
+      ],
+      "warm_median_ms": {
+        "total": 3004,
+        "witness": 789,
+        "proving": 1517
+      },
+      "peak_renderer_rss_mib": 2574,
+      "bb_wasm_memory_mib": 805
+    },
+    {
+      "label": "desktop",
+      "cpu_throttling": 4,
+      "threads": 1,
+      "cross_origin_isolated": true,
+      "main_thread_probe_ms": 727,
+      "cold_run": {
+        "run": 1,
+        "threads": 1,
+        "wall_ms": 10136,
+        "stage_ms": {
+          "download": 747,
+          "witness": 815,
+          "proving": 8547,
+          "verifying": 13
+        },
+        "downloaded_bytes": 18790270,
+        "cached_bytes": 0,
+        "bb_wasm_memory_mib": 738,
+        "proof_bytes": 16224
+      },
+      "warm_runs": [
+        {
+          "run": 1,
+          "threads": 1,
+          "wall_ms": 10190,
+          "stage_ms": {
+            "download": 705,
+            "witness": 804,
+            "proving": 8637,
+            "verifying": 33
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 738,
+          "proof_bytes": 16224
+        },
+        {
+          "run": 2,
+          "threads": 1,
+          "wall_ms": 10166,
+          "stage_ms": {
+            "download": 763,
+            "witness": 814,
+            "proving": 8558,
+            "verifying": 13
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 738,
+          "proof_bytes": 16224
+        },
+        {
+          "run": 3,
+          "threads": 1,
+          "wall_ms": 10020,
+          "stage_ms": {
+            "download": 723,
+            "witness": 802,
+            "proving": 8469,
+            "verifying": 13
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 738,
+          "proof_bytes": 16224
+        }
+      ],
+      "warm_median_ms": {
+        "total": 10166,
+        "witness": 804,
+        "proving": 8558
+      },
+      "peak_renderer_rss_mib": 1690,
+      "bb_wasm_memory_mib": 738
+    },
+    {
+      "label": "desktop",
+      "cpu_throttling": 4,
+      "threads": 18,
+      "cross_origin_isolated": true,
+      "main_thread_probe_ms": 717,
+      "cold_run": {
+        "run": 1,
+        "threads": 18,
+        "wall_ms": 3185,
+        "stage_ms": {
+          "download": 765,
+          "witness": 820,
+          "proving": 1576,
+          "verifying": 11
+        },
+        "downloaded_bytes": 18790270,
+        "cached_bytes": 0,
+        "bb_wasm_memory_mib": 805,
+        "proof_bytes": 16224
+      },
+      "warm_runs": [
+        {
+          "run": 1,
+          "threads": 18,
+          "wall_ms": 3181,
+          "stage_ms": {
+            "download": 740,
+            "witness": 819,
+            "proving": 1594,
+            "verifying": 11
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 805,
+          "proof_bytes": 16224
+        },
+        {
+          "run": 2,
+          "threads": 18,
+          "wall_ms": 2911,
+          "stage_ms": {
+            "download": 655,
+            "witness": 758,
+            "proving": 1476,
+            "verifying": 7
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 805,
+          "proof_bytes": 16224
+        },
+        {
+          "run": 3,
+          "threads": 18,
+          "wall_ms": 2875,
+          "stage_ms": {
+            "download": 643,
+            "witness": 748,
+            "proving": 1456,
+            "verifying": 14
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 805,
+          "proof_bytes": 16224
+        }
+      ],
+      "warm_median_ms": {
+        "total": 2911,
+        "witness": 758,
+        "proving": 1476
+      },
+      "peak_renderer_rss_mib": 2623,
+      "bb_wasm_memory_mib": 805
+    },
+    {
+      "label": "desktop",
+      "cpu_throttling": 6,
+      "threads": 1,
+      "cross_origin_isolated": true,
+      "main_thread_probe_ms": 1073,
+      "cold_run": {
+        "run": 1,
+        "threads": 1,
+        "wall_ms": 10070,
+        "stage_ms": {
+          "download": 730,
+          "witness": 799,
+          "proving": 8514,
+          "verifying": 11
+        },
+        "downloaded_bytes": 18790270,
+        "cached_bytes": 0,
+        "bb_wasm_memory_mib": 738,
+        "proof_bytes": 16224
+      },
+      "warm_runs": [
+        {
+          "run": 1,
+          "threads": 1,
+          "wall_ms": 10055,
+          "stage_ms": {
+            "download": 721,
+            "witness": 805,
+            "proving": 8499,
+            "verifying": 14
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 738,
+          "proof_bytes": 16224
+        },
+        {
+          "run": 2,
+          "threads": 1,
+          "wall_ms": 10176,
+          "stage_ms": {
+            "download": 740,
+            "witness": 839,
+            "proving": 8567,
+            "verifying": 15
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 738,
+          "proof_bytes": 16224
+        },
+        {
+          "run": 3,
+          "threads": 1,
+          "wall_ms": 10026,
+          "stage_ms": {
+            "download": 730,
+            "witness": 819,
+            "proving": 8453,
+            "verifying": 11
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 738,
+          "proof_bytes": 16224
+        }
+      ],
+      "warm_median_ms": {
+        "total": 10055,
+        "witness": 819,
+        "proving": 8499
+      },
+      "peak_renderer_rss_mib": 1703,
+      "bb_wasm_memory_mib": 738
+    },
+    {
+      "label": "desktop",
+      "cpu_throttling": 6,
+      "threads": 18,
+      "cross_origin_isolated": true,
+      "main_thread_probe_ms": 1079,
+      "cold_run": {
+        "run": 1,
+        "threads": 18,
+        "wall_ms": 3117,
+        "stage_ms": {
+          "download": 748,
+          "witness": 807,
+          "proving": 1535,
+          "verifying": 11
+        },
+        "downloaded_bytes": 18790270,
+        "cached_bytes": 0,
+        "bb_wasm_memory_mib": 805,
+        "proof_bytes": 16224
+      },
+      "warm_runs": [
+        {
+          "run": 1,
+          "threads": 18,
+          "wall_ms": 3157,
+          "stage_ms": {
+            "download": 748,
+            "witness": 821,
+            "proving": 1555,
+            "verifying": 11
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 805,
+          "proof_bytes": 16224
+        },
+        {
+          "run": 2,
+          "threads": 18,
+          "wall_ms": 2913,
+          "stage_ms": {
+            "download": 644,
+            "witness": 756,
+            "proving": 1492,
+            "verifying": 7
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 805,
+          "proof_bytes": 16224
+        },
+        {
+          "run": 3,
+          "threads": 18,
+          "wall_ms": 2894,
+          "stage_ms": {
+            "download": 643,
+            "witness": 757,
+            "proving": 1460,
+            "verifying": 7
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 805,
+          "proof_bytes": 16224
+        }
+      ],
+      "warm_median_ms": {
+        "total": 2913,
+        "witness": 757,
+        "proving": 1492
+      },
+      "peak_renderer_rss_mib": 2632,
+      "bb_wasm_memory_mib": 805
+    },
+    {
+      "label": "efficiency-cores",
+      "cpu_throttling": 1,
+      "threads": 1,
+      "cross_origin_isolated": true,
+      "main_thread_probe_ms": 539,
+      "cold_run": {
+        "run": 1,
+        "threads": 1,
+        "wall_ms": 43823,
+        "stage_ms": {
+          "download": 4186,
+          "witness": 3114,
+          "proving": 36414,
+          "verifying": 56
+        },
+        "downloaded_bytes": 18790270,
+        "cached_bytes": 0,
+        "bb_wasm_memory_mib": 738,
+        "proof_bytes": 16224
+      },
+      "warm_runs": [
+        {
+          "run": 1,
+          "threads": 1,
+          "wall_ms": 42036,
+          "stage_ms": {
+            "download": 2564,
+            "witness": 2932,
+            "proving": 36461,
+            "verifying": 38
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 738,
+          "proof_bytes": 16224
+        },
+        {
+          "run": 2,
+          "threads": 1,
+          "wall_ms": 41628,
+          "stage_ms": {
+            "download": 2594,
+            "witness": 3051,
+            "proving": 35911,
+            "verifying": 46
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 738,
+          "proof_bytes": 16224
+        },
+        {
+          "run": 3,
+          "threads": 1,
+          "wall_ms": 40938,
+          "stage_ms": {
+            "download": 2306,
+            "witness": 2640,
+            "proving": 35902,
+            "verifying": 51
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 738,
+          "proof_bytes": 16224
+        }
+      ],
+      "warm_median_ms": {
+        "total": 41628,
+        "witness": 2932,
+        "proving": 35911
+      },
+      "peak_renderer_rss_mib": 1418,
+      "bb_wasm_memory_mib": 738
+    },
+    {
+      "label": "efficiency-cores",
+      "cpu_throttling": 1,
+      "threads": 4,
+      "cross_origin_isolated": true,
+      "main_thread_probe_ms": 529,
+      "cold_run": {
+        "run": 1,
+        "threads": 4,
+        "wall_ms": 17585,
+        "stage_ms": {
+          "download": 2696,
+          "witness": 3012,
+          "proving": 11785,
+          "verifying": 52
+        },
+        "downloaded_bytes": 18790270,
+        "cached_bytes": 0,
+        "bb_wasm_memory_mib": 771,
+        "proof_bytes": 16224
+      },
+      "warm_runs": [
+        {
+          "run": 1,
+          "threads": 4,
+          "wall_ms": 17560,
+          "stage_ms": {
+            "download": 2674,
+            "witness": 2754,
+            "proving": 12039,
+            "verifying": 53
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 771,
+          "proof_bytes": 16224
+        },
+        {
+          "run": 2,
+          "threads": 4,
+          "wall_ms": 17194,
+          "stage_ms": {
+            "download": 2236,
+            "witness": 2973,
+            "proving": 11917,
+            "verifying": 26
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 771,
+          "proof_bytes": 16224
+        },
+        {
+          "run": 3,
+          "threads": 4,
+          "wall_ms": 17370,
+          "stage_ms": {
+            "download": 2127,
+            "witness": 3019,
+            "proving": 12163,
+            "verifying": 33
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 771,
+          "proof_bytes": 16224
+        }
+      ],
+      "warm_median_ms": {
+        "total": 17370,
+        "witness": 2973,
+        "proving": 12039
+      },
+      "peak_renderer_rss_mib": 2011,
+      "bb_wasm_memory_mib": 771
+    }
+  ]
+}

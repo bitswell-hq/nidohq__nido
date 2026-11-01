@@ -42,6 +42,10 @@ async function handle(method: string, p: Record<string, unknown>): Promise<unkno
       return vault.due(p.ledger as number);
     case 'mature':
       return vault.mature(p.views as never);
+    case 'inbound':
+      return vault.inbound(p.envelope as Uint8Array);
+    case 'mail':
+      return vault.mail(p.raw as Uint8Array);
     default:
       throw new Error(`unknown method ${method}`);
   }

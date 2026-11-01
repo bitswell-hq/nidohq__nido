@@ -1,0 +1,41 @@
+---
+// The email recovery prover, timed in this browser. A static page under the
+// recovery routes (same COOP/COEP headers as /security/recover/), with no
+// wallet state: it proves a TEST-ONLY synthetic email. The logic lives in
+// src/lib/recovery/proverBench.ts.
+import NidoLayout from '../../../../layouts/NidoLayout.astro';
+---
+<NidoLayout title="Prover benchmark" shell="focused">
+  <div class="pad" id="bench-root" style="display:grid;gap:12px;padding-top:24px;">
+    <h1 class="disp" style="margin:0;font-size:26px;">Email recovery prover benchmark</h1>
+    <p class="mut" style="margin:0;font-size:13.5px;line-height:1.5;">
+      Proves one recovery email in this browser, exactly as the recovery page does, and reports how long each step took.
+      The email is a TEST-ONLY synthetic message signed by a test key; nothing here touches a Nido or the network beyond downloading the prover.
+    </p>
+    <div class="card" style="padding:16px;display:grid;gap:10px;">
+      <div class="mut" style="font-size:12.5px;" data-env></div>
+      <label class="pol-input-label">Proofs in a row
+        <input name="runs" class="input" type="number" min="1" value="3" style="max-width:120px;">
+      </label>
+      <label class="pol-check"><input type="checkbox" name="cold" checked> Start with an empty cache (measures the download)</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn primary" type="button" data-threads="1">Run with 1 thread</button>
+        <button class="btn soft" type="button" data-threads="max">Run with every core</button>
+      </div>
+      <div class="mut" style="font-size:12.5px;" data-status role="status"></div>
+    </div>
+    <button class="btn ghost sm" type="button" data-copy hidden>Copy results (JSON)</button>
+    <pre id="out" class="mono" style="white-space:pre-wrap;word-break:break-all;font-size:11px;margin:0;">READY</pre>
+  </div>
+</NidoLayout>
+
+<style is:global>
+  .pol-input-label { display: grid; gap: 5px; font-size: 12.5px; font-weight: 600; }
+  .pol-check { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; }
+</style>
+
+<script>
+  import { mountBench } from '../../../../lib/recovery/proverBench.js';
+
+  mountBench(document.getElementById('bench-root')!);
+</script>

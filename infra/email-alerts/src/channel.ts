@@ -9,6 +9,7 @@
 import { type ChildProcess, fork } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import type { ContactRequest } from '@nidohq/email-recovery';
+import type { InboundResult } from './vault/inbound.js';
 import type {
   ChainView,
   ContactResult,
@@ -35,6 +36,8 @@ export interface VaultApi {
   dispatch(ev: DispatchRequest): Promise<{ status: 'done' | 'retry'; writes: Writes }>;
   due(ledger: number): Promise<string[]>;
   mature(views: Record<string, ChainView>): Promise<{ applied: string[]; dropped: string[]; postponed: string[]; writes: Writes }>;
+  /** A browser's sealed inbound registration (spec §4.6). */
+  inbound(envelope: Uint8Array): Promise<InboundResult>;
   close(): Promise<void>;
 }
 
@@ -57,6 +60,9 @@ export class InProcessVault implements VaultApi {
   }
   mature(views: Record<string, ChainView>) {
     return this.vault.mature(views);
+  }
+  inbound(envelope: Uint8Array) {
+    return this.vault.inbound(envelope);
   }
   async close() {}
 }
@@ -132,6 +138,18 @@ export class ProcessVault implements VaultApi {
   }
   mature(views: Record<string, ChainView>) {
     return this.request('mature', { views }) as Promise<{ applied: string[]; dropped: string[]; postponed: string[]; writes: Writes }>;
+  }
+  inbound(envelope: Uint8Array) {
+    return this.request('inbound', { envelope }) as Promise<InboundResult>;
+  }
+  /**
+   * Mail for `RECOVERY_INBOX`, handed to the vault's MX. In a deployment the
+   * MX runs in the enclave and SMTP's TLS terminates there, so the host
+   * never holds these octets; here they cross the test's own channel to the
+   * vault process, and the host only receives the sealed copies.
+   */
+  mail(raw: Uint8Array) {
+    return this.request('mail', { raw }) as Promise<Record<string, Uint8Array>>;
   }
   async close() {
     this.child.kill();

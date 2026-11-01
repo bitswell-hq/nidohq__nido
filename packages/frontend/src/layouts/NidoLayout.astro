@@ -42,6 +42,8 @@ const exampleDappUrl = import.meta.env.PUBLIC_EXAMPLE_DAPP_URL as string | undef
     <meta name="color-scheme" content="light" />
     <link rel="canonical" href={canonical} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- Installable (iOS Web Push needs the Home Screen app), for recovery alerts. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
     <title>{!title || title.includes('Nido') ? title || 'Nido' : `${title} · Nido`}</title>
     <meta name="description" content={description} />
 

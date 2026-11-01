@@ -13,6 +13,11 @@ same code runs in browsers and in Node 20+.
 | `hpke.ts` | HPKE (RFC 9180) base mode, DHKEM(P-256, HKDF-SHA256), HKDF-SHA256, AES-128-GCM, through `@hpke/core` | §10.3 |
 | `enrollment.ts` | Sealed alert-contact requests (register, replace, remove, confirm), the WebAuthn challenge an account passkey signs, and §9.3 rule 2 | §10.3 |
 | `strkey.ts` | `C...` addresses to and from 32-byte contract ids | |
+| `prover/` | The browser prover: `RecoveryProver` starts a Web Worker per proof (`worker.ts`, serving `serve.ts`'s protocol), which downloads and caches the artifact, key and CRS (`assets.ts`, pinned CRS digests), solves the witness with noir_js, proves with Barretenberg on threads when the page is cross-origin isolated, verifies the proof under the circuit's key, and reports each stage (`protocol.ts`) | §6.5 |
+| `enrollmentEmail.ts` | The enrollment Subject (`E`), the wallet's check of the enrollment email with the circuit's rules, and the salted key pin tree | §5.4, §7.4 |
+| `backup.ts`, `effWordlist.ts` | The `account_code` backups: the passphrase-encrypted block (Argon2id, AES-256-GCM) and the recovery kit's 26 characters | §5.6 |
+| `dkimKey.ts` | The key list, DKIM key records, and DNS-over-HTTPS JSON answers | §7.7 |
+| `inbound.ts` | The sealed inbound path: a browser's sealed registration for a Subject value, and opening the message the vault sealed to it | §4.6 |
 
 A contact change in the browser:
 
@@ -31,9 +36,9 @@ await postContact(encodeContactRequest(finish({ publicKey: accountSignerKey, ...
 ```
 
 The wallet UI around this (subscribing the service worker, showing codes,
-reading the registry) is not part of this package.
+reading the registry) is `packages/frontend/src/lib/recovery/`.
 
-The circuit's inputs for a recovery email, as the browser prover will build
+The circuit's inputs for a recovery email, as the browser prover builds
 them:
 
 ```ts
@@ -49,6 +54,22 @@ const solved = await new Noir(recoveryCircuit).execute(noirInputs(witness));
 event carries the modulus; `leaf`, `siblings` and `root` the path) or from
 the guardian's pin tree.
 
+Proving it in the browser, with progress:
+
+```ts
+const prover = new RecoveryProver({ circuitUrl, vkUrl, circuitId });   // circuitId = sha256(vk)
+const proof = await prover.prove(
+  { eml, accountCode, rho, statement, modulus, keyPath },
+  { onProgress: (e) => show(e.stage, e.elapsedMs, e.loaded, e.total) },
+);
+// proof.proof and proof.publicInputs go into the guardian's approval (spec §8.1)
+```
+
+The worker is `dist/prover/worker.js`, started as a module worker; a
+bundler that understands `new Worker(new URL(...), { type: 'module' })`
+(Vite, which the wallet uses) emits it. The page and every worker script
+need cross-origin isolation for threads (spec §6.5).
+
 ```sh
 npm run build -w @nidohq/email-recovery
 npx tsc -p packages/email-recovery/tsconfig.test.json
@@ -59,6 +80,12 @@ The tests check the alert code against an independent `node:crypto`
 computation and a pinned vector, HPKE against RFC 9180 Appendix A.3.1, the
 StrKey codec against the Stellar SDK, and the attestation verifier against
 the Nitro mock of `@nidohq/email-mocks` across 25 refusal cases.
+
+`test/prover.test.ts` checks the prover's protocol, cache and stages with
+Barretenberg stood in, and proves the Gmail fixture for real through the
+same code; `test/enrollmentEmail.test.ts` the enrollment check, the pin tree
+(against the registry's vector) and the backups (Argon2id against RFC 9106);
+`test/dkimKey.test.ts` the key records and the key list.
 
 For the circuit's inputs (`test/recoveryInputs.test.ts`): the `P2` hashes
 against the values the circuit's Noir tests and the DKIM key registry pin;
@@ -75,5 +102,6 @@ its claim (`test/attackHarness.ts`) and pins the assertion that refuses it.
 | --- | --- |
 | `scripts/email-fixture.mjs` | TEST-ONLY: the provider keys the integration tests' registry admits, and the recovery email and `Prover.toml` for one approval (`just gen-email-proofs` runs it) |
 | `scripts/measure-bbjs.mjs` | Proves a committed fixture with bb.js and prints its time and peak memory (`circuits/email-recovery/scripts/measure.sh` runs it) |
+| `scripts/dkim-key-list.mjs` | Writes the key list (spec §7.7) from a DKIM key registry over RPC |
 
 Both need the package built first.

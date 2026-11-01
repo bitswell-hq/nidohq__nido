@@ -10,6 +10,12 @@
  * `authenticatorData || SHA-256(clientDataJSON)`, low-S), and add the relying
  * party: `rpIdHash` must be `SHA-256(rpId)` and the origin one of the
  * wallet's.
+ *
+ * A Nido passkey's relying party is its account's own subdomain
+ * (`<account>.<apex>`, the account's `C...` address in lowercase), so with
+ * `accountApex` set the rpId and origin are the ones of the account the
+ * request names: a passkey of one account cannot authorize another's
+ * contact, even if it were also that account's signer.
  */
 import { createPublicKey, verify } from 'node:crypto';
 import { bytes, type Authorization } from '@nidohq/email-recovery';
@@ -23,8 +29,21 @@ const BE = 0x08;
 const BS = 0x10;
 
 export interface RelyingParty {
+  /** A fixed relying party, when `accountApex` is not set. */
   rpId: string;
   origins: string[];
+  /** The wallet's apex (`nido.fyi`); each account's rpId is `<account>.<apex>`, its origin `https://<account>.<apex>`. */
+  accountApex?: string;
+  /** The origin scheme and port for `accountApex` (`https:` and none in a deployment). */
+  accountOrigin?: { scheme: 'https:' | 'http:'; port?: number };
+}
+
+/** The rpId and origins an assertion for `account` (`C...`) must carry. */
+export function relyingPartyFor(rp: RelyingParty, account: string): { rpId: string; origins: string[] } {
+  if (!rp.accountApex) return rp;
+  const rpId = `${account.toLowerCase()}.${rp.accountApex}`;
+  const o = rp.accountOrigin ?? { scheme: 'https:' };
+  return { rpId, origins: [`${o.scheme}//${rpId}${o.port ? `:${o.port}` : ''}`] };
 }
 
 function p256Key(raw: Uint8Array) {
@@ -44,7 +63,7 @@ export async function checkAuthorization(
   a: Authorization,
   challenge: Uint8Array,
   signers: Uint8Array[],
-  rp: RelyingParty,
+  rp: { rpId: string; origins: string[] },
 ): Promise<void> {
   if (a.publicKey.length !== 65 || a.publicKey[0] !== 4) throw new Error('authorization: bad public key');
   if (!signers.some((s) => equal(s, a.publicKey))) throw new Error('authorization: not a signer of the account');
