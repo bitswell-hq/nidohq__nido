@@ -1,0 +1,97 @@
+name: Attenuating-grants paper and slides
+
+# The claim ledger (paper/claims.yaml) points at Lean theorems, tests and
+# measurement files across the repository, so a change to any of them can
+# break the build as surely as a change to the paper.
+on:
+  pull_request:
+    paths:
+      - "paper/**"
+      - "formal/**"
+      - "crates/grant-eval/**"
+      - "crates/grant-component/**"
+      - "crates/agent-host/**"
+      - "crates/grant-relay/**"
+      - "crates/key-keeper/**"
+      - "crates/integration-tests/tests/it/grant_signer.rs"
+      - "contracts/grant-signer/**"
+      - "evaluation/**"
+      - "research/email-recovery/check-claims.pl"
+      - "research/email-recovery/claims-to-tex.pl"
+      - "research/email-recovery/shared/claims.sty"
+      - ".github/workflows/paper.yml"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build PDFs (pinned TeX Live)
+    runs-on: ubuntu-latest
+    steps:
+      # One claim's evidence lives in vendor/perch, so the checker needs the
+      # submodule.
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      # `make -C paper` runs the claim checks and latexmk inside the TeX Live
+      # image pinned by digest in paper/Makefile.
+      - name: Build paper and slides
+        run: make -C paper
+
+      - name: Upload PDFs
+        uses: actions/upload-artifact@v4
+        with:
+          name: attenuating-grants-pdfs
+          path: |
+            paper/build/paper.pdf
+            paper/build/slides.pdf
+          if-no-files-found: error
+
+  # On main, the latest PDFs are also assets of the rolling prerelease
+  # paper-latest, whose tag follows the commit they were built from.
+  publish:
+    name: Publish PDFs to the paper-latest release
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: paper-latest-release
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: paper-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: attenuating-grants-pdfs
+          path: pdfs
+
+      - name: Move the tag and replace the release assets
+        run: |
+          notes="Paper and slides built by the paper workflow from ${GITHUB_SHA} on main."
+          # Point the tag at the built commit (create it, or force-move it).
+          if gh api "repos/$GH_REPO/git/refs/tags/$TAG" >/dev/null 2>&1; then
+            gh api -X PATCH "repos/$GH_REPO/git/refs/tags/$TAG" \
+              -f sha="$GITHUB_SHA" -F force=true >/dev/null
+          else
+            gh api -X POST "repos/$GH_REPO/git/refs" \
+              -f ref="refs/tags/$TAG" -f sha="$GITHUB_SHA" >/dev/null
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --prerelease \
+              --title "One Policy, Two Boundaries: paper and slides (latest main)" \
+              --notes "$notes"
+          else
+            gh release create "$TAG" --prerelease --verify-tag \
+              --title "One Policy, Two Boundaries: paper and slides (latest main)" \
+              --notes "$notes"
+          fi
+          gh release upload "$TAG" --clobber pdfs/paper.pdf pdfs/slides.pdf
