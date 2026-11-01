@@ -16,7 +16,8 @@
 //! Four vocabularies instantiate the model: [`chain`] (Soroban contract
 //! invocations and contract creation), [`files`], [`network`] and
 //! [`signing`]. Each defines its action and caveat types and its own
-//! `allows` / `allows_all`.
+//! `allows` / `allows_all`. [`budget`] holds the allowances along the
+//! delegation tree and the transactional spend that charges them.
 //!
 //! The code is written in a restricted Rust subset so Charon and Aeneas can
 //! translate it to Lean: plain structs and enums, `while` loops over bounds
@@ -28,6 +29,7 @@
 
 extern crate alloc;
 
+pub mod budget;
 pub mod chain;
 pub mod files;
 pub mod network;

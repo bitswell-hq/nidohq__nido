@@ -1,6 +1,6 @@
 # Attenuating Grants: Lean model
 
-The readable Lean specification of attenuating grants, its first three
+The readable Lean specification of attenuating grants, its first four
 theorems, a step-counting evaluator with a proven cost bound, and the proof
 that the Rust evaluator in `crates/grant-eval`, translated to Lean by Charon
 and Aeneas, agrees with the specification. An AI
@@ -209,6 +209,70 @@ no such term: the empty grant checks one action in zero steps.
 | `Network.hostIn_iff`, `portIn_iff`, `schemeIn_iff` | each Network caveat is membership of its field |
 | `Signing.keyIn_iff`, `networkIn_iff`, `payloadIn_iff` | each Signing caveat is membership of its field |
 
+### 4. Budget safety
+
+`AttenuatingGrants/Budget.lean` models budgets as allowances along the
+delegation tree. The ledger is a list of nodes, one per grant:
+
+| Definition | Meaning |
+|---|---|
+| `Node` | `parent : Option Nat` (toward the root), `allowance : Nat`, `spent : Nat` (every successful spend at or under the node) |
+| `Ledger` | `List Node`, indexed from zero; a parent precedes its children |
+| `Ledger.Within l i a` | `a` is `i` or an ancestor of `i`: a spend at `i` charges `a` |
+| `Ledger.walk`, `Ledger.chargePath` | walk from the spender to its root, failing at the first node that cannot take the amount, a missing node, or a parent link that does not point to an earlier node |
+| `Ledger.spend l i amount` | one transaction: the outcome and the ledger after it; success charges every node on the chain, failure returns `l` with `.overdrawn a`, `.noSuchNode a` or `.badParent a` |
+| `Ledger.refill l i extra` | raise node `i`'s allowance by `extra`; fails past `amountMax`; an admin-document action, never an agent's |
+| `Ledger.run l ops` | apply a list of spends and refills; returns the final ledger and the log of successful spends |
+| `spentUnder l log a` | the total of the logged spends made at or under `a` |
+
+Allowances oversubscribe: children's allowances may sum to more than their
+parent's, and nothing restricts a child's allowance relative to its
+parent's. Because a spend charges every ancestor or fails changing nothing,
+spending under a node still never exceeds that node's allowance. An
+`.overdrawn a` error names the first node on the chain, counting from the
+spender, that cannot take the amount; that node is where the refill request
+goes, up the delegation chain to a human approver.
+
+| Lean name | Statement |
+|---|---|
+| `Ledger.spend_ok_charges` | success: `l.Within i a → l'[a]? = l[a]?.map (spent + amount)` |
+| `Ledger.spend_ok_unchanged` | success: `¬ l.Within i a → l'[a]? = l[a]?` |
+| `Ledger.spend_ok_length` | success: `l'.length = l.length` |
+| `Ledger.spend_error` | failure: `(l.spend i amount).1 = .error e → (l.spend i amount).2 = l` |
+| `Ledger.spend_overdrawn` | `.overdrawn a` names a node with `l.Within i a` and `allowance < spent + amount` |
+| `Ledger.mem_walk` | the walk returns exactly the nodes `a` with `l.Within i a` |
+| `Ledger.parentOf_spend`, `parentOf_refill` | spends and refills change no parent link |
+| `Ledger.spend_withinAllowance`, `refill_withinAllowance`, `run_withinAllowance` | every node's `spent ≤ allowance` is preserved |
+| `Ledger.spend_bounded`, `refill_bounded` | every allowance `≤ amountMax` is preserved |
+| `Ledger.spent_run` | after a run, each node's spent is its starting spent plus `spentUnder` |
+| `Ledger.spentUnder_le_allowance` | from a ledger with nothing spent, after any run, `spentUnder l log a ≤` node `a`'s allowance |
+
+`spentUnder_le_allowance` has no hypothesis on the allowances, so it holds
+however much a node's children oversubscribe it. Two `example`s at the end of
+the module check the oversubscribed-siblings case by `rfl`: a root of 10 with
+two children of 8 each; after the first child spends 8, the second child's
+spend of 3 fails as `.overdrawn 0`, and its spend of 2 succeeds.
+
+In the model, the failure half of theorem 4 holds by the shape of `spend`:
+the error branch returns its input ledger. The Rust evaluator mutates the
+ledger in place, so there the same statement is a property of the code,
+tested and still to be proven (see below).
+
+**Amounts.** The model uses unbounded `Nat`; the Rust evaluator uses `u128`.
+`amountMax` is `2 ^ 128 - 1`. A refill fails when the new allowance would
+exceed it, matching Rust's `checked_add`. A spend needs no bound: every Rust
+allowance is at most `amountMax`, so whenever `spent + amount` overflows a
+`u128` it also exceeds the allowance, and both the model and the code fail as
+overdrawn at the same node. On ledgers whose fields fit in `u128` (which
+`spend_bounded`, `refill_bounded` and `spend_withinAllowance` keep true) every
+model value is a `u128` value, so the equivalence can relate the two by each
+scalar's value as a `Nat`, with no wrapped or saturated case. Indices are `Nat` in the
+model and `usize` in Rust.
+
+**Termination.** `walk` recurses on its fuel, the ledger's length, matching
+the Rust loop bound. Every step moves to a strictly earlier node, so the fuel
+runs out only on an empty ledger.
+
 All names are in the `AttenuatingGrants` namespace.
 
 ## Extracted evaluator
@@ -323,10 +387,11 @@ Proven: the Lean translation agrees with the model. Trusted, not proven:
 ## Axioms
 
 Every theorem above depends on at most Lean's built-in axioms `propext`,
-`Quot.sound` and `Classical.choice`; none depends on an axiom declared by
-Aeneas's Lean library. `AttenuatingGrants/Axioms.lean` records each theorem's
-`#print axioms` output under `#guard_msgs`, so `lake build` fails if any of
-them gains a dependency (such as `sorryAx`).
+`Quot.sound` and `Classical.choice` (`spentUnder` decides `Within`
+classically); none depends on an axiom declared by Aeneas's Lean library.
+`AttenuatingGrants/Axioms.lean` records each theorem's `#print axioms` output
+under `#guard_msgs`, so `lake build` fails if any of them gains a dependency
+(such as `sorryAx`).
 
 ## Proven and unproven
 
@@ -346,4 +411,17 @@ Stated but unproven, or not yet stated:
   code's semantics (Charon, Aeneas and Aeneas's Lean library) and that rustc
   compiles that code faithfully are trusted, not proven
   ([Trusted base](#trusted-base)).
-- **Budgets** (theorem 4): not in this package.
+- **Budget equivalence**: the extraction translates `grant_eval::budget`
+  into `Extracted/GrantEval.lean`, but the proof that the translation agrees
+  with `Budget.lean` is not in this package. That proof must show that
+  `spend` leaves the ledger unchanged on every error path, that its charging
+  walk visits exactly the chain `check_spend` accepted, and that the charging
+  addition never overflows. Until it exists, theorem 4 is about the model,
+  and the Rust budget code is tested, not proven.
+- **Growing the tree**: `Ledger.run` covers spends and refills over a fixed
+  ledger. Appending a node when a grant is delegated, and issuing a new root,
+  are not modelled, so `spentUnder_le_allowance` is not yet stated for runs
+  that add nodes.
+- **Ledger storage and approval**: where the ledger is stored (for example a
+  Soroban contract) and how a refill request reaches its approver are outside
+  this package.

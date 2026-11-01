@@ -90,6 +90,30 @@ Action: `{ key, network, payload: Transaction | AuthEntry | Message }`.
 Caveats `KeyIn(list)`, `NetworkIn(list)`, `PayloadIn(list)`, each holding iff
 that field is in the list.
 
+### `budget`
+
+Budgets are allowances along the delegation tree. The ledger is a slice of
+`Node { parent: Option<usize>, allowance: u128, spent: u128 }`, one per grant,
+where `spent` counts every successful spend at or under the node and a parent
+precedes its children (its index is smaller).
+
+| Function | Effect |
+| --- | --- |
+| `check_spend(ledger, node, amount)` | walks from `node` to its root and returns the first failure: `Overdrawn(i)` at the first node, counting from `node`, whose `spent + amount` overflows or exceeds its allowance; `NoSuchNode(i)` or `BadParent(i)` on a malformed ledger |
+| `spend(ledger, node, amount)` | if `check_spend` succeeds, adds `amount` to `node` and every ancestor; otherwise returns its error and changes nothing |
+| `refill(ledger, node, extra)` | raises `node`'s allowance by `extra`; `NoSuchNode` or `Overflow` change nothing |
+
+Children's allowances may sum to more than their parent's. Because every
+ancestor is charged in the same transaction, the total spent at or under a
+node never exceeds that node's allowance. `Overdrawn(i)` names where a refill
+request goes; `refill` is an admin-document action, never an agent's.
+
+The Lean model is `formal/AttenuatingGrants/Budget.lean`, which states and
+proves budget safety (theorem 4) for the model. Amounts there are unbounded
+`Nat`; a refill fails past `u128::MAX` as `checked_add` does, and a spend
+whose sum overflows `u128` exceeds the allowance in both, so the two agree on
+every `u128` input with no wrapped or saturated case.
+
 ## Restricted subset
 
 The evaluator is written so Charon and Aeneas can translate it to Lean, and so
@@ -101,14 +125,21 @@ the translation is a total function:
   `val_eq`); byte strings through the `bytes_eq` loop.
 - Each loop is a single `while i < s.len()` over one slice, with an early
   `return` and no nested loop, labelled `break` or `continue` (the loop forms
-  Aeneas's README lists as supported).
+  Aeneas's README lists as supported). The budget walks count steps with `i`
+  against the ledger's length and follow parent links with a second
+  variable.
 - Nothing in the evaluation path can panic:
   - slice indexing `s[i]` happens only under `i < s.len()` (and, in
     `bytes_eq` and `is_prefix`, after checking the second slice is at least as
     long);
   - argument indices come from caveats, so they go through `args.get(index)`;
-  - the only arithmetic is the loop counter `i + 1` with `i < s.len()`, which
-    cannot overflow;
+    budget node indices come from the ledger, so they go through `get` and
+    `get_mut`;
+  - the loop counter `i + 1` runs under `i < s.len()`, so it cannot overflow;
+  - budget amounts use `checked_add`, and an overflow fails the spend or
+    refill. The one plain addition, `spent += amount` in the charging walk,
+    runs only after `check_spend` found `spent + amount` within that node's
+    allowance;
   - `index as usize` widens a `u32`, lossless on every target with at least
     32-bit pointers (a compile-time assertion in `chain.rs` checks this).
 - No function calls a function of the same name in another module by its bare
@@ -138,6 +169,8 @@ actions. The wiring stays small and auditable:
   checked again.
 - The Soroban integration turns each authorization context into a `chain`
   action.
+- Budget wiring passes the node of the grant actually being spent under, and
+  exposes `refill` only to the admin document.
 
 **Grants control access, not information flow.** A grant decides which actions
 an agent may take. It does not track what the agent learns from an allowed
@@ -150,6 +183,17 @@ caveat. They check attenuation monotonicity, and agreement with a
 plain-Rust reading of the semantics, exhaustively over every grant of up to
 three caveats drawn from a small universe per vocabulary. The checks run
 against every action in that vocabulary's set.
+
+The budget tests cover oversubscribed siblings, a spend that exhausts a middle
+ancestor, the error naming the nearest overdrawn node, overflow at the
+spender and at an ancestor, refill overflow, and malformed ledgers, checking
+after every failure that the ledger is identical field for field. An
+exhaustive test runs every sequence of up to four spends and refills, from a
+universe of ten, on a five-node oversubscribed forest, against a plain-Rust
+reference. After each step it checks that a success charges exactly the
+spender's chain and a failure changes nothing, that every spent is within its
+allowance, and that each node's spent equals the total of successful spends
+at or under it.
 
 Proven in `formal/` about the Charon + Aeneas translation of this crate
 (`formal/AttenuatingGrants/Extracted/`), for each vocabulary:
@@ -167,6 +211,12 @@ Proven in `formal/` about the Charon + Aeneas translation of this crate
 `formal/README.md` lists the theorems and the pinned tool versions. These are
 statements about the translation; that it has this code's semantics, and that
 rustc compiles the code faithfully, is the trusted base above.
+
+Stated, not proven: that the translation of `budget` agrees with
+`formal/AttenuatingGrants/Budget.lean`. The extraction translates the module,
+but no equivalence proof covers it yet; it must show that `spend` changes
+nothing on every error path, that the charging walk visits exactly the chain
+`check_spend` accepted, and that its addition never overflows.
 
 ## Commands
 
