@@ -21,6 +21,8 @@ packages/frontend/dist/
 packages/passkey-sdk/dist/
 packages/stellar-wallets-kit-module/dist/
 packages/email-mocks/dist/
+packages/email-recovery/dist/
+infra/email-alerts/dist/
 packages/contract-bindings/*/dist/
 
 # Astro build cache

@@ -37,6 +37,9 @@ nido-email-guardian = { path = "../../contracts/email-guardian" }
 # feeds it.
 nido-dkim-registry = { path = "../../contracts/dkim-registry" }
 nido-dns-attestation-mock = { path = "../dns-attestation-mock" }
+# The enclave-image registry's client; the contract runs from its wasm
+# (`ENCLAVE_IMAGE_REGISTRY_WASM`).
+nido-enclave-image-registry = { path = "../../contracts/enclave-image-registry" }
 
 # Crypto
 p256 = { version = "0.13", features = ["ecdsa"] }

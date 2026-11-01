@@ -5,9 +5,11 @@ email inbox becomes one guardian approval in Perch's account recovery: what
 the recovery email must contain, how the account commits to the address,
 what the zero-knowledge circuit proves and exposes, how DKIM keys are
 identified and registered, what the per-account email-guardian contract
-checks, where one-factor safety is enforced, and which recovery events drive
-alerts. Every later component (the circuit, the key registry, the browser
-prover, the alert service, the formal model, the paper) builds against it.
+checks, where one-factor safety is enforced, which recovery events drive
+alerts, and how the alert service delivers them without its operator
+reading an address. Every later component (the circuit, the key registry,
+the browser prover, the alert service, the formal model, the paper) builds
+against it.
 
 Perch is used unchanged. Its recovery is specified in
 `vendor/perch/docs/recovery/spec.md` (cited here as **Perch §N**) and its
@@ -36,7 +38,7 @@ named in the sentence. Each requirement is marked with what backs it today:
 7. DKIM key identity, registry, and pin
 8. The email-guardian contract
 9. One-factor safety and policy rules
-10. Alert hook points
+10. Alerts
 11. Properties and their obligations
 12. Measurements
 13. Open questions
@@ -50,9 +52,10 @@ named in the sentence. Each requirement is marked with what backs it today:
 | Email guardian | `C`, the registry, the pin, the controller, the account, allowed actions, the verifier | One per account; counts as one Perch guardian (§8) |
 | Perch controller | The account's recovery configuration and attempts | Collects guardian approvals, enforces quorum, delay, cancellation [Perch] |
 | DKIM key registry | A Merkle tree of `(domain, key_hash)` leaves, a k-of-n multisig, an attester set | Says which key-tree roots are acceptable now (§7.3, §7.6) |
+| Enclave-image registry | Approved enclave measurements, a fixed multisig, a 14-day timelock | Says which enclave images may receive the alert vault's key (§10.4) |
 | DNS attesters | Ed25519 signing keys | Sign what a provider's DKIM key record publishes (§7.5) |
 | Proof verifier | The email circuit's verification key | Perch's UltraHonk verifier behind Perch's `ProofVerifierInterface` (§8.4) |
-| Alert service | A keyed lookup from account to alert channels | Notifies the user when the account's recovery state changes (§10) |
+| Alert service | A host that watches the controller, and a sealed vault holding a keyed lookup from account to alert contacts | Notifies the user when the account's recovery state changes (§10) |
 
 **Enrollment** (while the owner still holds a working passkey): the wallet
 draws `account_code`, the user sends an enrollment email, the wallet reads the
@@ -937,8 +940,9 @@ The builder tells the email guardian apart by a typed marker, never by its
 address: the wallet lists it in `RecoveryChoice.guardians` as
 `{ kind: 'email', address, allowedActions }` when it deploys it, and states
 the registered second channel as `RecoveryChoice.secondAlertChannel`
-(`'web-push'`). The alert service that registers the channel is
-**[specified]** (§10). `packages/passkey-sdk/src/perch/recoverySpec.test.ts`
+(`'web-push'`). The alert service registers the channel and refuses an
+email-guardian contact without it (§10.3) **[built, tested]**.
+`packages/passkey-sdk/src/perch/recoverySpec.test.ts`
 ("email guardian rules") pins each rule at its boundary **[built, tested]**:
 
 | Test | What it shows |
@@ -972,38 +976,333 @@ DNS attester mock) **[built, tested]**:
 | `email_approvals_alone_never_complete_a_recovery` | With a 2-of-2 quorum the email vote never authorizes; as the only guardian (quorum 1, `Loss`) it authorizes, but completion waits for the delay, the owner can cancel, and a new attempt needs a new email |
 | `email_approval_counts_toward_a_protected_reconfiguration` | Through `approve_change`, the email vote is one vote of a `Protected` reconfiguration quorum |
 
-## 10. Alert hook points
+## 10. Alerts
 
 Alerts are driven by the controller's events, filtered by account. Nothing
 is written on chain for alerts: no tag, no registration, no event from the
 guardian.
 
-| Event (topic 0) | Topic 1 | Alert |
-| --- | --- | --- |
-| `attempt_authorized` | account | **Required, on every channel:** the account has entered a recovery window; generic text plus the per-attempt verification code |
-| `recovery_completed` | account | Required: the account's signers changed |
-| `attempt_cancelled` | account | Informational |
-| `epoch_advanced` | account | Required: the recovery configuration (guardians, timing, the email guardian itself) changed |
-| `change_evidence_recorded` | account | Informational: approvals for a reconfiguration or upgrade are being collected |
-| `attempt_begun` | account | Informational and rate-limited: opening an attempt is permissionless, so these can be spammed |
-| `attempt_invalidated` | account | None |
+| Event (topic 0) | Topic 1 | Alert | Channels |
+| --- | --- | --- | --- |
+| `attempt_authorized` | account | **Required:** the account has entered a recovery window; generic text plus the per-attempt verification code | Every channel |
+| `recovery_completed` | account | Required: the account's signers changed | Every channel |
+| `epoch_advanced` | account | Required: the recovery configuration (guardians, timing, the email guardian itself) changed | Every channel |
+| `attempt_cancelled` | account | Informational | Email |
+| `change_evidence_recorded` | account | Informational: approvals for a reconfiguration or upgrade are being collected | Email |
+| `attempt_begun` | account | Informational and rate-limited: opening an attempt is permissionless, so these can be spammed | Email, at most one per account per 24 hours of ledger close time; the next one says how many were held back |
+| `attempt_invalidated` | account | None | None |
 
-Topic 0 is the event struct's name in snake case and topic 1 the account
-(`#[contractevent]` with one `#[topic]` field; structs in
-`perch-recovery/src/contract.rs`) [Perch].
+Topic 0 is the event struct's name in snake case, topic 1 the account, and
+the data the struct's other fields as a map (`#[contractevent]` with one
+`#[topic]` field; structs in `perch-recovery/src/contract.rs`) [Perch]; the
+recorded events of `crates/integration-tests/tests/it/email_alerts.rs` have
+exactly this shape **[built, tested]**. A completed recovery emits
+`epoch_advanced` and `recovery_completed` in the same transaction, so it
+sends both.
 
-**Lookup.** The alert service keeps each account's alert channels under
+**Lookup.** The vault keeps each account's alert contacts under
 
 ```text
 lookup = HMAC-SHA-256(k_alert, "nido/email-recovery/v1/alert-lookup" || account contract id)
 ```
 
-where `k_alert` never leaves the sealed vault that holds the addresses. The
-service computes `lookup` for the account in each event's topic and finds
-the record; an observer without `k_alert` cannot list which accounts have
-alerts. When email is a recovery factor, a second channel (Web Push to a
-passkey device) is required (§9.3 rule 2).
-**[specified]** (alert service).
+where `k_alert` never leaves the sealed vault that holds the addresses
+(§10.5). For each event the vault computes `lookup` for the account in
+topic 1 and finds the record; an observer of the stored records without
+`k_alert` cannot list which accounts have alerts **[built, tested]**
+(`infra/email-alerts/src/vault/keys.ts`; `test/custody.test.ts` recomputes
+it). When email is a recovery factor, a second channel (Web Push to a
+passkey device) is required (§9.3 rule 2, §10.3).
+
+The service is `infra/email-alerts` (host and vault) with the browser side
+in `packages/email-recovery` and every third party mocked in
+`packages/email-mocks`. What is built, what is mocked, and what is only
+specified is listed per subsection.
+
+### 10.1 The verification code
+
+Every alert carries a 6-digit code that identifies what it is about. The
+user compares it with the code the wallet shows for the attempt (or
+change, or epoch) the wallet knows about; the alert itself never names the
+account.
+
+```text
+k_code  = HKDF-SHA-256(ikm = account_code, salt = "", info = "nido/email-recovery/v1/alert-code-key", L = 32)
+
+subject = 0x01 || BE64(attempt_id)     attempt_begun, attempt_authorized, attempt_cancelled, recovery_completed
+        / 0x02 || BE64(epoch)          epoch_advanced
+        / 0x03 || digest               change_evidence_recorded (the 32-byte change digest)
+
+mac     = HMAC-SHA-256(k_code, "nido/email-recovery/v1/alert-code" || network_id || controller || account || subject)
+code    = BE64(mac[0..8]) mod 10^6, written as 6 digits with leading zeros, shown "123 456"
+```
+
+`network_id` is `sha256(network passphrase)`, `controller` the 32-byte
+contract id of the controller that emitted the event, `account` that of
+topic 1.
+
+- **Who computes it.** The vault, with the `k_code` the wallet registered
+  sealed at enrollment (§10.3). Any wallet that holds `account_code`, which
+  the email factor needs anyway (§5.1), computes the same code; a
+  recovering device that lost the passkey does too.
+- **What it hides.** Without `k_code` the code is unpredictable. The
+  sending service and the user's mail provider see the code but cannot
+  match it to an on-chain attempt, which would undo the blinding of §4.2;
+  nobody can choose a statement or attempt to produce a given code.
+- **What it is not.** It does not authenticate an alert: alerts carry no
+  link to act on, so a forged alert can only make the user open the wallet,
+  which reads the chain. A recovery that does not use the email factor
+  needs `account_code` (the recovery kit or the backup of §5.6) to show the
+  code.
+- `deriveAlertCodeKey` and `alertCode` in `packages/email-recovery/src/alertCode.ts`
+  are the only implementation; the vault imports them **[built, tested]**
+  (`test/alertCode.test.ts` checks them against an independent `node:crypto`
+  computation; `infra/email-alerts/test/alerts.test.ts` and
+  `test/e2e.test.ts` check that the email and the push carry the code the
+  wallet computes).
+
+Test vector: `account_code` = bytes `01..10`, `network_id =
+sha256("Test SDF Network ; September 2015")`, controller = 32 bytes `c1`,
+account = 32 bytes `a1`, attempt id 1:
+`k_code = a9045e1ee8c9fd6654033c8148a2569407441e29fefa90dc3ce38b35e03398e0`,
+code `169328`.
+
+The choice of derivation is open (§13 question 8).
+
+### 10.2 The alert service (host)
+
+The host is untrusted: it never holds an address, and a lying or stopped
+host can suppress alerts but cannot read or redirect them. It
+**[built, tested]** (`infra/email-alerts/src/service.ts`):
+
+- **Watches** the controller with Stellar RPC `getEvents`, filtered only by
+  contract id (so no query singles out an account), in pages, with a
+  stored cursor. A page is handled in order; each event's id is recorded as
+  handled in the same atomic state write (temporary file, `fsync`, rename)
+  that stores the vault's sealed output, and the cursor moves only after
+  the whole page. The watcher is caught up when the cursor's ledger reaches
+  the latest ledger: one request scans at most 10,000 ledgers
+  (observed on `soroban-testnet.stellar.org` and reproduced by the mock), so
+  a short page does not mean caught up. The client's requests were run
+  against that RPC, which accepted them and returned events of the shape the
+  watcher decodes.
+- **Never misses or repeats an alert.** After a restart it resumes from the
+  cursor; a crash after the vault sent but before the host stored the
+  answer re-dispatches the event, and the vault's delivery log refuses a
+  second send of the same (event, contact, channel). A failed alert goes to
+  a retry queue with exponential backoff (30 s doubling, at most 1 h)
+  without holding back later events.
+- **Tracks authorized attempts** per account from `attempt_authorized` until
+  `attempt_cancelled`, `recovery_completed`, or `expires_at`.
+- **Relays** wallet requests to the vault with the account's chain state:
+  the latest ledger, whether an attempt is authorized, and the account's
+  administrative passkeys, read with `simulateTransaction` of the account's
+  `installed_rules()` (every `External` signer on a non-recovery rule that
+  covers calls to the account itself: a `Default` rule or a `CallContract`
+  rule naming the account; Nido's documents scope the admin rule as
+  `CallContract(account)`). The read is tested against the recorded
+  `installed_rules()` of a real account on the integration-test host, served
+  through the RPC mock's `simulateTransaction`; it has not been run against
+  a live network.
+- **Matures** contact changes (§10.3) when they are due.
+
+Residual: public RPCs keep a bounded history (120,960 ledgers by default,
+confirmed on testnet). A watcher stopped for longer loses events; the RPC
+refuses its cursor and the service logs it. Reconciling from controller
+state after such an outage is not built (§13).
+
+### 10.3 Alert contacts
+
+A contact is an address plus, optionally, a Web Push subscription, `k_code`,
+the purposes (bit 0: security alerts, always set; bit 1: product updates),
+and the version of the consent text the user saw. The wallet seals it to
+the vault with HPKE (RFC 9180, base mode, DHKEM(P-256, HKDF-SHA256),
+HKDF-SHA256, AES-128-GCM, `info = "nido/email-recovery/v1/vault-request"`)
+after verifying the vault's attestation (§10.5).
+
+**Owner authorization.** Every registration, replacement, and removal
+carries a WebAuthn assertion (W3C WebAuthn Level 3 §7.2) by one of the
+account's administrative passkeys over
+
+```text
+challenge = sha256("nido/email-recovery/v1/alert-contact/" || op || account || contact
+                   || sha256(envelope) || BE32(purposes) || BE32(consent_version) || nonce)
+```
+
+with `op` one of `register`, `replace`, `remove`; `contact` the 16-byte id
+of the new contact (or of the one to remove); `nonce` 32 bytes the vault
+issued, single use, valid 10 minutes (`remove` signs purposes and consent
+version 0). The vault checks the assertion as the WebAuthn verifier of Perch
+accounts does on chain (type `webauthn.get`, the challenge, UP and UV set,
+BS only with BE, P-256 over `authenticatorData || SHA-256(clientDataJSON)`,
+low-S) plus the relying party (`rpIdHash = SHA-256(rpId)`, an allowed
+origin), and that the key is in the signer set the host relays. A lying host
+could relay a false signer set; that host can already suppress every alert,
+so the check defends against third parties, not against the host.
+
+**Rules** **[built, tested]** (`infra/email-alerts/src/vault/vault.ts`,
+`test/contacts.test.ts`):
+
+1. A new contact receives alerts only after its email confirmation: the
+   vault mails a 6-digit code, valid 72 hours, five attempts.
+2. Registration is refused while the account has a live contact; changing
+   it is a replacement.
+3. Replacing or removing a contact takes effect 241,920 ledgers (14 days,
+   longer than the 7-day minimum delay of §9.3 rule 3) after the request.
+   Until then the old contact keeps receiving alerts, and it is told about
+   the change at once, by email and push. A replacement whose new contact
+   was not confirmed by then is dropped.
+4. Removal is refused while a recovery attempt is authorized, and a removal
+   that matures while one is authorized waits until it ends.
+5. When a change matures, the vault re-checks that the authorizing passkey
+   is still an administrative signer. A completed recovery that replaced it
+   drops the change.
+6. A contact whose account has an email guardian must include a Web Push
+   subscription (§9.3 rule 2). Both the wallet helper and the vault refuse
+   one without.
+
+The wallet helpers are `packages/email-recovery/src/enrollment.ts`.
+`recoverySpec` refuses an email guardian without a declared second channel
+(§9.3 rule 2); the wallet UI that declares it after registering here, and
+the service worker that receives the pushes, are not built.
+
+### 10.4 The enclave-image registry
+
+`contracts/enclave-image-registry` (crate `nido-enclave-image-registry`) is
+the public record of which enclave images may hold the vault key
+**[built, tested]** (`src/test.rs`, 14 tests; wasm 10,152 bytes optimized
+**[measured]**):
+
+- A fixed multisig (1 to 10 signers, `threshold` set at construction; no
+  admin, no upgrade entry point) votes with `approve(signer, measurement)`.
+  The first vote is the proposal (`measurement_proposed`); every vote emits
+  `measurement_approved`.
+- The vote that reaches the threshold queues the measurement with
+  `active_from = L + 241,920` (14 days) and emits `measurement_queued`.
+- From `active_from`, anyone may call `activate` (`measurement_activated`).
+  `is_active(measurement)` is true only from then.
+- `threshold` signers may `revoke` at any stage; it takes effect at once and
+  is final (`measurement_revocation_voted`, `measurement_revoked`).
+
+```text
+measurement = sha256("nido/email-recovery/v1/enclave-image" || PCR0 || PCR1 || PCR2)
+```
+
+over the 48-byte SHA-384 registers `nitro-cli build-enclave` reports for the
+image. PCR3, PCR4, and PCR8 are not part of it, so a release policy never
+trusts only a signing certificate. The integration-test host runs the
+registry's whole lifecycle from its wasm (`email_alerts.rs`), and the
+custodian mocks read activation and revocation from its events.
+
+The 14-day public timelock is a contract rather than a policy of the
+custodians so that every approval is visible on chain, to anyone, before it
+can take effect, and so that no custodian can shorten it.
+
+### 10.5 The sealed vault
+
+**Keys.** One 32-byte master secret `K`; everything else derives from it
+with `HKDF-SHA-256(ikm = K, salt = "nido/email-recovery/v1/vault", info)`:
+the HPKE key pair wallets seal to (`info = "hpke"`, then RFC 9180
+`DeriveKeyPair`), `k_alert` (`"alert-lookup"`), `k_store` (`"store"`), and
+the VAPID key (`"vapid"`, 48 bytes reduced into `[1, n-1]`). The vault id is
+`sha256("nido/email-recovery/v1/vault-id" || HPKE public key)`.
+
+**Attestation.** The enclave answers a wallet's 32-byte nonce with an AWS
+Nitro Enclaves attestation document (COSE_Sign1, ES384, the CBOR fields of
+AWS's attestation process document) whose `public_key` is the HPKE key
+(DER SubjectPublicKeyInfo) and whose `user_data` is CBOR `{purpose:
+"nido-alert-vault/v1", vapid}`. The wallet verifies it as AWS prescribes
+(the certificate path to the pinned root, validity, basic constraints and
+key usage, the COSE signature, the field rules) and also requires its own
+nonce, a timestamp at most 5 minutes old, a non-debug enclave (PCR0 not
+zero), and a measurement it reads as active in the registry
+**[built, tested]** (`packages/email-recovery/src/attestation.ts`; 25
+refusal cases in `test/attestation.test.ts`). An absent optional field may
+be `null`, as the NSM writes it. The NSM and its PKI are a
+TEST-ONLY mock in AWS's published format with a test-only CA chain
+(`packages/email-mocks/src/nitro.ts`).
+
+**Custody.** `K` is split 2-of-3 with Shamir's scheme over GF(2^8)
+(`shamir-secret-sharing` 0.0.4) across three custodians:
+
+- *Genesis.* The enclave draws `K` and deposits share `i` with custodian
+  `i`, HPKE-sealed to the custodian's key, under an attestation carrying the
+  custodian's single-use nonce and `user_data = {purpose:
+  "nido-share-deposit/v1", vault: vault id}`. A custodian never replaces a
+  share it holds.
+- *Restore* (restart or a new image). The enclave attests with each
+  custodian's nonce, an ephemeral HPKE key as `public_key`, and `user_data =
+  {purpose: "nido-share-request/v1", vault}`. Each custodian verifies the
+  attestation independently, requires the measurement to be active in the
+  registry, and returns its share sealed to the ephemeral key (`aad = nonce
+  || vault`), the shape of AWS KMS's attested recipient. Two shares that
+  re-derive the vault id reconstruct `K`; a wrong share is detected and the
+  third custodian is asked.
+
+**[built, tested]** for the vault side (`src/vault/custody.ts`,
+`test/custody.test.ts`); the custodians are TEST-ONLY mocks
+(`packages/email-mocks/src/custodian.ts`) that check attestations with an
+independent verifier on `node:crypto`. Who the custodians are, and their
+production protocol, are open (§13).
+
+**Records at rest.** The host stores each account's record under its
+lookup as `nonce || AES-256-GCM(k_store, nonce, CBOR(record), aad =
+"nido/email-recovery/v1/record" || lookup)`, and the delivery log likewise.
+A restarted vault loads them after restoring `K`.
+
+**What is not built.** The production NSM binding (`/dev/nsm`), the vsock
+channel with TLS terminating inside the enclave, and a reproducible enclave
+build that yields the PCRs. In tests the vault is a separate Node process
+reached over IPC (`ProcessVault`).
+
+### 10.6 Sending
+
+**Email.** Lettermint's Sending API (`POST /v1/send`,
+`x-lettermint-token`, an `Idempotency-Key` per (event, contact) that makes a
+retry within 24 hours return the original response), two attempts; then
+Scaleway Transactional Email (`POST
+/transactional-email/v1alpha1/regions/fr-par/emails`, `X-Auth-Token`), two
+attempts. A 429, a 5xx, or a network error is retried; anything else fails
+over at once. Both are EU-owned services; the mocks follow Lettermint's
+published OpenAPI document (version 0.0.1) and Scaleway's generated SDK, and
+cite them **[built, tested]** (`src/vault/send.ts`,
+`packages/email-mocks/src/sending.ts`). Scaleway has no idempotency key, so a
+Lettermint request that was accepted but whose answer was lost can be sent
+again through Scaleway.
+
+**Web Push.** RFC 8030 push requests (`TTL` 7 days and `Urgency: high` for
+required alerts, a `Topic` per event so a resend replaces an undelivered
+copy), RFC 8291 message encryption (one `aes128gcm` record; the
+implementation reproduces RFC 8291's example byte for byte), and RFC 8292
+VAPID (an ES256 JWT for the push service's origin, valid 12 hours, `sub` a
+`mailto:` URI) **[built, tested]** (`src/vault/webpush.ts`). A 404 or 410
+marks the subscription gone; email continues.
+
+**Content.** Generic text that never names the account, the address, or the
+attempt; the code of §10.1; the wallet's canonical origin as plain text;
+no link to act on (`src/vault/content.ts`). The push payload is
+`{v, kind, title, body, code}`.
+
+### 10.7 Who sees what
+
+| Party | Sees |
+| --- | --- |
+| The vault (attested enclave) | Addresses, push subscriptions, `k_code`, codes, `K` |
+| The host | Which accounts register or change contacts and when (it relays their chain state), events, sealed blobs and their sizes, the timing of outbound traffic |
+| Custodians | One share each; the vault id; the enclave's measurement |
+| Sending service | The address and the alert text, including the code |
+| The user's mail provider | The alert text, including the code |
+| Push service | The subscription endpoint and an encrypted payload |
+| Stellar RPC | Bulk `getEvents` queries by contract, and `installed_rules` reads of accounts that change contacts |
+| Anyone | The registry's approvals and activations |
+
+`infra/email-alerts/test/e2e.test.ts` checks the host, RPC, custodian, and
+push-service rows: with the vault in its own process, none of the messages
+to or from it, the host's HTTP bodies, its log, its state file, the RPC
+calls, the custodians' decisions, or the push bodies contains the address
+**[built, tested]**. The privacy claim this supports is scoped: Nido's
+servers and staff cannot read the address; the sending service and the
+user's mail provider necessarily can.
 
 **Registry changes.** The key registry's events (§7.6) concern every
 account at once, so they are announced publicly rather than per account.
@@ -1093,7 +1392,9 @@ model's agreement with the contracts is tested, not proven
 ## 12. Measurements
 
 All figures were read from test runs in this repository; nothing here is a
-network measurement.
+network measurement. Alert figures are **measured on mocks**: every service
+is a TEST-ONLY mock on the loopback interface, so they show the service's
+own cost, not a provider's or a network's.
 
 | Figure | Value | Source |
 | --- | --- | --- |
@@ -1107,6 +1408,15 @@ network measurement.
 | `attest` (parse, checks, Ed25519 verification) | 1,159,121 instructions; 291,157 bytes of memory; 3 entries read; 1 entry and 436 bytes written; 412 event bytes; fee without rent 7,260 stroops | same test **[measured]** |
 | `execute` of an addition (the leaf and the 16-level root recomputation) | 22,787,215 instructions; 1,077,800 bytes of memory; 37 entries read; 20 entries and 4,384 bytes written; 348 event bytes; fee without rent 102,659 stroops | same test **[measured]** |
 | The approval that executes a revocation (removal, root recomputation, refusals) | 20,051,676 instructions; 883,550 bytes of memory; 39 entries read; 21 entries and 1,944 bytes written; 516 event bytes; fee without rent 103,542 stroops | same test **[measured]** |
+| Enclave-image registry wasm, optimized | 10,152 bytes | `just build-contracts` output for `nido_enclave_image_registry.wasm` **[measured]** |
+| `attempt_authorized` to the email accepted by the sending mock | 22 to 28 ms, median 26 (10 runs) | `infra/email-alerts/test/e2e.test.ts`, from the start of the watcher's poll to the Lettermint mock's receipt; Node 24.18.0, darwin arm64 **[measured on mocks]** |
+| `attempt_authorized` to the push accepted by the push mock | 29 to 35 ms, median 33 (10 runs) | same **[measured on mocks]** |
+| Reading the event to the vault's answer (email and push sent) | 27.7 to 34.2 ms, median 31.4 (10 runs) | same, `PollReport.latencyMs` **[measured on mocks]** |
+| Vault restart: process start, shares from two custodians, reconstruction, unsealing | 244 to 339 ms, median 302 (10 runs) | same **[measured on mocks]** |
+| Vault attestation document (16 PCRs, 3-certificate bundle) | 3,775 bytes | same **[measured on mocks]** |
+| Contact registration request as the wallet posts it | 1,284 bytes of JSON | same **[measured on mocks]** |
+| Web Push body (RFC 8291, one record) | 661 bytes | same **[measured on mocks]** |
+| Lettermint request body of an alert | 685 bytes | same **[measured on mocks]** |
 
 The `submit_guardian` figure is a plumbing figure: Perch's controller and
 account, the guardian, and the registry run as wasm, but the verifier is
@@ -1129,6 +1439,9 @@ Fee estimation through RPC simulation needs care: Soroban's
 recording-mode simulation does not run custom accounts' `__check_auth`
 (`vendor/perch/AGENTS.md`), so a simulated `submit_guardian` omits the
 guardian's checks and the proof verification.
+
+In production, alert latency adds the watcher's polling interval and the
+providers' own delivery to these figures.
 
 ## 13. Open questions
 
@@ -1175,9 +1488,15 @@ guardian's checks and the proof verification.
    fixtures in the circuit work.
 7. **`RECOVERY_INBOX`.** The fixed recipient address and how its mail
    reaches the browser (sealed inbound or `.eml` import) are not fixed here.
-8. **Per-attempt verification code.** How the alert service derives the
-   code an `attempt_authorized` alert carries, and how the recovering
-   wallet shows the same code, is the alert service's to specify.
+8. **Verification code derivation.** v1 (§10.1) keys the code with
+   `k_code`, derived from `account_code` and registered sealed with the
+   vault. Alternatives: a key from the owner passkey's PRF output, which
+   lets the owner's device confirm that an alert came from the vault but
+   which a recovering device that lost the passkey cannot compute; or a
+   code computed from the attempt's public statement digest without any
+   key, which every device can show but which the sending service and the
+   user's mail provider can match to the on-chain attempt, linking the
+   inbox to the account, and which whoever chooses a statement can steer.
 9. **On-chain enrollment proof.** v1 checks the enrollment email in the
    wallet only (§5.4). A guardian constructor that verifies a proof of the
    enrollment email would make `C` verifiable by third parties, at the cost
@@ -1187,8 +1506,36 @@ guardian's checks and the proof verification.
     the wallet.
 11. **Wallet policy.** The rules of §9.3 are built in `recoverySpec` and
     tested (§9.3 lists the tests). They bind Nido's wallet only: the chain
-    accepts any configuration the owner applies, and the second alert
-    channel is an input the alert service, not yet built, will back.
+    accepts any configuration the owner applies. The second alert channel
+    is an input the wallet should set only after the alert service has
+    confirmed the contact with its Web Push subscription (§10.3); the wallet
+    UI that does so is not built.
 12. **Address and domain bounds.** `ADDR_MAX = 124` and the 62-byte leaf
     domain cover the launch providers. Custom domains would need larger
     bounds, which change `C`'s packing and the leaf format (a new version).
+13. **Custodians.** Who the three custodians are (at least one outside
+    Nido), the protocol and key storage they run in production, and how
+    they read the registry (its events, as the mocks do, or its contract
+    state).
+14. **Production enclave.** The binding to `/dev/nsm`, the vsock channel
+    with TLS terminating inside the enclave, and a reproducible image build
+    that publishes PCR0 to PCR2 are not built.
+15. **Outages longer than RPC retention.** A watcher stopped for longer than
+    the RPC's history (120,960 ledgers by default) loses events.
+    Reconciling from controller state, and an operator alarm when the
+    watcher falls behind, are not built.
+16. **Accounts without an email guardian.** `k_code` comes from
+    `account_code`, which such accounts do not have. Their alerts would need
+    another key for the code, for example one kept in the recovery kit.
+17. **What the host learns.** The host reads the chain state of every
+    account that registers or changes a contact, so it learns which
+    accounts do so and when, and outbound traffic timing shows which
+    accounts have contacts. Whether to blur this (cover traffic, batched
+    reads) is open.
+18. **Failover duplicates.** Scaleway's API has no idempotency key, so a
+    Lettermint request that was accepted but whose answer was lost can be
+    delivered twice.
+19. **Enclave-image registry governance.** Its signers and threshold, whether
+    a signer outside Nido must be among the approvers, and how the signer
+    set changes (today: deploying a new registry and pointing the
+    custodians at it).

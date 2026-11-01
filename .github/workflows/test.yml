@@ -129,6 +129,18 @@ jobs:
         run: |
           npx tsc -p packages/email-mocks/tsconfig.test.json
           npx vitest run --root packages/email-mocks
+      # The recovery alert service: the browser helpers (alert code, Nitro
+      # attestation, sealed and passkey-authorized contacts), the vault and
+      # the watcher against the TEST-ONLY third-party mocks, and the end-to-end
+      # run over the chain record of crates/integration-tests (email_alerts.rs)
+      # with the vault in its own process.
+      - name: Email alerts (browser helpers, vault, watcher, end to end on mocks)
+        run: |
+          npm run build -w @nidohq/email-recovery -w @nidohq/email-mocks -w @nidohq/email-alerts
+          npx tsc -p packages/email-recovery/tsconfig.test.json
+          npx vitest run --root packages/email-recovery
+          npx tsc -p infra/email-alerts/tsconfig.test.json
+          npx vitest run --root infra/email-alerts
 
   e2e:
     name: E2E (fast UI + CDP)

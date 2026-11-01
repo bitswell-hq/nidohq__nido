@@ -30,6 +30,7 @@ jobs:
         contract:
           - dkim-registry
           - email-guardian
+          - enclave-image-registry
           - factory
           - multisig-policy
           - name-registry

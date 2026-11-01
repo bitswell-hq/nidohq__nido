@@ -28,6 +28,10 @@
     "test": "vitest run",
     "fixtures": "tsc && node dist/cli.js"
   },
+  "dependencies": {
+    "@hpke/core": "^1.9.0",
+    "cborg": "^6.2.1"
+  },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "mailauth": "8.0.4",

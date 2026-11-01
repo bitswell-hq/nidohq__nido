@@ -1171,6 +1171,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "nido-enclave-image-registry"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "nido-factory"
 version = "0.1.0"
 dependencies = [
@@ -1189,6 +1196,7 @@ dependencies = [
  "nido-dkim-registry",
  "nido-dns-attestation-mock",
  "nido-email-guardian",
+ "nido-enclave-image-registry",
  "nido-preauth-sweep-policy",
  "p256",
  "perch-account",
