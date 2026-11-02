@@ -9,15 +9,16 @@ import EmailRecovery.OneFactor
   accepted in exactly one context; `accepted_account_unique`: and for exactly one
   account, controller and network, whichever guardian checks it.
 * `digest_fixes`: the digest fixes the account, network, controller, action,
-  attempt or request id and epoch, unless SHA-256 collides (with the encoding's
-  code facts).
+  attempt or request id and epoch, unless the two statements' encodings are a
+  SHA-256 collision (with the encoding's code facts).
 * `votes_counted_once`, `change_votes_counted_once`,
   `counted_vote_refused_again`: the controller records an address at most once
   per attempt and domain, and once per change digest.
 * `email_vote_binds_statement`, `email_vote_replay`: composed with the
   controller, an email approval that counts toward an attempt counts only
-  toward the attempt and domain whose statement it was made for, unless SHA-256
-  collides.
+  toward the attempt and domain whose statement it was made for, unless the
+  encodings of the two statements the controller built are a SHA-256
+  collision.
 * `emailAuth_payload_irrelevant`: the verdict does not depend on the
   authorization entry the approval is wrapped in, and the controller's
   transition has no submitter, so a copy submitted by anyone records the same
@@ -63,11 +64,12 @@ theorem accepted_account_unique (h₁ : check H E c₁ env₁ p₁ ap contexts�
     a₁.network.symm.trans a₂.network⟩
 
 /-- A digest fixes one account, network, controller, action, nonce (attempt or
-request id) and epoch, unless SHA-256 collides. -/
+request id) and epoch, unless the two statements' encodings are a SHA-256
+collision. -/
 theorem digest_fixes (hE : E.Facts) {s t : Statement} (h : digest H E s = digest H E t) :
     (s.account = t.account ∧ s.network = t.network ∧ s.controller = t.controller ∧
       s.action = t.action ∧ s.subject.nonce = t.subject.nonce ∧ s.epoch = t.epoch) ∨
-    H.Sha256Collision := by
+    H.Sha256Collides (E.encode s, E.encode t) := by
   rcases digest_binds hE h with h | h
   · subst h
     exact Or.inl ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
@@ -200,8 +202,9 @@ theorem email_vote_binds_statement {s s' : State} {L id : Nat} {dom : Domain}
 
 /-- **Theorem 3 (replay and front-running resistance).** One email approval
 that counts in two `submit_guardian` calls counts for one attempt, in one
-domain, at one epoch, unless SHA-256 collides. Whoever submits it, in whatever
-authorization entry, records the same vote. -/
+domain, at one epoch, unless the encodings of the two statements the controller
+built from its stored configuration and attempts are a SHA-256 collision.
+Whoever submits it, in whatever authorization entry, records the same vote. -/
 theorem email_vote_replay (hE : E.Facts) (hW : W.digest = digest H E)
     {s₁ s₁' s₂ s₂' : State} {L₁ L₂ id₁ id₂ : Nat} {dom₁ dom₂ : Domain} {env₁ env₂ : Env}
     {p₁ p₂ : Nat}
@@ -209,11 +212,14 @@ theorem email_vote_replay (hE : E.Facts) (hW : W.digest = digest H E)
       .ok s₁')
     (h₂ : submitGuardian W s₂ L₂ (emailAuth H E G cfg env₂ p₂ ap W.here other) id₂ dom₂ G =
       .ok s₂') :
-    ∃ a₁ a₂, s₁.attempts id₁ = some a₁ ∧ s₂.attempts id₂ = some a₂ ∧
-      ((a₁.id = a₂.id ∧ dom₁ = dom₂ ∧ a₁.epoch = a₂.epoch) ∨ H.Sha256Collision) := by
-  obtain ⟨c₁, a₁, -, ha₁, hd₁, -⟩ := email_vote_binds_statement h₁
-  obtain ⟨c₂, a₂, -, ha₂, hd₂, -⟩ := email_vote_binds_statement h₂
-  refine ⟨a₁, a₂, ha₁, ha₂, ?_⟩
+    ∃ c₁ a₁ c₂ a₂, s₁.config = some c₁ ∧ s₁.attempts id₁ = some a₁ ∧
+      s₂.config = some c₂ ∧ s₂.attempts id₂ = some a₂ ∧
+      ((a₁.id = a₂.id ∧ dom₁ = dom₂ ∧ a₁.epoch = a₂.epoch) ∨
+        H.Sha256Collides
+          (E.encode (attemptStatement W c₁ a₁ dom₁), E.encode (attemptStatement W c₂ a₂ dom₂))) := by
+  obtain ⟨c₁, a₁, hc₁, ha₁, hd₁, -⟩ := email_vote_binds_statement h₁
+  obtain ⟨c₂, a₂, hc₂, ha₂, hd₂, -⟩ := email_vote_binds_statement h₂
+  refine ⟨c₁, a₁, c₂, a₂, hc₁, ha₁, hc₂, ha₂, ?_⟩
   rw [hW] at hd₁ hd₂
   rcases digest_binds hE (hd₁.symm.trans hd₂) with h | h
   · exact Or.inl (attemptStatement_inj h)

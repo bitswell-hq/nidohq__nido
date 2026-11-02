@@ -101,8 +101,9 @@ the evidence; the tag in both documents follows on the next build.
 
 The four properties of the email factor are `proven` in Lean
 (`formal/`, built by `just email-recovery-formal`), about a model whose
-agreement with the contracts is `tested`; the assumptions they rest on are
-`assumed`. The implementation and evaluation claims are `tested` or
+agreement with the contracts is `tested`; privacy is proven in an ideal model
+of the commitment and the proofs, whose step to Poseidon2 and UltraHonk is
+`assumed` with the other assumptions the properties rest on. The implementation and evaluation claims are `tested` or
 `measured` against the code and the results in `eval/`; proving on a phone
 is `unproven`, because no phone was measured.
 

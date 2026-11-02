@@ -5,8 +5,9 @@ The four properties of the email recovery factor (`docs/email-recovery/spec.md`
 (§8.3), the email circuit's relation (§6.2), and Perch's recovery controller
 (`vendor/perch/docs/recovery/spec.md`, cited as Perch §N), with the wallet
 policy of §9.3 as a separate theorem. The cryptographic assumptions of §11.1
-are hypotheses of the theorems or named breaks in their conclusions, never
-axioms.
+are named breaks in the theorems' conclusions, each on inputs the theorem
+computes, or hypotheses; privacy is proven in an ideal model of the commitment
+and the proofs (below). None is an axiom.
 
 ## Build
 
@@ -30,20 +31,20 @@ with `#guard_msgs`: every theorem depends on at most Lean's built-in `propext`,
 
 | Module | Contents |
 | --- | --- |
-| `Basic` | Byte strings, the BN254 modulus and canonical field elements, Perch's `split_hi_lo`, the domain tags, SHA-256 and Poseidon2 as abstract functions, and their breaks (`Sha256Collision`, `P2Collision`, `P2HitsZero`) |
+| `Basic` | Byte strings, the BN254 modulus and canonical field elements, Perch's `split_hi_lo`, the domain tags, SHA-256 and Poseidon2 as abstract functions, and their breaks on given inputs (`Sha256Collides`, `P2Collides`, `P2Zero`) |
 | `Statement` | Perch's `RecoveryStatement` (Perch §4), the fields the guardian reads (`View`), the encoding and its code facts (`Encoding.Facts`), the digest, entry points and authorization contexts |
-| `Merkle` | The depth-16 key trees (§7.2), membership paths, and `path_binds` |
+| `Merkle` | The depth-16 key trees (§7.2), membership paths, `pathBreak` (the pairs a path collides on), and `path_binds` |
 | `Pack` | `pack` (§2) and `pack_injective` |
-| `Circuit` | The commitment (§5.3), key hash and leaf (§7.1, §7.2), salt leaf and pin root (§7.4), the blinded Subject (§4.2), and `Relation`, one field per obligation C1 to C6 (§6.2) |
+| `Circuit` | The modulus limbs (§7.1); the Poseidon2 inputs and values of the commitment (§5.3), key hash and leaf (§7.1, §7.2), salt leaf and pin tree (§7.4); key-tree slots; the blinded Subject (§4.2); `Relation`, one field per obligation C1 to C6 (§6.2); and the binding lemmas |
 | `Guardian` | `GuardianConfig` (§8.1), `construct` (§8.2), `check` (§8.3), and `check_eq_ok_iff` |
 | `Soundness` | Theorem 1 |
 | `Controller` | Perch's controller as a state machine (T1 to T9) with its event log |
 | `Invariants` | `Inv`, the invariant of every reachable controller state |
 | `OneFactor` | Theorem 4 |
 | `Replay` | Theorem 3, and the guardian composed with the controller (`emailAuth`) |
-| `Privacy` | Theorem 2 |
+| `Privacy` | Theorem 2: the honest wallet, the ideal model, the adversary's view and its simulator, and the structural lemma |
 | `WalletPolicy` | The §9.3 rules as a predicate, and the wallet part of Theorem 4 |
-| `Examples` | Concrete values satisfying the hypotheses of Theorems 1 and 4 |
+| `Examples` | Concrete values satisfying the hypotheses of Theorems 1, 2 and 4, and a leaky prover that Theorem 2's view detects |
 | `Axioms` | The axiom dependencies of every theorem |
 
 ## Model
@@ -59,10 +60,13 @@ C6 for the public inputs `x = (C, digest_hi, digest_lo, key_root)`. C1 is
 arithmetic: `s < n`, `2^2047 ≤ n < 2^2048`, `s^65537 mod n` equals the PKCS#1
 v1.5 encoding of `SHA-256(H)`. The header-level functions (which bytes are the
 `From` address, the Subject value, the `d=` value; lowercasing; `hex`; the
-modulus limbs; the PKCS#1 encoding) are abstract (`Format`): computing them as
-§4.3 and §4.5 say is the circuit's obligation, outside this model. The
-commitment, key leaf, salt leaf, pin tree, blinded token and packing are the
-spec's formulas.
+PKCS#1 encoding) are abstract (`Format`): computing them as §4.3 and §4.5 say is
+the circuit's obligation, outside this model. The modulus limbs, the packing,
+the commitment, key hash, key leaf, salt leaf, pin tree and blinded token are
+the spec's formulas. `modulusLimbs` is §7.1's 18 little-endian 120-bit limbs
+(`modulusLimbs_spec`: for `n < 2^2048` there are 18, each below `2^120`,
+recomposing to `n`), and different moduli have different limbs
+(`modulusLimbs_injective`), so the key hash binds the modulus itself.
 
 **Perch's controller.** `Controller.lean` models one controller serving one
 account: the stored configuration (profile, mode with guardian set and quorum,
@@ -94,18 +98,20 @@ name the configuration an attempt was authorized under.
 
 ## Theorems
 
-All are **proven** (no `sorry`; checked by `lake build`).
+All are **proven** (no `sorry`; checked by `lake build`); Theorem 2 is proven
+in its ideal model (see "The privacy model").
 
 | Property (§11.2) | Lean | Statement |
 | --- | --- | --- |
-| 1 Soundness | `EmailRecovery.email_of_check` | If `check` accepts an approval and the verifier has a knowledge extractor, there is an email (`EmailFactor`): its header carries a valid RSA-2048 DKIM signature under `n`; the leaf `leaf(domain, key_hash(n))` has a path to the accepted root, which is the unexpired pin or a root the registry accepts; its `From` address and an account code open `C`; the address's domain is `d=` and the leaf domain; its Subject opens to `d`; and the statement bytes hash to `d` and name the guardian's account, controller and network, an allowed action through its entry point, and an unexpired bound |
-| | `EmailRecovery.soundness` | Adds the registry (A5) and the honest enrollment (A7): the `From` address is the enrolled address and the key's leaf is trusted, unless Poseidon2 collides or maps an input to 0 |
-| 2 Privacy | `EmailRecovery.privacy_noninterference` | For every run of the controller composed with the guardian, the chain's view (the guardian's configuration, and the controller's state and event log) is a function of the public values, the transactions, `C`, and the pin root |
-| | `EmailRecovery.check_noninterference`, `enroll_factors`, `publicInputs_enroll`, `privacy_two_runs` | The same for the deployed configuration and every verdict; the proof's public inputs are `C`, the digest limbs and the root |
+| 1 Soundness | `EmailRecovery.email_of_check` | If `check` accepts an approval, its twelve checks hold (`Accepted`), and for every extractor `X` either `X`'s witness for the approval's proof is an email (`SignedEmail`) or `X` fails on that accepted proof (`ExtractionFails`). The email: its header carries a valid RSA-2048 DKIM signature under `n`; the leaf `leaf(domain, key_hash(n))` has a path to the accepted root, which is the unexpired pin or a root the registry accepts; its `From` address and an account code open `C`; the address's domain is `d=` and the leaf domain; its Subject opens to `d`; and the statement bytes hash to `d` and name the guardian's account, controller and network, an allowed action through its entry point, and an unexpired bound |
+| | `EmailRecovery.soundness` | Adds the registry (A5) and the honest enrollment (A7): the email's `From` address and account code are the enrolled ones and `(leaf domain, n)` is a trusted key, unless a Poseidon2 break on inputs computed from the extracted witness, the enrollment and the accepted root's tree holds (`SoundnessAssumptions.Break`) |
+| 2 Privacy | `EmailRecovery.privacy_simulation` | In the ideal model (`Functionalities.Ideal`), for every private state of the wallet and every adaptive adversary, the adversary's view (the deployed configuration, every approval the wallet hands out with its proof, every transaction, the guardian's verdict on its approval in every context, the controller's results, states and events) equals a simulator's view computed from the public deployment, two handles, the proof system's simulator and the adversary's own moves |
+| | `EmailRecovery.privacy_two_runs` | So two wallets with any two private states, including different addresses and account codes, give every adversary the same view |
+| | `EmailRecovery.structural_noninterference`, `enroll_factors`, `publicInputs_enroll` | Structural: for any fixed sequence of transactions, the guardian's configuration and verdicts and the controller's results, states and events are a function of the public values, the transactions, `C` and the pin root; the proof's public inputs are `C`, the digest limbs and the root. The contracts store and emit nothing about the address beyond `C` and the pin root |
 | 3 Replay | `EmailRecovery.accepted_names_digest`, `accepted_context_unique`, `accepted_account_unique` | An approval is accepted only in the context `controller.fn((sha256(statement),))`, in exactly one context, and for exactly one account, controller and network |
-| | `EmailRecovery.digest_fixes` | The digest fixes the account, network, controller, action, attempt or request id and epoch, unless SHA-256 collides |
+| | `EmailRecovery.digest_fixes` | The digest fixes the account, network, controller, action, attempt or request id and epoch, unless the two statements' encodings are a SHA-256 collision |
 | | `EmailRecovery.Perch.votes_counted_once`, `change_votes_counted_once`, `counted_vote_refused_again` | The controller records an address at most once per attempt and domain, and once per change digest; a resubmitted vote is refused |
-| | `EmailRecovery.Perch.email_vote_replay`, `email_vote_binds_statement`, `email_change_binds_statement` | Composed with the controller: an email approval that counts in two `submit_guardian` calls counts for one attempt, one domain, one epoch, unless SHA-256 collides; a change approval is recorded only under its own statement's digest |
+| | `EmailRecovery.Perch.email_vote_replay`, `email_vote_binds_statement`, `email_change_binds_statement` | Composed with the controller: an email approval that counts in two `submit_guardian` calls counts for one attempt, one domain, one epoch, unless the encodings of the two statements the controller built from its stored configuration and attempts are a SHA-256 collision; a change approval is recorded only under its own statement's digest |
 | | `EmailRecovery.check_payload_irrelevant`, `emailAuth_payload_irrelevant` | The verdict ignores the authorization entry the approval is wrapped in; the controller's transitions have no submitter input. A copy submitted by anyone records the same vote |
 | 4 One-factor safety | `EmailRecovery.Perch.completion_waits_for_delay` | In every trace, every completion is preceded in the log by its attempt's authorization, under a configuration with `delay_ledgers > 0`, at least `delay_ledgers` ledgers earlier |
 | | `EmailRecovery.Perch.email_only_authorizes_only_at_quorum_one`, `email_only_never_authorizes` | In every trace whose only evidence is approvals by the email guardian `G` (owner-authorized transactions allowed), every authorization is under a guardian-only configuration with quorum 1 listing `G`; so with quorum at least 2, or in `combined` or `zk-only` mode, none happens |
@@ -115,43 +121,122 @@ All are **proven** (no `sorry`; checked by `lake build`).
 | 4, wallet policy | `EmailRecovery.Perch.wallet_policy_email_alone`, `one_factor_under_wallet_policy` | Under the §9.3 rules (`WalletPolicy`), the email guardian alone reaches the quorum only under `loss`, with `delay_ledgers ≥ 120,960` and a second alert channel |
 | | `EmailRecovery.Perch.wallet_policy_needed_email_allows_every_action` | Rule 4: a needed email vote allows every action |
 
-Supporting results: `path_binds` (a Merkle path to a tree's root shows the
-tree holds the leaf at that index, unless Poseidon2 collides), `commit_binds`
-(the commitment binds the address and account code, unless Poseidon2
-collides), `pack_injective`, `digest_binds`, `split_injective`, and
-`enroll_subject_ne_recovery_subject` (an enrollment Subject never satisfies
-C5).
+Supporting lemmas. The binding lemmas each conclude equality, or a collision on
+the inputs they name: `path_binds` (a Merkle path to a tree's root shows the
+tree holds the leaf at that index, unless the pairs `pathBreak` computes
+collide), `commit_binds` (the commitment binds the address and account code),
+`keyHash_binds` (the key hash binds the modulus), `keyLeaf_binds` (a leaf binds
+its domain and key hash), `slot_binds` (a slot whose leaf is a key's leaf holds
+that key, unless `SlotBreak` holds) and `digest_binds` (a digest binds the
+statement, unless the two encodings collide under SHA-256). The injectivity
+lemmas are `pack_injective`, `modulusLimbs_injective` and `split_injective`.
+`enroll_subject_ne_recovery_subject` is a lemma about two constants (the
+enrollment and recovery phrases differ in their first byte, so an enrollment
+Subject never satisfies C5), not a security property of its own.
 
 **Non-vacuity.** `Examples.lean` gives concrete values for which every
 hypothesis holds: a guardian, a ledger and an approval that `check` accepts,
-with `SoundnessAssumptions` for them (`assumptions₀`, `check₀`); and a run
-from an unenrolled account, with one guardian's approvals as the only
-evidence, that enrolls, opens an attempt, authorizes it with that one vote at
-quorum 1, and completes it after the delay (`trace₀`, `trace₀_events`).
+with `SoundnessAssumptions` for them and an extractor that does not fail on the
+approval (`assumptions₀`, `check₀`, `extraction₀`); a run from an unenrolled
+account, with one guardian's approvals as the only evidence, that enrolls,
+opens an attempt, authorizes it with that one vote at quorum 1, and completes it
+after the delay (`trace₀`, `trace₀_events`); and two wallets with different
+addresses and account codes under tools in the ideal model (`privacy₀`).
+`leaky_prover_distinguishes` shows the privacy theorem's view contains the
+proofs: with a prover that writes the address into its proof, one query gives
+the two wallets different views.
+
+## Reading the breaks
+
+A conclusion "`P`, unless `B`" says something about `P` only if `B` can be
+false. "Poseidon2 has a collision somewhere" cannot: by pigeonhole it is true of
+every function from unbounded inputs to a finite field. So every break here is a
+proposition about specific inputs, built from the theorem's data: the commitment
+inputs of the extracted address and code and of the enrolled ones; the pair of
+children `pathBreak` finds along the extracted path; the extracted key's leaf
+input and the input of the slot it sits in; the two moduli's key-hash inputs;
+the two statements' encodings. Each theorem is then a reduction: anyone who
+violates `P` hands over a collision computed from the data. That is the reading
+of collision resistance for a fixed, unkeyed hash function (P. Rogaway,
+"Formalizing Human Ignorance: Collision-Resistant Hashing without the Keys",
+VIETCRYPT 2006, <https://eprint.iacr.org/2006/281>). Existentially quantified
+values in a conclusion are pinned to the theorem's data by equations
+(`s.attempts id = some a`).
+
+Knowledge soundness is handled the same way. A deterministic extractor that
+succeeds on every accepted proof would be perfect soundness, which a succinct
+argument does not have: accepting proofs of false statements exist. Theorem 1
+instead takes any function `X` from public inputs and proof to witness and
+concludes, for the one approval the guardian accepted, the email facts about
+`X`'s witness or `ExtractionFails` on that approval's public inputs and proof.
+A4 is the computational claim that an efficient `X` exists (it may use the
+prover's code) for which an efficient prover makes the guardian accept a proof
+on which `ExtractionFails` holds only with negligible probability.
+
+## The privacy model
+
+Privacy is a statement about what an adversary sees, so Theorem 2 models the
+adversary and the honest wallet. The wallet holds a private state (`Private`:
+the address, account code and pinned keys, and for each request the recovery
+email, blinding value and key path), and is written once over its tools
+(`Functionalities`: the commitment, the pin root and the prover). Enrolling, it
+deploys the configuration those tools give; asked for an approval of a request
+(statement bytes and the source of its root), it builds the circuit witness
+from its private state and returns the statement, the root and a proof of the
+witness for the public inputs the guardian will build. The adversary
+(`Adversary`) picks each move from the deployed configuration and everything it
+has observed: it asks the wallet for an approval, or runs a transaction of its
+choice through the guardian and the controller, which may carry any approval,
+including a copy of one the wallet handed out. Its view is the configuration
+and every observation, proofs included.
+
+`Functionalities.real` is the spec's Poseidon2 formulas and a prover
+(`enroll_real`). The ideal model (`Functionalities.Ideal hC hR sim`) has the
+commitment return the handle `hC` and the pin root the handle `hR` whatever the
+secret, and every proof be `sim` of its public inputs. `privacy_simulation`
+proves that in the ideal model the view is `simView`, which takes no private
+input. The step from the ideal model to the real tools is assumed, not proven:
+
+- the pair `(C, pin root)` for a uniform secret `account_code` (A6) is
+  indistinguishable from two uniform handles when Poseidon2 is a random
+  function (A3): each is a Poseidon2 output computed from the code;
+- an honest UltraHonk proof of a valid witness is indistinguishable from the
+  simulator's output on its public inputs (A4, zero knowledge).
+
+What the view shows besides the handles is each approval's statement and the
+source of its root (the pin, or which registry root), the time of each
+transaction, and everything public about the deployment, as spec §11.2 item 2
+lists. The model's wallet answers every request; a real wallet can answer only
+requests it holds a valid witness for, and it picks the source itself
+(`chooseKeyPath`: the pin when the signing key is pinned and the pin is live,
+the registry root otherwise), so the source of an approval's root is revealed
+information about the signing key, as listed. What the mail provider sees off
+chain (`T`, and the timing of the email) is outside this view.
 
 ## Assumptions
 
 | Id (§11.1) | In the model | Used by |
 | --- | --- | --- |
 | A1 RSA-2048 PKCS#1 v1.5 is unforgeable; providers keep keys secret | Not stated. Theorem 1 concludes that a valid signature under the key exists; A1 is the step from there to "the provider signed this header", a computational claim | The argument after Theorem 1 |
-| A2 SHA-256 collision resistance | The break `Sha256Collision` appears as an alternative in the conclusion | Theorem 3 (`digest_fixes`, `email_vote_replay`) |
-| A3 Poseidon2 collision resistance | The breaks `P2Collision` and `P2HitsZero` appear as alternatives in the conclusion | Theorem 1 (`soundness`, `from_is_enrolled`, `key_is_trusted`) |
-| A3 Poseidon2 as a random function | Not stated: indistinguishability of `C`, the pin root and the blinded Subject is computational | The step from Theorem 2 to indistinguishability |
-| A4 knowledge soundness | Hypothesis `Extractor`: an extractor that returns a witness of `Relation` for every accepted proof, the deterministic form of knowledge soundness | Theorem 1 |
-| A4 zero knowledge | Not stated: computational | The step from Theorem 2 to indistinguishability |
-| A5 the registry holds only real keys | Hypothesis `RegistryTrees`: every accepted root is the root of a depth-16 tree whose non-empty leaves are `Trusted`. The tree's shape is the registry contract's (tested); that its leaves are trusted is the registry's governance (§7.6) | `soundness`, `key_is_trusted` |
-| A6 `account_code` and `rho` secret and uniform | Not stated: it is what makes `C` hide the address; Theorem 2 reduces privacy to the secrecy of `C`'s and the pin root's preimages | The step from Theorem 2 to indistinguishability |
-| A7 honest enrollment | Hypotheses `HonestCommitment` (`C` is the enrolled address's commitment) and `HonestPin` (the pin root is the wallet's pin tree over `Trusted` leaves) | `soundness` |
+| A2 SHA-256 collision resistance | `Sha256Collides` on the encodings of the two statements, an alternative in the conclusion | Theorem 3 (`digest_fixes`, `email_vote_replay`) |
+| A3 Poseidon2 collision resistance | `P2Collides` on the commitment inputs, the path pairs, the leaf and slot inputs, or the key-hash inputs, and `P2Zero` on the key's leaf input, alternatives in the conclusion (`SoundnessAssumptions.Break`) | Theorem 1 (`soundness`, `from_is_enrolled`, `key_is_trusted`) |
+| A3 Poseidon2 as a random function | The ideal model's handles: with A6, `(C, pin root)` is indistinguishable from two uniform handles (computational, assumed) | The step from Theorem 2's ideal model to the real tools |
+| A4 knowledge soundness | `ExtractionFails` on the accepted approval's public inputs and proof, an alternative in the conclusion, for every extractor | Theorem 1 |
+| A4 zero knowledge | The ideal model's prover: an honest proof is `sim` of its public inputs (computational, assumed) | The step from Theorem 2's ideal model to the real tools |
+| A5 the registry holds only real keys | Hypothesis `RegistryTrees`: for every accepted root, the keys at the leaves of its depth-16 tree (`keyAt`), each `Trusted`. The tree's shape is the registry contract's (tested); that its keys are trusted is the registry's governance (§7.6) | `soundness`, `key_is_trusted` |
+| A6 `account_code` and `rho` secret and uniform | Not stated: with A3 it makes `C` and the pin root hide the address and pinned keys | The step from Theorem 2's ideal model to the real tools |
+| A7 honest enrollment | Hypotheses `HonestCommitment` (`C` is the enrolled address's commitment) and `HonestPin` (the pin root is the wallet's pin tree over the enrolled account code and `Trusted` keys) | `soundness` |
 
-`SoundnessAssumptions` bundles A4, A5 and A7 for Theorem 1. Theorems 2 and 4
-need no cryptographic hypothesis.
+`SoundnessAssumptions` bundles A5 and A7 for Theorem 1. Theorem 4 needs no
+cryptographic hypothesis. Theorem 2's cryptography is its ideal model, and the
+step from that model to the real tools is assumed.
 
-**`P2HitsZero`.** The key trees' empty leaf is `0`. A key leaf
+**`P2Zero`.** The key trees' empty leaf is `0`. A key leaf
 `P2(DOM_LEAF, ...)` equal to `0` would stand in for an empty slot of any
 registry or pin tree, and that is a Poseidon2 input mapping to `0`, not a
-collision. `key_is_trusted` therefore names it as a separate break. Under A3's
-random-function model finding one is as hard as hitting any fixed value;
-collision resistance alone does not exclude it.
+collision. `slot_binds` therefore names it as a separate break, on the key's
+own leaf input. Under A3's random-function model finding one is as hard as
+hitting any fixed value; collision resistance alone does not exclude it.
 
 **Code facts.** Two properties of Perch's encoding are hypotheses
 (`Encoding.Facts`), used only by Theorem 3: the encoding is injective, and the
@@ -211,16 +296,23 @@ is tested, not proven.
   proven. The theorem is about configurations that satisfy the predicate.
 - **Registry.** `contracts/dkim-registry` builds the tree `RegistryTrees`
   describes (§7.2: depth 16, untagged interior nodes, empty leaves `0`, and
-  retirement and revocation emptying a leaf) and accepts only its current
+  retirement and revocation emptying a leaf; it computes each leaf from the
+  domain and the modulus an addition carries) and accepts only its current
   root and roots in grace (§7.3). Its hashing is cross-checked against Noir
-  (`just dkim-registry-vectors`), not proven. That the non-empty leaves are
+  (`just dkim-registry-vectors`), not proven. That the keys at its leaves are
   keys their domains control is A5, which the registry reduces to its
   governance (§7.6).
+- **Wallet.** The privacy model's wallet mirrors the browser prover (§6.5):
+  it proves the witness `encodeRecoveryEmail` builds from the email and the
+  secret, for the public inputs the guardian builds, with the root
+  `chooseKeyPath` picks (`packages/frontend/src/lib/recovery/emailModel.ts`).
+  Agreement is by reading, not tested against the model.
 
 ## What was run and what was read
 
 Run: `lake build` on Lean `v4.35.0` (all modules, including the `#guard_msgs`
-axiom checks and the examples), and `#print axioms` for every theorem.
+axiom checks and the examples), `#print axioms` for every theorem, and the
+CI workflow's scan for unchecked declarations.
 Read: the spec, Perch's recovery spec and statement layout, the guardian's
-`contract.rs` and `statement.rs`, and Perch's controller `contract.rs`, against
-which the model was written.
+`contract.rs` and `statement.rs`, Perch's controller `contract.rs`, and the
+wallet's `chooseKeyPath`, against which the model was written.

@@ -1,19 +1,28 @@
 import EmailRecovery.Soundness
 import EmailRecovery.OneFactor
+import EmailRecovery.Privacy
 
 /-!
 # The theorems' hypotheses are satisfiable
 
 A theorem whose hypotheses can never hold together says nothing. This module
-exhibits, for Theorems 1 and 4, concrete values that satisfy every hypothesis:
+exhibits, for Theorems 1, 2 and 4, concrete values that satisfy every hypothesis:
 
 * `assumptions₀` and `check₀`: a guardian, a ledger, an approval its `check`
-  accepts, and `SoundnessAssumptions` for them, so `soundness` applies.
+  accepts, and `SoundnessAssumptions` for them, so `soundness` applies; and an
+  extractor that does not fail on that approval (`extraction₀`), so the
+  conclusion's email branch is the one that holds.
 * `trace₀`: a run from an unenrolled account, with approvals by guardian `7` as
   the only evidence, that enrolls, opens an attempt, authorizes it with that one
   vote at quorum 1, and completes it once the delay has passed. Its log holds
   the authorization and the completion, so `one_factor_safety` applies to a
   completed recovery.
+* `privacy₀`: two wallets with different addresses and account codes, and
+  tools in the ideal model, so `privacy_two_runs` compares two distinct
+  addresses; and `leaky_prover_distinguishes`: with a prover that writes the
+  address into its proof, one query gives the two wallets different views, so
+  the view contains the proofs and the theorem needs its zero-knowledge
+  hypothesis.
 
 The hash functions here are constants. They have none of the properties the
 assumptions are about; consistency of the hypotheses needs none.
@@ -32,7 +41,6 @@ def F₀ : Format where
   domainOf := fun _ => [1]
   lower := id
   hex := fun _ => []
-  limbs := fun _ => []
   emsa := fun _ => 0
 
 def E₀ : Encoding := ⟨fun _ => [], fun _ => some ⟨.lostKey, 1, 2, 3, 100⟩⟩
@@ -86,32 +94,30 @@ theorem relation₀ : Relation H₀ F₀ x₀ w₀ where
   leafDomainLength := by decide
   path := rfl
 
-def extractor₀ : Extractor H₀ F₀ (env₀.verifier cfg₀.verifier) where
-  extract := fun _ _ => w₀
-  sound := fun x π h => by
-    simp only [env₀] at h
-    split at h
-    · rename_i hx
-      obtain ⟨rfl, -⟩ := hx
-      exact relation₀
-    · contradiction
+def extractor₀ : Extractor := fun _ _ => w₀
 
-def assumptions₀ : SoundnessAssumptions H₀ F₀ cfg₀ env₀ (fun _ => True) where
-  extractor := extractor₀
-  registry := fun root h => by
+def assumptions₀ : SoundnessAssumptions H₀ cfg₀ env₀ (fun _ _ => True) where
+  registry := ⟨fun _ _ => none, fun root h => by
     simp only [env₀, Option.some.injEq, beq_iff_eq] at h
     subst h
-    exact ⟨fun _ => 1, rfl, fun _ _ => trivial⟩
+    rfl, fun _ _ _ _ _ => trivial⟩
   enrolledAddress := [1]
   enrolledCode := 0
   commitment := ⟨by decide, rfl⟩
-  pin := fun q hq => by simp [cfg₀] at hq
+  pinnedKeys := []
+  pin := ⟨fun q hq => by simp [cfg₀] at hq, fun _ _ => trivial⟩
 
 theorem check₀ :
     check H₀ E₀ cfg₀ env₀ 0 ap₀ [AuthContext.approval 3 .submitGuardian 0] = .ok () := rfl
 
+/-- The extractor does not fail on the accepted approval. -/
+theorem extraction₀ :
+    ¬ ExtractionFails H₀ F₀ (env₀.verifier cfg₀.verifier) extractor₀ (approvalInputs H₀ cfg₀ ap₀)
+      ap₀.proof :=
+  fun h => h.2 relation₀
+
 /-- Theorem 1 applies to these values. -/
-example := soundness assumptions₀ check₀
+example := soundness (F := F₀) extractor₀ assumptions₀ check₀
 
 /-! ## A completed recovery with one email vote -/
 
@@ -161,5 +167,44 @@ theorem trace₀_completes : ∃ e ∈ s₄.log, e.event = .recoveryCompleted 0 
 
 /-- Theorem 4 applies to a completed recovery. -/
 example := one_factor_safety trace₀
+
+/-! ## Privacy compares two addresses, and the proofs are in the view -/
+
+def dep₀ : Deployment := ⟨2, 3, 4, 5, 6, allowAll, some 100⟩
+
+def mail₀ : Mail := ⟨[], 0, 2 ^ 2047, [], 0, [], 0, []⟩
+
+def alice : Private := ⟨⟨ascii "alice@gmail.com", 1, []⟩, fun _ => mail₀⟩
+def bob : Private := ⟨⟨ascii "bob@outlook.com", 2, []⟩, fun _ => mail₀⟩
+
+/-- Tools in the ideal model. -/
+def idealTools : Functionalities := ⟨fun _ _ => 1, fun _ _ => 2, fun _ _ => []⟩
+
+theorem idealTools_ideal : idealTools.Ideal 1 2 (fun _ => []) :=
+  ⟨fun _ _ => rfl, fun _ _ => rfl, fun _ _ => rfl⟩
+
+/-- Two different addresses (and account codes) give every adversary the same
+view. -/
+theorem privacy₀ :
+    alice.secret.address ≠ bob.secret.address ∧ alice.secret.accountCode ≠ bob.secret.accountCode ∧
+      ∀ adv s₀ n, view H₀ E₀ W₀ 7 idealTools dep₀ alice adv s₀ n =
+        view H₀ E₀ W₀ 7 idealTools dep₀ bob adv s₀ n :=
+  ⟨by decide, by decide, fun adv s₀ n => privacy_two_runs idealTools_ideal alice bob adv s₀ n⟩
+
+/-- A prover that writes the address into its proof. -/
+def leakyTools : Functionalities := ⟨fun _ _ => 1, fun _ _ => 2, fun _ w => w.address⟩
+
+/-- An adversary that asks for one approval. -/
+def queryOnce : Adversary := fun _ _ => .query ⟨[], .pin⟩
+
+/-- With the leaky prover, the two wallets' views differ after one query. -/
+theorem leaky_prover_distinguishes :
+    view H₀ E₀ W₀ 7 leakyTools dep₀ alice queryOnce (State.init 5) 1 ≠
+      view H₀ E₀ W₀ 7 leakyTools dep₀ bob queryOnce (State.init 5) 1 := by
+  intro h
+  have h₂ := congrArg (fun v => v.2) h
+  simp only [view, game, play, queryOnce, List.nil_append, List.cons.injEq, Obs.approval.injEq,
+    approve, leakyTools, Private.witness, alice, bob, and_true] at h₂
+  exact absurd (congrArg Approval.proof h₂) (by decide)
 
 end EmailRecovery.Examples
