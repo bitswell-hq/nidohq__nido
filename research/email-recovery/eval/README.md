@@ -560,6 +560,21 @@ Testnet (`Test SDF Network ; September 2015`, https://soroban-testnet.stellar.or
 | complete (apply_doc through the recovery rule) | [`ff431206c9e3…`](https://stellar.expert/explorer/testnet/tx/ff431206c9e3c9ad4d0880fececaec432b95ef159a531bbf58641d7889037be4) | 14,897,208 | 15,746,781 | 27 / 12 | 5,264 | 4,256 | 592,637 | 552,040 | 3,431 |
 <!-- END GENERATED cost -->
 
+**Registry-root votes on a network: scheduled.** A key reaches a registry
+root only after its addition's attested timelock, 72 hours of ledger close
+time, which on the local network is wall-clock time as on testnet. Both
+runs are enrolled and waiting: the local run's additions
+(`network/run-registry-root.sh`) are eligible from close time 2026-11-05
+06:40:59 UTC, when it executes them and submits one vote per launch domain
+against the registry's root and one against the pin, and the testnet run's
+addition (`testnet/votes.mjs`) from 2026-11-05 06:39:55 UTC, when `vote`
+executes it and submits registry-root votes. Until those votes are recorded,
+the registry-root figures are the test host's: its approvals are proven
+against a registry root (the test-host columns above, `onchain.md`, whose
+footprints include the registry's instance and code), and
+`is_accepted_root` costs 565,410 instructions when it accepts and 568,054
+when it refuses (spec §12).
+
 **Why the readings differ.** Each difference between the environments is
 attributed:
 
@@ -596,8 +611,8 @@ attributed:
   against applying are not separated here.
 - *The key path.* A vote against a registry root adds the registry's
   `is_accepted_root` call and puts the registry's instance and code in the
-  footprint; the registry-root table measures it on a network beside pin
-  votes of the same run.
+  footprint. Every network vote above uses the pin; the test host's
+  readings use a registry root (below).
 
 ## Archival and the keeper
 
@@ -762,13 +777,14 @@ Run, in this repository, on the machine of the proving table:
   contracts built from this tree and Perch's fetched testnet wasm, with every
   approval proven by bb.js in Node, and its three registry scenarios on the
   integration-test host;
-- the registry-root run on its own local network (`network/run-registry-root.sh`),
-  which waited out the attested 72-hour timelock in real time;
+- the registry-root run's setup on its own local network
+  (`network/run-registry-root.sh`: the stack and 22 enrolled accounts); its
+  votes are scheduled for when the additions' timelock elapses;
 - the keeper on its own local network (`network/run-keeper.sh`);
 - the recovery with every entry archived, on the test host (`archival.sh`);
 - on testnet, the recovery run (`testnet/run.sh`) and the votes run's setup
-  (`testnet/votes.mjs setup`); its registry-root votes are scheduled for when
-  its addition is eligible;
+  (`testnet/votes.mjs setup`: the registry and six pin votes); its
+  registry-root votes are scheduled for when its addition is eligible;
 - read-only reads of mainnet's and testnet's settings and of testnet's code
   entries (`fees/settings.mjs`, `fees/code-entries.mjs`);
 - the proving measurements (`proving/measure.sh`, `measure-browser.mjs`);
