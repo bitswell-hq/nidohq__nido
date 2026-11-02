@@ -44,8 +44,10 @@ inputs (every input in part 1, every 25th case in part 2). Where the harness
 refuses, the artifact must refuse with the same assertion; where the harness
 accepts, the artifact must refuse at a Subject assertion. Inputs are built
 by the wallet's own encoder functions (`signedHeaderBlock`, `limbs`,
-`barrettHint` from `@nidohq/email-recovery`) and executed with noir_js
-`execute`, without proving.
+`barrettHint` from `@nidohq/email-recovery`; a modulus too short for the
+Barrett hint gets a zero hint, which only unconstrained code reads, so the
+circuit itself judges the key) and executed with noir_js `execute`, without
+proving.
 
 For each DKIM-Signature field of a message, aligned with the From domain or
 not, the circuit runs on the signed octets the reference builds and, where
@@ -114,7 +116,7 @@ and domain; the unmasked rows stay under `target/`.
 ### Results
 
 <!-- BEGIN GENERATED real-mail by report.mjs; do not edit -->
-Corpus: 5,154 posts from 18 lists at https://lists.gnu.org/archive/mbox, months 2025-10, 2026-05, 2026-06, 2026-07, 2026-08, 2026-09, 2026-10 (manifest built 2026-11-02); 0 no longer served. 5,327 DKIM-Signature fields, 10,320 circuit executions (harness and recovery artifact), 512 s, Python 3.14.4.
+Corpus: 5,154 posts from 18 lists at https://lists.gnu.org/archive/mbox, months 2025-10, 2026-05, 2026-06, 2026-07, 2026-08, 2026-09, 2026-10 (manifest built 2026-11-02); 0 no longer served. 5,327 DKIM-Signature fields, 10,320 circuit executions (harness and recovery artifact), 493 s, Python 3.14.4.
 
 | From domain | Posts | Signatures (aligned) | Reference accepts | Circuit accepts | Posts in agreement |
 | --- | --- | --- | --- | --- | --- |
@@ -204,7 +206,7 @@ circuit's address is that mailbox, and the circuit's domain is the lowercase
 ### Results
 
 <!-- BEGIN GENERATED fuzz by report.mjs; do not edit -->
-Seed `nido-email-recovery-parser-fuzz-v1`, cases 0 to 49,999: 50,000 cases, 49,779 DKIM-Signature fields (221 cases have none the reference recognizes), 51,814 circuit executions, 2685 s, Python 3.14.4. Signed over the reference's octets: 49,157; over the encoder's (fields the reference does not process): 617.
+Seed `nido-email-recovery-parser-fuzz-v1`, cases 0 to 49,999: 50,000 cases, 49,779 DKIM-Signature fields (221 cases have none the reference recognizes), 51,814 circuit executions, 2338 s, Python 3.14.4. Signed over the reference's octets: 49,157; over the encoder's (fields the reference does not process): 617.
 
 | Verdict | Signatures |
 | --- | --- |
@@ -214,7 +216,7 @@ Seed `nido-email-recovery-parser-fuzz-v1`, cases 0 to 49,999: 50,000 cases, 49,7
 | spec-deviation | 251 |
 | completeness | 714 |
 
-Invariant (circuit accepts ⇒ the reference DKIM verifier accepts, Python reads exactly the circuit's address, and the circuit's domain is the lowercase d=): **violated in 5193 signatures**. Every 25th case also ran the recovery artifact: 1,994 signatures, 0 disagreements with the harness. The encoder's signed block differed from the reference's on 267 signatures, 1 of them valid under the key by the reference.
+Invariant (circuit accepts ⇒ the reference DKIM verifier accepts, Python reads exactly the circuit's address, and the circuit's domain is the lowercase d=): **violated in 5193 signatures**. Every 25th case also ran the recovery artifact: 1,994 signatures, 0 disagreements with the harness. The encoder's signed block differed from the reference's on 267 signatures; the reference does not verify the signature: 266 (smallest case 237); the reference verifies the signature: 1 (smallest case 1114).
 <!-- END GENERATED fuzz -->
 
 By family:
@@ -344,7 +346,7 @@ gives the evidence per provider and what would settle each unknown.
 
 | What | Command | Time here |
 | --- | --- | --- |
-| Everything, rewriting `results/` and these tables | `just email-recovery-parser-check` ([`check.sh`](check.sh)) | about an hour (part 1 ten minutes, part 2 fifty), plus the archive downloads on a first run |
+| Everything, rewriting `results/` and these tables | `just email-recovery-parser-check` ([`check.sh`](check.sh)) | under an hour (part 1 about nine minutes, part 2 about forty), plus the archive downloads on a first run |
 | The CI subset: the first 10 posts per launch domain and the first 2,000 cases, which must reproduce `results/` exactly | `research/email-recovery/eval/parser/check.sh --ci` ([`compare-results.mjs`](compare-results.mjs)) | a few minutes |
 | One fuzz case, printed | `node research/email-recovery/eval/parser/fuzz.mjs --show <index>` | seconds |
 | Rebuilding the corpus manifest and key list | `node research/email-recovery/eval/parser/build-corpus.mjs` | about 25 minutes, at the archive's pace |

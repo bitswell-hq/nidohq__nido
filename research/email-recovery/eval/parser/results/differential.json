@@ -17,7 +17,7 @@
   "unavailable": 0,
   "perDomainCap": null
  },
- "seconds": 512,
+ "seconds": 493,
  "executions": 10320,
  "python": "Python 3.14.4",
  "signatures": 5327,
