@@ -1,0 +1,31 @@
+\section{Proving measurements}\label{app:proving}
+
+Table~\ref{tab:proving} gives every proving configuration of
+\S\ref{sec:eval-proving}. The browser total includes cached assets,
+Barretenberg's start and local verification. The slower tier's
+background-priority threads yield to other work, so its figures depend most
+on the machine's load\claims{desktop-proving-cost,browser-proving-cost,efficiency-core-proving}.
+
+\begin{table}[h]
+  \caption{Proving one recovery email: median of five runs, in seconds;
+    memory is the peak resident set of \texttt{bb}, the Node process, or
+    Chrome's renderer. Total adds the witness (native, Node) or runs from
+    the page's request to the verified proof (Chrome).}
+  \label{tab:proving}
+  \small
+  \begin{tabularx}{\columnwidth}{@{}>{\raggedright\arraybackslash}X r r r r@{}}
+    \toprule
+    Prover & Thr. & Proving & Total & Memory \\
+    \midrule
+    Native \texttt{bb} & 18 & 0.94 & 1.69 & 876 MiB \\
+    Native \texttt{bb} & 1 & 4.64 & 5.38 & 870 MiB \\
+    bb.js, Node & 18 & 3.24 & 3.97 & 1{,}662 MiB \\
+    bb.js, Node & 1 & 13.4 & 14.1 & 1{,}386 MiB \\
+    Chrome 151 & 18 & 1.44 & 2.81 & 2{,}586 MiB \\
+    Chrome 151 & 1 & 8.37 & 9.88 & 1{,}432 MiB \\
+    Chrome, Performance tier & 4 & 10.3 & 14.9 & 2{,}034 MiB \\
+    Chrome, Performance tier & 1 & 32.5 & 37.3 & 1{,}398 MiB \\
+    Phone & --- & \multicolumn{3}{c}{not measured} \\
+    \bottomrule
+  \end{tabularx}
+\end{table}

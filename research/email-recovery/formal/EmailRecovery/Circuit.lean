@@ -18,6 +18,9 @@ Poseidon2 input are the spec's formulas.
 Each binding lemma (`commit_binds`, `keyHash_binds`, `keyLeaf_binds`,
 `slot_binds`, `subject_binds_digest`) concludes that the hashed values are
 equal, or names a Poseidon2 break on inputs it computes from its arguments.
+Each takes the bounds that make those inputs field elements, the bounds the
+circuit's types give its private inputs (`Relation.codeCanonical`,
+`rhoCanonical`, `siblingsCanonical`).
 -/
 
 namespace EmailRecovery
@@ -163,6 +166,54 @@ def saltInput (code : Nat) : List Nat := [domPinSalt, code]
 `(DOM_BLIND, digest_hi, digest_lo, rho)`. -/
 def blindInput (d rho : Nat) : List Nat := [domBlind, hi d, lo d, rho]
 
+/-! ## Every hashed input is a list of field elements -/
+
+theorem commitInput_canonical {address : Bytes} {code : Nat} (ha : address.length ≤ 124)
+    (hc : Canonical code) : CanonicalList (commitInput address code) := by
+  intro x hx
+  simp only [commitInput, List.cons_append, List.mem_cons, List.mem_append,
+    List.not_mem_nil, or_false, false_or] at hx
+  rcases hx with rfl | rfl | hx | rfl
+  · decide
+  · exact Canonical.of_lt (Nat.lt_succ_of_le ha) (by decide)
+  · exact pack_canonical _ _ x hx
+  · exact hc
+
+theorem keyHashInput_canonical {n : Nat} (hn : n < 2 ^ 2048) : CanonicalList (keyHashInput n) := by
+  intro x hx
+  simp only [keyHashInput, List.mem_cons] at hx
+  rcases hx with rfl | hx
+  · decide
+  · exact Canonical.of_lt ((modulusLimbs_spec hn).2.1 x hx) (by decide)
+
+theorem leafInput_canonical {domain : Bytes} {kh : Nat} (hd : domain.length ≤ 62)
+    (hk : Canonical kh) : CanonicalList (leafInput domain kh) := by
+  intro x hx
+  simp only [leafInput, List.cons_append, List.mem_cons, List.mem_append,
+    List.not_mem_nil, or_false, false_or] at hx
+  rcases hx with rfl | rfl | hx | rfl
+  · decide
+  · exact Canonical.of_lt (Nat.lt_succ_of_le hd) (by decide)
+  · exact pack_canonical _ _ x hx
+  · exact hk
+
+theorem saltInput_canonical {code : Nat} (hc : Canonical code) : CanonicalList (saltInput code) := by
+  intro x hx
+  simp only [saltInput, List.mem_cons, List.not_mem_nil, or_false] at hx
+  rcases hx with rfl | rfl
+  · decide
+  · exact hc
+
+theorem blindInput_canonical {d rho : Nat} (hd : d < 2 ^ 256) (hr : Canonical rho) :
+    CanonicalList (blindInput d rho) := by
+  intro x hx
+  simp only [blindInput, List.mem_cons, List.not_mem_nil, or_false] at hx
+  rcases hx with rfl | rfl | rfl | rfl
+  · decide
+  · exact Canonical.of_lt (hi_lt hd) (by decide)
+  · exact Canonical.of_lt (lo_lt d) (by decide)
+  · exact hr
+
 variable (H : Hashes) (F : Format)
 
 /-- `C`. -/
@@ -192,6 +243,21 @@ def Slot.leaf : Slot → Nat
   | .key domain n => keyLeaf H domain (keyHash H n)
   | .salt code => saltLeaf H code
   | .empty => 0
+
+/-- Every leaf is a field element: a Poseidon2 output or the empty `0`. -/
+theorem Slot.leaf_canonical (slot : Slot) : Canonical (slot.leaf H) := by
+  cases slot with
+  | key => exact H.p2_canonical _
+  | salt => exact H.p2_canonical _
+  | empty => show Canonical 0; decide
+
+/-- What a key tree's leaf may hold (§7.2, §7.3 rule 4, §7.4): a key of a domain
+of at most 62 bytes and an RSA-2048 modulus, a salt that is a field element, or
+nothing. -/
+def Slot.Fits : Slot → Prop
+  | .key domain n => domain.length ≤ 62 ∧ n < 2 ^ 2048
+  | .salt code => Canonical code
+  | .empty => True
 
 /-- The pin tree's slots (§7.4): the salt at 0, the pinned keys at `1 .. k`,
 empty slots after them. -/
@@ -248,7 +314,8 @@ structure PublicInputs where
 
 /-- The circuit's private inputs (§6.2). The positions of the `From` address,
 the Subject token and the `d=` value are represented by the values at those
-positions. -/
+positions. `rho`, `accountCode` and `siblings` are the circuit's `Field` inputs
+`rho`, `account_code` and `key_siblings`; `Relation` bounds them. -/
 structure Witness where
   header : Bytes
   signature : Nat
@@ -271,6 +338,8 @@ structure Relation (x : PublicInputs) (w : Witness) : Prop where
   fromAddr : F.fromAddr w.header = some w.address
   /-- C3: `1 ≤ len(addr-spec) ≤ ADDR_MAX` -/
   addressLength : 1 ≤ w.address.length ∧ w.address.length ≤ 124
+  /-- C3: `account_code` is a field element (its type, `Field`) -/
+  codeCanonical : Canonical w.accountCode
   /-- C3: the address and `account_code` open `C` -/
   opensCommitment : commit H w.address w.accountCode = x.commitment
   /-- C4: the selected signature's `d=` -/
@@ -279,6 +348,8 @@ structure Relation (x : PublicInputs) (w : Witness) : Prop where
   aligned : F.lower (F.domainOf w.address) = F.lower w.dkimD
   /-- C4: `lowercase(d=) = leaf domain` -/
   leafDomain : F.lower w.dkimD = w.leafDomain
+  /-- C5: `rho` is a field element (its type, `Field`) -/
+  rhoCanonical : Canonical w.rho
   /-- C5: exactly one `subject` field, the phrase and `hex(T)` for the digest limbs -/
   subject : F.subject w.header =
     some (recoveryPhrase ++ hex (H.p2 [domBlind, x.digestHi, x.digestLo, w.rho]))
@@ -286,6 +357,8 @@ structure Relation (x : PublicInputs) (w : Witness) : Prop where
   leafIndex : w.leafIndex < 2 ^ treeDepth
   /-- C6: one sibling per level -/
   siblings : w.siblings.length = treeDepth
+  /-- C6: each sibling is a field element (`key_siblings: [Field; REGISTRY_DEPTH]`) -/
+  siblingsCanonical : CanonicalList w.siblings
   /-- C6: the leaf domain fits its two limbs -/
   leafDomainLength : 1 ≤ w.leafDomain.length ∧ w.leafDomain.length ≤ 62
   /-- C6: the path from the key's leaf reaches `key_root` -/
@@ -298,10 +371,10 @@ variable {H}
 
 /-- The commitment binds the address and `account_code`, unless the two
 commitment inputs are a Poseidon2 collision. -/
-theorem commit_binds {a b : Bytes} {c d : Nat} (ha : a.length ≤ 124)
-    (h : commit H a c = commit H b d) :
+theorem commit_binds {a b : Bytes} {c d : Nat} (ha : a.length ≤ 124) (hb : b.length ≤ 124)
+    (hc : Canonical c) (hd : Canonical d) (h : commit H a c = commit H b d) :
     (a = b ∧ c = d) ∨ H.P2Collides (commitInput a c, commitInput b d) := by
-  rcases H.p2_eq h with h | h
+  rcases H.p2_eq (commitInput_canonical ha hc) (commitInput_canonical hb hd) h with h | h
   · simp only [commitInput, List.cons_append, List.cons.injEq, true_and] at h
     obtain ⟨hlen, h⟩ := h
     have hpack : pack a (31 * 4) = pack b (31 * 4) := List.append_inj_left h (by simp [pack_length])
@@ -312,19 +385,20 @@ theorem commit_binds {a b : Bytes} {c d : Nat} (ha : a.length ≤ 124)
 
 /-- The key hash binds the modulus, unless the two key-hash inputs are a
 Poseidon2 collision. -/
-theorem keyHash_binds {n m : Nat} (h : keyHash H n = keyHash H m) :
+theorem keyHash_binds {n m : Nat} (hn : n < 2 ^ 2048) (hm : m < 2 ^ 2048)
+    (h : keyHash H n = keyHash H m) :
     n = m ∨ H.P2Collides (keyHashInput n, keyHashInput m) := by
-  rcases H.p2_eq h with h | h
+  rcases H.p2_eq (keyHashInput_canonical hn) (keyHashInput_canonical hm) h with h | h
   · simp only [keyHashInput, List.cons.injEq, true_and] at h
     exact Or.inl (modulusLimbs_injective h)
   · exact Or.inr h
 
 /-- A registry leaf binds its domain and key hash, unless the two leaf inputs
 are a Poseidon2 collision. -/
-theorem keyLeaf_binds {a b : Bytes} {k l : Nat} (ha : a.length ≤ 62)
-    (h : keyLeaf H a k = keyLeaf H b l) :
+theorem keyLeaf_binds {a b : Bytes} {k l : Nat} (ha : a.length ≤ 62) (hb : b.length ≤ 62)
+    (hk : Canonical k) (hl : Canonical l) (h : keyLeaf H a k = keyLeaf H b l) :
     (a = b ∧ k = l) ∨ H.P2Collides (leafInput a k, leafInput b l) := by
-  rcases H.p2_eq h with h | h
+  rcases H.p2_eq (leafInput_canonical ha hk) (leafInput_canonical hb hl) h with h | h
   · simp only [leafInput, List.cons_append, List.cons.injEq, true_and] at h
     obtain ⟨hlen, h⟩ := h
     have hpack : pack a (31 * 2) = pack b (31 * 2) := List.append_inj_left h (by simp [pack_length])
@@ -334,17 +408,18 @@ theorem keyLeaf_binds {a b : Bytes} {k l : Nat} (ha : a.length ≤ 62)
   · exact Or.inr h
 
 variable {F} in
-/-- A Subject binds the digest: if one header's Subject opens to the digests
-`d₁` and `d₂` (C5), they are equal, unless the two blinding inputs are a
+/-- A Subject binds the digest: if one header's Subject opens to the 32-byte
+digests `d₁` and `d₂` (C5), they are equal, unless the two blinding inputs are a
 Poseidon2 collision. -/
-theorem subject_binds_digest {hdr : Bytes} {d₁ d₂ ρ₁ ρ₂ : Nat}
+theorem subject_binds_digest {hdr : Bytes} {d₁ d₂ ρ₁ ρ₂ : Nat} (hd₁ : d₁ < 2 ^ 256)
+    (hd₂ : d₂ < 2 ^ 256) (hρ₁ : Canonical ρ₁) (hρ₂ : Canonical ρ₂)
     (h₁ : F.subject hdr = some (recoveryPhrase ++ hex (blind H d₁ ρ₁)))
     (h₂ : F.subject hdr = some (recoveryPhrase ++ hex (blind H d₂ ρ₂))) :
     d₁ = d₂ ∨ H.P2Collides (blindInput d₁ ρ₁, blindInput d₂ ρ₂) := by
   have h := h₁.symm.trans h₂
   simp only [Option.some.injEq, List.append_cancel_left_eq] at h
-  rcases H.p2_eq (hex_injective (H.p2_canonical _).lt_two_pow (H.p2_canonical _).lt_two_pow h)
-    with h | h
+  rcases H.p2_eq (blindInput_canonical hd₁ hρ₁) (blindInput_canonical hd₂ hρ₂)
+    (hex_injective (H.p2_canonical _).lt_two_pow (H.p2_canonical _).lt_two_pow h) with h | h
   · simp only [blindInput, List.cons.injEq, true_and, and_true] at h
     exact Or.inl (split_injective h.1 h.2.1)
   · exact Or.inr h
@@ -361,20 +436,22 @@ def SlotBreak (H : Hashes) (domain : Bytes) (n : Nat) : Slot → Prop
 /-- A slot whose leaf is the leaf of key `(domain, n)` holds that key, unless
 `SlotBreak` holds. -/
 theorem slot_binds {slot : Slot} {domain : Bytes} {n : Nat} (hd : domain.length ≤ 62)
-    (h : slot.leaf H = keyLeaf H domain (keyHash H n)) :
+    (hn : n < 2 ^ 2048) (hslot : slot.Fits) (h : slot.leaf H = keyLeaf H domain (keyHash H n)) :
     slot = .key domain n ∨ SlotBreak H domain n slot := by
+  have hleaf := leafInput_canonical hd (H.p2_canonical (keyHashInput n))
   cases slot with
   | key d m =>
-    rcases keyLeaf_binds hd h.symm with ⟨rfl, hk⟩ | hc
-    · rcases keyHash_binds hk with rfl | hc
+    rcases keyLeaf_binds hd hslot.1 (H.p2_canonical _) (H.p2_canonical _) h.symm
+      with ⟨rfl, hk⟩ | hc
+    · rcases keyHash_binds hn hslot.2 hk with rfl | hc
       · exact Or.inl rfl
       · exact Or.inr (Or.inr hc)
     · exact Or.inr (Or.inl hc)
   | salt code =>
-    refine Or.inr ⟨?_, h.symm⟩
+    refine Or.inr ⟨hleaf, saltInput_canonical hslot, ?_, h.symm⟩
     intro heq
     have := congrArg List.length heq
     simp [leafInput, saltInput, pack_length] at this
-  | empty => exact Or.inr h.symm
+  | empty => exact Or.inr ⟨hleaf, h.symm⟩
 
 end EmailRecovery

@@ -45,6 +45,7 @@ import { perchDeployment, requireDeployment } from './deployment.js';
 import { backupPanel } from './emailBackup.js';
 import { CONSENT_TEXT, confirmAlertContact, pushSubscription, registerAlertContact } from './emailAlerts.js';
 import { emailRecoveryDeployment, thisWalletApex } from './emailConfig.js';
+import { emailCircuit } from './emailProver.js';
 import { ALLOW_ALL, contractWasmHash, deployGuardianOperation, deployedAddress, readGuardianConfig, type GuardianConfig } from './emailGuardian.js';
 import {
   ENROLLED_ADDRESS_NOTE,
@@ -177,7 +178,8 @@ export async function mountEmailEnroll(root: HTMLElement, accountOrNull: string 
             await initHashes();
             status.textContent = 'Checking your email…';
             const signerKey = await resolveEnrollmentKey(eml, () => confirmDnsLookup());
-            const checked = await checkEnrollmentEmail({ eml, accountId, rhoE, accountCode: bytesToBigInt(accountCode), modulus: signerKey.modulus });
+            const circuit = await emailCircuit();
+            const checked = await checkEnrollmentEmail({ circuit, eml, accountId, rhoE, accountCode: bytesToBigInt(accountCode), modulus: signerKey.modulus });
             progress.checked = {
               address: checked.address,
               domain: checked.domain,

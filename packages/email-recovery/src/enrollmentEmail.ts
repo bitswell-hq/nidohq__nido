@@ -7,8 +7,10 @@
  * because the commitment `C` is computed from its `From` address, and an
  * address the recovery circuit would refuse, or a provider whose format it
  * cannot prove, would leave the user with an email factor that can never
- * approve anything. So the check applies the recovery circuit's own rules
- * (§4.3 rules 2 to 7, §4.5) to the enrollment email.
+ * approve anything. So the check runs the recovery circuit itself on the
+ * enrollment email's signed header block (`circuitAcceptsHeader`), after the
+ * checks of the address's domain and the Subject that the circuit's
+ * placeholder inputs leave out.
  */
 
 import {
@@ -16,6 +18,7 @@ import {
   HEADER_MAX,
   type KeyPath,
   LAUNCH_DOMAINS,
+  REGISTRY_DEPTH,
   addressCommitment,
   alignedSignedBlock,
   bigIntToBytes,
@@ -23,6 +26,7 @@ import {
   initHashes,
   keyHash,
   merkleRoot,
+  noirInputs,
   p2,
   pinSalt,
   registryLeaf,
@@ -30,11 +34,18 @@ import {
   treePath,
 } from './recoveryInputs.js';
 import { DkimHeaderError, blockFieldValue, domainOf, fromAddress } from './dkimHeader.js';
+import { type CompiledCircuit, solveWitness } from './prover/prove.js';
 
 /** `BE(sha256("nido/email-recovery/v1/enroll")) mod r` (spec §2). */
 export const DOM_ENROLL = 0x2bfe80f315441c3aadf9e7de0ab78fae545af772c0671cf5a512eb1ae713c9e7n;
 /** The enrollment Subject phrase, trailing space included (spec §5.4). */
 export const ENROLL_PHRASE = 'ENROLL NIDO ACCOUNT RECOVERY ';
+
+/** Octets a recovery email's signed block has beyond the enrollment email's: its phrase is one octet longer (spec §4.2, §5.4). */
+export const RECOVERY_SUBJECT_EXTRA = 1;
+
+/** The recovery circuit's refusal of a header it accepts whose Subject is not a recovery Subject (`lib/src/subject.nr`). */
+export const RECOVERY_PHRASE_REFUSAL = 'Subject: must start with the recovery phrase';
 
 /** `E = P2(DOM_ENROLL, account_hi, account_lo, rho_e)` for a 32-octet account contract id. */
 export function enrollmentValue(accountId: Uint8Array, rhoE: bigint): bigint {
@@ -66,6 +77,8 @@ export function fromGrammarOk(value: string): boolean {
 export interface EnrollmentEmailInput {
   /** The raw enrollment email, CRLF line endings. */
   eml: Uint8Array;
+  /** The recovery circuit's compiled artifact (`circuits/email-recovery/artifacts/recovery.json`), the one the prover proves with. */
+  circuit: CompiledCircuit;
   /** The 32-octet contract id of the account being enrolled. */
   accountId: Uint8Array;
   /** The `rho_e` the Subject was built with. */
@@ -90,15 +103,54 @@ export interface CheckedEnrollment {
 }
 
 /**
+ * Runs the recovery circuit itself on a signed header block: `circuit`
+ * executed with noir_js, without a proof, under placeholder public inputs
+ * and openings. The relation checks the header (C1, C2, the `From` grammar,
+ * the DKIM-Signature tags and `d=`) and the Subject's position before it
+ * compares the Subject with the recovery phrase
+ * (`verify_dkim_header_with_hints` in `lib/src/dkim.nr`, then
+ * `parse_subject`), so a header it accepts whose Subject is the enrollment
+ * phrase is refused first by `RECOVERY_PHRASE_REFUSAL`. Any other refusal is
+ * the circuit's verdict on how the provider signed, thrown as a
+ * `DkimHeaderError`. The parser check pins the same order on real and fuzzed
+ * headers (`research/email-recovery/eval/parser`, its cross-check).
+ */
+export async function circuitAcceptsHeader(
+  circuit: CompiledCircuit,
+  block: Uint8Array,
+  modulus: bigint,
+  signature: bigint,
+  solve: typeof solveWitness = solveWitness,
+): Promise<void> {
+  let inputs: Record<string, unknown>;
+  try {
+    const placeholders = { commitment: 1n, digestHi: 2n, digestLo: 3n, keyRoot: 4n, rho: 5n, accountCode: 6n, keyIndex: 0 };
+    inputs = noirInputs({ ...placeholders, header: block, modulus, signature, keySiblings: new Array<bigint>(REGISTRY_DEPTH).fill(0n) });
+  } catch (e) {
+    // The block is over the bound, or the key or the signature does not fit 2048 bits.
+    throw new DkimHeaderError(`the recovery circuit cannot take this email: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  let refusal: string;
+  try {
+    await solve(circuit, inputs);
+    refusal = 'it accepted placeholder public inputs';
+  } catch (e) {
+    refusal = (e instanceof Error ? e.message : String(e)).replace(/^Circuit execution failed: /, '');
+  }
+  if (refusal !== RECOVERY_PHRASE_REFUSAL) throw new DkimHeaderError(`the recovery circuit refuses how this email is signed: ${refusal}`);
+}
+
+/**
  * The checks of spec §5.4 on the email the user sent: its aligned
- * DKIM-Signature verifies under `modulus` with the circuit's tag rules, its
- * `From` parses under §4.5 at an allowlisted domain, and its Subject is the
- * enrollment phrase for this account and `rho_e`. Throws a `DkimHeaderError`
- * naming the first rule broken.
+ * DKIM-Signature verifies under `modulus`, its `From` address is at an
+ * allowlisted domain, its Subject is the enrollment phrase for this account
+ * and `rho_e`, and the recovery circuit accepts its signed header block
+ * (`circuitAcceptsHeader`) with room for the recovery Subject's extra octet.
+ * Throws a `DkimHeaderError` naming the first rule broken.
  */
 export async function checkEnrollmentEmail(input: EnrollmentEmailInput): Promise<CheckedEnrollment> {
   await initHashes();
-  const { signature, block } = await alignedSignedBlock(input.eml, input.modulus);
+  const { signature, block, value } = await alignedSignedBlock(input.eml, input.modulus);
   const tags = signature.tags;
   if (tags.get('v') !== '1') throw new DkimHeaderError('the DKIM-Signature is not v=1');
   if (tags.get('a')?.toLowerCase() !== 'rsa-sha256') throw new DkimHeaderError('the DKIM-Signature is not rsa-sha256');
@@ -120,6 +172,10 @@ export async function checkEnrollmentEmail(input: EnrollmentEmailInput): Promise
   if (blockFieldValue(block, 'subject') !== enrollmentSubject(input.accountId, input.rhoE)) {
     throw new DkimHeaderError('the signed Subject is not this enrollment’s Subject');
   }
+  if (block.length + RECOVERY_SUBJECT_EXTRA > HEADER_MAX) {
+    throw new DkimHeaderError(`the signed header block is ${block.length} octets; a recovery email from this inbox would exceed the circuit's ${HEADER_MAX}`);
+  }
+  await circuitAcceptsHeader(input.circuit, block, input.modulus, value);
   return {
     address,
     domain,
@@ -128,6 +184,13 @@ export async function checkEnrollmentEmail(input: EnrollmentEmailInput): Promise
     keyLeaf: registryLeaf(domain, keyHash(input.modulus)),
   };
 }
+
+/**
+ * How long the guardian's key pin lasts (spec §7.4), in seconds of ledger
+ * close time: 30 days, within the guardian's 365-day cap. The wallet, the
+ * evaluation's harness and the integration tests read this one definition.
+ */
+export const PIN_LIFETIME_SECONDS = 2_592_000;
 
 /** A key the pin holds: its domain (the `d=` it signs for) and modulus. */
 export interface PinnedKey {

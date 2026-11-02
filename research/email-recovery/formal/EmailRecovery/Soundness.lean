@@ -20,7 +20,11 @@ fails on this accepted proof (`ExtractionFails`, A4's bad event).
 `From` address and account code are the enrolled ones and its modulus is a
 trusted key of the leaf domain, unless one of the Poseidon2 breaks
 `SoundnessAssumptions.Break` lists holds, each on inputs computed from the
-extracted witness, the enrollment and the accepted root's tree.
+extracted witness, the enrollment and the accepted root's tree. Every such input
+is a list of field elements: the relation bounds the witness's `Field` inputs,
+the enrollment draws a 16-byte account code, and the registry and the pin hold
+only RSA-2048 keys of domains of at most 62 bytes, so each named break is a
+collision of Poseidon2 on `F_r^k` (`Hashes.P2Collides`).
 
 `email_binds_statement`: two accepted approvals whose extracted emails share a
 header carry one statement, unless their blinding inputs collide under
@@ -81,18 +85,21 @@ structure SignedEmail (H : Hashes) (F : Format) (c : GuardianConfig) (ap : Appro
   /-- `leaf(domain, key_hash(n))` is in the tree with the accepted root (C6). -/
   leafIndex : w.leafIndex < 2 ^ treeDepth
   siblings : w.siblings.length = treeDepth
+  siblingsCanonical : CanonicalList w.siblings
   leafDomainLength : w.leafDomain.length ≤ 62
   keyInTree :
     pathRoot H (keyLeaf H w.leafDomain (keyHash H w.modulus)) w.leafIndex w.siblings = ap.keyRoot
   /-- The `From` address of `H` and an account code open `C` (C3). -/
   fromAddress : F.fromAddr w.header = some w.address
   addressLength : w.address.length ≤ 124
+  codeCanonical : Canonical w.accountCode
   committed : commit H w.address w.accountCode = c.commitment
   /-- The address's domain is `d=` and the leaf's domain (C4). -/
   dkimDomain : F.dkimDomain w.header = some w.dkimD
   aligned : F.lower (F.domainOf w.address) = F.lower w.dkimD
   leafDomain : F.lower w.dkimD = w.leafDomain
   /-- The Subject of `H` opens to `d` (C5). -/
+  rhoCanonical : Canonical w.rho
   subject : F.subject w.header = some (recoveryPhrase ++ hex (blind H d w.rho))
 
 variable {H : Hashes} {F : Format} {E : Encoding} {c : GuardianConfig} {env : Env} {p : Nat}
@@ -100,8 +107,9 @@ variable {H : Hashes} {F : Format} {E : Encoding} {c : GuardianConfig} {env : En
 
 theorem signedEmail_of_relation {w : Witness} (r : Relation H F (approvalInputs H c ap) w) :
     SignedEmail H F c ap (H.sha256 ap.statement) w :=
-  ⟨r.signed, r.wellFormed, r.leafIndex, r.siblings, r.leafDomainLength.2, r.path, r.fromAddr,
-    r.addressLength.2, r.opensCommitment, r.dkimDomain, r.aligned, r.leafDomain, r.subject⟩
+  ⟨r.signed, r.wellFormed, r.leafIndex, r.siblings, r.siblingsCanonical, r.leafDomainLength.2,
+    r.path, r.fromAddr, r.addressLength.2, r.codeCanonical, r.opensCommitment, r.dkimDomain,
+    r.aligned, r.leafDomain, r.rhoCanonical, r.subject⟩
 
 /-- Guardian acceptance establishes the twelve checks, and, for every extractor,
 the email statement of §11.2 item 1 for the extracted witness, or the
@@ -121,10 +129,17 @@ theorem email_of_check (X : Extractor) (h : check H E c env p ap contexts = .ok 
 /-! ## The enrolled address and the trusted key -/
 
 /-- Assumption A7 for the commitment: the enrolling wallet computed `C` from the
-enrollment email's `From` address (at most `ADDR_MAX` bytes) and the account
-code it drew. -/
-def HonestCommitment (H : Hashes) (c : GuardianConfig) (address : Bytes) (code : Nat) : Prop :=
-  address.length ≤ 124 ∧ c.commitment = commit H address code
+enrollment email's `From` address (at most `ADDR_MAX` bytes) and the 16-byte
+account code it drew. -/
+structure HonestCommitment (H : Hashes) (c : GuardianConfig) (address : Bytes) (code : Nat) :
+    Prop where
+  addressLength : address.length ≤ 124
+  codeLt : code < 2 ^ 128
+  commits : c.commitment = commit H address code
+
+theorem HonestCommitment.codeCanonical {H : Hashes} {c : GuardianConfig} {address : Bytes}
+    {code : Nat} (h : HonestCommitment H c address code) : Canonical code :=
+  Canonical.of_lt h.codeLt (by decide)
 
 /-- The slots of a registry tree whose leaf `i` holds `keyAt i`. -/
 def registrySlot (keyAt : Nat → Option (Bytes × Nat)) (i : Nat) : Slot :=
@@ -135,19 +150,26 @@ def registrySlot (keyAt : Nat → Option (Bytes × Nat)) (i : Nat) : Slot :=
 /-- Assumption A5, with §7.3 rule 4: the tree behind every root the registry
 accepts. `keyAt root i` is the key `(domain, modulus)` at leaf `i` of that tree,
 `none` for an empty leaf, and every key it holds is `Trusted` (a key its
-domain's operator controls). -/
+domain's operator controls). The registry admits only allowlisted domains of 1
+to 62 bytes and RSA-2048 moduli (`fits`). -/
 structure RegistryTrees (H : Hashes) (env : Env) (registry : Nat) (Trusted : Bytes → Nat → Prop) where
   keyAt : Nat → Nat → Option (Bytes × Nat)
   root : ∀ root, env.registry registry root = some true →
     treeRoot H treeDepth (fun i => (registrySlot (keyAt root) i).leaf H) = root
   trusted : ∀ root i k, env.registry registry root = some true → keyAt root i = some k →
     Trusted k.1 k.2
+  fits : ∀ root i k, env.registry registry root = some true → keyAt root i = some k →
+    k.1.length ≤ 62 ∧ k.2 < 2 ^ 2048
 
 /-- Assumption A7 for the pin: a pinned root is the root the enrolling wallet
-computed from the account code and the keys it pinned, each `Trusted` (§7.4). -/
-def HonestPin (H : Hashes) (c : GuardianConfig) (code : Nat) (keys : List (Bytes × Nat))
-    (Trusted : Bytes → Nat → Prop) : Prop :=
-  (∀ q, c.pin = some q → q.root = pinRoot H code keys) ∧ ∀ k ∈ keys, Trusted k.1 k.2
+computed from the 16-byte account code and the keys it pinned (§7.4), each
+`Trusted` and each an RSA-2048 key of a domain of at most 62 bytes. -/
+structure HonestPin (H : Hashes) (c : GuardianConfig) (code : Nat) (keys : List (Bytes × Nat))
+    (Trusted : Bytes → Nat → Prop) : Prop where
+  root : ∀ q, c.pin = some q → q.root = pinRoot H code keys
+  codeLt : code < 2 ^ 128
+  trusted : ∀ k ∈ keys, Trusted k.1 k.2
+  fits : ∀ k ∈ keys, k.1.length ≤ 62 ∧ k.2 < 2 ^ 2048
 
 /-- The hypotheses of Theorem 1, by spec §11.1 id. A2 does not appear (the
 guardian's own checks need no hash property), A3's collision resistance appears
@@ -204,7 +226,8 @@ theorem from_is_enrolled {d : Nat} {w : Witness} {address : Bytes} {code : Nat}
     (e : SignedEmail H F c ap d w) (hc : HonestCommitment H c address code) :
     (w.address = address ∧ w.accountCode = code) ∨
       H.P2Collides (commitInput w.address w.accountCode, commitInput address code) :=
-  commit_binds e.addressLength (e.committed.trans hc.2)
+  commit_binds e.addressLength hc.addressLength e.codeCanonical hc.codeCanonical
+    (e.committed.trans hc.commits)
 
 theorem pinSlot_key {code : Nat} {keys : List (Bytes × Nat)} {i : Nat} {d : Bytes} {n : Nat}
     (h : pinSlot code keys i = .key d n) : (d, n) ∈ keys := by
@@ -240,7 +263,7 @@ theorem slot_root (A : SoundnessAssumptions H c env Trusted) {root : Nat}
     split at hp
     · rename_i q hq
       simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at hp
-      rw [← hp.1, A.pin.1 q hq]
+      rw [← hp.1, A.pin.root q hq]
       rfl
     · contradiction
   · rw [ite_eq_right hp]
@@ -254,7 +277,7 @@ theorem slot_trusted (A : SoundnessAssumptions H c env Trusted) {root i : Nat} {
   unfold SoundnessAssumptions.slot at hk
   by_cases hp : c.pinned env.closeTime root = true
   · rw [ite_eq_left hp] at hk
-    exact A.pin.2 _ (pinSlot_key hk)
+    exact A.pin.trusted _ (pinSlot_key hk)
   · rw [ite_eq_right hp] at hk
     have hr : env.registry c.registry root = some true := by
       rcases h with ⟨q, hq, hqr, hl⟩ | hr
@@ -262,14 +285,42 @@ theorem slot_trusted (A : SoundnessAssumptions H c env Trusted) {root i : Nat} {
       · exact hr
     exact A.registry.trusted root i _ hr (registrySlot_key hk)
 
+/-- Every slot of the tree behind an accepted root holds what a key tree may
+hold. -/
+theorem slot_fits (A : SoundnessAssumptions H c env Trusted) {root : Nat}
+    (h : RootAccepted c env root) (i : Nat) : (A.slot root i).Fits := by
+  unfold SoundnessAssumptions.slot
+  by_cases hp : c.pinned env.closeTime root = true
+  · rw [ite_eq_left hp]
+    cases i with
+    | zero => exact Canonical.of_lt A.pin.codeLt (by decide)
+    | succ i =>
+      simp only [pinSlot]
+      split
+      · rename_i k hk
+        exact A.pin.fits k (List.mem_of_getElem? hk)
+      · trivial
+  · rw [ite_eq_right hp]
+    have hr : env.registry c.registry root = some true := by
+      rcases h with ⟨q, hq, hqr, hl⟩ | hr
+      · exact absurd (by simp [GuardianConfig.pinned, hq, hqr, hl]) hp
+      · exact hr
+    unfold registrySlot
+    split
+    · rename_i k hk
+      exact A.registry.fits root i k hr hk
+    · trivial
+
 /-- The modulus behind an accepted email is a trusted key of the leaf domain,
 unless a `KeyBreak` holds. -/
 theorem key_is_trusted (A : SoundnessAssumptions H c env Trusted) {d : Nat} {w : Witness}
     (e : SignedEmail H F c ap d w) (hroot : RootAccepted c env ap.keyRoot) :
     Trusted w.leafDomain w.modulus ∨ A.KeyBreak ap.keyRoot w := by
-  rcases path_binds e.siblings e.leafIndex (e.keyInTree.trans (slot_root A hroot).symm)
+  rcases path_binds (fun i => (A.slot ap.keyRoot i).leaf_canonical H) (H.p2_canonical _)
+      e.siblingsCanonical e.siblings e.leafIndex (e.keyInTree.trans (slot_root A hroot).symm)
     with hslot | hc
-  · rcases slot_binds e.leafDomainLength hslot with hk | hb
+  · rcases slot_binds e.leafDomainLength e.signed.2.2.1 (slot_fits A hroot w.leafIndex) hslot
+      with hk | hb
     · exact Or.inl (slot_trusted A hroot hk)
     · exact Or.inr (Or.inr hb)
   · exact Or.inr (Or.inl hc)
@@ -316,7 +367,8 @@ theorem signedEmail_binds_statement {c₁ c₂ : GuardianConfig} {ap₁ ap₂ : 
       H.Sha256Collides (ap₁.statement, ap₂.statement) := by
   have s₁ := e₁.subject
   rw [hdr] at s₁
-  rcases subject_binds_digest s₁ e₂.subject with hd | hc
+  rcases subject_binds_digest (H.sha256_lt _) (H.sha256_lt _) e₁.rhoCanonical e₂.rhoCanonical
+      s₁ e₂.subject with hd | hc
   · rcases H.sha256_eq hd with h | h
     · exact Or.inl h
     · exact Or.inr (Or.inr h)

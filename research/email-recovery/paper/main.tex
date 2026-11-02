@@ -54,9 +54,10 @@ RFC~5322 reader reads, while it differs from a strict DKIM verifier on tags
 it does not read and on whitespace it
 refuses\claims{parser-real-mail,parser-fuzzing}. The Noir circuit has
 248{,}996 UltraHonk gates\claim{circuit-size}. On a local Stellar network
-running mainnet's settings, an email vote is metered at 121.6 million of a
-transaction's 400 million instructions and charged 83{,}125 to 83{,}153
-stroops (0.0083 XLM), and desktop Chrome proves in 1.44\,s on 18
+running mainnet's settings, an email vote is metered at
+\figM[1]{vote-metered-median} million of a transaction's 400 million
+instructions and charged \fig{vote-fee-min} to \fig{vote-fee-max} stroops
+(0.0083 XLM), and desktop Chrome proves in 1.44\,s on 18
 threads\claims{network-verification-cost,browser-proving-cost}. Phones are not
 measured, and no user study was run. All 73 rows of an attack suite,
 phishing, deleted alerts, a lapsed push and a switched phone among them, have
@@ -99,6 +100,7 @@ stop\claims{network-attack-suite,registry-timelock-attacks}.
 \appendix
 \input{sections/analysis-appendix}
 \input{sections/attack-appendix}
+\input{sections/proving-appendix}
 \input{sections/reproducibility}
 \input{sections/claims-appendix}
 

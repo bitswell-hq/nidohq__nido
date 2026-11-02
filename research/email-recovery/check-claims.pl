@@ -1,10 +1,12 @@
 #!/usr/bin/env perl
 # Check the claim ledger (claims.yaml) against the documents and the repository.
 #
-#   perl check-claims.pl [--ledger FILE] [--sources DIR]... [--repo DIR]
+#   perl check-claims.pl [--ledger FILE] [--sources DIR]... [--repo DIR] [--figures FILE]
 #
 # Defaults: the ledger next to this script, sources paper/ slides/ shared/,
-# and the repository two levels up. Exits non-zero listing every violation:
+# the repository two levels up, and the figures file
+# research/email-recovery/eval/results/figures.json in it. Exits non-zero
+# listing every violation:
 #
 #   - each entry has exactly id, statement, status, and (unless unproven)
 #     evidence; ids are unique and match [a-z][a-z0-9-]*;
@@ -14,12 +16,19 @@
 #       proven    { lean: <theorem name>, file: <path> }  the file declares it
 #                 (the name or a dotted suffix of it, as namespaces allow)
 #       tested    { test: <test name>,    file: <path> }  the name is in the file
-#       measured  { file: <path> }                        the file exists, and
+#       measured  { file: <path> }                        the file exists, is
+#                 not under docs/ (a measured claim rests on a measurement or
+#                 the code that makes it, not on the specification), and
 #                 every figure of four or more digits in the statement
 #                 (121,639,784 or 1208 alike) occurs in one of the claim's
 #                 files, written with or without its thousands separators,
 #                 unless "about", "around", "roughly" or "approximately"
-#                 introduces it as a rounded figure
+#                 introduces it as a rounded figure, or it is a figure
+#                 placeholder ({{name}}, or {{name:m}} in millions), which
+#                 must name a figure of the figures file, a file the claim
+#                 lists among its evidence (eval/report.mjs writes it from
+#                 the results, so a placeholder is the result by
+#                 construction)
 #       assumed   { assumption: <text> }
 #       unproven  no evidence
 #     Paths are relative to the repository root.
@@ -31,16 +40,19 @@ use warnings;
 use File::Basename qw(dirname);
 use File::Find qw(find);
 use File::Spec;
+use Cwd qw(abs_path);
 use Getopt::Long qw(GetOptions);
+use JSON::PP;
 use YAML::Tiny;
 
 my $here = File::Spec->rel2abs(dirname(__FILE__));
-my ($ledger, @sources, $repo);
-GetOptions('ledger=s' => \$ledger, 'sources=s' => \@sources, 'repo=s' => \$repo)
-    or die "usage: $0 [--ledger FILE] [--sources DIR]... [--repo DIR]\n";
+my ($ledger, @sources, $repo, $figures_file);
+GetOptions('ledger=s' => \$ledger, 'sources=s' => \@sources, 'repo=s' => \$repo, 'figures=s' => \$figures_file)
+    or die "usage: $0 [--ledger FILE] [--sources DIR]... [--repo DIR] [--figures FILE]\n";
 $ledger //= "$here/claims.yaml";
 @sources = map { "$here/$_" } qw(paper slides shared) unless @sources;
 $repo //= File::Spec->catdir($here, File::Spec->updir, File::Spec->updir);
+$figures_file //= File::Spec->catfile($repo, qw(research email-recovery eval results figures.json));
 
 my @errors;
 sub fail { push @errors, join('', @_) }
@@ -95,7 +107,49 @@ for my $i (0 .. $#$claims) {
         unless (ref $item eq 'HASH') { fail "$where: evidence must be a mapping or a list of mappings"; next }
         check_evidence($where, $status, $want, $item);
     }
-    check_figures($where, $statement, \@items) if $status eq 'measured' && defined $statement;
+    next unless defined $statement && !ref $statement;
+    my $plain = check_placeholders($where, $status, $statement, \@items);
+    check_figures($where, $plain, \@items) if $status eq 'measured';
+}
+
+# The figures file's map of figure names to values, read once.
+my $figures;
+sub figures {
+    return $figures if $figures;
+    my $doc = eval {
+        open my $fh, '<:raw', $figures_file or die "cannot read: $!\n";
+        JSON::PP->new->utf8->decode(do { local $/; <$fh> });
+    };
+    $figures = ref $doc eq 'HASH' && ref $doc->{figures} eq 'HASH' ? $doc->{figures} : {};
+    fail "the figures file $figures_file has no 'figures' map: ", $@ || 'wrong shape' unless %$figures;
+    return $figures;
+}
+
+# Each figure placeholder in a statement names a figure of the figures file,
+# which the claim (a measured one) lists among its evidence. Returns the
+# statement without its placeholders, for the figure-occurrence check.
+sub check_placeholders {
+    my ($where, $status, $statement, $items) = @_;
+    my @names = $statement =~ /\{\{([^{}]*)\}\}/g;
+    (my $plain = $statement) =~ s/\{\{[^{}]*\}\}/ /g;
+    fail "$where: a stray '{{' or '}}' in the statement" if $plain =~ /\{\{|\}\}/;
+    return $plain unless @names;
+    unless ($status eq 'measured') {
+        fail "$where: only a measured claim may use figure placeholders";
+        return $plain;
+    }
+    my $want = abs_path($figures_file) // $figures_file;
+    my $listed = grep {
+        ref $_ eq 'HASH' && defined $_->{file} && !ref $_->{file}
+            && (abs_path(File::Spec->catfile($repo, $_->{file})) // '') eq $want
+    } @$items;
+    fail "$where: a claim with figure placeholders lists the figures file among its evidence" unless $listed;
+    for my $p (@names) {
+        my ($name) = $p =~ /^([a-z][a-z0-9-]*)(?::m)?$/;
+        unless (defined $name) { fail "$where: '{{$p}}' is not a figure placeholder ({{name}} or {{name:m}})"; next }
+        fail "$where: the figure '$name' is not in the figures file" unless exists figures()->{$name};
+    }
+    return $plain;
 }
 
 # Every figure of four or more digits in a measured claim's statement occurs
@@ -146,7 +200,11 @@ sub check_evidence {
     }
     my $abs = File::Spec->catfile($repo, $path);
     unless (-f $abs) { fail "$where: evidence file '$path' does not exist"; return }
-    return if $status eq 'measured';
+    if ($status eq 'measured') {
+        fail "$where: '$path' is the specification, not a measurement; cite the result file or the code that writes it"
+            if $path =~ m{^docs/};
+        return;
+    }
 
     open my $fh, '<', $abs or do { fail "$where: cannot read '$path': $!"; return };
     my $text = do { local $/; <$fh> };

@@ -16,9 +16,15 @@ so the theorems hold for any parser and computing them as
 (\S\ref{sec:hardening}), not a proven one; $\mathrm{hex}$ is the spec's
 formula, injective below $2^{256}$. No assumption is an axiom: the
 build pins every theorem's axioms to Lean's built-in three\claim{lean-axioms}.
-Appendix~\ref{app:obligations} lists each property's obligations and their
-status, and Appendix~\ref{sec:gap} how the model's agreement with the
-contracts is tested.
+Per property: soundness and replay resistance are proven over the model,
+with hash breaks named and extraction as A4's bad event, while C1 to C6,
+the parsing and the guardian's checks are tested (\S\ref{sec:hardening},
+\S\ref{sec:eval-parser}); one-factor safety is proven over every controller
+trace, the wallet policy as a predicate and in code by tests; privacy is
+proven in an ideal model whose step to Poseidon2 and UltraHonk is assumed;
+the model's agreement with the contracts is tested
+(Appendix~\ref{sec:gap}); Table~\ref{tab:obligations} gives each
+component's obligations.
 
 \paragraph{Reading the breaks.} A conclusion ``$P$, or Poseidon2 has a
 collision'' says nothing, since by pigeonhole every hash from unbounded
@@ -26,7 +32,13 @@ inputs to a field has collisions. Each break here is instead a proposition
 about specific inputs the theorem computes from its own data, so each
 theorem is a reduction: whoever violates $P$ hands over a collision, the
 reading of collision resistance for a fixed, unkeyed
-hash~\cite{rogaway-human-ignorance}. Extraction is different: it is isolated
+hash~\cite{rogaway-human-ignorance}. Each named Poseidon2 input is a list of
+field elements, as A3 on $\mathbb{F}_r^k$ needs: the relation bounds the
+witness's field-typed inputs ($\code$, $\blind$, the Merkle siblings),
+enrollment draws a 16-byte $\code$, and the trees hold only RSA-2048 keys of
+domains of at most 62 bytes; otherwise $x$ and $x+r$, which Poseidon2 reads
+alike, would be a named break that breaks nothing
+(\textsf{aliased\_code\_is\_no\_break})\claim{email-factor-soundness}. Extraction is different: it is isolated
 as A4's bad event on the accepted proof, not reduced. An extractor that
 succeeds on every accepted proof would be perfect soundness, which a
 succinct argument does not have, so the theorem takes any function $X$ from

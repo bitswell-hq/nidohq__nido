@@ -2,7 +2,9 @@
 # Build what the evaluation's local network runs: Perch's account for the
 # local network's stateless deployer (evaluation/scripts/local-stack.sh),
 # the stateless deployer and image allowlist fixtures, the suite's TEST-ONLY
-# fixtures, the DNS attester mock, the npm packages, and the TLS certificate
+# fixtures, the DNS attester mock, the npm packages the suite imports (the
+# wallet SDK among them, so a checkout whose dist/ predates its source runs
+# the current SDK), and the TLS certificate
 # of the RPC proxy (lib/tls.mjs), after checking that node_modules matches
 # package-lock.json (lib/preflight.mjs). Needs the Stellar CLI, `npm ci`,
 # `just perch-infra` and `just build-contracts` (the email contracts' wasm).
@@ -38,5 +40,5 @@ mkdir -p "$e2e/wasm"
 for w in "$e2e"/wasm/nido_*.wasm; do stellar contract optimize --wasm "$w" --wasm-out "$w" >/dev/null; done
 (cd research/email-recovery/eval/network/fixtures/foreign-controller && CARGO_TARGET_DIR="$root/$out/cargo-fc" stellar contract build --out-dir "$root/$out/wasm")
 cargo build -q -p nido-dns-attestation-mock
-npm run build -w @nidohq/email-mocks -w @nidohq/email-recovery -w @nidohq/email-alerts >/dev/null
+npm run build -w @nidohq/passkey-sdk -w @nidohq/email-mocks -w @nidohq/email-recovery -w @nidohq/email-alerts >/dev/null
 node --input-type=module -e "import('./research/email-recovery/eval/network/lib/tls.mjs').then((m) => m.cert('$out/tls'))"

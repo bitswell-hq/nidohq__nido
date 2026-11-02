@@ -23,15 +23,21 @@ exhibits, for Theorems 1, 2 and 4, concrete values that satisfy every hypothesis
   address into its proof, one query gives the two wallets different views, so
   the view contains the proofs and the theorem needs its zero-knowledge
   hypothesis.
+* `aliased_code_is_no_break`: why the relation bounds its `Field` inputs. Under
+  a hash that, like Poseidon2, reads its inputs modulo `r`, the account codes
+  `code` and `code + r` open one commitment and the siblings `s` and `s + r`
+  hash alike, though nothing is broken. A model witness carrying such an alias
+  would make Theorem 1 conclude a break instead of the enrolled code; the
+  bounds exclude that witness, and the pairs are no `P2Collides`.
 
-The hash functions here are constants. They have none of the properties the
-assumptions are about; consistency of the hypotheses needs none.
+The hash functions of the first three are constants. They have none of the
+properties the assumptions are about; consistency of the hypotheses needs none.
 -/
 
 namespace EmailRecovery.Examples
 
 /-- SHA-256 as the constant 0 and Poseidon2 as the constant 1. -/
-def H₀ : Hashes := ⟨fun _ => 0, fun _ => 1, fun _ => by decide⟩
+def H₀ : Hashes := ⟨fun _ => 0, fun _ => by decide, fun _ => 1, fun _ => by decide⟩
 
 def F₀ : Format where
   wellFormed := fun _ => True
@@ -84,13 +90,19 @@ theorem relation₀ : Relation H₀ F₀ x₀ w₀ where
   wellFormed := trivial
   fromAddr := rfl
   addressLength := by decide
+  codeCanonical := by decide
   opensCommitment := rfl
   dkimDomain := rfl
   aligned := rfl
   leafDomain := rfl
+  rhoCanonical := by decide
   subject := rfl
   leafIndex := by decide
   siblings := by simp [w₀]
+  siblingsCanonical := fun x hx => by
+    simp only [w₀, List.mem_replicate] at hx
+    rw [hx.2]
+    decide
   leafDomainLength := by decide
   path := rfl
 
@@ -100,12 +112,12 @@ def assumptions₀ : SoundnessAssumptions H₀ cfg₀ env₀ (fun _ _ => True) w
   registry := ⟨fun _ _ => none, fun root h => by
     simp only [env₀, Option.some.injEq, beq_iff_eq] at h
     subst h
-    rfl, fun _ _ _ _ _ => trivial⟩
+    rfl, fun _ _ _ _ _ => trivial, fun _ _ _ _ h => by simp at h⟩
   enrolledAddress := [1]
   enrolledCode := 0
-  commitment := ⟨by decide, rfl⟩
+  commitment := ⟨by decide, by decide, rfl⟩
   pinnedKeys := []
-  pin := ⟨fun q hq => by simp [cfg₀] at hq, fun _ _ => trivial⟩
+  pin := ⟨fun q hq => by simp [cfg₀] at hq, by decide, fun _ _ => trivial, fun _ h => by simp at h⟩
 
 theorem check₀ :
     check H₀ E₀ cfg₀ env₀ 0 ap₀ [AuthContext.approval 3 .submitGuardian 0] = .ok () := rfl
@@ -209,5 +221,40 @@ theorem leaky_prover_distinguishes :
   simp only [view, game, play, queryOnce, List.nil_append, List.cons.injEq, Obs.approval.injEq,
     approve, leakyTools, Private.witness, alice, bob, and_true] at h₂
   exact absurd (congrArg Approval.proof h₂) (by decide)
+
+/-! ## Why the relation bounds its field inputs -/
+
+/-- A hash that reads its inputs as field elements, as Poseidon2 does: its value
+depends on each input only modulo `r`. -/
+def Hmod : Hashes where
+  sha256 := fun _ => 0
+  sha256_lt := fun _ => by decide
+  p2 := fun xs => (xs.map (· % fieldModulus)).sum % fieldModulus
+  p2_canonical := fun _ => Nat.mod_lt _ (by decide)
+
+theorem fieldModulus_ne_zero : fieldModulus ≠ 0 := by decide
+
+theorem not_canonical_add (x : Nat) : ¬ Canonical (x + fieldModulus) := by
+  unfold Canonical
+  omega
+
+/-- Under `Hmod`, the account codes `code` and `code + r` open one commitment
+and the siblings `s` and `s + r` hash alike with any node `l`, though the inputs
+differ. Neither pair is a `P2Collides`: `code + r` and `s + r` are not field
+elements, and `Relation.codeCanonical` and `Relation.siblingsCanonical` exclude a
+witness that carries them. Without those bounds such a witness would satisfy the
+relation, and Theorem 1 would conclude a break where nothing is broken. -/
+theorem aliased_code_is_no_break (a : Bytes) (code l s : Nat) :
+    commit Hmod a (code + fieldModulus) = commit Hmod a code ∧
+      commitInput a (code + fieldModulus) ≠ commitInput a code ∧
+      ¬ Hmod.P2Collides (commitInput a (code + fieldModulus), commitInput a code) ∧
+      Hmod.p2 [l, s + fieldModulus] = Hmod.p2 [l, s] ∧
+      ¬ Hmod.P2Collides ([l, s + fieldModulus], [l, s]) := by
+  refine ⟨?_, ?_, ?_, ?_, ?_⟩
+  · simp [commit, Hmod, commitInput, Nat.add_mod_right]
+  · simp [commitInput, fieldModulus_ne_zero]
+  · exact fun h => not_canonical_add code (h.1 _ (by simp [commitInput]))
+  · simp [Hmod, Nat.add_mod_right]
+  · exact fun h => not_canonical_add s (h.1 _ (by simp))
 
 end EmailRecovery.Examples

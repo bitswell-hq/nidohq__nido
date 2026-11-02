@@ -27,9 +27,9 @@ claims:
       controller and network, an allowed action and an unexpired bound. With
       an honest registry and enrollment, the From address and account code are
       the enrolled ones and the signing modulus is a listed key of the From
-      domain, unless Poseidon2 collides on a pair of inputs, or maps an input
-      to zero, that the theorem computes from the email, the enrollment and
-      the key tree. The email binds one statement: two accepted approvals
+      domain, unless Poseidon2 collides on a pair of lists of field elements,
+      or maps such a list to zero, that the theorem computes from the email,
+      the enrollment and the key tree. The email binds one statement: two accepted approvals
       whose extracted emails share a header carry the same statement, unless
       extraction fails on one of them, their blinding inputs collide under
       Poseidon2 or their statements collide under SHA-256.
@@ -405,21 +405,28 @@ claims:
   - id: network-verification-cost
     statement: >-
       On a local Stellar network at protocol 29 with mainnet's settings, the
-      20 email votes with a real proof that leave their attempt collecting, each
-      proven against its guardian's key pin, are metered at 121,576,077 to
-      121,664,431 instructions (median 121,641,679) and declare 126,485,435 to
-      126,577,531, which their fee is charged on; each reads 12 ledger entries
-      and writes 2 (1,208 bytes) in an 18,080-byte transaction, and is charged
-      83,125 to 83,153 stroops (0.0083 XLM),
-      2,047 to 2,049 of them rent: the fee mainnet's settings give the same
-      transaction. At mainnet's settings a ledger holds at
-      most 12 such votes, 4 in each of its 3 clusters of 580,000,000
-      instructions.
+      {{vote-count}} email votes with a real proof that leave their attempt
+      collecting, each proven against its guardian's key pin, are metered at
+      {{vote-metered-min}} to {{vote-metered-max}} instructions (median
+      {{vote-metered-median}}) and declare {{vote-declared-min}} to
+      {{vote-declared-max}}, which their fee is charged on; each reads 12
+      ledger entries and writes 2 (1,208 bytes) in an 18,080-byte
+      transaction, and is charged {{vote-fee-min}} to {{vote-fee-max}}
+      stroops (0.0083 XLM), {{vote-rent-min}} to {{vote-rent-max}} of them
+      rent: the fee mainnet's settings give the same transaction. At
+      mainnet's settings a ledger holds at most {{votes-per-ledger}} such
+      votes, {{votes-per-cluster}} in each of its 3 clusters of 580,000,000
+      instructions. The figures are one attack run's, typeset from its
+      results. Each run draws new keys and proofs: over three runs of one
+      build, the bounds of the vote fee moved by at most 7 stroops and the
+      median of the metered instructions by 10,310.
     status: measured
     evidence:
       - file: research/email-recovery/eval/results/attacks-local.json
       - file: research/email-recovery/eval/README.md
       - file: research/email-recovery/eval/results/settings/mainnet.json
+      - file: research/email-recovery/eval/results/figures.json
+      - file: research/email-recovery/eval/results/attack-reruns.json
 
   - id: testnet-email-recovery
     statement: >-
@@ -449,30 +456,35 @@ claims:
       A port of the host's fee computation reproduces, to the stroop, every
       fee charged in the evaluation's local-network and testnet runs from each
       transaction's declared resources and the network's archived settings.
-      At mainnet's settings the Gmail email vote costs 37,969 stroops of
-      compute, 36,419 of history, 3,585 of transaction size, 2,500 for the
-      entries it writes, 516 for their bytes and 10 for events, 80,989
-      non-refundable, plus 2,049 rent and the 100-stroop inclusion fee:
-      83,148 (0.0083 XLM), its charge on the local network; testnet charges
-      the same components except rent, 1,333, because its minimum temporary
-      lifetime is 720 ledgers against mainnet's 17,280.
+      At mainnet's settings the Gmail email vote costs {{gmail-compute}}
+      stroops of compute, {{gmail-history}} of history, {{gmail-size}} of
+      transaction size, {{gmail-write-entries}} for the entries it writes,
+      {{gmail-write-bytes}} for their bytes and {{gmail-events}} for events,
+      {{gmail-nonrefundable}} non-refundable, plus {{gmail-rent}} rent and the
+      100-stroop inclusion fee: {{gmail-total}} (0.0083 XLM), its charge on
+      the local network; testnet charges the same components except rent,
+      1,333, because its minimum temporary lifetime is 720 ledgers against
+      mainnet's 17,280.
     status: measured
     evidence:
       - file: research/email-recovery/eval/README.md
       - file: research/email-recovery/eval/results/attacks-local.json
+      - file: research/email-recovery/eval/results/figures.json
 
   - id: metering-attribution
     statement: >-
       Re-executed on the test host, the Gmail vote's transaction meters
       130,031,418 instructions under mainnet's cost model and 130,065,594
       under testnet's, which differs in nine CPU cost types; between the
-      networks the medians of the same wasm differ by 23,436 instructions
-      (0.02%); and the release-profile build of the contracts meters 1,574,340
-      fewer instructions per vote than the size-optimized wasm every network
-      here runs.
+      networks the medians of the same wasm differ by less than the spread of
+      either network's votes within one run, so no difference is attributed
+      to the networks; and the release-profile build of the contracts meters
+      {{release-saving}} fewer instructions per vote than the size-optimized
+      wasm every network here runs (the medians of two runs).
     status: measured
     evidence:
-      file: research/email-recovery/eval/README.md
+      - file: research/email-recovery/eval/README.md
+      - file: research/email-recovery/eval/results/figures.json
 
   # Supporting results of the Lean model.
   - id: guardian-payload-irrelevant
@@ -961,13 +973,18 @@ claims:
   # Enrollment, the browser prover and the alert path.
   - id: enrollment-email-check
     statement: >-
-      Before deploying a guardian, the wallet checks the enrollment email
-      under the recovery circuit's rules and commits to its signed From
-      address; another account's or another blinding value's enrollment
-      Subject, the recovery phrase, a key that did not sign the email, and a
-      domain outside the allowlist are refused.
+      Before deploying a guardian, the wallet runs the recovery circuit itself
+      on the enrollment email's signed header block and commits to its signed
+      From address; another account's or another blinding value's enrollment
+      Subject, the recovery phrase, a key that did not sign the email, a
+      domain outside the allowlist, and signatures the circuit cannot prove
+      (c=relaxed, c=Relaxed/Relaxed, a=RSA-SHA256, a space in d=) are refused.
     status: tested
     evidence:
+      - test: the recovery circuit itself refuses signatures it cannot prove
+        file: packages/email-recovery/test/enrollmentEmail.test.ts
+      - test: circuitAcceptsHeader accepts a header only where the circuit stops at the recovery phrase
+        file: packages/email-recovery/test/enrollmentEmail.test.ts
       - test: an honest enrollment email is accepted, and C is the commitment to its signed From address
         file: packages/email-recovery/test/enrollmentEmail.test.ts
       - test: another account, another rho_e, or the recovery phrase is refused
@@ -980,9 +997,9 @@ claims:
   - id: account-code-backup
     statement: >-
       The account code's backup in the enrollment email opens only with its
-      wallet-generated five-word passphrase and its account, which it carries
-      inside its ciphertext; the recovery kit holds the code as 26 base32
-      characters and names its account.
+      wallet-generated five-word passphrase (about 64.6 bits) and its account,
+      which it carries inside its ciphertext; the recovery kit holds the code
+      as 26 base32 characters and names its account.
     status: tested
     evidence:
       - test: the passphrase-encrypted block opens only with its passphrase and account
@@ -1354,28 +1371,35 @@ claims:
     statement: >-
       On the local network, the email vote that authorizes an attempt with a
       seven-day delay also writes the authorized attempt: about 122 million
-      instructions metered (127,443,767 declared), 1,488 bytes written, and
-      3,632,052 stroops charged, of which 3,545,582 are rent.
+      instructions metered ({{authorizing-declared}} declared), 1,488 bytes
+      written, and {{authorizing-fee}} stroops charged, of which
+      {{authorizing-rent}} are rent.
     status: measured
     evidence:
-      file: research/email-recovery/eval/results/attacks-local.json
+      - file: research/email-recovery/eval/results/attacks-local.json
+      - file: research/email-recovery/eval/results/figures.json
 
   - id: testnet-recovery-total
     statement: >-
       The seven transactions of the testnet recovery from minting the
       account to completion were charged 13,758,804 stroops (1.4 XLM), of
       which the helper's authorizing vote paid 3,664,629 (3,653,812 rent); the
-      delay was 12 ledgers (57,099 ms). An earlier run on the same Perch
+      delay was 12 ledgers (57,099 ms). Another run on the same Perch
       deployment found Perch's doc compiler and recovery controller, instance
       and code, archived and restored them first, one transaction per entry,
-      for 112,447,907 stroops (11.2 XLM) beside its recovery's 13,384,714.
-      With every entry a recovery reads archived, the same recovery at
-      mainnet's settings takes 7 transactions and 3,959,831,748 stroops (396
-      XLM), against 5,237,377 with nothing archived (re-executed on the test
-      host); keeping the email verifier, the key registry and the guardian's
-      code live costs 3,304,297,283 stroops (330.4 XLM) a year at mainnet's
-      settings and each account's guardian instance 3,245,716 (0.3246 XLM)
-      (the keeper on a local network with mainnet's settings). These price
+      for 112,447,907 stroops (11.2 XLM), 8.2 times this recovery; that cost
+      depends on Perch's entries alone. With every entry a recovery reads
+      archived, the same recovery at mainnet's settings is priced as 7
+      transactions and 3,959,831,748 stroops (396 XLM), against 5,237,377 with
+      nothing archived: its 4 steps re-executed on the test host, which
+      enforces no per-transaction limit, and 3 RestoreFootprint transactions
+      modelled for the code entries too large to restore inline. Keeping the
+      email verifier, the key registry and the guardian's code live costs
+      3,304,297,283 stroops (330.4 XLM) a year at mainnet's settings, each
+      account's guardian instance 3,245,716 (0.3246 XLM), and Perch's
+      controller, doc compiler, WebAuthn verifier and account code, which
+      Perch's operator keeps, 8,677,150,521 (867.7 XLM) (the keeper on a
+      local network with mainnet's settings). These price
       rent at mainnet's rate when its settings were read, the 1,000-stroop
       floor per KB, which holds while the network's average state stays at
       most 2.0 GB (it was 1.718 GB); every rent figure scales with the rate,
@@ -1392,15 +1416,17 @@ claims:
   - id: enrollment-cost
     statement: >-
       At mainnet's settings, on the local network that runs them, enrolling
-      an account costs 11,434,621 stroops (1.1 XLM): minting it 2,876,016,
-      deploying its email guardian 1,609,367, and the recovery document that
-      lists the guardian with one helper 6,949,238 (medians over the attack
+      an account costs {{enrollment-total}} stroops (1.1 XLM): minting it
+      {{enrollment-mint}}, deploying its email guardian
+      {{enrollment-guardian}}, and the recovery document that lists the
+      guardian with one helper {{enrollment-doc}} (medians over the attack
       run's 11 launch-domain accounts), almost all of it rent for new
       entries' minimum lifetime of 2,073,600 ledgers.
     status: measured
     evidence:
       - file: research/email-recovery/eval/README.md
       - file: research/email-recovery/eval/results/attacks-local.json
+      - file: research/email-recovery/eval/results/figures.json
 
   - id: circuit-fix-migration
     statement: >-
@@ -1411,8 +1437,10 @@ claims:
       profile (the deployment and the owner's apply_doc) and 4 transactions
       and 3,159,077 stroops (0.3159 XLM) under Protected (with the two
       helpers' approve_change votes), 1,601,271 of each being the new
-      guardian instance's prepaid rent; re-executed on the test host, the new
-      verifier's one deployment for all accounts not counted.
+      guardian instance's prepaid rent; re-executed on the test host, with a
+      second instance of the current verifier standing in for the fixed one
+      (a fixed circuit's verifier has the same size and verification work),
+      the new verifier's one deployment for all accounts not counted.
     status: measured
     evidence:
       - file: research/email-recovery/eval/results/migration-test-host.json
@@ -1465,18 +1493,31 @@ claims:
       20,048,562.
     status: measured
     evidence:
-      - file: docs/email-recovery/spec.md
+      - file: research/email-recovery/eval/results/registry-costs-test-host.jsonl
       - file: crates/integration-tests/tests/it/dkim_registry.rs
+
+  - id: watcher-load
+    statement: >-
+      Reading every transaction on mainnet, as the alert watcher does to find
+      email votes (getTransactions with JSON XDR, 200 a page) through one
+      public RPC: 24 consecutive ledgers held 8,879 transactions, 2,275 of
+      them Soroban, and 123,836,893 octets of JSON, about 5.2 MB a ledger and
+      89 GB a day at 5-second ledgers, fetched in 50.75 seconds against 120
+      seconds of chain time, on a machine at a load average of about 7.
+    status: measured
+    evidence:
+      - file: research/email-recovery/eval/results/watcher-load-mainnet.json
+      - file: research/email-recovery/eval/watcher-load.mjs
 
   - id: alert-latency
     statement: >-
       With every service a loopback mock, attempt_authorized reaches the
-      sending mock in 11 to 62 ms (median 16.5) and the push mock in 13 to 66
-      ms (median 19), and a restarted vault restores its key from two
-      custodians in 147 to 238 ms (median 152), over 10 runs each.
+      sending mock in 11 to 13 ms (median 11.5) and the push mock in 12 to 15
+      ms (median 13.5), and a restarted vault restores its key from two
+      custodians in 98.2 to 105.9 ms (median 101.3), over 10 runs each.
     status: measured
     evidence:
-      - file: docs/email-recovery/spec.md
+      - file: research/email-recovery/eval/results/alert-latency.json
       - file: infra/email-alerts/test/e2e.test.ts
 
   # The assumptions the properties rest on.
@@ -1581,22 +1622,30 @@ claims:
     evidence:
       assumption: >-
         Poseidon2 behaves as a random oracle on its inputs, and the account
-        code carries at least 128 bits of entropy that only the user holds, so
-        the commitment and the pin root are indistinguishable from two handles
-        drawn independently of the address and the keys.
+        code carries 128 bits of entropy that only the user holds, so the
+        commitment and the pin root are indistinguishable from two handles
+        drawn independently of the address and the keys. For a user who keeps
+        the optional passphrase-encrypted copy in the enrollment email, the
+        provider can test passphrase guesses against it offline, so against
+        the provider the code is as strong as the five-word passphrase (about
+        64.6 bits) stretched by Argon2id (64 MiB, three passes).
 
   - id: hash-collision-resistance
     statement: >-
-      Nobody can find a SHA-256 collision, a Poseidon2 collision, or a
-      Poseidon2 input that hashes to zero.
+      Nobody can find a SHA-256 collision, a Poseidon2 collision on lists of
+      field elements, or a list of field elements that Poseidon2 hashes to
+      zero.
     status: assumed
     evidence:
       assumption: >-
-        SHA-256 and Poseidon2 (noir-lang/poseidon v0.2.0 over the BN254 scalar
-        field) are collision resistant, and Poseidon2 behaves as a random
-        function, so no input is known that it maps to zero, the empty leaf of
-        the key trees. The theorems reduce to this assumption by naming the
-        colliding inputs, computed from their own data.
+        SHA-256 is collision resistant, and Poseidon2 (noir-lang/poseidon
+        v0.2.0 over the BN254 scalar field) is collision resistant on F_r^k
+        and behaves as a random function, so no list of field elements is
+        known that it maps to zero, the empty leaf of the key trees. The
+        theorems reduce to this assumption by naming the colliding inputs,
+        computed from their own data; every Poseidon2 input they name is a
+        list of field elements, because the model bounds the circuit's Field
+        inputs, the enrolled code and the keys the trees hold.
 
   - id: honest-enrollment
     statement: >-
@@ -1613,13 +1662,19 @@ claims:
   - id: secret-generation
     statement: >-
       The account code and every blinding value rho come from a
-      cryptographically secure generator and stay with the user and the
-      user's browser.
+      cryptographically secure generator; rho stays in the user's browser, and
+      the account code stays with the user, except as the optional
+      passphrase-encrypted copy and as the alert-code key derived from it and
+      sealed to the vault.
     status: assumed
     evidence:
       assumption: >-
         The wallet's random generator is secure, and the user's device and
         browser are not compromised while they hold the account code or rho.
+        The encrypted copy in the Sent folder is readable by the inbox thief
+        and the provider, who can attack its five-word passphrase (about 64.6
+        bits) offline at one Argon2id evaluation (64 MiB, three passes) per
+        guess.
 
   - id: blinded-subject-hiding
     statement: >-
@@ -1672,6 +1727,26 @@ claims:
         build served to a user could read the address at enrollment or at
         recovery. Nothing built lets the user check the served code against
         a published build.
+
+  - id: entries-live
+    statement: >-
+      Every ledger entry a recovery reads is live when the owner recovers, or
+      someone restores it and pays for the restoration.
+    status: assumed
+    evidence:
+      assumption: >-
+        The operator's keeper extends the email verifier, the DKIM key
+        registry, the guardian's code and every enrolled account's guardian
+        instance before they archive; Perch's operator keeps Perch's
+        controller, doc compiler, WebAuthn verifier and account code live; an
+        account's own instance and document are extended to the network's
+        maximum lifetime, about 180 days at 5-second ledgers, only when the
+        account changes them or anyone calls its permissionless renew, so
+        they archive about 180 days after that unless renewed. The wallet
+        builds no RestoreFootprint transaction, so an archived code entry too
+        large to restore inline blocks a recovery through the wallet until
+        someone else restores it. Archival affects liveness only: a restored
+        entry has the bytes it had.
 
   - id: alert-liveness
     statement: >-

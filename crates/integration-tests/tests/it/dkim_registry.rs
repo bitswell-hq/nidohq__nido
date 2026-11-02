@@ -90,7 +90,9 @@ fn the_registry_has_no_upgrade_path() {
 /// over the 2048-bit modulus), an attestation (parsing and the Ed25519
 /// check), an activation (the 16-level root recomputation), and
 /// `is_accepted_root`, the call every email approval through a registry
-/// root makes.
+/// root makes. With `NIDO_REGISTRY_COST_ROWS=<file>` the readings are written
+/// to the file, one JSON object a line
+/// (`research/email-recovery/eval/registry-costs.sh`).
 #[test]
 fn dkim_registry_costs() {
     let w = world();
@@ -99,10 +101,11 @@ fn dkim_registry_costs() {
     let record = fixture("rsa2048-a");
     let n = modulus_2048(&record.parse().unwrap()).unwrap();
 
+    let rows = std::cell::RefCell::new(Vec::<String>::new());
     let report = |case: &str| {
         let r = w.env.cost_estimate().resources();
         let fee = w.env.cost_estimate().fee();
-        println!(
+        let row = format!(
             "{{\"case\":\"{case}\",\"instructions\":{},\"mem_bytes\":{},\"read_entries\":{},\"disk_read_bytes\":{},\"write_entries\":{},\"write_bytes\":{},\"event_bytes\":{},\"fee_without_rent_stroops\":{},\"rent_stroops\":{}}}",
             r.instructions,
             r.mem_bytes,
@@ -114,6 +117,8 @@ fn dkim_registry_costs() {
             fee.total - fee.persistent_entry_rent - fee.temporary_entry_rent,
             fee.persistent_entry_rent + fee.temporary_entry_rent,
         );
+        println!("{row}");
+        rows.borrow_mut().push(row);
         r
     };
 
@@ -138,6 +143,12 @@ fn dkim_registry_costs() {
     let rid = registry.propose_revoke(&w, 3, &record.domain, &kh);
     registry.approve(&w, 4, rid);
     report("approve (revocation: removal and refusal)");
+
+    if let Ok(path) = std::env::var("NIDO_REGISTRY_COST_ROWS") {
+        let mut text = rows.borrow().join("\n");
+        text.push('\n');
+        std::fs::write(path, text).expect("write the registry cost rows");
+    }
 
     // Loose ceilings, far below the network's per-transaction limits, so a
     // regression that multiplies the cost is caught here.

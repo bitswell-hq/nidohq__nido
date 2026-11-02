@@ -1,0 +1,6 @@
+claims:
+  - id: x
+    statement: A vote is charged {{vote-fee-maximum}} stroops.
+    status: measured
+    evidence:
+      file: eval/run-figures.json

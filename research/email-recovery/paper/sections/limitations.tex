@@ -7,7 +7,7 @@ policy, and a reproducible image build. The custodians, registry members and
 attesters are not named. Every third party is a mock: before mainnet each
 provider's outbound recovery mail must be checked from a real account,
 Fastmail first, whose archived signatures verify under no known key, and a
-submission test must settle A1b per provider. Phones are not
+submission test must settle A1b per provider. The wallet does not restore archived entries (A13). Phones are not
 measured\claim{phone-proving-budget}, nor registry-root votes on a network,
 and no user study was run. There is no external audit, and mainnet waits for
 one.
@@ -37,7 +37,9 @@ codes; the alert host learns which accounts register contacts.
 user with no device left cannot cancel, and an owner whose push device
 lapsed or went silent while alerts go to a stolen inbox learns of an attempt
 only by opening the wallet; a second helper closes both. The factor is the
-inbox and a 128-bit code, so a lost code loses it. It covers the losses of
+inbox and a 128-bit code, or, for a user who keeps the encrypted copy, the
+inbox and a passphrase of about 64.6 bits stretched by Argon2id, which the
+inbox thief and the provider can attack offline; a lost code loses it. It covers the losses of
 Table~\ref{tab:losses}; a provider that requires the lost device to sign in,
 or a new phone without a mail app, defeats it. A circuit fix does not reach
 accounts that cannot reconfigure (\S\ref{sec:design-guardian}), and a
@@ -45,6 +47,4 @@ lowered target close time shortens existing email-plus-delay members until
 they are rebuilt (A9).
 
 \paragraph{Open questions.} Appendix~\ref{app:open} lists every open
-decision with its alternatives, among them a reply to approvals with
-\texttt{To:} bound, circuit fixes, the alert code's key, and who pays
-restorations and the keeper.
+decision with its alternatives.

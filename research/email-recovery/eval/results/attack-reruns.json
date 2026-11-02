@@ -1,0 +1,282 @@
+{
+  "build": {
+    "nido_dkim_registry": "7e115ff9409131f99889a04cd2b6058bf1aa86def03a3ca5574b6ea3e600523d",
+    "nido_email_guardian": "e21515aef4ed843dc32a3c0407aa4fc1609e6d945c34e7b8bc42af835a329893",
+    "nido_email_verifier": "5d7e195e3f2cc5f1fd2e9a7056219828ded4126a7c5084c51af93e7f5f36dfd8"
+  },
+  "runs": [
+    {
+      "generated": "2026-11-02T13:59:48.343Z",
+      "figures": {
+        "authorizing-declared": 127443767,
+        "authorizing-fee": 3632052,
+        "authorizing-rent": 3545582,
+        "enrollment-doc": 6949238,
+        "enrollment-guardian": 1609367,
+        "enrollment-mint": 2876016,
+        "enrollment-total": 11434621,
+        "gmail-compute": 37969,
+        "gmail-events": 10,
+        "gmail-history": 36419,
+        "gmail-nonrefundable": 80989,
+        "gmail-rent": 2049,
+        "gmail-size": 3585,
+        "gmail-total": 83148,
+        "gmail-write-bytes": 516,
+        "gmail-write-entries": 2500,
+        "release-saving": 1574340,
+        "vote-count": 20,
+        "vote-declared-max": 126577531,
+        "vote-declared-median": 126551768,
+        "vote-declared-min": 126485435,
+        "vote-fee-max": 83153,
+        "vote-fee-median": 83145,
+        "vote-fee-min": 83125,
+        "vote-metered-max": 121664431,
+        "vote-metered-median": 121641679,
+        "vote-metered-min": 121576077,
+        "vote-rent-max": 2049,
+        "vote-rent-median": 2049,
+        "vote-rent-min": 2047,
+        "votes-per-cluster": 4,
+        "votes-per-ledger": 12
+      }
+    },
+    {
+      "generated": "2026-11-02T18:00:04.568Z",
+      "figures": {
+        "authorizing-declared": 127427050,
+        "authorizing-fee": 3632047,
+        "authorizing-rent": 3545582,
+        "enrollment-doc": 6949238,
+        "enrollment-guardian": 1609367,
+        "enrollment-mint": 2876016,
+        "enrollment-total": 11434621,
+        "gmail-compute": 37962,
+        "gmail-events": 10,
+        "gmail-history": 36419,
+        "gmail-nonrefundable": 80982,
+        "gmail-rent": 2049,
+        "gmail-size": 3585,
+        "gmail-total": 83141,
+        "gmail-write-bytes": 516,
+        "gmail-write-entries": 2500,
+        "release-saving": 1567511,
+        "vote-count": 20,
+        "vote-declared-max": 126581803,
+        "vote-declared-median": 126546663,
+        "vote-declared-min": 126508610,
+        "vote-fee-max": 83154,
+        "vote-fee-median": 83144,
+        "vote-fee-min": 83132,
+        "vote-metered-max": 121670559,
+        "vote-metered-median": 121634850,
+        "vote-metered-min": 121598361,
+        "vote-rent-max": 2049,
+        "vote-rent-median": 2049,
+        "vote-rent-min": 2047,
+        "votes-per-cluster": 4,
+        "votes-per-ledger": 12
+      }
+    },
+    {
+      "generated": "2026-11-02T18:11:39.646Z",
+      "figures": {
+        "authorizing-declared": 127466878,
+        "authorizing-fee": 3632059,
+        "authorizing-rent": 3545582,
+        "enrollment-doc": 6949238,
+        "enrollment-guardian": 1609281,
+        "enrollment-mint": 2876016,
+        "enrollment-total": 11434535,
+        "gmail-compute": 37962,
+        "gmail-events": 10,
+        "gmail-history": 36419,
+        "gmail-nonrefundable": 80982,
+        "gmail-rent": 2049,
+        "gmail-size": 3585,
+        "gmail-total": 83141,
+        "gmail-write-bytes": 516,
+        "gmail-write-entries": 2500,
+        "release-saving": 1564030,
+        "vote-count": 20,
+        "vote-declared-max": 126584607,
+        "vote-declared-median": 126543147,
+        "vote-declared-min": 126501470,
+        "vote-fee-max": 83155,
+        "vote-fee-median": 83143,
+        "vote-fee-min": 83130,
+        "vote-metered-max": 121671235,
+        "vote-metered-median": 121631369,
+        "vote-metered-min": 121591295,
+        "vote-rent-max": 2049,
+        "vote-rent-median": 2049,
+        "vote-rent-min": 2047,
+        "votes-per-cluster": 4,
+        "votes-per-ledger": 12
+      }
+    }
+  ],
+  "spread": {
+    "authorizing-declared": {
+      "min": 127427050,
+      "max": 127466878,
+      "spread": 39828
+    },
+    "authorizing-fee": {
+      "min": 3632047,
+      "max": 3632059,
+      "spread": 12
+    },
+    "authorizing-rent": {
+      "min": 3545582,
+      "max": 3545582,
+      "spread": 0
+    },
+    "enrollment-doc": {
+      "min": 6949238,
+      "max": 6949238,
+      "spread": 0
+    },
+    "enrollment-guardian": {
+      "min": 1609281,
+      "max": 1609367,
+      "spread": 86
+    },
+    "enrollment-mint": {
+      "min": 2876016,
+      "max": 2876016,
+      "spread": 0
+    },
+    "enrollment-total": {
+      "min": 11434535,
+      "max": 11434621,
+      "spread": 86
+    },
+    "gmail-compute": {
+      "min": 37962,
+      "max": 37969,
+      "spread": 7
+    },
+    "gmail-events": {
+      "min": 10,
+      "max": 10,
+      "spread": 0
+    },
+    "gmail-history": {
+      "min": 36419,
+      "max": 36419,
+      "spread": 0
+    },
+    "gmail-nonrefundable": {
+      "min": 80982,
+      "max": 80989,
+      "spread": 7
+    },
+    "gmail-rent": {
+      "min": 2049,
+      "max": 2049,
+      "spread": 0
+    },
+    "gmail-size": {
+      "min": 3585,
+      "max": 3585,
+      "spread": 0
+    },
+    "gmail-total": {
+      "min": 83141,
+      "max": 83148,
+      "spread": 7
+    },
+    "gmail-write-bytes": {
+      "min": 516,
+      "max": 516,
+      "spread": 0
+    },
+    "gmail-write-entries": {
+      "min": 2500,
+      "max": 2500,
+      "spread": 0
+    },
+    "release-saving": {
+      "min": 1564030,
+      "max": 1574340,
+      "spread": 10310
+    },
+    "vote-count": {
+      "min": 20,
+      "max": 20,
+      "spread": 0
+    },
+    "vote-declared-max": {
+      "min": 126577531,
+      "max": 126584607,
+      "spread": 7076
+    },
+    "vote-declared-median": {
+      "min": 126543147,
+      "max": 126551768,
+      "spread": 8621
+    },
+    "vote-declared-min": {
+      "min": 126485435,
+      "max": 126508610,
+      "spread": 23175
+    },
+    "vote-fee-max": {
+      "min": 83153,
+      "max": 83155,
+      "spread": 2
+    },
+    "vote-fee-median": {
+      "min": 83143,
+      "max": 83145,
+      "spread": 2
+    },
+    "vote-fee-min": {
+      "min": 83125,
+      "max": 83132,
+      "spread": 7
+    },
+    "vote-metered-max": {
+      "min": 121664431,
+      "max": 121671235,
+      "spread": 6804
+    },
+    "vote-metered-median": {
+      "min": 121631369,
+      "max": 121641679,
+      "spread": 10310
+    },
+    "vote-metered-min": {
+      "min": 121576077,
+      "max": 121598361,
+      "spread": 22284
+    },
+    "vote-rent-max": {
+      "min": 2049,
+      "max": 2049,
+      "spread": 0
+    },
+    "vote-rent-median": {
+      "min": 2049,
+      "max": 2049,
+      "spread": 0
+    },
+    "vote-rent-min": {
+      "min": 2047,
+      "max": 2047,
+      "spread": 0
+    },
+    "votes-per-cluster": {
+      "min": 4,
+      "max": 4,
+      "spread": 0
+    },
+    "votes-per-ledger": {
+      "min": 12,
+      "max": 12,
+      "spread": 0
+    }
+  }
+}

@@ -388,22 +388,24 @@
     & Test host & Local network & Testnet \\
     \midrule
     Settings & SDK snapshot & mainnet's & testnet's \\
-    Instructions, metered (M) & 131.2 & 121.6 & 121.7 \\
+    Instructions, metered (M) & 131.2 & \figM[1]{vote-metered-median} & 121.7 \\
     Transaction (bytes) & 18{,}148 & 18{,}080 & 18{,}080 \\
-    Fee (stroops) & 178{,}196 & 83{,}125--83{,}153 & 82{,}419--82{,}446 \\
+    Fee (stroops) & 178{,}196 & \fig{vote-fee-min}--\fig{vote-fee-max} & 82{,}419--82{,}446 \\
     \bottomrule
   \end{tabular}
   \par\smallskip{\footnotesize\claims{onchain-verification-cost,network-verification-cost,testnet-email-recovery}}
   \par\medskip
   \begin{itemize}\footnotesize
-    \item Mainnet projection: 83{,}148 stroops (0.0083 XLM) for the Gmail
-      vote: 37{,}969 compute, 36{,}419 history (an 18\,KB envelope),
-      2{,}049 rent\claim{fee-attribution}.
-    \item Enrollment at mainnet's settings: 11{,}434{,}621 stroops (1.1
+    \item Mainnet projection: \fig{gmail-total} stroops (0.0083 XLM) for the Gmail
+      vote: \fig{gmail-compute} compute, \fig{gmail-history} history (an 18\,KB envelope),
+      \fig{gmail-rent} rent\claim{fee-attribution}.
+    \item Enrollment at mainnet's settings: \fig{enrollment-total} stroops (1.1
       XLM)\claim{enrollment-cost}.
-    \item Everything archived: 3{,}959{,}831{,}748 stroops (396 XLM); the
-      keeper, 330.4 XLM a year; both at the rent floor, ten times at 3\,GB of
-      state\claim{testnet-recovery-total}.
+    \item Everything archived: 3{,}959{,}831{,}748 stroops (396 XLM), 3 of
+      its 7 transactions modelled; the keeper, 330.4 XLM a year, Perch's
+      867.7; both at the rent floor, ten times at 3\,GB of
+      state\claim{testnet-recovery-total}. The wallet does not restore
+      archived entries itself (A13)\claim{entries-live}.
     \item Testnet: built from \texttt{ab274154} on \texttt{main}, circuit id
       read back. Registry-root votes on a network: not measured.
   \end{itemize}
@@ -456,15 +458,19 @@
 \begin{frame}{Limitations and open questions}
   \small
   \begin{itemize}
-    \item Not built: the production enclave and its mail exchanger. All third
-      parties are mocks. Not measured: phones, people (no user study). No
+    \item Not built: the production enclave and its mail exchanger; the
+      wallet's restoration of archived entries. All third parties are mocks. Not measured: phones, people (no user study). No
       audit; testnet only.
     \item Toward a malicious operator: committing the recovery domain's mail
       routing under the image registry's timelock, certificate-transparency
       monitoring, reproducible wallet builds; none built.
     \item Before mainnet: real provider mail, Fastmail first, and a
       submission test of A1b; where it fails, the factor reduces to knowing
-      the code.
+      the victim's address, often public, and the code.
+    \item The factor is the inbox and a 128-bit code; with the encrypted
+      copy kept in the Sent folder, the inbox and a five-word passphrase
+      (about 64.6 bits) under Argon2id, which the thief and the provider can
+      attack offline\claim{secret-generation}.
     \item The provider can link an email to its vote by timing; the sending
       service sees alert addresses.
     \item Open: a reply to approvals with \texttt{To:} bound; circuit fixes

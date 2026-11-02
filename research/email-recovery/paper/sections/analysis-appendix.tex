@@ -112,6 +112,26 @@ reduces to the victim's address and $\code$ (\S\ref{sec:threat}).
   \end{tabularx}
 \end{table*}
 
+Table~\ref{tab:losses} shows which losses the factor covers, by how the
+wallet's passkey is kept and where the inbox is (\S\ref{sec:threat}).
+
+\begin{table}[h]
+  \caption{When the email factor adds recovery coverage, by passkey and
+    loss, assuming the inbox's provider does not require a lost device to
+    sign in.}
+  \label{tab:losses}
+  \small
+  \begin{tabularx}{\columnwidth}{@{}>{\raggedright\arraybackslash}p{0.2\columnwidth}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
+    \toprule
+    Lost & Device-bound passkey & Synced, inbox at the sync provider & Synced, inbox elsewhere \\
+    \midrule
+    Every device & covers & not needed: sync restores the passkey & not needed \\
+    Platform account & --- & adds nothing: the inbox is lost too & covers \\
+    Keychain unlock secret only & --- & covers & covers \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
 \section{Open questions}\label{app:open}
 
 Each open decision, with its current setting and the alternatives.
@@ -131,7 +151,9 @@ Each open decision, with its current setting and the alternatives.
     code can also approve cancellations of the owner's attempts, which are
     alerted.
   \item \emph{Where $\code$ is kept.} The encrypted copy in the Sent folder
-    and the kit. Plain text in the enrollment email recovers best but lets
+    and the kit. The copy lowers the offline work of whoever reads the Sent
+    folder, the inbox thief and the provider, from $2^{128}$ guesses of
+    $\code$ to about $2^{64.6}$ Argon2id evaluations of the passphrase. Plain text in the enrollment email recovers best but lets
     the provider compute $\Cm$; a kit alone keeps no copy at the provider but
     is lost with the kit.
   \item \emph{Registry parameters.} A 24-hour grace, capped at 7 days (7
@@ -177,6 +199,11 @@ Each open decision, with its current setting and the alternatives.
   \item \emph{Custodians, the enclave and its image registry.} Who the
     custodians are (one outside the operator), their production protocol,
     the enclave's production binding, and the image registry's signers.
+  \item \emph{Finding email votes.} The watcher reads every transaction on
+    the network (\S\ref{sec:eval-e2e}). A guardian version emitting an event
+    under a fixed topic from \texttt{\_\_check\_auth} would let a topic
+    filter select the votes, revealing nothing the account's configuration
+    does not; it needs a new guardian for every account.
   \item \emph{Outages longer than RPC retention.} Reconciliation and a lag
     alarm are built; a monitor outside the watcher is not, nor a choice of
     whether the email-plus-delay floor should exceed the longest tolerated
@@ -199,7 +226,10 @@ Each open decision, with its current setting and the alternatives.
     provider's handling of two \texttt{From} fields and of an encoded-word
     display name today, sending as another mailbox at three providers, and
     reassignment at two; whether to gate a provider on the submission test.
-  \item \emph{Keeping contracts live.} Who funds the keeper on mainnet,
-    whether the wallet extends an account's own entries, and the registry's
+  \item \emph{Keeping contracts live.} Who funds the keeper on mainnet;
+    whether the keeper or the wallet renews each account's own entries, which
+    otherwise archive about 180 days after the account last changed them;
+    a wallet path that restores archived entries through the relayer, the
+    large code entries first in their own transactions; and the registry's
     tree paths.
 \end{enumerate}

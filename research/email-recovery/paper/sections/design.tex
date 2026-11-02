@@ -92,9 +92,9 @@ it. The commitment is
 \end{align*}
 where $\mathrm{pack}$ cuts the address, padded to 124 bytes, into four
 31-byte field elements; the address's domain is inside $\Cm$. The wallet
-checks the enrollment email under the recovery circuit's own rules before
-deploying a guardian, so an inbox whose recovery email could never be proven
-is refused at enrollment\claim{enrollment-email-check}. The two Subject
+runs the recovery circuit itself on the enrollment email's signed block
+before deploying a guardian, so a provider signing in a form the circuit
+cannot prove is refused at enrollment\claim{enrollment-email-check}. The two Subject
 phrases differ in their first byte\claim{enrollment-subject-distinct}. A
 wrong $\Cm$ disables only its owner's email factor. The wallet deploys the
 guardian with $\Cm$ and a key pin, reads back its configuration and code
@@ -106,7 +106,11 @@ Recovery needs $\code$, so the email factor is really the inbox and a
 128-bit code. The wallet offers two backups: a block in the enrollment
 email's body, kept in the Sent folder, encrypting $\code$ and the account
 under an Argon2id~\cite{rfc9106} key from a generated five-word passphrase;
-and a recovery kit\claim{account-code-backup}. Enrollment checks that the
+and a recovery kit\claim{account-code-backup}. For a user who keeps the
+block, the factor is the inbox and that passphrase, about 64.6 bits
+stretched by Argon2id (64\,MiB, three passes), which the inbox thief and the
+provider can attack offline; the kit alone keeps the code's 128
+bits\claim{secret-generation}. Enrollment checks that the
 kit was copied, and recovery settings check a typed code against the
 guardian's pin root, storing nothing (\S\ref{sec:design-registry}).
 
@@ -187,7 +191,8 @@ A fix reaches an account only through a new verifier, deployed once, and a
 new guardian on it that keeps $\Cm$, listed through Perch's reconfiguration
 gate: at mainnet's settings, 2 transactions and 2{,}631{,}221 stroops (0.26
 XLM) under \texttt{Loss}, 4 and 3{,}159{,}077 (0.32 XLM) under
-\texttt{Protected}\claim{circuit-fix-migration}. When a gap is found, the
+\texttt{Protected}, measured with a second instance of the current verifier
+standing in for the fixed one\claim{circuit-fix-migration}. When a gap is found, the
 registry's emergency threshold revokes the affected providers' keys; pins
 holding them last until they expire, at most 30 days for the wallet's; and
 the wallet prompts owners to move. That cannot reach a \texttt{Loss} owner

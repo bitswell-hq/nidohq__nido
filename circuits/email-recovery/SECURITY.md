@@ -220,7 +220,13 @@ heuristic under-constrained-value check, and both are expected:
   (`research/email-recovery/eval/parser/README.md`) runs the 490 signatures
   the circuit accepts in the first 1,000 fuzz cases again with each position
   changed, as a dishonest prover may: all 39,256 mutated hints are refused
-  or bind the same address, domain and key hash;
+  or bind the same address, domain and key hash. One hint is free by
+  design: `t_len`, the length of the `t=` value, is range-checked to 32
+  bits by its type and constrained only by `DkimSignature::timestamp()`,
+  which the recovery relation never calls (freshness comes from the
+  statement's expiry, not `t=`). Nothing the relation binds reads it, so a
+  prover may set it to any value, and every one of the 980 mutations that
+  bind the same values is a change of `t_len`;
 - on noir-bignum's `compute_quadratic_expression_with_borrow_flags`
   (`expressions.nr:258`): one of its three outputs (the remainder) is
   discarded by the caller; the quotient and borrow flags it uses are

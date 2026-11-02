@@ -5,9 +5,13 @@
 %   \claimstatement{id}  the claim's statement as the ledger words it
 %   \ClaimTable          the appendix table of every claim
 %   \ClaimList           the same claims as a list that breaks across pages
+%   \fig{name}           a run-dependent figure of the evaluation, e.g. 83{,}125
+%   \figM{name}          the same figure in millions, two decimals, e.g. 121.64;
+%                        \figM[1]{name} to one decimal, e.g. 121.6
 %
 % An id missing from the ledger is a LaTeX error; check-claims.pl reports it
-% first, with the file and line.
+% first, with the file and line. So is a figure missing from the generated
+% figures.tex (figures-to-tex.pl, from eval/results/figures.json).
 \NeedsTeXFormat{LaTeX2e}
 \ProvidesPackage{claims}[2026/11/01 claim ledger tags]
 \RequirePackage{xcolor}
@@ -109,6 +113,25 @@
     \ClaimTableRows
   \end{list}%
   \endgroup}
+
+% Figures: figures-to-tex.pl writes one
+% \FigureDefine{name}{value}{millions, two decimals}{millions, one decimal} each.
+\newcommand\FigureDefine[4]{%
+  \expandafter\def\csname fig@#1\endcsname{#2}%
+  \expandafter\def\csname figM2@#1\endcsname{#3}%
+  \expandafter\def\csname figM1@#1\endcsname{#4}}
+
+\newcommand\fig@get[2]{%
+  \ifcsname #1@#2\endcsname\csname #1@#2\endcsname\else
+    \PackageError{claims}{Figure `#2' is not in eval/results/figures.json}{Regenerate it with
+      eval/report.mjs, or fix the name.}%
+  \fi}
+\DeclareRobustCommand\fig[1]{\fig@get{fig}{#1}}
+\DeclareRobustCommand\figM[2][2]{\fig@get{figM#1}{#2}}
+
+% A document without run-dependent figures has no figures.tex; \fig and \figM
+% then report each name they are given as missing.
+\InputIfFileExists{figures.tex}{}{}
 
 \InputIfFileExists{claims.tex}{}{%
   \PackageError{claims}{claims.tex not found}{Build with research/email-recovery/build.sh,

@@ -9,15 +9,56 @@
 // re-verify each proof against its circuit after testnet is reset. Writes
 // results/testnet-xdr.json. Read-only.
 //
-//   node research/email-recovery/eval/testnet/evidence.mjs
+// `--check` instead fetches every transaction the file records again and
+// compares it: the envelope and the result byte for byte, and the metadata
+// after normalizing it. A ledger's hash covers its transactions and their
+// results but not their metadata, which each RPC node's core writes as it
+// applies the ledger, so two nodes may answer one transaction with metadata
+// that differs: in its diagnostic events (the `core_metrics` event carries
+// the answering node's own readings) and in the order in which an
+// operation's ledger-entry changes are listed. The normalized form drops the
+// diagnostic events and sorts each operation's changes; anything else that
+// differs fails the check.
+//
+//   node research/email-recovery/eval/testnet/evidence.mjs [--check]
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { Networks } from '@stellar/stellar-sdk';
+import { Networks, xdr } from '@stellar/stellar-sdk';
 import { Chain } from '../network/lib/chain.mjs';
+
+/** Base64 metadata XDR without its diagnostic events, each operation's ledger-entry changes sorted. */
+export function normalizedMeta(metaXdr) {
+  const meta = xdr.TransactionMeta.fromXDR(metaXdr, 'base64');
+  const v = meta.switch() === 4 ? meta.v4() : meta.switch() === 3 ? meta.v3() : undefined;
+  if (meta.switch() === 4) v.diagnosticEvents([]);
+  else if (meta.switch() === 3) v.sorobanMeta()?.diagnosticEvents([]);
+  for (const op of v?.operations() ?? []) {
+    const sorted = op.changes().map((c) => [c.toXDR('base64'), c]).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    op.changes(sorted.map(([, c]) => c));
+  }
+  return meta.toXDR('base64');
+}
 
 const repo = new URL('../../../../', import.meta.url).pathname;
 const RPC = process.env.NIDO_TESTNET_RPC ?? 'https://soroban-testnet.stellar.org';
 const results = `${repo}research/email-recovery/eval/results/`;
 const chain = new Chain({ rpcUrl: RPC, passphrase: Networks.TESTNET });
+
+if (process.argv.includes('--check')) {
+  const recorded = JSON.parse(readFileSync(`${results}testnet-xdr.json`, 'utf8')).transactions;
+  const counts = { envelope: 0, result: 0, metaExact: 0, metaNormalized: 0, total: 0 };
+  for (const [hash, t] of Object.entries(recorded)) {
+    const got = await chain.call('getTransaction', { hash });
+    counts.total++;
+    if (got.envelopeXdr === t.envelopeXdr) counts.envelope++;
+    if (got.resultXdr === t.resultXdr) counts.result++;
+    if (got.resultMetaXdr === t.resultMetaXdr) counts.metaExact++;
+    if (normalizedMeta(got.resultMetaXdr) === normalizedMeta(t.resultMetaXdr)) counts.metaNormalized++;
+  }
+  console.log(JSON.stringify(counts));
+  const ok = counts.envelope === counts.total && counts.result === counts.total && counts.metaNormalized === counts.total;
+  process.exit(ok ? 0 : 1);
+}
+
 const runs = {};
 const transactions = {};
 for (const [name, file] of [['recovery', 'testnet.json'], ['votes', 'testnet-votes.json'], ['restorations', 'testnet-restorations.json']]) {

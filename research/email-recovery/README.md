@@ -28,7 +28,11 @@ Each build, in order:
 4. generates `build/gen/attacks.tex`, the paper's attack tables, from the
    evaluation's results in `eval/results/` (`attacks-to-tex.pl`), and fails
    if any scenario's observed outcome differs from its expected one;
-5. builds both documents with `latexmk -Werror` (settings in `latexmkrc`),
+5. generates `build/gen/figures.tex` from `eval/results/figures.json`
+   (`figures-to-tex.pl`): the attack run's figures that move from run to
+   run, which `eval/report.mjs` derives from the results whenever it
+   regenerates the evaluation's README;
+6. builds both documents with `latexmk -Werror` (settings in `latexmkrc`),
    then scans the logs, so an undefined reference or citation, or a missing
    bibliography entry, fails the build.
 
@@ -54,6 +58,7 @@ artifacts, `email-recovery-paper` and `email-recovery-slides`. On a push to
 | `claims.yaml` | The claim ledger |
 | `check-claims.pl`, `claims-to-tex.pl` | Ledger checker and LaTeX generator |
 | `attacks-to-tex.pl` | The paper's attack tables, from `eval/results/` |
+| `figures-to-tex.pl` | The run-dependent figures (`\fig`, `\figM`), from `eval/results/figures.json` |
 | `tests/check-claims/` | Checker self-tests |
 | `tools/build-in-container.sh` | The build steps `build.sh` runs in the container |
 
@@ -73,7 +78,7 @@ Every claim the paper or the slides make has one entry in `claims.yaml`:
 | --- | --- | --- |
 | `proven` | `{ lean: <theorem>, file: <.lean path> }` | the file exists and declares `theorem` or `lemma` with that name or a dotted suffix of it (its last component, or `Ns.thm` inside namespaces) |
 | `tested` | `{ test: <test name>, file: <path> }` | the file exists and contains the test name as a whole word |
-| `measured` | `{ file: <path> }` | the measurement file exists |
+| `measured` | `{ file: <path> }` | the measurement file exists and is not under `docs/`; every figure of four or more digits in the statement occurs in one of the claim's files, unless "about" (or "around", "roughly", "approximately") marks it as rounded or it is a figure placeholder (below) |
 | `assumed` | `{ assumption: <text> }` | the assumption is stated |
 | `unproven` | none | no evidence is given |
 
@@ -98,6 +103,22 @@ with `YAML::Tiny`, which the TeX Live image has).
 
 Changing a claim's status means changing its ledger entry and pointing it at
 the evidence; the tag in both documents follows on the next build.
+
+## Figures that move from run to run
+
+Each attack-suite run draws new keys and proofs, so the metered and
+declared instructions and the fees of its email votes, and the medians
+derived from them, move between runs. Those figures are not written into
+the sources. `eval/report.mjs` writes them, by name, to
+`eval/results/figures.json` from the results it reads; the documents print
+them with `\fig{name}` (thousands separated), `\figM{name}` (millions, two
+decimals) or `\figM[1]{name}` (one decimal); and a ledger statement writes
+them as `{{name}}` or `{{name:m}}`, which `claims-to-tex.pl` turns into the
+same macros. `check-claims.pl` requires every placeholder to name a figure of
+that file and the claim to list the file among its evidence. Re-running the
+attack suite (`just email-recovery-attacks`) regenerates the results, the
+evaluation's README and `figures.json` together, and the next document build
+typesets the new figures.
 
 ## Current state
 

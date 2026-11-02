@@ -1,0 +1,19 @@
+{
+  "generated": "2026-11-02T18:00:24.073Z",
+  "rpc": "https://mainnet.sorobanrpc.com",
+  "ledgers": {
+    "first": 65271291,
+    "last": 65271314,
+    "count": 24
+  },
+  "pages": 45,
+  "transactions": 8879,
+  "sorobanTransactions": 2275,
+  "jsonOctets": 123836893,
+  "octetsPerLedger": 5159871,
+  "octetsPerDayAtLedgerTarget": 89162562960,
+  "fetchSeconds": 50.75,
+  "chainSeconds": 120,
+  "fetchMarginOverChainTime": 2.36,
+  "loadAverageAtEnd": 7.4
+}

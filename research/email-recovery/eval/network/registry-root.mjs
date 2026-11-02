@@ -32,6 +32,7 @@
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { PIN_LIFETIME_SECONDS } from '@nidohq/email-recovery';
 import { Passkey } from './lib/account.mjs';
 import { Chain } from './lib/chain.mjs';
 import { CIRCUIT_ID, Inbox, closeProver, launchKeys } from './lib/email.mjs';
@@ -97,7 +98,7 @@ async function setup() {
         quorum: 2,
         delayLedgers: 20,
         expiryLedgers: 2_000,
-        pinSeconds: path === 'pin' ? 30 * 86_400 : null,
+        pinSeconds: path === 'pin' ? PIN_LIFETIME_SECONDS : null,
       });
       accounts.push({ path, domain, ...enrolledJson(e) });
     }

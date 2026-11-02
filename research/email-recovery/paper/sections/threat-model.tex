@@ -40,9 +40,11 @@ A1 is split: unforgeability (A1a) is cryptographic; sender authentication
 Appendix~\ref{app:providers} reviews from public sources, with every gap
 open; a controlled submission test from real accounts is a check before
 mainnet. If A1b fails at a provider, for example by checking only the first
-of several \texttt{From} fields and signing the last, the factor there reduces to knowing
-the victim's address and $\code$, which still open the commitment, under
-the same delay, quorum and alerts\claim{email-factor-soundness}. A9
+of several \texttt{From} fields and signing the last, the factor there
+reduces to knowing the victim's address, often public, and $\code$, which
+still open the commitment\claim{email-factor-soundness}; the delay and the
+quorum still apply\claim{one-factor-safety}, and the alerts still
+fire\claim{compromised-inbox-alerted}. A9
 separates two clocks: the windows this design adds are measured on ledger
 close time and keep their wall-clock length whatever the network's ledger
 rate; Perch's delay and the statement's expiry are ledger counts.
@@ -62,9 +64,9 @@ rate; Perch's delay and the statement's expiry are ledger counts.
           authenticates the one it signs, sending as another in-domain
           address needs proof of control, and a reassigned address is
           useless without $\code$\claim{provider-authenticates-sender}. \\
-    A2, A3 & SHA-256 and Poseidon2 are collision resistant, and no known
-          input maps to zero under Poseidon2; for hiding, Poseidon2 is a
-          random function\claims{hash-collision-resistance,commitment-hiding,blinded-subject-hiding}. \\
+    A2, A3 & SHA-256 is collision resistant, and so is Poseidon2 on lists
+          of BN254 field elements, $\mathbb{F}_r^k$, with no known such list
+          mapping to zero; for hiding, Poseidon2 is a random function\claims{hash-collision-resistance,commitment-hiding,blinded-subject-hiding}. \\
     A4 & UltraHonk in Perch's zero-knowledge flavor is zero knowledge and
           weakly simulation extractable for adversaries that see honest
           proofs (stated, not established), and the pinned toolchain compiles
@@ -72,8 +74,10 @@ rate; Perch's delay and the statement's expiry are ledger counts.
           written\claims{proof-system-security,toolchain-correctness}. \\
     A5 & Every key the registry lists for a domain was published by that
           domain's provider\claim{registry-correctness}. \\
-    A6 & $\code$ and $\blind$ come from a secure generator and stay with the
-          user and the browser\claim{secret-generation}. \\
+    A6 & $\code$ and $\blind$ come from a secure generator; $\blind$ stays
+          in the browser, $\code$ with the user, except as the optional
+          encrypted copy and the alert-code key sealed to the
+          vault\claim{secret-generation}. \\
     A7 & The enrolling wallet commits to the real enrollment email's address
           and pins only keys it checked\claim{honest-enrollment}. \\
     A8 & The enclave keeps its memory from its host, and at most one of the
@@ -88,6 +92,11 @@ rate; Perch's delay and the statement's expiry are ledger counts.
     A11 & Users run the published wallet build\claim{published-wallet-build}. \\
     A12 & Under email plus delay, the owner learns of an authorized attempt
           within the delay\claim{alert-liveness}. \\
+    A13 & For liveness: every entry a recovery reads is live, or someone
+          restores it and pays. The operator's keeper keeps the email
+          contracts, Perch's operator Perch's; the account's own entries
+          archive about 180 days after it last changes or renews
+          them\claim{entries-live}. \\
     \bottomrule
   \end{tabularx}
 \end{table}
@@ -149,26 +158,10 @@ what reaches them is not measured\claim{user-behaviour}.
 sync the wallet's by default, so losing every device loses such a passkey
 only with the platform account or its keychain's unlock
 secret\claim{passkey-sync}. For a Gmail or iCloud user the platform account
-can also hold the factor's inbox (Table~\ref{tab:losses}); enrollment notes
+can also hold the factor's inbox (Table~\ref{tab:losses},
+Appendix~\ref{app:providers}); enrollment notes
 such an inbox and recommends another inbox or
 helper\claim{enrollment-safeguards}.
-
-\begin{table}[t]
-  \caption{When the email factor adds recovery coverage, by passkey and
-    loss, assuming the inbox's provider does not require a lost device to
-    sign in.}
-  \label{tab:losses}
-  \small
-  \begin{tabularx}{\columnwidth}{@{}>{\raggedright\arraybackslash}p{0.2\columnwidth}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
-    \toprule
-    Lost & Device-bound passkey & Synced, inbox at the sync provider & Synced, inbox elsewhere \\
-    \midrule
-    Every device & covers & not needed: sync restores the passkey & not needed \\
-    Platform account & --- & adds nothing: the inbox is lost too & covers \\
-    Keychain unlock secret only & --- & covers & covers \\
-    \bottomrule
-  \end{tabularx}
-\end{table}
 
 \paragraph{Non-goals.} The design does not hide that an account has an email
 guardian, that a recovery happened, or, from the mail provider, that its user

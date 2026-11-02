@@ -163,7 +163,7 @@ info: 'EmailRecovery.Perch.email_only_authorizes_only_at_quorum_one' depends on 
 #guard_msgs in
 #print axioms EmailRecovery.commit_binds
 
-/-- info: 'EmailRecovery.keyHash_binds' depends on axioms: [propext] -/
+/-- info: 'EmailRecovery.keyHash_binds' depends on axioms: [propext, Quot.sound] -/
 #guard_msgs in
 #print axioms EmailRecovery.keyHash_binds
 
@@ -174,6 +174,14 @@ info: 'EmailRecovery.Perch.email_only_authorizes_only_at_quorum_one' depends on 
 /-- info: 'EmailRecovery.slot_binds' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms EmailRecovery.slot_binds
+
+/-- info: 'EmailRecovery.slot_fits' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms EmailRecovery.slot_fits
+
+/-- info: 'EmailRecovery.pack_canonical' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms EmailRecovery.pack_canonical
 
 /-- info: 'EmailRecovery.subject_binds_digest' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
@@ -222,3 +230,7 @@ info: 'EmailRecovery.Perch.email_only_authorizes_only_at_quorum_one' depends on 
 /-- info: 'EmailRecovery.Examples.leaky_prover_distinguishes' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms EmailRecovery.Examples.leaky_prover_distinguishes
+
+/-- info: 'EmailRecovery.Examples.aliased_code_is_no_break' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms EmailRecovery.Examples.aliased_code_is_no_break

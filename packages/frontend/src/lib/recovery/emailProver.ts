@@ -11,7 +11,7 @@
  * `circuit_id` differs is not one this build can prove for.
  */
 
-import { RecoveryProver, type ProverAssets } from '@nidohq/email-recovery';
+import { type CompiledCircuit, RecoveryProver, type ProverAssets, defaultCache, fetchAsset } from '@nidohq/email-recovery';
 import circuitUrl from '../../../../../circuits/email-recovery/artifacts/recovery.json?url';
 import vkUrl from '../../../../../contracts/email-verifier/vk/email_recovery.vk?url';
 
@@ -32,6 +32,16 @@ export function emailProverAssets(crsBaseUrl?: string): ProverAssets {
 
 export function emailProver(crsBaseUrl?: string): RecoveryProver {
   return new RecoveryProver(emailProverAssets(crsBaseUrl));
+}
+
+/**
+ * The recovery circuit's artifact, which the enrollment check runs on the
+ * enrollment email (`checkEnrollmentEmail`). It is stored in the prover's
+ * cache, so a later proof does not download it again.
+ */
+export async function emailCircuit(): Promise<CompiledCircuit> {
+  const { bytes } = await fetchAsset(emailProverAssets().circuitUrl, { cache: await defaultCache() });
+  return JSON.parse(new TextDecoder().decode(bytes)) as CompiledCircuit;
 }
 
 /** "18.8 MB" */
