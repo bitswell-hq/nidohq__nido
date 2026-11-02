@@ -1,45 +1,59 @@
 \section{Implementation}\label{sec:impl}
 
-The implementation has five parts: the recovery statement format and the
-email-guardian contract on Perch's existing recovery; a Noir circuit, proved
-with UltraHonk, with header constraints for the launch providers; the
-browser prover and the recovery flow; the DKIM key registry contract with
-its timelock and attestation feed; and mocks of every third party (mail
-providers signing with test keys in each provider's format, inbound mail, DNS
-attestations, the sending service, the enclave and its custodians, and Web
-Push).
+The implementation is one repository; Perch is a pinned dependency used
+unchanged, and the circuit is compiled and proven with exactly Perch's pinned
+toolchain, nargo 1.0.0-beta.9 and Barretenberg 0.87.0, so its proofs verify
+with Perch's Soroban verifier code\claim{circuit-size}. The optimized
+WebAssembly is 33{,}479 bytes for the guardian, 68{,}269 for the registry,
+45{,}616 for the verifier and 10{,}152 for the enclave-image
+registry\claim{contract-sizes}.
 
-\paragraph{The circuit.}
-The recovery circuit takes the DKIM-signed header block as a private input of
-at most 1536 bytes, together with the RSA-2048 signature and modulus, the
-account code, the blinding value of the Subject and the key's Merkle path.
-It checks the signature over exactly those bytes, parses the
-\texttt{From} address and the \texttt{Subject} under fixed grammars, and
-opens its four public inputs: the address commitment, the two halves of the
-statement digest and the key-tree root. It is proved in UltraHonk's
-zero-knowledge flavour with the Keccak transcript, the toolchain Perch's
-on-chain verifier pins, and has 251{,}561 gates, padded to $2^{18}$. The
-1536-byte bound admits every launch provider's header with the longest
-address the design allows (124 bytes) and a display name of at least 500
-bytes. \claimstatement{circuit-accepts-launch-providers}\claim{circuit-accepts-launch-providers}
-\claimstatement{circuit-binds-public-inputs}\claim{circuit-binds-public-inputs}
+\paragraph{Circuit.} The circuit is a library of components (RSA-2048
+PKCS\#1 v1.5 with SHA-256; the structural scan of the signed block; the
+\texttt{From}, \texttt{DKIM-Signature} and \texttt{Subject} parsers; packing;
+the registry leaf and Merkle root) composed by one relation function. It
+vendors only noir-bignum, for the 2048-bit modular multiplication, and
+Noir's SHA-256 library, each pinned file by file; Poseidon2 is Perch's
+vendored copy; no parser is reused\claim{circuit-vendoring}. The header parsers are written against
+the grammars of \S\ref{sec:design-circuit}, and every position in the header
+is an unconstrained hint that constrained code re-checks. At a 1024-byte
+header bound the same relation has 189{,}503 gates and the same padded size;
+the 1536-byte bound costs the prover more but leaves the verification key
+and the on-chain cost unchanged\claim{circuit-size}. That bound admits every
+launch domain's recovery email and, with a 124-byte address, a display name
+of 536 bytes at the tightest provider\claim{header-bound-fits}.
 
-The circuit must enforce what open-source email circuits have been found to
-miss. Public audits of zkEmail's Circom and Noir
-libraries~\cite{audit-zksecurity-2024,audit-yacademy,audit-veridise-2024,audit-consensys-2024}
-report, among others, header-field extraction fooled by a header in simple
-canonicalisation, and the first characters of a claimed header value left
-unchecked for CRLF. Each publicly documented issue class has a negative test
-naming its source, and an attack suite runs every adversarial email of the
-provider mocks through the compiled circuit with the witness most favourable
-to the attacker's claim.
-\claimstatement{circuit-refuses-attacks}\claim{circuit-refuses-attacks}
+\paragraph{Contracts.} The guardian, the registry, the verifier and the
+enclave-image registry are Soroban contracts in Rust. The verifier is a
+constructorless, immutable contract that embeds Perch's UltraHonk verifier
+from the same Perch commit as the other Perch dependencies, with the email
+circuit's verification key compiled in, and reports the key's SHA-256 as its
+circuit id; the guardian refuses at construction a verifier whose circuit id
+differs from its own configuration\claim{guardian-construction}. A real
+proof of each launch domain's recovery email verifies on chain through it,
+is refused with any public input changed, and counts as exactly one guardian
+vote\claim{onchain-email-vote}. The
+registry stores its tree with the host's Poseidon2 sponge and Perch's table
+of empty-subtree hashes, so the root it stores is the root the circuit proves
+against\claim{registry-hash-parity}.
 
-\paragraph{On-chain verification.}
-The email guardian hands the proof to a verifier contract that embeds
-Perch's UltraHonk verifier with the circuit's verification key, and builds
-the public inputs itself from its configuration, the authorised digest and a
-key root it accepts.
-\claimstatement{onchain-email-vote}\claim{onchain-email-vote}
+\paragraph{Wallet.} The browser side is TypeScript: an encoder from a raw
+message to the witness, the prover worker (noir\_js 1.0.0-beta.9 and bb.js
+0.87.0), which checks its downloads against pinned digests and verifies each
+proof locally against the guardian's circuit id\claim{browser-prover}, the
+enrollment and recovery pages, and the key lookup.
 
-\pending{the browser prover and the recovery flow are not yet built.}
+\paragraph{Alert service.} The host watches the controller over Stellar
+RPC with a stored cursor, retries failed alerts, and never repeats one; the
+vault runs as a separate process standing in for the enclave. The wallet's
+HPKE reproduces RFC~9180's test vector, and the vault's Web Push encryption
+RFC~8291's example\claim{alert-formats}.
+
+\paragraph{Mocks.} Every third party is a test-only mock in its published
+format: the mail providers sign with test-only keys in each provider's layout,
+established from public mailing-list archives\claim{provider-mock-formats};
+DNS answers follow RFC~6376's key records and the DNS-over-HTTPS JSON
+format\claim{key-lookup}; the sending services follow their published APIs,
+Web Push its RFCs, and the enclave's attestation AWS's documented
+format~\cite{aws-nitro-attestation}\claim{vault-custody}; the DNS attester
+signs test-only Ed25519 attestations.

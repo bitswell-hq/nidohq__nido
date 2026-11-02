@@ -4,6 +4,8 @@
 \setbeamertemplate{navigation symbols}{}
 \setbeamertemplate{footline}[frame number]
 \setbeamerfont{footnote}{size=\tiny}
+\usepackage{booktabs}
+\usepackage{tabularx}
 
 \input{macros}
 
@@ -16,140 +18,347 @@
 
 \begin{frame}
   \titlepage
+  \centering\small
+  Every claim carries its status:
+  \claimtag{proven} \claimtag{tested} \claimtag{measured} \claimtag{assumed} \claimtag{unproven}
 \end{frame}
 
 \begin{frame}{The problem}
   \begin{itemize}
     \item A passkey smart account is lost with the last device that holds the passkey.
-    \item An inbox is a credential users keep for years and can regain.
-    \item Naive email recovery stores the address and makes the checker a
-      party that can recover any account.
+    \item An inbox is a credential people keep for years and can
+      regain~\cite{bonneau-recovery}.
+    \item Naive email recovery puts the address in a database and makes the
+      checker a party that can recover any account; a recovery
+      server~\cite{sep30} holds keys for every account it serves.
+    \item Checking DKIM on chain removes the server but publishes the
+      \texttt{From} header.
   \end{itemize}
   \bigskip
-  \textbf{Goal:} email as one recovery factor, with no plaintext address or
-  secret stored anywhere.
+  \textbf{Thesis:} inbox control can be \emph{one} recovery factor with no
+  plaintext address or secret held by anyone, and is never sufficient alone.
+\end{frame}
+
+\begin{frame}{The approach in one picture}
+  \centering
+  \resizebox{0.92\linewidth}{!}{\input{figures/recovery-flow}}
+  \par\medskip\small
+  A per-account guardian with $\Cm = \commitf(\addr, \code)$, counted as one
+  guardian in Perch's recovery, used unchanged\claim{guardian-on-perch}.
 \end{frame}
 
 \begin{frame}{Background}
-  \begin{description}[Perch recovery]
-    \item[DKIM] the signing domain signs header fields and a body hash;
-      keys in DNS~\cite{rfc6376,rfc8301}.
-    \item[Perch recovery] guardians and a quorum approve a fixed-width
-      recovery statement; a delay follows; the owner may
-      cancel~\cite{perch-recovery-spec}.
-    \item[UltraHonk] Noir circuits proved with Barretenberg, verified on
-      Soroban by Perch's verifier~\cite{noir-docs,barretenberg-docs}.
+  \begin{description}[Perch recovery]\small
+    \item[DKIM] The signing domain \texttt{d=} signs the fields \texttt{h=}
+      names and the signature field itself, under a key in DNS; relaxed
+      canonicalization unfolds lines and squeezes
+      whitespace~\cite{rfc6376,rfc8301}. It attests to the domain, not the
+      author.
+    \item[Perch recovery] Anyone opens an attempt; guardians approve the
+      SHA-256 digest of a fixed-width statement; at the quorum the attempt is
+      authorized, and it completes after a delay during which a
+      \texttt{Loss} owner can cancel~\cite{perch-recovery-spec}.
+    \item[UltraHonk] Noir circuits proved by Barretenberg, verified on
+      Soroban by Perch's verifier; proofs are 16{,}224 bytes\claim{circuit-size}.
   \end{description}
 \end{frame}
 
 \begin{frame}{Threat model}
-  \begin{itemize}
-    \item The adversary sees the chain and the mempool, opens attempts, sends
-      email, may hold the victim's inbox, and may run Nido's servers.
-    \item Assumptions:
-      \begin{itemize}\small
-        \item DKIM signatures cannot be forged.\claim{dkim-unforgeability}
-        \item Providers sign only for the mailbox holder.\claim{provider-authenticates-sender}
-        \item The registry lists only real provider keys.\claim{registry-correctness}
-        \item UltraHonk is knowledge-sound and zero-knowledge.\claim{proof-system-security}
-        \item The commitment hides the address.\claim{commitment-hiding}
-        \item The hashes are collision resistant.\claim{hash-collision-resistance}
-        \item The enrolling wallet is honest.\claim{honest-enrollment}
+  \small
+  \begin{columns}[T]
+    \begin{column}{0.46\textwidth}
+      Adversaries
+      \begin{itemize}\footnotesize
+        \item inbox thief
+        \item registry members (below or at threshold)
+        \item relayer, front-runner
+        \item mail provider (curious, not forging)
+        \item network observer
+        \item malicious frontend (trusted only at enrollment)
       \end{itemize}
-  \end{itemize}
+      Privacy claim, scoped: ``Nido's servers and staff can't read your
+      address.''
+    \end{column}
+    \begin{column}{0.52\textwidth}
+      Assumptions
+      \begin{itemize}\footnotesize
+        \item A1 DKIM unforgeable\claim{dkim-unforgeability}; providers
+          authenticate senders\claim{provider-authenticates-sender}
+        \item A2, A3 hashes\claim{hash-collision-resistance}\claim{commitment-hiding}
+        \item A4 UltraHonk sound and ZK\claim{proof-system-security}
+        \item A5 registry lists real keys\claim{registry-correctness}
+        \item A6 secrets stay with the user\claim{secret-generation}
+        \item A7 honest enrollment\claim{honest-enrollment}
+        \item A8 enclave isolation\claim{enclave-isolation}
+      \end{itemize}
+    \end{column}
+  \end{columns}
 \end{frame}
 
-\begin{frame}{Design: one factor, one guardian}
+\begin{frame}{Enrollment and recovery}
   \centering
-  \resizebox{0.95\linewidth}{!}{\input{figures/recovery-flow}}
-  \par\medskip\small
-  A per-account, immutable email guardian with $\Commit$, counted as one
-  guardian in Perch's quorum.
+  \resizebox{!}{0.82\textheight}{\input{figures/sequence}}
 \end{frame}
 
-\begin{frame}{Design: the recovery email and the proof}
+\begin{frame}{Binding the statement, blinding it from the provider}
+  \small
   \begin{itemize}
-    \item The user sends one email from their own inbox to a fixed address.
-    \item Subject: a fixed phrase and $\Blinded$; $\blind$ stays in the browser.
-    \item The browser proves: valid DKIM under a registered key; \texttt{d=}
-      matches a single unfolded \texttt{From}; that address opens $\Cm$; the
-      Subject binds the statement.
-    \item The guardian checks $\Sha(\text{statement bytes}) = \digest$, its own
-      account inside them, and the proof.
+    \item The email approves Perch's own statement $S$; the guardian checks
+      $\Sha(S) = \digest$ and that $S$ names its account.
+    \item Account, new key, nonce (attempt id, epoch) and expiry are fields of
+      $S$, so the digest binds all four.
+    \item Subject: \texttt{APPROVE NIDO ACCOUNT RECOVERY} $\mathrm{hex}(T)$,
+      $T = \blindf(\digest, \blind)$ with $\blind$ kept in the
+      browser\claim{subject-blinding}.
+    \item The provider sees $T$, not $\digest$\claim{blinded-subject-hiding};
+      it learns that its user sent an approval, and when.
+    \item The mail reaches the browser sealed by the vault, or as an
+      \texttt{.eml} file\claim{sealed-inbound}.
   \end{itemize}
 \end{frame}
 
-\begin{frame}{Design: registry and alerts}
+\begin{frame}{The circuit relation}
+  \begin{columns}[c]
+    \begin{column}{0.56\textwidth}
+      \resizebox{\linewidth}{!}{\input{figures/circuit-relation}}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \small
+      \begin{itemize}
+        \item 251{,}561 UltraHonk gates, padded to $2^{18}$; headers up to
+          1536 bytes\claim{circuit-size}\claim{header-bound-fits}
+        \item Reads the signed bytes only; fixed \texttt{From} grammar;
+          aligned \texttt{d=}\claim{circuit-from-grammar}\claim{circuit-dkim-rules}
+        \item Any public input changed: the proof
+          fails\claim{circuit-binds-public-inputs}
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The email guardian}
+  \small
   \begin{itemize}
-    \item DKIM key registry: multisig with timelocks (72\,h for keys live in
-      DNS, 7 days otherwise), fed by DNS attestations; per-account key pin;
-      grace period for retired keys.
-    \item Launch providers: Gmail, Outlook/Hotmail, iCloud, Yahoo, Proton,
-      Fastmail, GMX/web.de.
-    \item Alerts from Perch's recovery events: generic text, a per-attempt
-      code, and Web Push to a passkey device.
-    \item Alert addresses sealed to an attested enclave, key split 2-of-3.
+    \item One immutable guardian per account: its address is in Perch's
+      \texttt{config\_hash}, so changing the email factor passes Perch's
+      reconfiguration gate.
+    \item Twelve checks in order: one controller call with $\digest$;
+      $\Sha(S)=\digest$; network, account, controller; allowed action and
+      entry point; not expired; root is the live pin or registry-accepted;
+      the proof verifies\claim{guardian-checks}.
+    \item Public inputs built only from its own state\claim{guardian-checks};
+      the verdict ignores the authorization entry\claim{guardian-payload-irrelevant}.
+    \item Construction refuses bad commitments, pins over 365 days, and a
+      verifier for another circuit\claim{guardian-construction}.
   \end{itemize}
 \end{frame}
 
-\begin{frame}{Properties}
+\begin{frame}{DKIM key registry and the per-account pin}
+  \small
+  \begin{itemize}
+    \item Additions: $k$-of-$n$ approval, then 72 hours if attested live in
+      DNS, else 7 days\claim{registry-timelocks}; allowlisted domains,
+      RSA-2048 only\claim{registry-governance}.
+    \item Grace for superseded roots; revocation refuses every root holding
+      the key at once\claim{registry-revocation}; no admin or
+      upgrade\claim{registry-immutable}.
+    \item Pin: a salted key tree fixed at construction, additive, at most 365
+      days\claim{key-pin}; the wallet uses 30 days\claim{wallet-pin-lifetime}.
+    \item A planted, activated key still cannot approve without the account
+      code\claim{registry-timelock-attacks}.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Alerts without reading the address}
+  \small
+  \begin{itemize}
+    \item Driven by Perch's own events; no on-chain tag; records found by
+      $\mathrm{HMAC}(k, \mathit{account})$ inside the vault.
+    \item Generic text, no link, a six-digit code the wallet also
+      shows\claim{alert-code}; Web Push required when email is a
+      factor\claim{wallet-second-alert-channel}.
+    \item Contact changes take 14 days; removal refused during an authorized
+      recovery\claim{alert-contacts}.
+    \item Vault key 2-of-3 across custodians; enclave images after a 14-day
+      public timelock\claim{vault-custody}.
+    \item With third parties mocked, no server-side record holds the address:
+      ``Nido's servers and staff can't read your
+      address''\claim{servers-cannot-read-address}\claim{enclave-isolation}.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Properties: soundness and privacy}
   \small
   \begin{description}[Soundness]
-    \item[Soundness] An accepted approval implies a DKIM-signed email from the
-      committed address whose Subject opens to the statement's
-      digest.\claim{email-factor-soundness}
-    \item[Privacy] The chain sees the address only through the salted
-      commitment and pin root.\claim{address-privacy}
-    \item[Replay] One approval counts once, for one account, attempt and
-      epoch.\claim{replay-resistance}
-    \item[One factor] Email alone authorizes only at quorum one, and
-      completion waits for the delay.\claim{one-factor-safety}
+    \item[Soundness] An accepted approval implies an email whose header
+      carries a valid RSA-2048 DKIM signature under a key in an accepted
+      tree, whose \texttt{From} opens $\Cm$, and whose Subject opens to the
+      digest of a statement for this account, controller, network and an
+      unexpired bound; with A5 and A7, the enrolled address and a trusted
+      key\claim{email-factor-soundness}.
+    \item[Privacy] The chain's view of every run depends on the address only
+      through $\Cm$ and the salted pin root\claim{address-privacy};
+      indistinguishability needs A3, A4, A6\claim{commitment-hiding}.
   \end{description}
+  \medskip
+  Lean~4 model of the guardian, the relation C1--C6 and Perch's controller;
+  no axioms beyond Lean's own\claim{lean-axioms}.
 \end{frame}
 
-\begin{frame}{Implementation}
-  \begin{itemize}
-    \item Recovery statement format and the email-guardian contract on Perch.
-    \item A Noir DKIM circuit with header constraints for the launch
-      providers, fixing the issues public audits report~\cite{audit-consensys-2024,audit-veridise-2024}:
-      251{,}561 gates ($2^{18}$), headers up to 1536 bytes.
-      \claim{circuit-accepts-launch-providers}\claim{circuit-refuses-attacks}
-    \item On-chain: Perch's UltraHonk verifier with the circuit's key; one
-      real proof is one guardian vote.\claim{onchain-email-vote}
-    \item DKIM key registry, mocks of every third party.
+\begin{frame}{Properties: replay and one-factor safety}
+  \small
+  \begin{description}[One factor]
+    \item[Replay] An approval is accepted only for its own digest, which fixes
+      one account, network, controller, action, attempt and epoch; the
+      controller counts the guardian once\claim{replay-resistance}\claim{digest-fixes-statement}.
+    \item[One factor] With email approvals as the only evidence, an attempt is
+      authorized only at quorum one, guardian-only, and completes only after
+      a positive delay\claim{one-factor-safety}.
+    \item[Wallet] Email alone reaches the quorum only under \texttt{Loss},
+      with at least 7 days and a second alert
+      channel\claim{wallet-policy-one-factor}.
+  \end{description}
+  \medskip
+  The model's agreement with the code is tested, not
+  proven\claim{model-code-agreement}.
+\end{frame}
+
+\begin{frame}{Hardening against public issue classes}
+  \footnotesize
+  \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{0.33\linewidth}>{\raggedright\arraybackslash}X@{}}
+    \toprule
+    Class (public audits and issues) & Refusal \\
+    \midrule
+    Display names spoofing \texttt{From} & one angle-address ending the field; no quoted local part \\
+    Folded \texttt{From}, simple canonicalization & no folded line; relaxed only \\
+    Fields spanning lines; parser resets & a field starts at byte 0 or after CRLF \\
+    $\sigma + N$ signatures & $\sigma < N$ proven \\
+    \texttt{bh=}, \texttt{l=}, misaligned \texttt{d=} & scanned tags; \texttt{d=} equals the \texttt{From} domain \\
+    Unsigned or duplicated headers & only the signed block; one \texttt{from}, one \texttt{subject} \\
+    \bottomrule
+  \end{tabularx}
+  \par\medskip
+  One negative test per class, naming its public
+  source~\cite{audit-matterlabs-2024,audit-veridise-2024,audit-consensys-2024}\claim{circuit-issue-classes};
+  every adversarial mock email refused at a named
+  assertion\claim{circuit-refuses-attacks}.
+\end{frame}
+
+\begin{frame}{Evaluation: attack suite}
+  \small
+  \begin{tabular}{@{}lrr@{}}
+    \toprule
+    Class & Rows & Refused \\
+    \midrule
+    Forged emails & 11 & 10 \\
+    Replayed emails and proofs & 12 & 12 \\
+    Wrong account or new key & 5 & 5 \\
+    Stale or malicious registry keys & 8 & 7 \\
+    Compromised inbox & 10 & 7 \\
+    Provider header quirks & 5 & 2 \\
+    Front-running & 4 & 4 \\
+    Privacy on chain & 1 & --- \\
+    \bottomrule
+  \end{tabular}
+  \hfill
+  \begin{minipage}[t]{0.42\linewidth}
+    \footnotesize
+    56 rows, each with its expected outcome: 53 on a local network, 3 on the
+    test host\claim{network-attack-suite}\claim{registry-timelock-attacks}.\\[4pt]
+    Inbox thief with the code, email alone: authorized, not completed within
+    7 days; alerted by email and push; owner cancels\claim{compromised-inbox-alerted}.\\[4pt]
+    No address or code in 165 transactions\claim{privacy-no-address-on-chain}.
+  \end{minipage}
+\end{frame}
+
+\begin{frame}{Evaluation: on-chain cost of one email vote}
+  \small
+  \begin{tabular}{@{}lrrr@{}}
+    \toprule
+    & Test host (tx) & Local network & Testnet \\
+    \midrule
+    Instructions (M) & 131.1--131.3 & 120.05 & 121.64 \\
+    Entries read / written & 12 + 2 & 12 / 2 & 12 / 2 \\
+    Transaction (bytes) & 18{,}148 & 18{,}080 & 18{,}080 \\
+    Fee (stroops) & 178{,}175--178{,}255 & 176{,}230 & 82{,}428 \\
+    \bottomrule
+  \end{tabular}
+  \par\smallskip{\footnotesize Test host\claim{onchain-verification-cost},
+    local network\claim{network-verification-cost},
+    testnet\claim{testnet-email-recovery}}
+  \par\medskip
+  \begin{itemize}\footnotesize
+    \item Limit: 400 million instructions per
+      transaction\claim{onchain-verification-cost}. Test-host fee without
+      rent, network fees with rent.
+    \item The test host's approvals use a registry root, the networks' the
+      pin; each host meters with its own cost parameters.
+    \item A full email-factor recovery ran on testnet: 13{,}384{,}714
+      stroops over seven transactions\claim{testnet-recovery-total}.
   \end{itemize}
-  \bigskip
-  \pending{browser prover not yet built.}
 \end{frame}
 
-\begin{frame}{Evaluation}
-  \begin{itemize}
-    \item On chain: about 122M of 400M instructions, an 18\,KB transaction,
-      about 178{,}000 stroops before rent.\claim{onchain-verification-cost}
-    \item Proving, desktop: under 1\,s native; bb.js 14\,s on one thread,
-      3.3\,s on 18.\claim{desktop-proving-cost}
-    \item Attack suite on the circuit: forged and replayed emails, wrong
-      account, header quirks.\claim{circuit-refuses-attacks}
+\begin{frame}{Evaluation: proving}
+  \small
+  \begin{tabular}{@{}lrr@{}}
+    \toprule
+    Prover (one desktop) & 18 threads & 1 thread \\
+    \midrule
+    Native \texttt{bb} & 0.94\,s & 4.67\,s \\
+    bb.js in Node & 3.30\,s & 13.5\,s \\
+    Chrome (wallet worker) & 1.48\,s & 8.42\,s \\
+    Chrome, efficiency cores & 12.0\,s (4) & 36.4\,s \\
+    Phone & \multicolumn{2}{c}{not measured} \\
+    \bottomrule
+  \end{tabular}
+  \par\smallskip{\footnotesize Native and Node\claim{desktop-proving-cost},
+    Chrome\claim{browser-proving-cost},
+    efficiency cores\claim{efficiency-core-proving}}
+  \par\medskip
+  \begin{itemize}\footnotesize
+    \item First proof downloads 18{,}790{,}270 octets, then nothing\claim{prover-download}.
+    \item Phone budget of about two minutes: a target\claim{phone-proving-budget}.
+    \item DevTools throttling does not reach proving workers\claim{devtools-throttling}.
   \end{itemize}
-  \bigskip
-  \pending{phone-class devices.}
 \end{frame}
 
-\begin{frame}{Related work, limitations and open questions}
+\begin{frame}{Related work}
+  \small
   \begin{itemize}
-    \item zkEmail proves statements about DKIM email~\cite{zkemail-nr};
-      zkLogin uses OIDC tokens~\cite{zklogin}.
-    \item The four properties are proven about a model; its agreement with
-      the code is tested.
-    \item The provider learns that a recovery email was sent.
-    \item A key rotation can stall recovery up to the registry timelock.
+    \item zkEmail proves statements about DKIM email; its recovery modules
+      use email guardians with a relayer that proves and stores account
+      codes~\cite{zkemail-recovery,zkemail-tx-builder}. Here: proofs in the
+      browser, no operator holds the code, a blinded statement.
+    \item zkLogin and Aptos keyless accounts make an OIDC credential the
+      key~\cite{zklogin,aptos-aip61}; an OIDC path here would never count
+      as independent of the same provider's DKIM.
+    \item Social and guardian recovery keep the delay and the
+      veto~\cite{buterin-social-recovery,argent-spec}.
+    \item KeyForge would publish expired DKIM keys~\cite{specter-keyforge}:
+      the registry's retirement and revocation are the levers.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Limitations and open questions}
+  \small
+  \begin{itemize}
+    \item Not built: the production enclave, the custodians, the recovery
+      inbox's production mail exchanger. All third parties are mocks.
+    \item Not measured: phones. Not done: an external audit. Testnet only.
+    \item Open: pin semantics and lifetime, default allowed actions, where
+      the account code is kept, registry grace and revocation thresholds,
+      the alert code's key, an on-chain enrollment proof.
+    \item The provider learns that its user sent an approval; the sending
+      service sees alert addresses.
   \end{itemize}
 \end{frame}
 
 \begin{frame}{Summary}
-  Email can be one recovery factor with no plaintext address anywhere: a
-  salted commitment, a browser-side DKIM proof, and a per-account guardian
-  inside Perch's delayed recovery. Every claim carries its status.
+  Email can be one recovery factor with no plaintext address held by anyone:
+  a salted commitment, a browser-side DKIM proof over a blinded statement,
+  and a per-account guardian inside Perch's delayed recovery. Four
+  properties are proven over a model; the code is tested against it; every
+  number on these slides carries its status.
 \end{frame}
 
 \begin{frame}[allowframebreaks]{References}

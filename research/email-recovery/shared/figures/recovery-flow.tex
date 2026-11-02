@@ -2,9 +2,9 @@
 % and the slides; scale it from the including document.
 \begin{tikzpicture}[
     party/.style={draw, rounded corners=2pt, align=center, inner sep=3pt,
-                  minimum width=26mm, minimum height=10mm, font=\sffamily\small},
+                  minimum width=26mm, minimum height=10mm, font=\sffamily\figfontlarge},
     msg/.style={-{Stealth[length=2mm]}, semithick},
-    lbl/.style={font=\sffamily\footnotesize, align=center},
+    lbl/.style={font=\sffamily\figfont, align=center},
   ]
   \node[party] (other)  at (-4.4, 0)   {Other guardian};
   \node[party] (ctrl)   at (0, 0)      {Perch recovery\\controller};

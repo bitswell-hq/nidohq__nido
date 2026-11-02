@@ -2,75 +2,332 @@
 
 \begin{figure*}[t]
   \centering
-  \resizebox{0.8\linewidth}{!}{\input{figures/recovery-flow}}
-  \Description{The wallet on a new device sends an email carrying a blinded statement digest to the user's mail provider and receives the DKIM-signed copy. It submits a proof to the Perch recovery controller, which asks the per-account email guardian to check the digest; the guardian checks the signing key against the DKIM key registry. Another guardian also approves; recovery then needs the quorum and the delay before completion.}
-  \caption{The email factor inside one recovery attempt. The email guardian
-    is one of the account's guardians; the attempt still needs the quorum
-    and the delay.}
-  \label{fig:flow}
+  \resizebox{\textwidth}{!}{\input{figures/sequence}}
+  \Description{A message sequence between six parties: the wallet in the user's browser, the user's mail provider, the sealed vault, the Perch recovery controller, the per-account email guardian, and the DKIM key registry with the proof verifier. In enrollment, the wallet draws an account code, the user sends an enrollment email that the provider signs and the vault seals back to the browser, the wallet checks it and computes the commitment and the pin, deploys the guardian, and applies a document listing it. In recovery, an attempt is opened, the controller returns the statement and its digest, the wallet draws rho and computes the blinded value T, the user sends an email whose Subject ends with T, the provider signs it and the vault seals it back, the browser proves the circuit's obligations, the wallet submits the approval, the controller calls the guardian's check, which asks the registry and the verifier, and records one vote. Other guardians reach the quorum, the attempt is authorized, the alert service sends an email and a Web Push with a code, and after the delay, unless the owner cancels, the recovery completes.}
+  \caption{Enrollment and recovery. Dashed arrows are answers. The proof is
+    made in the browser; the vault, an attested enclave, is the only party
+    of the operator's that sees an email or an address.}
+  \label{fig:sequence}
 \end{figure*}
 
-\paragraph{One factor, one guardian.} Each account that opts in gets its own
-immutable email-guardian contract, listed as one guardian in its Perch
-recovery configuration and counted toward the quorum like any other
-(Fig.~\ref{fig:flow}). The guardian's constructor fixes the commitment
-$\Commit$, where $\addr$ is the exact \texttt{From} address captured at
-enrollment and $\code$ is an account code of at least 128 random bits that
-only the user holds; the registry it trusts; and the controller it answers
-to. Changing the address deploys a new guardian, which goes through Perch's
-reconfiguration rules. Email combines with the delay and other guardians;
-email plus the delay alone is allowed only under the lost-key profile, with a
-delay of at least seven days and a second alert channel. The wallet's
-recovery builder enforces this on every configuration it produces:
+Figure~\ref{fig:sequence} shows the two flows. Each account that opts in gets
+its own immutable email-guardian contract, listed as one guardian in its
+Perch recovery member and counted toward the quorum like any other. The
+guardian fixes at construction the commitment $\Cm$ to the enrolled address,
+the account, its Perch controller, the DKIM key registry it trusts, an
+optional key pin, the actions it may approve, and the proof verifier.
+
+\subsection{Statement binding}\label{sec:design-statement}
+The email factor approves exactly Perch's recovery statement and nothing
+else; there is no email-specific statement. The guardian authorizes
+$\digest = \Sha(S)$ for the statement encoding $S$, the circuit binds
+$\digest$, and the guardian also receives $S$ itself. The four items a
+recovery must bind are fields of $S$:
+\begin{description}
+  \item[Account] the \texttt{account} contract id, which the guardian
+    requires to be its own.
+  \item[New key] for lost-key and compromise recovery, the hash of the
+    replacement credentials and of the derived target document; for a
+    reconfiguration the new configuration hash, for an upgrade the Wasm hash.
+  \item[Nonce] the attempt id, which Perch never reuses for an account
+    (request id for upgrades), and the configuration epoch, which every
+    configuration change and completion bumps.
+  \item[Expiry] \texttt{valid\_until\_ledger}, a ledger sequence number;
+    Perch's statement carries no wall-clock time, so the DKIM \texttt{t=}
+    tag is not used.
+\end{description}
+The action is inside $\digest$, so one Subject format serves every action,
+and the guardian checks the action against its allowed set. The circuit takes
+the digest as two 128-bit limbs $\digest_{hi}, \digest_{lo}$, exactly as
+Perch's ZK projection splits it, so both are always canonical field elements.
+
+\subsection{The recovery email and its blinding}\label{sec:design-email}
+The user sends the recovery email directly from the enrolled inbox to
+\textsf{RECOVERY\_INBOX}, one fixed address per deployment; nothing about
+the user is needed to start recovery. The wallet opens the user's mail client
+with the recipient and Subject filled in. The Subject is exactly
+\begin{gather*}
+  \texttt{APPROVE NIDO ACCOUNT RECOVERY } \mathrm{hex}(T),\\
+  T = \blindf(\digest, \blind) = \Poseidon(\mathsf{DOM\_BLIND}, \digest_{hi}, \digest_{lo}, \blind),
+\end{gather*}
+where $\blind$ is 31 fresh random bytes that never leave the browser and
+$\mathrm{hex}$ gives 64 lowercase hexadecimal characters. Every statement and
+its digest are public, so a Subject carrying $\digest$ in the clear would let
+the provider match the email to the account and attempt; $T$ hides
+$\digest$ from anyone without $\blind$ when Poseidon2 is modelled as a random
+function\claim{blinded-subject-hiding}. Nothing may precede or follow the
+value: a \texttt{Re:} prefix, an RFC~2047 encoded word~\cite{rfc2047} or
+trailing text makes the email unprovable, while a provider that folds the
+long line at a space is harmless, because relaxed canonicalization restores
+the exact bytes\claim{subject-blinding}.
+
+The proof binds neither the recipient, nor the body, nor \texttt{t=}: not
+every launch provider signs \texttt{To:} or sets \texttt{t=}, an email to any
+recipient is equally good evidence of inbox control, and freshness comes from
+the statement's deadline and single-use attempt id. The signature still
+covers the whole signed header block.
+
+The signed octets reach the browser through the sealed vault, which runs
+the recovery address's mail exchanger: the browser first registers $T$ with
+a fresh device key, sealed to the vault with HPKE~\cite{rfc9180}; the first
+registration of a value holds it; and the vault seals each matching message
+to that key and keeps nothing\claim{sealed-inbound}. Alternatively the user
+imports the sent message as an \texttt{.eml} file.
+
+\subsection{Enrollment and the commitment}\label{sec:design-enroll}
+While the owner still holds the passkey, the wallet draws $\code$, 16 bytes
+from a secure generator, never reused and never sent to Nido. The user sends
+an enrollment email whose Subject is a distinct phrase followed by
+$\mathrm{hex}(E)$, where $E$ hashes the account's contract id under its own
+tag with a fresh $\blind_e$, and the wallet reads the exact
+\texttt{From} address $\addr$ from the DKIM-signed copy, so the user never
+types it and the provider writes the same bytes on every later email. The
+commitment is
+\begin{align*}
+  \Cm = \commitf(\addr, \code) = \Poseidon(&\mathsf{DOM\_COMMIT}, |\addr|,\\
+    &\mathrm{pack}(\addr), \code),
+\end{align*}
+where $\mathrm{pack}$ cuts the address, right-padded to 124 bytes, into four
+31-byte field elements and each $\mathsf{DOM}$ is a distinct domain tag; the domain of the address is inside $\Cm$, so the
+enrolled domain is the committed address's. The wallet checks the enrollment
+email under the recovery circuit's own rules before deploying a guardian, so
+an inbox whose recovery email could never be proven is refused at
+enrollment\claim{enrollment-email-check}; an enrollment Subject can never
+satisfy the recovery circuit\claim{enrollment-subject-distinct}. Nothing on
+chain verifies the enrollment email: a wrong $\Cm$ disables only its own
+owner's email factor.
+
+The wallet then deploys the guardian with $\Cm$ and a key pin
+(\S\ref{sec:design-registry}), reads back its configuration and code hash,
+and applies a document that lists it. Listing is an ordinary Perch
+reconfiguration, so under \texttt{Protected} it needs the current recovery
+condition too; since the guardian is immutable, changing the address, the
+code, the pin or the allowed actions means deploying a new guardian through
+the same gate.
+
+Recovery needs $\code$, so the wallet offers two backups: a block in the
+enrollment email's body, kept in the Sent folder, encrypting $\code$ under an
+Argon2id~\cite{rfc9106} key from a wallet-generated five-word passphrase; and
+a recovery kit\claim{account-code-backup}.
+
+\subsection{The circuit relation}\label{sec:design-circuit}
+The recovery circuit (Fig.~\ref{fig:relation}) has four public inputs, in
+this order: $\Cm$, $\digest_{hi}$, $\digest_{lo}$, and $\mathit{root}$, the
+root of the key tree the signing key is proven against. The guardian builds
+all four itself. The private inputs are the signed header block $H$ (at most
+1536 bytes), the RSA signature $s$ and modulus $n$, $\blind$, $\code$, and the
+key's leaf index and 16 Merkle siblings. Positions inside $H$ are hints that
+the circuit computes in unconstrained code and then checks. There is no
+action input, timestamp or nullifier: the action and the expiry are in the
+digest, and Perch's controller, not a nullifier, stops double counting.
+
+\begin{figure}[t]
+  \centering
+  \resizebox{\columnwidth}{!}{\input{figures/circuit-relation}}
+  \Description{Three columns. Private inputs on the left: the signed header block H of at most 1536 bytes, the RSA signature and modulus, the account code, rho, and the leaf index with 16 siblings. Obligations C1 to C6 in the middle. Public inputs on the right: the commitment, the two digest limbs, and the key-tree root. Arrows show that the header feeds C1 to C5, the signature and modulus feed C1 and C6, the account code feeds C3, rho feeds C5, the Merkle path feeds C6, and C3, C5 and C6 open the commitment, the digest limbs and the root.}
+  \caption{The recovery circuit's relation. Domain tags and lengths inside
+    the Poseidon2 hashes are omitted.}
+  \label{fig:relation}
+\end{figure}
+
+The circuit enforces six obligations:
+\begin{description}
+  \item[C1] $s<n$, $n$ has exactly 2048 bits, and $s^{65537} \bmod n$ is the
+    EMSA-PKCS1-v1\_5 encoding of $\Sha(H)$.
+  \item[C2] $H$ is a well-formed signed block: header fields in relaxed
+    canonical form, each ended by CRLF, then the signature's own field with
+    an empty \texttt{b=} and no trailing CRLF, carrying
+    \texttt{v=1}, \texttt{a=rsa-sha256}, relaxed header canonicalization,
+    an \texttt{h=} naming \texttt{from} and \texttt{subject}, and a
+    \texttt{d=}; no byte past $|H|$ is read.
+  \item[C3] $H$ holds exactly one \texttt{from} field; its value parses to an
+    address $\addr$ that, with $\code$, opens $\Cm$.
+  \item[C4] The lowercased domain of $\addr$ equals the lowercased
+    \texttt{d=}, which is the domain of the registry leaf.
+  \item[C5] $H$ holds exactly one \texttt{subject} field, whose value is the
+    recovery phrase followed by $\mathrm{hex}(T)$ for the public digest limbs
+    and $\blind$.
+  \item[C6] The leaf $\leaff(\mathit{dom}, \kh(n))$ has a depth-16 Merkle
+    path to $\mathit{root}$, where $\kh(n) = \Poseidon(\mathsf{DOM\_KEY},
+    n_0,\ldots,n_{17})$ over the 18 120-bit limbs of $n$, and the leaf hashes
+    $\mathsf{DOM\_LEAF}$, the domain's length, the domain packed into two
+    field elements, and $\kh(n)$.
+\end{description}
+The circuit takes the canonicalized bytes the signature covers and never
+canonicalizes; a field outside $H$ has no effect. The \texttt{From} value
+must be a bare address or a printable display name followed by exactly one
+angle-bracketed address that ends the field; quoted local parts, comments,
+groups and address lists are refused, the address has at most 124 bytes,
+and it is used exactly as signed, with no case folding or tag
+removal\claim{circuit-from-grammar}. The circuit refuses simple header
+canonicalization, a missing or duplicated \texttt{From} or \texttt{Subject},
+a misaligned \texttt{d=}, and a signature not below its
+modulus\claim{circuit-dkim-rules}. Changing any public input, or any private
+value that links the email to one, makes the proof
+fail\claim{circuit-binds-public-inputs}, and an honest recovery email from
+every launch domain is accepted, including a 124-byte address with a 500-byte
+display name\claim{circuit-accepts-launch-providers}.
+
+\subsection{The email guardian}\label{sec:design-guardian}
+The guardian's constructor refuses an account or controller that is not a
+contract, the account as its own controller, a zero or non-canonical
+commitment, a pin that has expired or lasts more than 365 days, an empty or
+unknown action set, and a verifier whose reported circuit id differs from the
+configured one\claim{guardian-construction}. Perch's controller calls
+\texttt{guardian.require\_auth\_for\_args((d,))}, and the host then runs the
+guardian's \texttt{\_\_check\_auth} with the approval $(S, \mathit{root},
+\pi)$ from the guardian's authorization entry. The guardian refuses at the
+first failing check of Table~\ref{tab:guardian}, and builds the public
+inputs only from its configuration, the authorized digest and the accepted
+root\claim{guardian-checks}. Approvals by the email guardian count toward a
+\texttt{Protected} reconfiguration through \texttt{approve\_change} like
+any guardian's\claim{guardian-on-perch}.
+
+\begin{table}[t]
+  \caption{The guardian's checks, in order.}
+  \label{tab:guardian}
+  \small
+  \begin{tabularx}{\columnwidth}{@{}r>{\raggedright\arraybackslash}X l@{}}
+    \toprule
+    \# & Check & Error \\
+    \midrule
+    1 & One contract call, on the controller, with one 32-byte argument $\digest$ & \texttt{UnexpectedContext} \\
+    2 & $\Sha(S) = \digest$ & \texttt{DigestMismatch} \\
+    3 & $S$ is a version-2 Perch statement of a known action & \texttt{MalformedStatement} \\
+    4--6 & $S$ names this network, account and controller & \texttt{Wrong\ldots} \\
+    7 & The action is allowed & \texttt{ActionNotAllowed} \\
+    8 & The call is that action's entry point & \texttt{WrongEntryPoint} \\
+    9 & Ledger $\le$ \texttt{valid\_until\_ledger} & \texttt{StatementExpired} \\
+    10 & $\mathit{root}$ is canonical & \texttt{NonCanonicalRoot} \\
+    11 & $\mathit{root}$ is the unexpired pin, or the registry accepts it & \texttt{UnknownRoot} \\
+    12 & $\pi$ verifies for $(\Cm, \digest_{hi}, \digest_{lo}, \mathit{root})$ & \texttt{ProofRejected} \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\paragraph{One guardian per account.} Perch binds guardian addresses into
+\texttt{config\_hash}, so everything fixed at the guardian's address is
+covered by Perch's reconfiguration gate. A guardian shared by many accounts
+would need a table from account to commitment, and whoever could change that
+table could change an account's email factor without passing the gate. And
+\texttt{require\_auth\_for\_args} hands the guardian only $\digest$: it
+learns which account $\digest$ concerns only from $S$ (check~2), and approves
+only for its own (check~5).
+
+\paragraph{What the guardian does not check.} It ignores the host's
+signature payload (the entry's nonce, expiration and invocation hash): the
+proof binds the statement, not an authorization entry, so anyone can re-wrap
+an approval, and the re-wrapped copy can still authorize only the same
+digest, which the controller counts once\claim{guardian-payload-irrelevant}.
+Quorum, delay, cancellation and epoch are the controller's; the guardian
+could not read them anyway, since Soroban refuses re-entry into the
+controller that is calling it. The guardian calls only the registry and the
+verifier, which embeds Perch's UltraHonk verifier with the circuit's
+verification key\claim{verifier-contract}.
+
+\subsection{The DKIM key registry and the pin}\label{sec:design-registry}
+Keys are identified by $\kh(n)$, never by selector, because a provider may
+reuse a selector for a new key. The registry holds a depth-16 Merkle tree of
+leaves $\leaff(\mathit{domain}, \kh)$ hashed exactly as C6 hashes them, with the
+host's Poseidon2, and answers one question for the guardian: is this root
+accepted now\claim{registry-hash-parity}? Its rules are:
 \begin{itemize}
-  \item \claimstatement{wallet-one-email-guardian}\claim{wallet-one-email-guardian}
-  \item \claimstatement{wallet-second-alert-channel}\claim{wallet-second-alert-channel}
-  \item \claimstatement{wallet-email-plus-delay}\claim{wallet-email-plus-delay}
-  \item \claimstatement{wallet-email-allowed-actions}\claim{wallet-email-allowed-actions}
+  \item \emph{Activation.} An addition, proposed and approved by the
+    multisig, executes 72 hours after the later of its approval and the
+    ledger since which a threshold of attesters' latest observations see the
+    key live in DNS, or 7 days after its approval, whichever comes
+    first\claim{registry-timelocks}.
+  \item \emph{Grace.} A root superseded at ledger $L$ stays acceptable
+    through $L + \mathit{grace}$, so a proof against the previous root still
+    verifies and a key the provider has just retired keeps working briefly.
+  \item \emph{Revocation.} An emergency threshold of members revokes a key
+    for compromise; from that ledger every root containing it is refused,
+    grace included, a pending addition of it stops, and it can return only
+    through a new full-threshold addition on the 7-day
+    path\claim{registry-revocation}.
+  \item \emph{Scope.} Leaves exist only for allowlisted domains and RSA keys
+    of exactly 2048 bits; the registry computes key hashes itself; the empty
+    tree's root is never accepted\claim{registry-governance}.
 \end{itemize}
-Perch's controller accepts any configuration the owner applies, so these
-rules bind Nido's wallet, not the chain.
+An attester resolves \texttt{selector.\_domainkey.domain}, signs an exact
+encoding of what it saw with Ed25519~\cite{rfc8032}, bound to the registry's
+contract id, and anyone may submit the signature; each attester's latest
+observation counts\claim{registry-attestations}. The registry has no admin,
+setter or upgrade path\claim{registry-immutable}: changing a parameter
+means deploying a new registry, which a guardian follows only by being
+replaced through Perch's gate. Its proposed governance is five members with
+threshold three, an emergency threshold of two, three attesters with
+threshold two, and a 24-hour grace period\claim{registry-defaults}.
 
-\paragraph{The recovery email.} The user sends one email from their own
-inbox to a fixed recovery address; nothing needs the user's address to start
-recovery. Its Subject carries a fixed phrase and $\Blinded$, a blinded copy of
-the statement digest, where $\blind$ stays in the browser, so the provider
-cannot link the email to the public attempt.
+\paragraph{The per-account pin.} A guardian may carry one pin, a key tree
+fixed at construction, with an expiry of at most 365 days. Its leaf 0 is
+$\Poseidon(\mathsf{DOM\_PIN\_SALT}, \code)$ and its other leaves are
+registry-format leaves of the pinned keys, so the pin's root reveals nothing
+about which provider's keys it holds without $\code$. The guardian accepts a
+key root if it is the unexpired pin's or the registry accepts it, so the pin
+carries a new account through the window while its provider's key waits in
+the registry's timelock, and keeps the enrolled key usable if the registry
+drops it\claim{key-pin}. The pin is the one path the registry cannot close: a
+revoked key stays usable through a pin that holds it until the pin expires,
+and forging an approval with it still needs the victim's address and
+$\code$. The wallet deploys guardians with a 30-day
+pin\claim{wallet-pin-lifetime}.
 
-\paragraph{The proof.} The browser proves, with a progress indicator, that
-the email carries a valid DKIM signature under a key whose hash is in the
-registry's Merkle root, that \texttt{d=} equals the domain of a single,
-unfolded \texttt{From} address that opens $\Cm$, and that the Subject is the
-fixed phrase and $\Blinded$. Proving uses threads on the recovery origin,
-which is served cross-origin isolated (COOP/COEP).
+\paragraph{Finding the key.} Asking for one provider's key reveals the
+provider, so the wallet reads a static list of every registry key, the same
+for every user, and falls back to DNS over HTTPS only after telling the
+user; either way a key counts only through the pin or an accepted
+root\claim{key-lookup}.
 
-\paragraph{The guardian check.} The guardian's \texttt{\_\_check\_auth}
-receives the digest from the controller. It also requires the statement
-bytes, checks $\Sha(\text{bytes}) = \digest$ and that the account inside them
-is its own, checks that the registry root is current, and verifies the
-proof through Perch's UltraHonk verifier.
+\subsection{Alerts and the sealed vault}\label{sec:design-alerts}
+Alerts are driven by the controller's own events; nothing is written on
+chain for them. The alert service's host watches the controller by contract
+id and hands each event to the vault, which finds the account's record under
+$\mathrm{HMAC}(k_\mathit{alert}, \mathit{account})$ with a key that never
+leaves it. Authorization, completion and configuration changes alert every
+channel; opening an attempt, which anyone can do, at most one email a day.
+An alert has generic text and no link, and carries a six-digit code keyed by
+a key derived with HKDF~\cite{rfc5869} from $\code$, which the wallet shows
+for the attempt it knows\claim{alert-code}.
 
-\paragraph{The key registry.} A multisig adds keys after a timelock: 72
-hours for keys that independent DNS attestations observe live in DNS, seven
-days otherwise. Each account may pin a key, and retired keys stay valid for a
-grace period. Launch providers are an allowlist of major providers (Gmail,
-Outlook and Hotmail, iCloud, Yahoo, Proton, Fastmail, GMX and web.de); custom
-domains are not supported at first.
+When email is a recovery factor, a second channel is required: Web Push to a
+passkey device~\cite{rfc8030,rfc8291,rfc8292}. A contact is registered,
+replaced or removed only with an assertion by one of the account's
+administrative passkeys~\cite{webauthn3}; a replacement or removal takes
+effect after 14 days, longer than the 7-day minimum delay, while the old
+contact keeps receiving alerts and is told at once; and removal is refused
+while a recovery is authorized\claim{alert-contacts}. Alert email goes
+through an EU-owned sending service, with failover to a second
+one\claim{alert-formats}.
 
-\paragraph{Alerts.} When an account enters recovery, alerts go out from
-Perch's recovery events, with generic text and a per-attempt verification
-code. Nothing on chain tags the account for the alert service, which finds
-its records by a keyed hash of the account. When email is a recovery factor,
-a second channel, Web Push to a passkey device, is required. Alert addresses
-are held in a sealed vault: the browser encrypts each address to an attested
-enclave whose key is split 2-of-3 across independent custodians, and new
-enclave code waits out a 14-day public timelock. Alert mail is sent by an
-EU-owned service. The privacy claim is scoped: Nido's servers and staff
-cannot read the address.
+The browser encrypts each address to the vault with HPKE after verifying the
+vault's attestation document~\cite{aws-nitro-attestation}. The vault's master
+key is split 2-of-3 with Shamir's scheme~\cite{shamir} across independent
+custodians, who release a share only to an enclave image that an on-chain
+image registry has activated after a 14-day public timelock, and stop once
+the image is revoked\claim{vault-custody}. With every third party mocked and
+the vault in its own process, no message, host record, log, RPC call,
+custodian decision or push body contains the address: Nido's servers and
+staff can't read your address\claim{servers-cannot-read-address}, under A8.
+The sending service and the user's mail provider necessarily see it.
 
-\paragraph{A later second path.} Sign-in with Google, Apple or Microsoft
-(OIDC) may later become a second way to produce the email factor. It never
-counts as a factor independent of the same provider's DKIM.
-
-\paragraph{Deployment.} The system runs on testnet first; mainnet waits for
-an external audit.
+\subsection{Wallet policy}\label{sec:design-policy}
+Perch's controller accepts any configuration its owner applies, so the
+remaining rules bind Nido's wallet, which builds every recovery member
+through one builder that tells the email guardian apart by a typed marker,
+never by address:
+\begin{enumerate}
+  \item at most one email guardian per recovery
+    member\claim{wallet-one-email-guardian};
+  \item an email guardian only with a registered second alert
+    channel\claim{wallet-second-alert-channel};
+  \item if the email vote alone can authorize (guardian-only, quorum one),
+    the \texttt{Loss} profile and a delay of at least seven days, 120{,}960
+    ledgers\claim{wallet-email-plus-delay};
+  \item every action allowed whenever the quorum needs the email vote, so
+    that a \texttt{Protected} account can still reconfigure and
+    upgrade\claim{wallet-email-allowed-actions}.
+\end{enumerate}
+OIDC sign-in with Google, Apple or Microsoft may later become a second way
+to produce the email factor; it would never count as a factor independent of
+the same provider's DKIM, since both rest on one provider.

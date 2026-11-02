@@ -1,0 +1,55 @@
+% Enrollment and recovery as a message sequence. Shared by the paper and the
+% slides; scale it from the including document.
+\begin{tikzpicture}[
+    x=1cm, y=0.36cm,
+    actor/.style={draw, rounded corners=2pt, fill=white, align=center,
+                  font=\sffamily\figfont, minimum width=23mm, minimum height=7mm, inner sep=2pt},
+    life/.style={densely dashed, gray},
+    msg/.style={-{Stealth[length=1.6mm]}, semithick},
+    reply/.style={msg, densely dashed},
+    lbl/.style={font=\sffamily\figfont, align=center, inner sep=1.5pt, fill=white},
+    act/.style={font=\sffamily\figfont, align=center, fill=gray!12, draw=gray!60,
+                rounded corners=1pt, inner sep=2pt},
+    phase/.style={font=\sffamily\figfont\bfseries, anchor=south west, inner sep=1pt, fill=white},
+  ]
+  \foreach \x/\n/\t in {
+      0/w/{Wallet\\(user's browser)},
+      3.1/p/{User's mail\\provider},
+      6.2/v/{Sealed vault\\(enclave)},
+      9.3/c/{Perch recovery\\controller},
+      12.4/g/{Email guardian\\(per account)},
+      15.5/r/{DKIM key registry,\\proof verifier}} {
+    \node[actor] (\n) at (\x, 0) {\t};
+    \draw[life] (\n.south) -- (\x, -33.0);
+  }
+
+  % Enrollment.
+  \draw[gray] (-1.2, -1.9) -- (16.7, -1.9);
+  \node[phase] at (-1.2, -1.9) {Enrollment (the owner still holds the passkey)};
+  \node[act] at (0, -3.0) {draw $\code$};
+  \draw[msg] (0, -4.3) -- node[lbl, above] {enrollment email, Subject $\ldots\,\mathrm{hex}(E)$} (3.1, -4.3);
+  \draw[msg] (3.1, -5.5) -- node[lbl, above] {DKIM-signed copy} (6.2, -5.5);
+  \draw[reply] (6.2, -6.7) -- node[lbl, above, pos=0.35] {sealed to the registering browser} (0, -6.7);
+  \node[act] at (0, -8.2) {check the email;\\$\Commit$; pin};
+  \draw[msg] (0, -9.9) -- node[lbl, above, pos=0.78] {deploy with $\Cm$, the pin, the registry, the controller} (12.4, -9.9);
+  \draw[msg] (0, -11.1) -- node[lbl, above, pos=0.72] {apply a document listing the guardian} (9.3, -11.1);
+
+  % Recovery.
+  \draw[gray] (-1.2, -12.3) -- (16.7, -12.3);
+  \node[phase] at (-1.2, -12.3) {Recovery (a new device; the passkey is lost)};
+  \draw[msg] (0, -13.4) -- node[lbl, above, pos=0.75] {\texttt{begin\_lost\_key}} (9.3, -13.4);
+  \draw[reply] (9.3, -14.6) -- node[lbl, above, pos=0.75] {statement $S$, $\digest = \Sha(S)$} (0, -14.6);
+  \node[act] at (0, -16.0) {draw $\blind$;\\$T = \Blinded$};
+  \draw[msg] (0, -17.5) -- node[lbl, above] {email, Subject $\ldots\,\mathrm{hex}(T)$} (3.1, -17.5);
+  \draw[msg] (3.1, -18.7) -- node[lbl, above] {DKIM-signed copy} (6.2, -18.7);
+  \draw[reply] (6.2, -19.9) -- node[lbl, above, pos=0.35] {sealed to the browser} (0, -19.9);
+  \node[act] at (0, -21.4) {prove C1--C6 for\\$(\Cm, \digest_{hi}, \digest_{lo}, \mathit{root})$};
+  \draw[msg] (0, -23.0) -- node[lbl, above, pos=0.72] {\texttt{submit\_guardian}, proof in the guardian's entry} (9.3, -23.0);
+  \draw[msg] (9.3, -24.1) -- node[lbl, above] {\texttt{\_\_check\_auth}$(\digest)$} (12.4, -24.1);
+  \draw[msg] (12.4, -25.2) -- node[lbl, above] {root accepted? proof valid?} (15.5, -25.2);
+  \draw[reply] (12.4, -26.3) -- node[lbl, above] {one vote} (9.3, -26.3);
+  \node[act] at (9.3, -27.6) {the other guardians' votes reach the quorum};
+  \draw[msg] (9.3, -29.0) -- node[lbl, above] {\texttt{attempt\_authorized}} (6.2, -29.0);
+  \draw[reply] (6.2, -30.2) -- node[lbl, above, pos=0.5] {alert by email and Web Push, with a code} (0, -30.2);
+  \node[act] at (9.3, -31.6) {the delay passes, unless the owner cancels;\\then anyone completes the recovery};
+\end{tikzpicture}

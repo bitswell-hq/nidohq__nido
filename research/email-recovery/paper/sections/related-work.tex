@@ -1,16 +1,61 @@
 \section{Related work}\label{sec:related}
 
-\paragraph{Proofs about email.} The zkEmail
-project~\cite{zkemail-docs,zkemail-verify,zkemail-nr} proves statements
-about DKIM-signed email in zero knowledge, with Circom circuits and a Noir
-library, and its libraries have been audited
-publicly~\cite{audit-zksecurity-2024,audit-yacademy,audit-veridise-2024,audit-consensys-2024}.
-This work uses email as one recovery factor inside a delayed, quorum-based
-recovery, binds the proof to a recovery statement rather than to an
-application command, and blinds that statement from the provider.
+\paragraph{Proofs about DKIM-signed email.} The zkEmail
+project~\cite{zkemail-docs,zkemail-verify,zkemail-nr} proves statements about
+DKIM-signed email in zero knowledge, with Circom circuits and a Noir library,
+and its libraries have been audited
+publicly~\cite{audit-zksecurity-2024,audit-yacademy,audit-zellic-2024,audit-matterlabs-2024,audit-veridise-2024,audit-consensys-2024}.
+An email wallet built on it lets users control a contract wallet by sending
+emails, verified by a proof of the provider's signature~\cite{suegami-email-wallet}.
+Its account-recovery modules~\cite{zkemail-recovery} make email guardians of
+ERC-4337~\cite{erc4337} and ERC-7579~\cite{erc7579} smart accounts: each
+guardian is a contract whose address derives from a hash of the email
+address and an account code, a guardian approves by replying to a request
+email whose command names the account, and a weighted threshold and a delay
+apply. In the underlying SDK~\cite{zkemail-tx-builder} a relayer receives
+the user's email, generates the proof, and stores users' account codes. The
+design here differs in where trust sits: the proof is made in the user's
+browser, no operator holds the account code or the email, the email binds a
+recovery statement blinded from the provider rather than a readable command,
+and the key registry has no immediate path for a new key. It is also one
+factor inside an existing recovery protocol, with properties proven over that
+protocol's controller.
 
-\paragraph{Proofs about existing credentials.} zkLogin~\cite{zklogin}
+\paragraph{Proofs about OIDC credentials.} zkLogin~\cite{zklogin}
 authenticates blockchain transactions with OpenID Connect tokens from
 existing platforms and hides the link between the off-chain and on-chain
-identity. An OIDC path here would be a second way to produce the email
-factor, never an independent one alongside the same provider's DKIM.
+identity; Aptos's keyless accounts~\cite{aptos-aip61} do the same and name a
+proof of a DKIM-signed email as a possible recovery path for accounts whose
+managing application disappears. In both, the credential is the account's key
+rather than one factor among several. An OIDC path here would be a second way
+to produce the email factor, never a factor independent of the same
+provider's DKIM, since one provider controls both.
+
+\paragraph{Guardian and server-based recovery.} Social recovery
+wallets~\cite{buterin-social-recovery} let a majority of guardians replace
+the signing key; in Argent's wallet~\cite{argent-spec} guardians, possibly a
+paid service, trigger a recovery the owner can cancel during a security
+period; Stellar's SEP-30~\cite{sep30} has recovery servers that hold signing
+keys and authenticate the user by email or phone. These place the email
+check, and the address, with a guardian or a server; the design here keeps
+their delay and veto and removes the operator from the check.
+
+\paragraph{Credentials from existing infrastructure.} DECO~\cite{deco}
+proves statements about TLS sessions, and zk-creds~\cite{zkcreds} builds
+anonymous credentials from existing identity documents; like email proofs,
+both turn an authority's existing signature into a credential and inherit
+that authority's trust.
+
+\paragraph{DKIM attributability.} KeyForge~\cite{specter-keyforge} proposes
+that providers publish expired signing keys so stolen mail cannot be proven
+authentic. Email proofs rely on exactly the attributability KeyForge
+removes: a provider that publishes old private keys turns every registry or
+pin entry for them into a forgeable key. The registry's retirement, grace
+and revocation rules, and the pin's bounded lifetime, are the levers such a
+policy would act on.
+
+\paragraph{Account recovery and takeover.} Email is a common recovery
+channel at large services~\cite{bonneau-recovery}, and manual hijackers who
+take over an inbox use it to lock out the owner~\cite{bursztein-hijacking}:
+the inbox thief of \S\ref{sec:threat}, and the reason email here is never
+sufficient alone and alerts reach a second channel.

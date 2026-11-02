@@ -169,22 +169,31 @@ claims:
 
   - id: onchain-verification-cost
     statement: >-
-      One submit_guardian carrying an email approval with a real proof uses
-      about 122 million of the 400 million instructions a Soroban transaction
-      may use, reads 14 ledger entries and writes 2 (1,208 bytes); as a
-      signed transaction it is 18,148 bytes with a resource fee of about
-      178,000 stroops before rent, at the mainnet fee rates the Soroban SDK
-      records. Measured on the test host, not on a network.
+      One submit_guardian carrying an email approval with a real proof, for
+      each of the 12 fixtures (every launch domain and a 124-byte address), uses
+      121,801,947 to 121,916,929 instructions on the test host, 30.5% of the
+      400 million a Soroban transaction may use, with the approval proven
+      against a registry root; it reads 14 ledger entries and writes 2 (1,208
+      bytes), with an invocation resource fee of 94,421 to 94,501
+      stroops before rent; re-executed as a signed transaction it uses
+      131,142,707 to 131,256,349 instructions in an 18,148-byte envelope, whose
+      16,784-byte authorization entry holds the 16,224-byte proof, with a
+      resource fee of 178,175 to 178,255 stroops before rent, at the mainnet fee
+      rates the Soroban SDK records. Measured on the test host, not on a
+      network.
     status: measured
     evidence:
-      file: research/email-recovery/eval/onchain.md
+      - file: research/email-recovery/eval/onchain.md
+      - file: research/email-recovery/eval/README.md
 
   - id: desktop-proving-cost
     statement: >-
-      On a shared 18-core desktop, the recovery circuit proves in under one
-      second with the native prover, and in about 14 seconds on one thread
-      and 3.3 seconds on 18 threads with bb.js in Node, using at most about
-      1.7 GiB; phone-class devices are not measured.
+      On an 18-core desktop (Apple M5 Max) shared with other work, proving one
+      recovery email takes, as the median of five runs, 0.94 seconds natively on
+      every core and 4.67 seconds on one thread (1.58 and 5.31 seconds with the
+      witness, at 879 and 872 MiB peak), and 3.30 seconds with bb.js in Node on 18
+      threads and 13.5 seconds on one (4.06 and 14.3 seconds with the witness, at
+      1,716 and 1,421 MiB); phone-class devices are not measured.
     status: measured
     evidence:
       - file: circuits/email-recovery/MEASUREMENTS.md
@@ -195,11 +204,12 @@ claims:
     statement: >-
       On a local Stellar network, with Perch's controller and account and
       Nido's guardian, verifier and key registry deployed from their
-      WebAssembly, the real circuit and real proofs, every attack scenario of
-      the evaluation has its expected outcome, and each refusal comes from a
-      named layer: forged and replayed emails and proofs, a wrong account or
-      new key in the statement, planted keys and expired pins, a compromised
-      inbox, provider header variants, and front-running.
+      WebAssembly, the real circuit and real proofs, each of the 53 scenario
+      rows of the evaluation has its expected outcome, and each refusal comes
+      from a named layer: forged and replayed emails and proofs, a wrong
+      account or new key in the statement, planted keys and expired pins, a
+      compromised inbox, provider header variants, front-running, and the
+      chain's view.
     status: tested
     evidence:
       - test: forged-emails-circuit
@@ -262,20 +272,26 @@ claims:
 
   - id: browser-proving-cost
     statement: >-
-      In Chrome on the same desktop, the wallet's own prover worker proves a
-      recovery email in about 8.4 seconds on one thread and 1.5 seconds on
-      18, and in about 36 seconds on one thread of the desktop's efficiency
-      cores; phone-class devices are not measured.
+      In headless Chrome 151 on the same desktop, the wallet's own prover
+      worker proves a recovery email in 1.48 seconds on 18 threads and 8.42
+      seconds on one (median of five warm runs), 2.92 and 9.96 seconds from the
+      page's request to the locally verified proof, with Barretenberg using 805
+      and 738 MiB and the renderer peaking at 2,616 and 1,468 MiB; phone-class
+      devices are not measured.
     status: measured
     evidence:
-      file: research/email-recovery/eval/results/proving.json
+      - file: research/email-recovery/eval/results/proving.json
+      - file: research/email-recovery/eval/browser-prover.md
 
   - id: network-verification-cost
     statement: >-
-      On a local Stellar network, an email vote with a real proof is metered
-      at about 120 million instructions, reads 12 ledger entries and writes
-      2 (1,208 bytes), and is an 18,080-byte transaction charged about
-      176,000 stroops, rent included.
+      On a local Stellar network, the 18 email votes with a real proof that
+      leave their attempt collecting, each proven against its guardian's key
+      pin, are metered at 119,970,963 to 120,088,289
+      instructions (median 120,047,601) and declare about 124.9 million; each
+      reads 12 ledger entries and writes 2 (1,208 bytes) in an 18,080-byte
+      transaction, and is charged a median of 176,230 stroops, 2,604 of them
+      rent.
     status: measured
     evidence:
       file: research/email-recovery/eval/results/attacks-local.json
@@ -285,12 +301,749 @@ claims:
       On Stellar testnet, through Perch's deployment and Nido's factory and
       with the email-recovery contracts deployed from this repository, one
       complete email-factor recovery ran from enrollment to completion; its
-      email vote, with a real proof, was metered at about 122 million
-      instructions in an 18,080-byte transaction charged about 82,000
-      stroops, rent included.
+      email vote, with a real proof against the guardian's key pin, was
+      metered at 121,639,784 instructions
+      (126,548,373 declared) in an 18,080-byte transaction charged 82,428
+      stroops, 1,333 of them rent, 1,715 ms from simulation to confirmation.
     status: measured
     evidence:
       file: research/email-recovery/eval/results/testnet.json
+
+  # Supporting results of the Lean model.
+  - id: guardian-payload-irrelevant
+    statement: >-
+      The guardian's verdict does not depend on the authorization entry an
+      approval is wrapped in, so whoever submits a copy of an approval gets
+      the verdict the original would have had.
+    status: proven
+    evidence:
+      lean: EmailRecovery.check_payload_irrelevant
+      file: research/email-recovery/formal/EmailRecovery/Guardian.lean
+
+  - id: digest-fixes-statement
+    statement: >-
+      A statement digest fixes one account, network, controller, action,
+      attempt or request id and epoch, unless SHA-256 collides.
+    status: proven
+    evidence:
+      lean: EmailRecovery.digest_fixes
+      file: research/email-recovery/formal/EmailRecovery/Replay.lean
+
+  - id: completion-waits-for-delay
+    statement: >-
+      In every trace of the controller model, every completed recovery is
+      preceded by its attempt's authorization under a configuration with a
+      positive delay, at least that many ledgers earlier.
+    status: proven
+    evidence:
+      lean: EmailRecovery.Perch.completion_waits_for_delay
+      file: research/email-recovery/formal/EmailRecovery/OneFactor.lean
+
+  - id: owner-can-cancel
+    statement: >-
+      During the delay, a cancellation of a live attempt by the owner of a
+      lost-key-profile account succeeds.
+    status: proven
+    evidence:
+      lean: EmailRecovery.Perch.owner_can_cancel
+      file: research/email-recovery/formal/EmailRecovery/OneFactor.lean
+
+  - id: enrollment-subject-distinct
+    statement: >-
+      An enrollment email's Subject never satisfies the recovery circuit's
+      Subject obligation.
+    status: proven
+    evidence:
+      lean: EmailRecovery.enroll_subject_ne_recovery_subject
+      file: research/email-recovery/formal/EmailRecovery/Circuit.lean
+
+  - id: check-iff-accepted
+    statement: >-
+      The model's guardian check returns success exactly when the facts of
+      its twelve checks hold, one per check.
+    status: proven
+    evidence:
+      lean: EmailRecovery.check_eq_ok_iff
+      file: research/email-recovery/formal/EmailRecovery/Guardian.lean
+
+  - id: email-only-never-authorizes
+    statement: >-
+      Under a configuration with a quorum of at least two, or in combined or
+      zk-only mode, approvals by the email guardian alone authorize no
+      attempt.
+    status: proven
+    evidence:
+      lean: EmailRecovery.Perch.email_only_never_authorizes
+      file: research/email-recovery/formal/EmailRecovery/OneFactor.lean
+
+  - id: email-alone-change-condition
+    statement: >-
+      The email guardian's approval alone meets the recovery condition for a
+      Protected reconfiguration or upgrade only in guardian-only mode with
+      quorum one.
+    status: proven
+    evidence:
+      lean: EmailRecovery.Perch.quorum_one_of_conditionMet
+      file: research/email-recovery/formal/EmailRecovery/OneFactor.lean
+
+  - id: lean-axioms
+    statement: >-
+      The build pins every theorem's axiom dependencies: none depends on
+      anything beyond Lean's built-in propext, Quot.sound and
+      Classical.choice, and no proof is left open.
+    status: tested
+    evidence:
+      test: guard_msgs
+      file: research/email-recovery/formal/EmailRecovery/Axioms.lean
+
+  # The circuit, the guardian and the registry, by component.
+  - id: circuit-size
+    statement: >-
+      The recovery circuit has 251,561 UltraHonk gates (117,491 ACIR
+      opcodes), padded to 2^18; the same relation at a 1024-byte header bound
+      has 189,503 gates, also padded to 2^18; every proof is 16,224 bytes.
+    status: measured
+    evidence:
+      file: circuits/email-recovery/MEASUREMENTS.md
+
+  - id: header-bound-fits
+    statement: >-
+      With a 1536-byte header bound, the recovery email of every launch domain
+      in its provider mock's format fits, and with a 124-byte address it still
+      fits a display name of 536 bytes at the tightest provider (WEB.DE) and
+      965 bytes at the loosest (Yahoo).
+    status: measured
+    evidence:
+      file: circuits/email-recovery/README.md
+
+  - id: circuit-vendoring
+    statement: >-
+      The circuit compiles only vendored noir-bignum and sha256 libraries and
+      Perch's Poseidon2, each pinned file by file by checksums that a check in
+      continuous integration fails on any drift, under the pinned nargo and
+      Barretenberg; no header parser is reused.
+    status: tested
+    evidence:
+      - test: check-vendor.sh
+        file: .github/workflows/email-recovery-circuits.yml
+      - test: check-toolchain.sh
+        file: .github/workflows/email-recovery-circuits.yml
+
+  - id: circuit-dkim-rules
+    statement: >-
+      The circuit refuses simple header canonicalization, an h= list without
+      From or Subject, a second From or Subject field, a field outside the
+      signed block, a d= that differs from the From domain, and a signature
+      not below its modulus.
+    status: tested
+    evidence:
+      - test: simple_header_canonicalization_is_refused
+        file: circuits/email-recovery/tests/src/soundness.nr
+      - test: h_without_from_is_refused
+        file: circuits/email-recovery/tests/src/soundness.nr
+      - test: two_from_fields_are_refused
+        file: circuits/email-recovery/tests/src/soundness.nr
+      - test: unsigned_field_cannot_be_added
+        file: circuits/email-recovery/tests/src/soundness.nr
+      - test: third_party_signing_domain_is_refused
+        file: circuits/email-recovery/tests/src/soundness.nr
+      - test: signature_plus_modulus_is_refused
+        file: circuits/email-recovery/tests/src/soundness.nr
+
+  - id: circuit-from-grammar
+    statement: >-
+      The circuit reads the From address only as a bare address or as the one
+      angle-bracketed address that ends the field; a decoy address in the
+      display name, a quoted local part, a comment and a value spanning into
+      the next field are refused.
+    status: tested
+    evidence:
+      - test: decoy_angle_addr_in_display_name_is_refused
+        file: circuits/email-recovery/tests/src/soundness.nr
+      - test: address_like_display_name_cannot_be_claimed
+        file: circuits/email-recovery/tests/src/soundness.nr
+      - test: quoted_local_part_is_refused
+        file: circuits/email-recovery/tests/src/soundness.nr
+      - test: from_value_cannot_span_into_the_next_field
+        file: circuits/email-recovery/tests/src/soundness.nr
+
+  - id: circuit-issue-classes
+    statement: >-
+      The circuit library's 123 tests include a negative test for each
+      publicly documented soundness issue class of open-source email circuits,
+      each refused at its named assertion.
+    status: tested
+    evidence:
+      - test: folded_from_under_simple_canonicalization_is_refused
+        file: circuits/email-recovery/tests/src/soundness.nr
+      - test: from_text_inside_another_field_cannot_be_claimed
+        file: circuits/email-recovery/tests/src/soundness.nr
+      - test: bh_inside_another_tag_cannot_be_listed
+        file: circuits/email-recovery/tests/src/soundness.nr
+      - test: l_tag_does_not_affect_the_header_only_proof
+        file: circuits/email-recovery/tests/src/soundness.nr
+      - test: bytes_past_the_signed_length_are_refused
+        file: circuits/email-recovery/tests/src/soundness.nr
+      - test: two_subject_fields_are_refused
+        file: circuits/email-recovery/tests/src/soundness.nr
+
+  - id: subject-blinding
+    statement: >-
+      The circuit accepts a Subject only as the fixed recovery phrase followed
+      by the 64 lowercase hexadecimal characters of T, the Poseidon2 hash of
+      the blinding tag, the two digest limbs and the browser's value rho; a
+      Subject under another rho, an encoded word, a reply prefix or trailing
+      text is refused.
+    status: tested
+    evidence:
+      - test: another_rho_is_refused
+        file: circuits/email-recovery/tests/src/recovery_tests.nr
+      - test: encoded_word_is_refused
+        file: circuits/email-recovery/tests/src/subject_tests.nr
+      - test: reply_prefix_is_refused
+        file: circuits/email-recovery/tests/src/subject_tests.nr
+      - test: trailing_text_is_refused
+        file: circuits/email-recovery/tests/src/subject_tests.nr
+      - test: the blinded digest is the Subject value the circuit vectors open
+        file: packages/email-recovery/test/recoveryInputs.test.ts
+
+  - id: registry-hash-parity
+    statement: >-
+      The registry's key hashes, leaves and roots, computed with the Soroban
+      host's Poseidon2, equal those the circuit computes, and those of an
+      independent Noir implementation.
+    status: tested
+    evidence:
+      - test: noir_vectors
+        file: contracts/dkim-registry/src/test.rs
+      - test: roots_match_the_registry
+        file: circuits/email-recovery/tests/src/registry_parity.nr
+
+  - id: guardian-checks
+    statement: >-
+      The email guardian refuses an approval at the first failing check of
+      twelve (one controller call carrying a digest; the statement hashes to
+      it; a well-formed statement for this network, account and controller;
+      an allowed action through its entry point; not expired; a canonical
+      key root that is the live pin or a registry-accepted root; a proof that
+      verifies), and builds every public input from its own configuration,
+      the authorized digest and the accepted root.
+    status: tested
+    evidence:
+      - test: refuses_anything_but_one_controller_call_carrying_a_digest
+        file: contracts/email-guardian/src/test.rs
+      - test: refuses_a_statement_that_is_not_the_digest_preimage
+        file: contracts/email-guardian/src/test.rs
+      - test: refuses_bytes_that_are_not_a_statement
+        file: contracts/email-guardian/src/test.rs
+      - test: refuses_a_statement_for_another_network
+        file: contracts/email-guardian/src/test.rs
+      - test: refuses_a_statement_for_another_account
+        file: contracts/email-guardian/src/test.rs
+      - test: refuses_a_statement_for_another_controller
+        file: contracts/email-guardian/src/test.rs
+      - test: refuses_a_disallowed_action
+        file: contracts/email-guardian/src/test.rs
+      - test: refuses_an_action_through_the_other_entry_point
+        file: contracts/email-guardian/src/test.rs
+      - test: refuses_an_expired_statement
+        file: contracts/email-guardian/src/test.rs
+      - test: refuses_a_non_canonical_root
+        file: contracts/email-guardian/src/test.rs
+      - test: refuses_a_root_the_registry_does_not_accept
+        file: contracts/email-guardian/src/test.rs
+      - test: builds_public_inputs_from_its_own_values_only
+        file: contracts/email-guardian/src/test.rs
+      - test: refuses_a_tampered_proof
+        file: contracts/email-guardian/src/test.rs
+
+  - id: guardian-construction
+    statement: >-
+      The guardian's constructor refuses an account that is not a contract,
+      the account as its own controller, a zero or non-canonical commitment,
+      an expired pin or one valid for more than 365 days (6,307,200 ledgers),
+      an empty or unknown action set, and a verifier for another circuit.
+    status: tested
+    evidence:
+      - test: construction_refuses_a_non_contract_account
+        file: contracts/email-guardian/src/test.rs
+      - test: construction_refuses_the_account_as_its_own_controller
+        file: contracts/email-guardian/src/test.rs
+      - test: construction_refuses_a_zero_commitment
+        file: contracts/email-guardian/src/test.rs
+      - test: construction_refuses_a_pin_longer_than_the_maximum_lifetime
+        file: contracts/email-guardian/src/test.rs
+      - test: construction_refuses_an_expired_pin
+        file: contracts/email-guardian/src/test.rs
+      - test: construction_refuses_an_unknown_action_bit
+        file: contracts/email-guardian/src/test.rs
+      - test: construction_refuses_a_verifier_for_another_circuit
+        file: contracts/email-guardian/src/test.rs
+
+  - id: guardian-on-perch
+    statement: >-
+      On Perch's controller and account from Perch's deployed WebAssembly,
+      used unchanged, one email approval with a real proof is one vote of a
+      2-of-3 quorum; a resubmission in a fresh authorization entry is
+      refused; an approval does not count for another attempt or another
+      account; email approvals alone never complete a recovery before the
+      delay; and the email vote counts toward a Protected reconfiguration.
+    status: tested
+    evidence:
+      - test: email_approval_counts_as_exactly_one_guardian_vote
+        file: crates/integration-tests/tests/it/email_guardian.rs
+      - test: the_same_email_approval_is_not_counted_twice
+        file: crates/integration-tests/tests/it/email_guardian.rs
+      - test: an_email_approval_cannot_be_replayed_into_another_attempt
+        file: crates/integration-tests/tests/it/email_guardian.rs
+      - test: an_email_approval_cannot_be_replayed_into_another_account
+        file: crates/integration-tests/tests/it/email_guardian.rs
+      - test: email_approvals_alone_never_complete_a_recovery
+        file: crates/integration-tests/tests/it/email_guardian.rs
+      - test: email_approval_counts_toward_a_protected_reconfiguration
+        file: crates/integration-tests/tests/it/email_guardian.rs
+
+  - id: verifier-contract
+    statement: >-
+      The verifier contract embeds Perch's UltraHonk verifier with the
+      circuit's 1,760-byte verification key, reports its SHA-256 as the
+      circuit id, verifies every committed proof including one made by bb.js,
+      and refuses each changed public input, changed proof bytes, a proof of
+      Perch's own circuit, and wrong lengths.
+    status: tested
+    evidence:
+      - test: every_committed_proof_verifies
+        file: contracts/email-verifier/src/test.rs
+      - test: a_bbjs_proof_verifies
+        file: contracts/email-verifier/src/test.rs
+      - test: a_changed_public_input_is_refused
+        file: contracts/email-verifier/src/test.rs
+      - test: a_proof_of_another_circuit_is_refused
+        file: contracts/email-verifier/src/test.rs
+      - test: wrong_lengths_are_refused
+        file: contracts/email-verifier/src/test.rs
+
+  - id: registry-timelocks
+    statement: >-
+      A registry addition attested live in DNS activates exactly 51,840
+      ledgers (72 hours) after the later of its approval and its attestation,
+      and any other addition exactly 120,960 ledgers (7 days) after approval;
+      a superseded root stays accepted through its grace period; the empty
+      tree and unknown roots are never accepted. On the integration-test host
+      a proof against a pending addition's root is refused one ledger before
+      the 72 hours end and counted once the addition executes.
+    status: tested
+    evidence:
+      - test: an_attested_addition_activates_after_exactly_72_hours
+        file: contracts/dkim-registry/src/test.rs
+      - test: the_72_hours_run_from_the_later_of_approval_and_attestation
+        file: contracts/dkim-registry/src/test.rs
+      - test: any_other_addition_activates_after_exactly_7_days
+        file: contracts/dkim-registry/src/test.rs
+      - test: a_superseded_root_is_accepted_through_its_grace_period
+        file: contracts/dkim-registry/src/test.rs
+      - test: the_empty_tree_and_unknown_roots_are_never_accepted
+        file: contracts/dkim-registry/src/test.rs
+      - test: a_key_added_through_the_attested_path_is_refused_before_72_hours_and_accepted_after
+        file: crates/integration-tests/tests/it/email_guardian.rs
+
+  - id: registry-governance
+    statement: >-
+      Only registry members propose and approve; an addition needs the
+      threshold of approvals and a revocation only the emergency threshold;
+      additions are refused outside the domain allowlist and for moduli that
+      are not 2048 bits; the registry computes each key hash itself; and a
+      revoked key returns only through a new addition on the 7-day path.
+    status: tested
+    evidence:
+      - test: only_members_propose_and_approve
+        file: contracts/dkim-registry/src/test.rs
+      - test: an_addition_needs_k_of_n_approvals
+        file: contracts/dkim-registry/src/test.rs
+      - test: a_revocation_needs_only_the_emergency_threshold
+        file: contracts/dkim-registry/src/test.rs
+      - test: additions_only_for_allowlisted_domains
+        file: contracts/dkim-registry/src/test.rs
+      - test: additions_only_for_rsa_2048_moduli
+        file: contracts/dkim-registry/src/test.rs
+      - test: the_key_hash_is_computed_never_supplied
+        file: contracts/dkim-registry/src/test.rs
+      - test: a_revoked_key_returns_only_through_a_new_addition_on_the_7_day_path
+        file: contracts/dkim-registry/src/test.rs
+
+  - id: registry-defaults
+    statement: >-
+      The registry's proposed governance, which its constructor accepts and
+      the evaluation deploys, is five members with threshold three, an
+      emergency revocation threshold of two, three DNS attesters with
+      threshold two, and a 17,280-ledger (24-hour) grace period.
+    status: tested
+    evidence:
+      test: construction_accepts_the_proposed_defaults
+      file: contracts/dkim-registry/src/test.rs
+
+  - id: wallet-pin-lifetime
+    statement: >-
+      The wallet deploys each guardian with a key pin valid for 30 days
+      (518,400 ledgers).
+    status: unproven
+
+  - id: registry-revocation
+    statement: >-
+      A revocation refuses every root that contains the key from the ledger
+      it executes in, leaves roots without the key in their grace, and stops
+      a pending addition of the key.
+    status: tested
+    evidence:
+      - test: revocation_refuses_every_root_containing_the_key_at_once
+        file: contracts/dkim-registry/src/test.rs
+      - test: revocation_leaves_roots_without_the_key_in_their_grace
+        file: contracts/dkim-registry/src/test.rs
+      - test: revocation_stops_a_pending_addition
+        file: contracts/dkim-registry/src/test.rs
+      - test: a_revoked_keys_root_is_refused_at_once
+        file: crates/integration-tests/tests/it/email_guardian.rs
+
+  - id: registry-attestations
+    statement: >-
+      The registry counts a DNS attestation only from a configured attester,
+      in its exact encoding, for its own contract id and the proposal's
+      domain and key hash, observed within the last 24 hours; each
+      attester's latest observation replaces its earlier one.
+    status: tested
+    evidence:
+      - test: attestation_refusals
+        file: contracts/dkim-registry/src/test.rs
+      - test: malformed_attestations_are_refused
+        file: contracts/dkim-registry/src/test.rs
+      - test: an_attesters_latest_observation_counts
+        file: contracts/dkim-registry/src/test.rs
+
+  - id: registry-immutable
+    statement: >-
+      The registry's WebAssembly imports no host function that deploys or
+      replaces contract code and exports exactly its governance, attestation
+      and view entry points: it has no admin, setter or upgrade path.
+    status: tested
+    evidence:
+      test: the_registry_has_no_upgrade_path
+      file: crates/integration-tests/tests/it/dkim_registry.rs
+
+  - id: key-pin
+    statement: >-
+      The guardian accepts its pin's root until the pin expires, for a key
+      the registry never admitted and after the registry revokes it, and
+      refuses the root once the pin has expired; another account's pin root
+      is refused.
+    status: tested
+    evidence:
+      - test: the_pin_path_works_independently_of_the_registry
+        file: crates/integration-tests/tests/it/email_guardian.rs
+      - test: accepts_the_pin_root_without_the_registry_until_it_expires
+        file: contracts/email-guardian/src/test.rs
+      - test: refuses_a_proof_against_another_pin
+        file: contracts/email-guardian/src/test.rs
+
+  - id: key-lookup
+    statement: >-
+      The wallet reads signing keys from a static key list it checks against
+      each modulus, and from DNS over HTTPS only as a fallback; every launch
+      key the DNS mock publishes verifies its provider's mail, and revoked,
+      non-RSA, short, duplicated and malformed records are refused.
+    status: tested
+    evidence:
+      test: revoked, non-RSA, short, duplicated and malformed records are refused
+      file: packages/email-recovery/test/dkimKey.test.ts
+
+  # Enrollment, the browser prover and the alert path.
+  - id: enrollment-email-check
+    statement: >-
+      Before deploying a guardian, the wallet checks the enrollment email
+      under the recovery circuit's rules and commits to its signed From
+      address; another account's or another blinding value's enrollment
+      Subject, the recovery phrase, a key that did not sign the email, and a
+      domain outside the allowlist are refused.
+    status: tested
+    evidence:
+      - test: an honest enrollment email is accepted, and C is the commitment to its signed From address
+        file: packages/email-recovery/test/enrollmentEmail.test.ts
+      - test: another account, another rho_e, or the recovery phrase is refused
+        file: packages/email-recovery/test/enrollmentEmail.test.ts
+      - test: a key that did not sign it is refused
+        file: packages/email-recovery/test/enrollmentEmail.test.ts
+      - test: a provider domain outside the allowlist is refused
+        file: packages/email-recovery/test/enrollmentEmail.test.ts
+
+  - id: account-code-backup
+    statement: >-
+      The account code's backup in the enrollment email opens only with its
+      wallet-generated five-word passphrase and its account; the recovery kit
+      holds the code as 26 base32 characters.
+    status: tested
+    evidence:
+      - test: the passphrase-encrypted block opens only with its passphrase and account
+        file: packages/email-recovery/test/enrollmentEmail.test.ts
+      - test: a passphrase is five words of the EFF large wordlist
+        file: packages/email-recovery/test/enrollmentEmail.test.ts
+      - test: the recovery kit is 26 base32 characters that round-trip
+        file: packages/email-recovery/test/enrollmentEmail.test.ts
+
+  - id: sealed-inbound
+    statement: >-
+      The vault seals an arriving recovery email to the browser that first
+      registered its Subject value, refuses a second registration of the same
+      value, and the host stores and serves only sealed copies.
+    status: tested
+    evidence:
+      - test: the vault seals a recovery email to the device that registered its Subject value, and only it opens it
+        file: infra/email-alerts/test/inbound.test.ts
+      - test: relays registrations, stores and serves only sealed copies, with CORS for wallet origins
+        file: infra/email-alerts/test/inbound.test.ts
+
+  - id: browser-prover
+    statement: >-
+      The wallet's prover runs in a Web Worker on as many threads as the page
+      has cores when it is cross-origin isolated (at most 32) and on one
+      otherwise; it refuses assets whose digests differ from the pinned ones,
+      and refuses to return a proof for other public inputs or one that does
+      not verify. The recovery routes, and only they, are cross-origin
+      isolated.
+    status: tested
+    evidence:
+      - test: "threads: one without cross-origin isolation, else the cores, capped at 32"
+        file: packages/email-recovery/test/prover.test.ts
+      - test: octets with the wrong digest are refused and not cached
+        file: packages/email-recovery/test/prover.test.ts
+      - test: a proof for other public inputs, or one that does not verify, is refused
+        file: packages/email-recovery/test/prover.test.ts
+      - test: the recovery routes, and only they, are cross-origin isolated
+        file: tests/support/headers.test.ts
+
+  - id: prover-download
+    statement: >-
+      A first proof downloads 18,790,270 octets (the circuit, its
+      verification key and the prefix of Barretenberg's reference string),
+      checked against pinned digests and cached, so a retry downloads
+      nothing.
+    status: measured
+    evidence:
+      file: research/email-recovery/eval/browser-prover.md
+
+  - id: alert-code
+    statement: >-
+      Every alert carries a six-digit verification code keyed by the account
+      code, which the wallet computes for the attempt it shows; alerts on
+      attempt_authorized go to every channel once, with generic text, as do
+      the rest of a recovery's required alerts; opening an attempt alerts by
+      email at most once a day per account.
+    status: tested
+    evidence:
+      - test: matches an independent computation for every subject kind
+        file: packages/email-recovery/test/alertCode.test.ts
+      - test: "attempt_authorized: one email and one push, generic text, the code the wallet computes"
+        file: infra/email-alerts/test/alerts.test.ts
+      - test: sends each alert at most once, however often the vault is asked
+        file: infra/email-alerts/test/alerts.test.ts
+      - test: rate-limits attempt_begun to one alert per account per day, counting the rest
+        file: infra/email-alerts/test/alerts.test.ts
+      - test: the rest of the recovery alerts every channel once
+        file: infra/email-alerts/test/e2e.test.ts
+
+  - id: alert-contacts
+    statement: >-
+      An alert contact is registered, replaced or removed only with an
+      assertion by one of the account's administrative passkeys; a
+      replacement or removal takes effect after 14 days while the old contact
+      keeps receiving alerts; removal is refused while a recovery is
+      authorized; and an email-guardian account's contact needs Web Push.
+    status: tested
+    evidence:
+      - test: needs an account passkey, and alerts start only after the email confirmation
+        file: infra/email-alerts/test/contacts.test.ts
+      - test: "replacing: the old contact is told at once and keeps alerts for 14 days; the new one receives once confirmed"
+        file: infra/email-alerts/test/contacts.test.ts
+      - test: removal is refused while a recovery is authorized
+        file: infra/email-alerts/test/contacts.test.ts
+      - test: refuses an email-guardian account without Web Push
+        file: infra/email-alerts/test/contacts.test.ts
+
+  - id: vault-custody
+    statement: >-
+      The vault key is split 2-of-3 across custodians: any two shares
+      restore it and one does not; the vault restores with one custodian
+      down; custodians release shares only to an enclave image that the image
+      registry has activated after its 14-day timelock, and stop once the
+      image is revoked; the wallet accepts the vault's attestation only for
+      an active, non-debug image.
+    status: tested
+    evidence:
+      - test: any two shares reconstruct the key; one does not; a wrong share is detected
+        file: infra/email-alerts/test/custody.test.ts
+      - test: restores with one custodian down; not with two down
+        file: infra/email-alerts/test/custody.test.ts
+      - test: refuses genesis while the image is approved but still inside its 14-day timelock
+        file: infra/email-alerts/test/custody.test.ts
+      - test: stops releasing shares once the registry revokes the image
+        file: infra/email-alerts/test/custody.test.ts
+      - test: a_measurement_activates_only_after_the_threshold_and_the_timelock
+        file: contracts/enclave-image-registry/src/test.rs
+      - test: the independent verifier refuses the same chain, freshness, and debug cases
+        file: packages/email-recovery/test/attestation.test.ts
+
+  - id: servers-cannot-read-address
+    statement: >-
+      With the vault in its own process and every third party mocked, no
+      message to or from the vault, host HTTP body, host log, host state
+      file, RPC call, custodian decision or push body contains the address:
+      Nido's servers and staff can't read your address.
+    status: tested
+    evidence:
+      - test: no party other than the vault and the sending service ever held the address
+        file: infra/email-alerts/test/e2e.test.ts
+      - test: "stores only sealed records: no address in the host state"
+        file: infra/email-alerts/test/alerts.test.ts
+
+  - id: alert-formats
+    statement: >-
+      The wallet's HPKE reproduces RFC 9180's test vector A.3.1, the alert
+      path's Web Push encryption reproduces RFC 8291's example byte for byte,
+      and alert email fails over from the first EU sending service to the second
+      after two failures, reusing one idempotency key.
+    status: tested
+    evidence:
+      - test: reproduces the RFC 8291 example byte for byte
+        file: infra/email-alerts/test/crypto.test.ts
+      - test: reproduces RFC 9180 A.3.1 (keys, enc, first ciphertext)
+        file: packages/email-recovery/test/hpke.test.ts
+      - test: fails over from Lettermint to Scaleway after two failures, reusing one Idempotency-Key
+        file: infra/email-alerts/test/alerts.test.ts
+
+  - id: end-to-end-local
+    statement: >-
+      On a local network, in Chromium, the wallet enrolls an inbox, deploys
+      and lists its guardian, and after the passkey is lost recovers the
+      account with one recovery email proven in the browser and a second
+      helper's vote, with the alert email and push carrying the code the page
+      shows.
+    status: tested
+    evidence:
+      test: enroll an inbox, lose the passkey, recover with one email and a second helper
+      file: tests/e2e/local/email-recovery.local.spec.ts
+
+  - id: provider-mock-formats
+    statement: >-
+      Each launch provider's mock signs with test-only keys in that
+      provider's layout, established from public mailing-list archives: the
+      28 DKIM-Signature fields observed there are reproduced line break for
+      line break.
+    status: tested
+    evidence:
+      test: layouts reproduce observed line breaks
+      file: packages/email-mocks/test/layouts.test.ts
+
+  # Further evaluation figures.
+  - id: privacy-no-address-on-chain
+    statement: >-
+      No envelope or result of the 165 transactions of the local attack run
+      contains any of its 17 inboxes' addresses or account codes.
+    status: tested
+    evidence:
+      test: privacy-no-address-on-chain
+      file: research/email-recovery/eval/network/attacks.mjs
+
+  - id: environments
+    statement: >-
+      The local network is stellar/quickstart in local mode, pinned by digest,
+      at protocol 28 with Stellar RPC 29.0.1, closing about one ledger a
+      second; testnet ran protocol 29 behind
+      Stellar RPC 30.0.0; the proving machine is an Apple M5 Max with 18
+      logical CPUs (6 performance and 12 efficiency cores), 128 GiB of memory
+      and macOS 26.5.2.
+    status: measured
+    evidence:
+      - file: research/email-recovery/eval/README.md
+      - file: research/email-recovery/eval/results/attacks-local.json
+      - file: research/email-recovery/eval/results/testnet.json
+      - file: research/email-recovery/eval/results/proving.json
+
+  - id: authorizing-vote-cost
+    statement: >-
+      On the local network, the email vote that authorizes an attempt with a
+      seven-day delay also writes the authorized attempt: about 121 million
+      instructions, 1,488 bytes written, and 3,734,680 stroops charged, of
+      which 3,550,194 are rent.
+    status: measured
+    evidence:
+      file: research/email-recovery/eval/results/attacks-local.json
+
+  - id: testnet-recovery-total
+    statement: >-
+      The seven transactions of the testnet recovery from minting the
+      account to completion were charged 13,384,714 stroops, of which the
+      helper's authorizing vote paid 3,664,628 (3,653,812 rent); the delay was
+      12 ledgers (57,575 ms). Perch's doc compiler and recovery controller,
+      instance and code, were archived on testnet and were restored first, one
+      transaction per entry.
+    status: measured
+    evidence:
+      file: research/email-recovery/eval/results/testnet.json
+
+  - id: efficiency-core-proving
+    statement: >-
+      On one thread of the desktop's efficiency cores, a recovery email proves
+      in 18.2 seconds natively, 56.6 seconds with bb.js in Node, and 36.4 seconds
+      in Chrome (41.3 seconds to the verified proof, the renderer peaking at
+      1,428 MiB); on four such threads in 6.25, 21.5 and 12.0 seconds (Chrome:
+      17.5 seconds, 2,015 MiB).
+    status: measured
+    evidence:
+      file: research/email-recovery/eval/results/proving.json
+
+  - id: devtools-throttling
+    statement: >-
+      DevTools CPU throttling at 4x and 6x left browser proving unchanged,
+      because Chrome applies it to pages only and refuses it for the workers
+      in which all proving runs.
+    status: measured
+    evidence:
+      file: research/email-recovery/eval/browser-prover.md
+
+  - id: phone-proving-budget
+    statement: >-
+      A phone-class device proves a recovery email in at most about two
+      minutes.
+    status: unproven
+
+  - id: contract-sizes
+    statement: >-
+      The optimized WebAssembly of the guardian is 33,479 bytes, of the key
+      registry 68,269, of the verifier 45,616, and of the enclave-image
+      registry 10,152.
+    status: measured
+    evidence:
+      file: docs/email-recovery/spec.md
+
+  - id: registry-costs
+    statement: >-
+      On the test host, is_accepted_root uses 563,910 instructions when it
+      accepts and 566,522 when it refuses, propose_add 9,346,166, the execute
+      of an addition 22,772,568, and the approval that executes a revocation
+      20,044,810.
+    status: measured
+    evidence:
+      - file: docs/email-recovery/spec.md
+      - file: crates/integration-tests/tests/it/dkim_registry.rs
+
+  - id: alert-latency
+    statement: >-
+      With every service a loopback mock, attempt_authorized reaches the
+      sending mock in 22 to 28 ms (median 26) and the push mock in 29 to 35
+      ms (median 33), and a restarted vault restores its key from two
+      custodians in 244 to 339 ms (median 302), over 10 runs each.
+    status: measured
+    evidence:
+      - file: docs/email-recovery/spec.md
+      - file: infra/email-alerts/test/e2e.test.ts
 
   # The assumptions the properties rest on.
   - id: dkim-unforgeability
@@ -371,3 +1124,47 @@ claims:
         The enrolling wallet is honest at enrollment: it computes the
         commitment and the pin root from the real enrollment email and the
         keys it verified.
+
+  - id: secret-generation
+    statement: >-
+      The account code and every blinding value rho come from a
+      cryptographically secure generator and stay with the user and the
+      user's browser.
+    status: assumed
+    evidence:
+      assumption: >-
+        The wallet's random generator is secure, and the user's device and
+        browser are not compromised while they hold the account code or rho.
+
+  - id: blinded-subject-hiding
+    statement: >-
+      The Subject value T reveals nothing about the statement digest to anyone
+      who does not know rho, so the mail provider cannot link the email to an
+      attempt on chain.
+    status: assumed
+    evidence:
+      assumption: >-
+        Poseidon2 behaves as a random function, and rho is a fresh 248-bit
+        value that never leaves the browser that builds the proof.
+
+  - id: enclave-isolation
+    statement: >-
+      The attested enclave that holds alert addresses keeps its memory from
+      its host and operators, and at most one of its three key custodians is
+      malicious.
+    status: assumed
+    evidence:
+      assumption: >-
+        The enclave platform's isolation and attestation hold, and no two of
+        the three independent custodians collude or are compromised together.
+
+  - id: toolchain-correctness
+    statement: >-
+      The pinned compiler and prover compile and prove the circuit as written,
+      beyond the public advisories reviewed for them.
+    status: assumed
+    evidence:
+      assumption: >-
+        nargo 1.0.0-beta.9 and Barretenberg 0.87.0, and the vendored
+        noir-bignum and sha256 libraries, are sound for the constructs the
+        circuit uses.

@@ -1,15 +1,72 @@
 \section{Limitations and open questions}\label{sec:limits}
 
+\paragraph{What is not built or not measured.} The production enclave is not
+built: the binding to the Nitro secure module, the vsock channel with TLS
+terminating inside the enclave, the recovery address's mail exchanger inside
+the enclave and its MTA-STS policy, and a reproducible image build that
+publishes the enclave's measurements. The custodians, the registry's members
+and attesters, and the enclave-image registry's signers are not named, and
+the custodians' production protocol is not specified. Every third party is
+a mock; whether each provider's real mail matches its mock, including the
+exact domains each provider signs with, its signed header block for very long
+addresses and display names, and whether its stored copy keeps the
+\texttt{DKIM-Signature}, is not confirmed. Proving on a phone is not
+measured\claim{phone-proving-budget}. There is no external audit and no
+fuzzing of the circuit; the system runs on testnet only, and mainnet waits
+for an audit. The model's agreement with the code is tested, not
+proven\claim{model-code-agreement}, and the circuit's obligations are tested,
+not proven.
+
+\paragraph{Inherent leakage.} The provider learns that its user sent a
+recovery approval, and when. The EU sending service sees the alert address
+and the alert's text, including the code. The alert host learns which
+accounts register or change contacts and when, and outbound traffic timing
+shows which accounts have contacts; whether to blur this with cover traffic
+or batched reads is open. A watcher stopped for longer than the RPC's event
+history loses events; reconciling from controller state is not built.
+
+\paragraph{Open design questions.} Each has a current setting and
+alternatives, stated neutrally.
 \begin{itemize}
-  \item The four properties of \S\ref{sec:properties} are proven about a
-    model; its agreement with the contracts is tested, not proven, and the
-    assumptions in \S\ref{sec:threat} are stated, not established.
-  \item The provider learns that its user sent a recovery email, and when.
-  \item Proving in a phone browser is slow; a progress indicator covers the
-    wait, and its duration is to be measured.
-  \item A provider key rotation can stall a recovery for up to the registry
-    timelock, unless the account pinned the new key.
-  \item Custom domains and organisation tenants are not supported.
-  \item The design depends on the allowlisted providers authenticating
-    senders and signing the \texttt{From} and \texttt{Subject} headers.
+  \item \emph{Key pin semantics.} The pin is additive. A restrictive pin
+    makes a planted registry key useless but stops recovery at every provider
+    rotation until a new guardian is deployed, as does requiring both pin and
+    registry; a pin the owner can change lets whoever holds the owner key and
+    $\code$ pin a key of their own.
+  \item \emph{Pin lifetime.} The cap is 365 days\claim{guardian-construction}
+    and the wallet uses 30\claim{wallet-pin-lifetime}, covering the 7-day
+    timelock with margin and keeping short the window in which a revoked key
+    stays usable through a pin. The cap keeps the enrolled key usable longest
+    and a revoked one too; about 10 days narrows the window further but moves
+    recoveries onto the registry sooner.
+  \item \emph{Default allowed actions.} Guardians are deployed with every
+    action allowed. Initiation and cancellation only, or initiation only, are
+    alternatives, with the fourth wallet rule preventing a lock-out.
+  \item \emph{Where $\code$ is kept.} The wallet offers the encrypted copy
+    and the kit. Plain text in the enrollment email recovers best but lets the
+    provider compute $\Cm$ and link the inbox to the account; a kit alone
+    keeps no copy at the provider but is lost with the kit.
+  \item \emph{Registry grace period.} It is 24 hours, capped at 7 days. Seven
+    days strands fewer proofs but keeps a key blanked in DNS acceptable for a
+    week unless revoked; one hour narrows that but can strand a user whose
+    proof used the previous root.
+  \item \emph{Revocation threshold.} Two of five members revoke at once, and
+    a revoked key returns only on the 7-day path. The full threshold instead
+    stops two members from blocking a live key, but also from stopping a
+    planted key or cutting off a leaked one without a third approval.
+  \item \emph{Alert code derivation.} The code is keyed from $\code$, so any
+    device holding $\code$ shows it, a recovering one included. A key from
+    the passkey's PRF output would let the owner's device authenticate alerts
+    but not a recovering device; a code from the public digest needs no key
+    but lets the sending service and the provider match an alert to the
+    attempt, and whoever chooses a statement steer the code.
+  \item \emph{Enrollment on chain.} Only the wallet checks the enrollment
+    email. A guardian constructor that verifies a proof of it would make
+    $\Cm$ checkable by third parties, at the cost of a second circuit.
 \end{itemize}
+Smaller questions: whether to deploy guardians through a factory that fixes
+their code on chain, and who pays on mainnet; which key derives the alert
+code for accounts without an email guardian, which have no $\code$; larger
+address and domain bounds for custom domains, which need a new commitment and
+leaf format; and duplicate alerts when the second sending service, which has
+no idempotency key, retries a request the first accepted.

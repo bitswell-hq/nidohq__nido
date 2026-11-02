@@ -1,0 +1,85 @@
+\section{Public issue classes}\label{app:hardening}
+
+Table~\ref{tab:hardening} lists each publicly documented soundness issue class
+of open-source email circuits, its public sources (finding numbers are the
+reports' own), and how the recovery circuit refuses it
+(\S\ref{sec:hardening})\claim{circuit-issue-classes}.
+
+\begin{table*}[h]
+  \caption{Publicly documented soundness issue classes of open-source email
+    circuits and how the recovery circuit refuses each.}
+  \label{tab:hardening}
+  \small
+  \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.2\textwidth}>{\raggedright\arraybackslash}p{0.3\textwidth}>{\raggedright\arraybackslash}X@{}}
+    \toprule
+    Class & Public sources & Refusal \\
+    \midrule
+    Display names that spoof \texttt{From} & Matter Labs 1~\cite{audit-matterlabs-2024}; Consensys 5.4~\cite{audit-consensys-2024}; Zellic 3.2~\cite{audit-zellic-2024} & the address is the angle-address that ends the field, or the whole value; at most one \texttt{<} and one \texttt{>}; no quoted local part \\
+    Folded \texttt{From} under simple canonicalization & Consensys 5.1 & no CRLF in the block is followed by SP or HTAB; header \texttt{c=} must be relaxed \\
+    Fields spanning lines & Veridise V-ZEML-VUL-006~\cite{audit-veridise-2024}; Consensys 5.2; zkemail.nr \#57~\cite{zkemailnr-issue57} & the \texttt{From} field's start and its closing CR lie on one line \\
+    $\sigma + N$ signatures & Veridise VUL-003, VUL-004 & signature limbs range-checked; $\sigma < N$ proven strictly \\
+    Regex or parser resets & Matter Labs 2; zkSecurity \#03~\cite{audit-zksecurity-2024}; zk-regex \#119~\cite{zkregex-issue119} & a field starts only at byte 0 or after CRLF; no regex automaton \\
+    \texttt{bh=} confusion & Veridise VUL-001; Consensys 5.10; zkemail.nr PR \#68~\cite{zkemailnr-pr68}; yAcademy 1~\cite{audit-yacademy} & tags read only at scanned tag starts, and the prover's list must be exactly those; \texttt{bh=} unique and canonical where the body is bound \\
+    \texttt{l=} & RFC~6376 \S8.2~\cite{rfc6376}; Veridise VUL-013 & refused wherever the body is bound; the header-only proof binds nothing it affects \\
+    Misaligned \texttt{d=} & Veridise VUL-013; email-wallet \#80~\cite{emailwallet-issue80}; archive \#88~\cite{archive-issue88}; RFC~7489~\cite{rfc7489} & lowercase \texttt{d=} equals the lowercase \texttt{From} domain byte for byte \\
+    Unsigned headers, data past the signed length & RFC~6376 \S3.7, \S5.4; ens-contracts PR \#38~\cite{enscontracts-pr38}; zk-email-verify \#166~\cite{zkemailverify-issue166} & only the signed block is hashed and parsed; bytes past its length are zero; the verified \texttt{DKIM-Signature} is the last field, with empty \texttt{b=} \\
+    Duplicated headers & RFC~6376 \S5.4.2, \S8.15; Veridise VUL-005 & exactly one line starts with \texttt{from:} and one with \texttt{subject:} \\
+    \bottomrule
+  \end{tabularx}
+\end{table*}
+
+\section{The attack suite in full}\label{app:attacks}
+
+Tables~\ref{tab:attacks-a} and~\ref{tab:attacks-b} list every scenario row,
+generated at build time from the committed results of the local-network run
+and the test-host scenarios. The build fails if any row's observed outcome
+differs from its expected one, so each row shows one outcome for both.
+``Layer'' is the first layer that refuses; ``P'' is the property of
+\S\ref{sec:threat} the row exercises; ``Where'' is the local network or the
+integration-test host. The emails behind the circuit rows are listed in
+Appendix~\ref{app:circuit}.
+
+\newcommand\AttackTable[3]{%
+  \begin{table*}[p]
+    \caption{#1}
+    \label{#2}
+    \scriptsize\renewcommand\arraystretch{0.95}
+    \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}p{0.2\textwidth}>{\raggedright\arraybackslash}p{0.14\textwidth}cc@{}}
+      \toprule
+      Scenario & Expected and observed outcome & Layer & P & Where \\
+      \midrule
+      #3
+      \bottomrule
+    \end{tabularx}
+  \end{table*}}
+
+\AttackTable{Attack scenarios: forged emails, replays, and a wrong account or
+  new key in the statement\claim{network-attack-suite}.}{tab:attacks-a}{\AttackTableA}
+\AttackTable{Attack scenarios: registry keys, the compromised inbox, header
+  quirks, front-running, and privacy on chain\claim{network-attack-suite}\claim{registry-timelock-attacks}.}{tab:attacks-b}{\AttackTableB}
+
+\section{The circuit's verdict on each adversarial email}\label{app:circuit}
+
+Table~\ref{tab:circuit-cases} lists every adversarial email of the provider
+mocks as the local-network run built it for a live attempt, with the
+attacker's strongest witness. ``Mocks' verdict'' is what a standard DKIM
+verifier says of the email: valid, valid but whose claim the circuit must
+refuse, or invalid. ``Tree'' is the key tree the witness uses: the account's
+pin, or a tree planted with a key no registry would hold. ``Outcome'' is the
+circuit's failing assertion, or \emph{accepted}. The build fails unless each
+outcome equals the one the unit attack suite pins for the same
+email\claim{circuit-refuses-attacks}.
+
+\begin{table*}[p]
+  \caption{The circuit's verdict on each adversarial email of the provider
+    mocks.}
+  \label{tab:circuit-cases}
+  \scriptsize\renewcommand\arraystretch{0.95}
+  \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.3\textwidth}>{\raggedright\arraybackslash}p{0.14\textwidth}l>{\raggedright\arraybackslash}X@{}}
+    \toprule
+    Email & Mocks' verdict & Tree & Outcome \\
+    \midrule
+    \AttackCircuitRows
+    \bottomrule
+  \end{tabularx}
+\end{table*}

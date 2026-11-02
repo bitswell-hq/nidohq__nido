@@ -1,40 +1,234 @@
 \section{Evaluation}\label{sec:eval}
 
-The evaluation runs on a local Stellar network and on testnet. It measures
-proving time and memory on desktop and phone-class devices; the on-chain cost
-of verification in instructions, bytes and fees; and an attack suite covering
-forged and replayed emails, a wrong account or key in the statement, stale or
-malicious registry keys, a compromised inbox, provider header quirks, and
-front-running.
+The evaluation asks three questions: does every attack the threat model
+names fail at the layer the design assigns it to (\S\ref{sec:eval-attacks});
+what does an email vote cost on chain, in each environment it runs in
+(\S\ref{sec:eval-cost}); and how long does a user wait for a proof
+(\S\ref{sec:eval-proving}). It ends with the alert path, the end-to-end runs
+on a local network and on testnet, and the threats to validity.
 
-\paragraph{On-chain cost.}
-Each launch domain's recovery email was proved with Perch's pinned prover
-and submitted as one guardian approval on Nido's integration-test stack,
-with Perch's controller and every contract running from its WebAssembly.
-\claimstatement{onchain-verification-cost}\claim{onchain-verification-cost}
-The cost does not depend on the provider: the proof, its public inputs and
-the circuit's size are the same for every email. The signed transaction is
-dominated by the 16{,}224-byte proof inside the guardian's authorisation
-entry.
-\claimstatement{network-verification-cost}\claim{network-verification-cost}
-\claimstatement{testnet-email-recovery}\claim{testnet-email-recovery}
+\paragraph{Environments.} The \emph{test host} is Soroban's in-process host
+in the integration tests, with Perch's controller and account from Perch's
+deployed WebAssembly and every email-recovery contract from its own; the
+ledger can be advanced, so it reaches timelocks that a network cannot within
+a run. The \emph{local network} is \texttt{stellar/quickstart} in local mode,
+pinned by digest (protocol 28, Stellar RPC 29.0.1, one ledger about every
+second), onto which the suite deploys Perch's stack and the email-recovery
+contracts from WebAssembly. \emph{Testnet} runs protocol 29 behind Stellar RPC
+30.0.0, with Perch's deployment and the email-recovery contracts deployed from
+this repository. Every approval in every environment carries a real proof of
+a recovery email signed by a provider mock for the statement the real
+controller built. Proving runs on one desktop (Apple M5 Max, 18 logical CPUs:
+6 performance and 12 efficiency cores, 128 GiB, macOS 26.5.2) shared with
+other work, whose load average is recorded with each
+run\claim{environments}.
 
-\paragraph{Proving.}
-\claimstatement{desktop-proving-cost}\claim{desktop-proving-cost}
-\claimstatement{browser-proving-cost}\claim{browser-proving-cost}
-A browser without cross-origin isolation proves on one thread; the recovery
-origin's isolation headers let bb.js use one worker per core.
+\subsection{Attack suite}\label{sec:eval-attacks}
+The suite deploys a registry with the proposed governance, whose launch keys
+wait in their 72-hour timelock throughout the run, and enrolls each account as
+the wallet does, with a 30-day pin and a recovery member built by the
+wallet's own builder. Each scenario gets the attacker's strongest input: the
+signature a standard DKIM verifier accepts, the octets it covers, the claimed
+account's key tree or one planted with the attacker's key, and that account's
+real commitment and statement. Where a forged email still yields a witness (a
+key no accepted tree holds, a guessed account code), the suite submits a real
+proof, so the refusal is the chain's, decoded to its layer: a circuit
+assertion, a guardian check, a registry or Perch error, the code backup, or
+the alert path. Three registry scenarios need an elapsed timelock or grace
+period, which a local network cannot reach within a run; they run on the test
+host with the registry's production WebAssembly and real timelocks.
 
-\paragraph{Attacks.}
-The circuit-level attack suite is part of the implementation
-(\S\ref{sec:impl}); its cases cover forged and replayed emails, a wrong
-account or statement, and provider header quirks, against the circuit with
-mocked provider emails.
+\begin{table}[t]
+  \caption{The attack suite by class: rows, expected outcomes, and the
+    layers that refuse first. Every row's observed outcome is its expected
+    one; Appendix~\ref{app:attacks} lists each row.}
+  \label{tab:attack-summary}
+  \small
+  \begin{tabularx}{\columnwidth}{@{}>{\raggedright\arraybackslash}X r r >{\raggedright\arraybackslash}p{0.34\columnwidth} c@{}}
+    \toprule
+    Class & Rows & Ref. & First refusing layers & Prop. \\
+    \midrule
+    Forged emails & 11 & 10 & circuit; guardian check 11; registry & 1 \\
+    Replayed emails and proofs & 12 & 12 & Perch; checks 1, 2, 11, 12; circuit & 3 \\
+    Wrong account or new key & 5 & 5 & checks 2, 11, 12 & 1 \\
+    Stale or malicious registry keys & 8 & 7 & registry; checks 11, 12 & 1 \\
+    Compromised inbox & 10 & 7 & circuit; checks 2, 11; backup; Perch & 4 \\
+    Provider header quirks & 5 & 2 & circuit & 1 \\
+    Front-running & 4 & 4 & Perch; check 2 & 3 \\
+    Privacy on chain & 1 & --- & --- & 2 \\
+    \midrule
+    Total & 56 & 47 & & \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
 
-Every attack class also runs on a local Stellar network.
-\claimstatement{network-attack-suite}\claim{network-attack-suite}
-\claimstatement{registry-timelock-attacks}\claim{registry-timelock-attacks}
-\claimstatement{compromised-inbox-alerted}\claim{compromised-inbox-alerted}
-\claimstatement{front-running-one-vote}\claim{front-running-one-vote}
+\paragraph{Results.} Table~\ref{tab:attack-summary} summarizes the 56 rows,
+53 on the local network\claim{network-attack-suite} and 3 on the test
+host\claim{registry-timelock-attacks}; every observed outcome is the expected
+one. Forged emails fail at the circuit, a real proof under a key no tree
+holds at check 11, and a 1024-bit key or a domain outside the allowlist at
+the registry. One forged row is accepted by design: a body replaced after
+signing counts one vote, because the provider signed the header block, which
+is all the proof binds. Replays fail at whichever of checks 1, 2, 11 and 12
+the replayed approval fails first, or at Perch (\texttt{AlreadyCounted});
+another account's pin root fails check 11 because pins are salted. A planted
+key is refused during its timelock, can be stopped by two members, and after
+activation cannot approve without the account code; a revoked key's root is
+refused in the revocation's ledger, a superseded root one ledger after its
+grace. Encoded-word and split Subjects are refused, while folded Subjects and
+every launch domain's format count one vote each.
 
-\pending{phone-class proving is not yet measured.}
+\paragraph{The compromised inbox.} An attacker who holds the inbox but not the
+account code fails at the circuit (the \texttt{From} address does not open the
+commitment) and, with a real proof for its own guess, at check 11; the backup
+in the Sent folder does not open without its passphrase. With the code as
+well, the email vote is one vote: under a 2-of-2 quorum the attempt stays
+collecting. With the email guardian as the only guardian, under
+\texttt{Loss} and a seven-day delay, the attacker authorizes an attempt but
+cannot complete it within the delay; the owner receives the attempt's code by
+email and by Web Push and cancels it, and a new attempt needs a new
+email\claim{compromised-inbox-alerted}. A copied approval submitted first by
+an observer records the guardian's single vote for the same attempt and
+cannot be redirected to a cancellation, another attempt or another
+account\claim{front-running-one-vote}. No envelope or result of the run's 165
+transactions contains any of its 17 inboxes' addresses or account
+codes\claim{privacy-no-address-on-chain}.
+
+\subsection{On-chain cost}\label{sec:eval-cost}
+Table~\ref{tab:cost} gives one \texttt{submit\_guardian} carrying an email
+approval with a real proof, read three ways. On the test host the reading is
+the invocation's cost estimate, and the same call re-executed as a signed
+transaction with the authorization entry enforced, priced at the mainnet fee
+rates the Soroban SDK records\claim{onchain-verification-cost}. On the local
+network and testnet it is the host's own metering of each transaction and the
+fee the network charged\claim{network-verification-cost}\claim{testnet-email-recovery}.
+The cost does not depend on the provider: the proof, the public inputs and the
+circuit's size are the same for every email. Every reading enforces
+the guardian's authorization entry; a simulation that only records
+authorization does not run a custom account's \texttt{\_\_check\_auth} and
+would leave out the guardian's checks and the proof verification.
+
+\begin{table*}[t]
+  \caption{One \texttt{submit\_guardian} with an email approval and a real
+    proof. Test host: range over the 12 fixtures. Local network: the 18 votes
+    that leave their attempt collecting (median, range). Testnet: one vote.}
+  \label{tab:cost}
+  \small
+  \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}X r r r r@{}}
+    \toprule
+    & Test host, invocation & Test host, transaction & Local network & Testnet \\
+    \midrule
+    Instructions (millions) & 121.80--121.92 & 131.14--131.26 & 120.05 (119.97--120.09) metered & 121.64 metered \\
+    Ledger entries read / written & 14 / 2 & 12 + 2 footprint & 12 / 2 & 12 / 2 \\
+    Bytes written & 1{,}208 & 1{,}208 & 1{,}208 & 1{,}208 \\
+    Signed transaction (bytes) & --- & 18{,}148 & 18{,}080 & 18{,}080 \\
+    Fee (stroops) & 94{,}421--94{,}501, no rent & 178{,}175--178{,}255, no rent & 176{,}230 charged, 2{,}604 rent & 82{,}428 charged, 1{,}333 rent \\
+    Key path & registry root & registry root & pin & pin \\
+    \bottomrule
+  \end{tabularx}
+\end{table*}
+
+\paragraph{Why the readings differ.} Only the first of three differences is
+attributed. \emph{Key path}: network approvals use the pin, so the guardian
+never calls the registry, whereas the test host's use a registry root,
+putting the registry's instance and code in the footprint and costing about
+564{,}000 instructions for \texttt{is\_accepted\_root}\claim{registry-costs}.
+\emph{Metering}: each host meters with its own cost parameters, which are not
+compared here; the local count is below the test host's by more than the
+registry call, testnet's (a newer protocol) about 1.6 million above the local
+one, and the test host's transaction reading about 7.6\% above its invocation
+reading, which the SDK documents omits some production work. \emph{Fees}:
+each environment prices with its own settings; testnet charged about half of
+what the local network did. The vote that authorizes an attempt also writes the authorized
+attempt and pays its rent: 3{,}734{,}680 stroops on the local network, of
+which 3{,}550{,}194 are rent\claim{authorizing-vote-cost}. Bytes written and
+the 16{,}784-byte authorization entry around the 16{,}224-byte
+proof\claim{onchain-verification-cost} are the same everywhere.
+
+\subsection{Proving}\label{sec:eval-proving}
+Table~\ref{tab:proving} gives the time to prove one recovery email (the Gmail
+fixture, the same circuit build and key the verifier embeds) natively, with
+bb.js in Node, and in Chrome with the wallet's own prover worker on the
+recovery route's isolation headers\claim{desktop-proving-cost}\claim{browser-proving-cost}\claim{efficiency-core-proving}.
+On one thread Chrome's worker proved faster than Node did on this machine;
+the reason is not investigated here. The browser total includes everything
+the page waits for (cached assets, Barretenberg's start, local verification);
+on 18 threads proving is about half of it. A first proof downloads
+18{,}790{,}270 octets, checked against pinned digests and cached, after which
+a retry downloads nothing\claim{prover-download}.
+
+\begin{table}[t]
+  \caption{Proving one recovery email: median of five runs, in seconds;
+    memory is the peak resident set of the \texttt{bb} process, the Node
+    process, or Chrome's renderer. Total adds the witness (native, Node) or
+    runs from the page's request to the verified proof (Chrome).}
+  \label{tab:proving}
+  \small
+  \begin{tabularx}{\columnwidth}{@{}>{\raggedright\arraybackslash}X r r r r@{}}
+    \toprule
+    Prover & Threads & Proving & Total & Memory \\
+    \midrule
+    Native \texttt{bb} & 18 & 0.94 & 1.58 & 879 MiB \\
+    Native \texttt{bb} & 1 & 4.67 & 5.31 & 872 MiB \\
+    bb.js, Node & 18 & 3.30 & 4.06 & 1{,}716 MiB \\
+    bb.js, Node & 1 & 13.5 & 14.3 & 1{,}421 MiB \\
+    Chrome 151 & 18 & 1.48 & 2.92 & 2{,}616 MiB \\
+    Chrome 151 & 1 & 8.42 & 9.96 & 1{,}468 MiB \\
+    Chrome, efficiency cores & 4 & 12.0 & 17.5 & 2{,}015 MiB \\
+    Chrome, efficiency cores & 1 & 36.4 & 41.3 & 1{,}428 MiB \\
+    Phone-class device & --- & \multicolumn{3}{c}{not measured} \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\paragraph{Phones are not measured.} No phone was available. The design
+budgets up to about two minutes of proving on a phone, behind a progress
+indicator; that budget is a target, not a result\claim{phone-proving-budget}.
+Two desktop proxies bound what can be said. The desktop's efficiency cores,
+selected with macOS's background scheduling class, prove in 36.4 seconds on
+one thread in Chrome, 56.6 in Node and 18.2 natively\claim{efficiency-core-proving};
+they are a slower class of core, not a model of a phone. DevTools CPU
+throttling at 4x and 6x leaves proving unchanged, because Chrome throttles
+pages but refuses to throttle the workers in which all proving
+runs\claim{devtools-throttling}. A self-contained benchmark page that runs the
+same prover on any device, with no account, is part of the wallet.
+
+\subsection{Alerts, end to end, and testnet}\label{sec:eval-e2e}
+\paragraph{Alerts.} With every service a loopback mock, an
+\texttt{attempt\_authorized} event reaches the sending mock in 22 to 28\,ms
+(median 26) and the push mock in 29 to 35\,ms (median 33), and a restarted
+vault restores its key from two custodians in 244 to 339\,ms (median 302),
+over ten runs each\claim{alert-latency}. These figures show the service's own
+cost; a deployment adds the watcher's polling interval and the providers'
+delivery.
+
+\paragraph{End to end.} On a local network, a browser test drives the wallet
+through enrollment (the Gmail mock signs the enrollment email, the vault seals
+it back, the page checks it, registers the alert contact with Web Push,
+deploys the guardian with its pin, and lists it with a quorum of two) and,
+after the passkey is lost, through recovery: the page proves the recovery
+email in the browser, submits the vote, a second helper approves, the alert
+email and push carry the code the page shows, and after the delay the page
+completes the recovery\claim{end-to-end-local}.
+
+\paragraph{Testnet.} On testnet, through Perch's deployment and Nido's
+factory, one complete email-factor recovery ran: mint, guardian deployment,
+the recovery document (quorum two with one helper, a 12-ledger delay),
+\texttt{begin\_lost\_key}, the email vote with a real proof, the helper's
+vote, the delay, and completion, after which the account's document held the
+new passkey and not the lost one\claim{testnet-email-recovery}. The seven
+transactions were charged 13{,}384{,}714 stroops, most of it rent for new
+entries; the run first restored Perch's doc compiler and recovery controller,
+which had been archived on testnet\claim{testnet-recovery-total}.
+
+\subsection{Threats to validity}\label{sec:eval-threats}
+Every email is signed by a mock in its provider's published layout, and DNS,
+the sending services, the push service, the enclave and the custodians are
+mocks: a provider whose real mail differs from its mock is not covered. No
+registry addition leaves its timelock during a network run, so network
+approvals use the pin, and scenarios that need an active key or an elapsed
+grace period run on the test host, which runs the same contracts but is not a
+network; likewise the enclave-image registry's 14-day timelock, for which the
+local alert path reads a test-only allowlist. A scenario reports only the
+first layer that refuses it; later checks are covered by unit tests. Timing
+comes from one shared machine, and the testnet figures from one run.

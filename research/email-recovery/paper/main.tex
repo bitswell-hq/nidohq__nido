@@ -1,6 +1,7 @@
 \documentclass[sigconf,anonymous,review]{acmart}
 
 \input{macros}
+\input{attacks}
 
 \setcopyright{none}
 \settopmatter{printacmref=false}
@@ -9,6 +10,8 @@
 \acmYear{}
 \acmDOI{}
 \acmISBN{}
+
+\setlength\emergencystretch{1.5em}
 
 \begin{document}
 
@@ -21,19 +24,46 @@
 
 \begin{abstract}
 A smart account can use control of an email inbox as one recovery factor
-without anyone storing a plaintext email address or secret. The account
-commits to a salted hash of the address. To recover, the user sends one email
-from their own inbox carrying the recovery statement, proves in the browser
-that the provider DKIM-signed it, and an on-chain verifier accepts the proof
-as one guardian approval inside an existing delayed recovery process. Email is
-never sufficient alone. We give the design on Perch's recovery for Soroban
-smart accounts, state its soundness, privacy, replay-resistance and
-one-factor-safety properties, and mark each claim as proven, tested,
-measured, assumed or unproven. Implementation and evaluation results are
-pending.
+without anyone storing the address or a secret in plaintext. The account
+commits to a salted Poseidon2 hash of the address. To recover, the user sends
+one email from that inbox to a fixed address; the user's browser proves in
+zero knowledge that the provider DKIM-signed it and that its Subject carries a
+blinded copy of the recovery statement's digest; and a per-account guardian
+contract verifies the proof on Soroban and counts it as one approval in
+Perch's delayed, quorum-based recovery, used unchanged. Email is never
+sufficient alone. We state four properties of the email factor (soundness,
+privacy of the address, replay and front-running resistance, and one-factor
+safety) and prove each in Lean over a model of the guardian, the circuit's
+relation and Perch's controller, with the cryptographic steps as named
+assumptions. The Noir circuit has 251{,}561 UltraHonk
+gates\claim{circuit-size} and refuses every publicly documented soundness
+issue class of open-source email circuits\claim{circuit-issue-classes}. On a
+local Stellar network an email vote is metered at about 120 million
+instructions\claim{network-verification-cost}, within a transaction's limit
+of 400 million\claim{onchain-verification-cost}; one
+complete email-factor recovery ran on testnet\claim{testnet-email-recovery};
+Chrome on a desktop proves a recovery email in 1.5\,s on 18 threads and 8.4\,s
+on one\claim{browser-proving-cost}, and phones are not measured. All 56
+scenarios of an attack suite on a local network and the integration-test host
+have their expected outcome\claim{network-attack-suite}\claim{registry-timelock-attacks}. Each claim carries
+its status: proven, tested, measured, assumed or unproven.
 \end{abstract}
 
-\keywords{account recovery, DKIM, zero-knowledge proofs, smart accounts, Soroban}
+\begin{CCSXML}
+<ccs2012>
+<concept><concept_id>10002978.10002991.10002992</concept_id>
+<concept_desc>Security and privacy~Authentication</concept_desc><concept_significance>500</concept_significance></concept>
+<concept><concept_id>10002978.10002986</concept_id>
+<concept_desc>Security and privacy~Formal methods and theory of security</concept_desc><concept_significance>300</concept_significance></concept>
+<concept><concept_id>10002978.10002979</concept_id>
+<concept_desc>Security and privacy~Cryptography</concept_desc><concept_significance>300</concept_significance></concept>
+</ccs2012>
+\end{CCSXML}
+\ccsdesc[500]{Security and privacy~Authentication}
+\ccsdesc[300]{Security and privacy~Formal methods and theory of security}
+\ccsdesc[300]{Security and privacy~Cryptography}
+
+\keywords{account recovery, DKIM, zero-knowledge proofs, smart accounts, Soroban, formal verification}
 
 \maketitle
 
@@ -52,6 +82,8 @@ pending.
 \bibliography{references}
 
 \appendix
+\input{sections/attack-appendix}
+\input{sections/reproducibility}
 \input{sections/claims-appendix}
 
 \end{document}
