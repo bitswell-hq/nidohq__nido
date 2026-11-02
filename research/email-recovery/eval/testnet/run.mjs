@@ -181,6 +181,7 @@ const out = {
   deployer: deployer.publicKey(),
   registryConfig: { members: members.map((m) => m.publicKey()), threshold: REGISTRY.threshold, revokeThreshold: REGISTRY.revokeThreshold, attesters: attesters.map((a) => a.publicKey.toString('hex')), attestThreshold: REGISTRY.attestThreshold, graceSeconds: REGISTRY.graceSeconds },
   imageRegistryConfig: { signers: [imageSigner.publicKey()], threshold: 1 },
+  circuitId: reportedCircuit,
   gmailProposal: { id: proposal, eligibleAt },
   restoredPerchEntries: restored,
   account: e.account.address,

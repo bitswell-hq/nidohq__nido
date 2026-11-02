@@ -1,5 +1,5 @@
 {
- "fetched": "2026-11-02T10:13:35.811Z",
+ "fetched": "2026-11-02T13:09:17.607Z",
  "rpc": "https://soroban-testnet.stellar.org",
  "passphrase": "Test SDF Network ; September 2015",
  "protocolVersion": 29,
@@ -102,7 +102,20 @@
    "name": "email verifier",
    "file": "nido_email_verifier.wasm",
    "hash": "5d7e195e3f2cc5f1fd2e9a7056219828ded4126a7c5084c51af93e7f5f36dfd8",
-   "onNetwork": false
+   "onNetwork": true,
+   "dataBytes": 45708,
+   "costInputs": {
+    "nInstructions": 9437,
+    "nFunctions": 54,
+    "nGlobals": 4,
+    "nTableEntries": 0,
+    "nTypes": 22,
+    "nDataSegments": 12,
+    "nElemSegments": 0,
+    "nImports": 25,
+    "nExports": 8,
+    "nDataSegmentBytes": 23552
+   }
   },
   {
    "name": "email guardian",

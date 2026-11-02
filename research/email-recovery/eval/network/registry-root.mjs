@@ -19,18 +19,24 @@
 //    from the registry, the path checked against its root) or against the
 //    pin, and writes results/registry-root-local.json.
 //
+// Setup and the votes read the deployed verifier's circuit id back and
+// refuse one that is not this tree's artifact's (its proofs would fail the
+// guardian's check 12); the state and the results record the build: the
+// commit, each email contract's wasm sha256 and the circuit id.
+//
 // With no phase named it runs all three, resuming from the state file when
 // one exists. network/run-registry-root.sh starts the network and runs it.
 //
 //   NODE_EXTRA_CA_CERTS=target/email-attacks/tls/cert.pem NIDO_EVAL_QUICKSTART_URL=http://127.0.0.1:8001 \
 //     node research/email-recovery/eval/network/registry-root.mjs [setup|wait|vote]
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { Passkey } from './lib/account.mjs';
 import { Chain } from './lib/chain.mjs';
-import { Inbox, closeProver, launchKeys } from './lib/email.mjs';
+import { CIRCUIT_ID, Inbox, closeProver, launchKeys } from './lib/email.mjs';
 import { enroll, enrolledFromJson, enrolledJson } from './lib/recovery.mjs';
-import { LAUNCH_DOMAINS, deployLocal, stackFromJson, stackJson } from './lib/stack.mjs';
+import { EMAIL_WASM, LAUNCH_DOMAINS, deployLocal, stackFromJson, stackJson } from './lib/stack.mjs';
 import { proxy } from './lib/tls.mjs';
 
 const repo = new URL('../../../../', import.meta.url).pathname;
@@ -47,6 +53,26 @@ const tls = await proxy(BASE, `${repo}target/email-attacks/tls`);
 const chain = new Chain({ rpcUrl: `${tls.url}/rpc`, passphrase: PASSPHRASE, friendbot: `${tls.url}/friendbot` });
 const keys = launchKeys();
 const keyOf = (d) => keys.find((k) => k.domain === d);
+
+/**
+ * The deployed verifier's circuit id, refusing one that is not this tree's:
+ * a proof of another circuit fails the guardian's check 12.
+ */
+async function checkCircuit(verifier) {
+  const deployed = Buffer.from(await chain.read(verifier, 'circuit_id')).toString('hex');
+  const local = CIRCUIT_ID.toString('hex');
+  if (deployed !== local) throw new Error(`the verifier ${verifier} checks circuit ${deployed.slice(0, 16)}…, this tree's artifact is ${local.slice(0, 16)}…: its proofs would fail the guardian's check 12; run the setup again from this build`);
+  return deployed;
+}
+
+/** The build the run deploys: the commit, each email contract's wasm, and the circuit id. */
+function build() {
+  const wasm = Object.fromEntries(['nido_email_verifier', 'nido_email_guardian', 'nido_dkim_registry'].map((w) => {
+    const b = readFileSync(`${EMAIL_WASM}${w}.wasm`);
+    return [w, { bytes: b.length, sha256: createHash('sha256').update(b).digest('hex') }];
+  }));
+  return { commit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8' }).trim(), wasm, circuitId: CIRCUIT_ID.toString('hex') };
+}
 
 function save(s) {
   mkdirSync(`${repo}target/email-registry-root`, { recursive: true });
@@ -82,7 +108,7 @@ async function setup() {
     proposals[domain] = { id, approvedAt: Number(p.approved_at), attestedAt: Number(p.attested_at), eligibleAt: Number(await stack.registry.eligibleAt(id)) };
   }
   const at = await chain.call('getLatestLedger');
-  const s = { stack: stackJson(stack), accounts, proposals, setup: { ledger: at.sequence, closeTime: Number(at.closeTime), seconds: Math.round((Date.now() - t0) / 1000) } };
+  const s = { build: { ...build(), verifierCircuitId: await checkCircuit(stack.email.verifier) }, stack: stackJson(stack), accounts, proposals, setup: { ledger: at.sequence, closeTime: Number(at.closeTime), seconds: Math.round((Date.now() - t0) / 1000) } };
   save(s);
   log(`${accounts.length} accounts enrolled; eligible from close time ${new Date(1000 * Math.max(...Object.values(proposals).map((p) => p.eligibleAt))).toISOString()}`);
   return s;
@@ -101,6 +127,7 @@ async function wait(s) {
 
 async function vote(s) {
   const stack = stackFromJson(chain, s.stack);
+  await checkCircuit(stack.email.verifier);
   const ctx = { chain, stack, keys };
   for (const [domain, p] of Object.entries(s.proposals)) {
     if (p.executed) continue;
@@ -141,6 +168,7 @@ async function vote(s) {
       rpc: version,
       settings: { file: 'research/email-recovery/eval/network/limits/mainnet.json', sha256: createHash('sha256').update(readFileSync(LIMITS)).digest('hex') },
     },
+    build: s.build,
     contracts: { controller: s.stack.deployment.recoveryController, registry: s.stack.registry.address, verifier: s.stack.email.verifier },
     setup: s.setup,
     voted: { ledger: at.sequence, closeTime: Number(at.closeTime) },

@@ -387,17 +387,19 @@ claims:
       with the email-recovery contracts deployed from this repository, one
       complete email-factor recovery ran from enrollment to completion; its
       email vote, with a real proof against the guardian's key pin, was
-      metered at 121,639,784 instructions
-      (126,548,373 declared) in an 18,080-byte transaction charged 82,428
-      stroops, 1,333 of them rent, 1,715 ms from simulation to confirmation; six
-      pin votes of a second run, on the guardian and registry whose windows are
-      ledger close time, were metered at 121,624,691 to 121,683,179
-      instructions (126,534,101 to 126,594,928 declared) and charged 82,424 to
-      82,442 stroops.
+      metered at 121,675,439 instructions
+      (126,586,879 declared) in an 18,080-byte transaction charged 82,440
+      stroops, 1,333 of them rent, 1,927 ms from simulation to confirmation; six
+      pin votes of a second run of the same build were metered at 121,609,311
+      to 121,696,841 instructions (126,516,681 to 126,607,608 declared) and
+      charged 82,419 to 82,446 stroops. Both runs record their commit and each
+      contract's wasm hash, read the deployed verifier's circuit id back, and
+      keep every transaction's envelope, result and metadata XDR.
     status: measured
     evidence:
       - file: research/email-recovery/eval/results/testnet.json
       - file: research/email-recovery/eval/results/testnet-votes.json
+      - file: research/email-recovery/eval/results/testnet-xdr.json
 
   - id: fee-attribution
     statement: >-
@@ -420,8 +422,8 @@ claims:
       Re-executed on the test host, the Gmail vote's transaction meters
       130,031,418 instructions under mainnet's cost model and 130,065,594
       under testnet's, which differs in nine CPU cost types; between the
-      networks the medians of the same wasm differ by 22,852 instructions
-      (0.02%); and the release-profile build of the contracts meters 1,559,822
+      networks the medians of the same wasm differ by 37,954 instructions
+      (0.03%); and the release-profile build of the contracts meters 1,559,822
       fewer instructions per vote than the size-optimized wasm every network
       here runs.
     status: measured
@@ -974,13 +976,16 @@ claims:
 
   - id: prover-download
     statement: >-
-      A first proof downloads 18,664,335 octets (the circuit, its
-      verification key and the prefix of Barretenberg's reference string),
-      checked against pinned digests and cached, so a retry downloads
-      nothing.
+      A first proof downloads 18,664,335 octets of proving inputs (the
+      circuit, its verification key and the prefix of Barretenberg's
+      reference string), checked against pinned digests and cached, so a
+      retry downloads none of them; with the page and the prover's code
+      (8,393,672 octets from the site, uncompressed) and the page's fonts, a
+      first proof transfers 27,192,989 octets.
     status: measured
     evidence:
-      file: research/email-recovery/eval/browser-prover.md
+      - file: research/email-recovery/eval/browser-prover.md
+      - file: research/email-recovery/eval/results/first-load.json
 
   - id: alert-code
     statement: >-
@@ -1257,20 +1262,25 @@ claims:
   - id: testnet-recovery-total
     statement: >-
       The seven transactions of the testnet recovery from minting the
-      account to completion were charged 13,384,714 stroops, of which the
-      helper's authorizing vote paid 3,664,628 (3,653,812 rent); the delay was
-      12 ledgers (57,575 ms). Perch's doc compiler and recovery controller,
-      instance and code, were archived on testnet and were restored first, one
-      transaction per entry, for 112,447,907 stroops more. With every entry a
+      account to completion were charged 13,758,804 stroops, of which the
+      helper's authorizing vote paid 3,664,629 (3,653,812 rent); the delay was
+      12 ledgers (57,099 ms). An earlier run on the same Perch deployment found
+      Perch's doc compiler and recovery controller, instance and code,
+      archived and restored them first, one transaction per entry, for
+      112,447,907 stroops beside its recovery's 13,384,714. With every entry a
       recovery reads archived, the same recovery at mainnet's settings takes 7
-      transactions and 3,935,930,637 stroops, against 5,237,377 with nothing
+      transactions and 3,959,831,748 stroops, against 5,237,377 with nothing
       archived (re-executed on the test host); keeping the email verifier, the
       key registry and the guardian's code live costs 3,304,297,283 stroops a
       year at mainnet's settings and each account's guardian instance
-      3,245,716 (the keeper on a local network with mainnet's settings).
+      3,245,716 (the keeper on a local network with mainnet's settings). These
+      price rent at mainnet's rate when its settings were read, the floor that
+      holds while the average state stays at most 2.0 GB; at 3.0 GB every
+      rent figure is ten times as large.
     status: measured
     evidence:
       - file: research/email-recovery/eval/results/testnet.json
+      - file: research/email-recovery/eval/results/testnet-restorations.json
       - file: research/email-recovery/eval/results/archival-test-host.json
       - file: research/email-recovery/eval/results/keeper-local.json
       - file: research/email-recovery/eval/README.md

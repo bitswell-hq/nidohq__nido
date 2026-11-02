@@ -16,6 +16,9 @@
 // Run again with the state file present, `setup` continues that run (an
 // account it has not enrolled, a vote it has not submitted).
 //
+// Both phases read the deployed verifier's circuit id back and refuse one
+// that is not this tree's artifact's.
+//
 // `vote`, once the addition is eligible (its `eligible_at`, 72 hours of
 // ledger close time after setup), executes it and has accounts submit
 // email votes proven against the registry's root.
@@ -98,11 +101,21 @@ async function deploy(deployer, t0) {
   const members = [];
   for (let i = 0; i < REGISTRY.members; i++) members.push(await chain.funded(Keypair.random()));
   const verifier = await create('nido_email_verifier');
-  const reported = Buffer.from(await chain.read(verifier, 'circuit_id')).toString('hex');
-  if (reported !== CIRCUIT_ID.toString('hex')) throw new Error('the deployed verifier reports another circuit id');
+  await checkCircuit(verifier);
   const registry = await create('nido_dkim_registry', [Registry.configScVal({ members, attesters })]);
   const guardianWasmHash = (await upload('nido_email_guardian')).toString('hex');
   return { verifier, registry, guardianWasmHash, members, wasm };
+}
+
+/**
+ * The deployed verifier's circuit id, refusing one that is not this tree's
+ * artifact's: a proof of another circuit fails the guardian's check 12.
+ */
+async function checkCircuit(verifier) {
+  const deployed = Buffer.from(await chain.read(verifier, 'circuit_id')).toString('hex');
+  const local = CIRCUIT_ID.toString('hex');
+  if (deployed !== local) throw new Error(`the verifier ${verifier} checks circuit ${deployed.slice(0, 16)}…, this tree's artifact is ${local.slice(0, 16)}…: its proofs would fail the guardian's check 12; run setup again from this build`);
+  return deployed;
 }
 
 function write(s) {
@@ -115,6 +128,7 @@ function write(s) {
     stellarCli: s.stellarCli,
     perch: d,
     contracts: s.contracts,
+    circuitId: s.circuitId,
     deployer: s.deployer,
     gmailProposal: s.proposal,
     restoredPerchEntries: s.restored,
@@ -161,6 +175,7 @@ async function setup(count, s) {
       },
       stack: { guardianWasmHash: c.guardianWasmHash, verifier: c.verifier, registry: c.registry },
       proposal: { id, eligibleAt: Number(await registry.eligibleAt(id)) },
+      circuitId: await checkCircuit(c.verifier),
       restored,
       accounts: [],
       votes: [],
@@ -168,6 +183,7 @@ async function setup(count, s) {
     s.log = chain.log;
     save(s);
   } else {
+    s.circuitId = await checkCircuit(s.stack.verifier);
     chain.log.push(...s.log);
     s.log = chain.log;
   }
@@ -194,6 +210,7 @@ async function setup(count, s) {
 }
 
 async function vote(s, count) {
+  s.circuitId = await checkCircuit(s.stack.verifier);
   const deployer = Keypair.fromSecret(s.secrets.deployer);
   const registry = new Registry(chain, s.stack.registry, s.secrets.members.map((m) => Keypair.fromSecret(m)), attesters, deployer);
   const stack = { deployment: d, email: { guardianWasmHash: s.stack.guardianWasmHash, verifier: s.stack.verifier }, registry };

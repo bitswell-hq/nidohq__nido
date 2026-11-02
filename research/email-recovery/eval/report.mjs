@@ -375,28 +375,52 @@ function cost() {
     out.push('');
     out.push(`Capacity (mainnet's settings, CAP-0063): a ledger's Soroban transactions run in stages of at most ${clusters} clusters with no conflicting footprints, and the sum over stages of each stage's largest cluster, counted in declared instructions, must stay within ${n(s.contract_compute_v0.ledger_max_instructions)}. At ${n(declared)} declared instructions, a cluster holds ${perCluster} email votes, so one ledger holds at most ${perCluster * clusters} votes on different attempts and ${perCluster} that conflict; the ledger's other limits allow ${n(Math.floor(s.contract_bandwidth_v0.ledger_max_txs_size_bytes / env))} votes by transaction size (${n(env)} bytes each), ${n(Math.floor(s.contract_ledger_cost_v0.ledger_max_write_bytes / wb))} by bytes written and ${n(s.contract_execution_lanes.ledger_max_tx_count)} by count. That is ${(perCluster * clusters / close).toFixed(1)} votes a second at ${close}-second ledgers. Beyond that, transactions bid inclusion fees for the space (surge pricing); the resource fee stays what the settings fix, so a burst of recoveries raises only the inclusion fee.`);
   }
+  // Enrollment: minting, the guardian and the document that lists it.
+  if (local) {
+    const step = (re) => local.transactions.filter((t) => t.status === 'SUCCESS' && re.test(t.label) && t.feeSplit);
+    const mint = step(/^mint provider-/);
+    const guardian = step(/^deploy guardian provider-/);
+    const doc = step(/^apply_doc provider-/);
+    if (mint.length && guardian.length && doc.length) {
+      const fee = (xs) => median(xs.map((t) => t.feeCharged));
+      const rent = (xs) => median(xs.map((t) => t.feeSplit.rent));
+      const tnStep = (re) => tn?.transactions.find((t) => re.test(t.label));
+      const tm = tnStep(/^mint testnet/), tg = tnStep(/^deploy guardian testnet/), td = tnStep(/^apply_doc testnet/);
+      const total = fee(mint) + fee(guardian) + fee(doc);
+      out.push('');
+      out.push(`Enrollment at mainnet's settings (the local network, which runs them, entry lifetimes included): minting the account ${n(fee(mint))} stroops, deploying its email guardian ${n(fee(guardian))}, and the document that lists it with one helper ${n(fee(doc))} (medians over the attack run's ${mint.length} launch-domain accounts; ${n(rent(mint))}, ${n(rent(guardian))} and ${n(rent(doc))} of them rent: new entries live at least mainnet's ${n(S.mainnet.settings.state_archival.min_persistent_ttl)}-ledger minimum, and the guardian and the account extend theirs to the maximum on any network): ${n(total)} stroops (${xlm(total)}).${tm && tg && td ? ` The testnet recovery run's enrollment: ${n(tm.feeCharged)}, ${n(tg.feeCharged)} and ${n(td.feeCharged)} stroops.` : ''}`);
+    }
+  }
   if (tn) {
     out.push('');
     out.push(tn.table ?? '');
+    // The recovery itself: enrollment to completion, without the deployment and the registry's governance.
+    const hashes = new Set(tn.steps.filter((st) => /^(enroll|begin_lost_key|submit_guardian|complete)/.test(st.step)).flatMap((st) => st.transactions));
+    const recovery = tn.transactions.filter((t) => hashes.has(t.hash));
+    if (recovery.length) {
+      const sum = recovery.reduce((a, t) => a + t.feeCharged, 0);
+      out.push('');
+      out.push(`The recovery, mint to completion: ${recovery.length} transactions charged ${n(sum)} stroops (${xlm(sum)}), ${n(recovery.reduce((a, t) => a + t.feeSplit.rent, 0))} of them rent.`);
+    }
   }
   return out.join('\n');
 }
 
 function archivalBlock() {
   const out = [];
-  const tn = json('testnet.json');
-  if (tn) {
-    const restores = tn.transactions.filter((t) => /^restore /.test(t.label));
+  const tr = json('testnet-restorations.json');
+  if (tr) {
+    const restores = tr.restores;
     const restoreSum = restores.reduce((a, t) => a + t.feeCharged, 0);
-    const recovery = tn.steps.filter((s) => !/^(deploy the email contracts|registry:|restore )/.test(s.step)).flatMap((s) => s.transactions);
-    const recoverySum = recovery.reduce((a, h) => a + tn.transactions.find((t) => t.hash === h).feeCharged, 0);
-    out.push(`Testnet run of ${day(tn.generated)} UTC: Perch's doc compiler and recovery controller, instance and code, had been archived and were restored before enrollment, one RestoreFootprint transaction per entry (testnet's minimum persistent lifetime, ${n(S.testnet?.settings.state_archival.min_persistent_ttl ?? 120_960)} ledgers, prepaid as rent).`);
+    const recoverySum = tr.recovery.reduce((a, t) => a + t.feeCharged, 0);
+    const recovery = tr.recovery;
+    out.push(`Testnet run of ${day(tr.generated)} UTC (\`results/testnet-restorations.json\`): Perch's doc compiler and recovery controller, instance and code, had been archived and were restored before enrollment, one RestoreFootprint transaction per entry (testnet's minimum persistent lifetime, ${n(S.testnet?.settings.state_archival.min_persistent_ttl ?? 120_960)} ledgers, prepaid as rent). A later run on the same deployment found them live.`);
     out.push('');
     out.push('| Transactions | Count | Fee charged (stroops) | of which rent |');
     out.push('| --- | --- | --- | --- |');
     for (const t of restores) out.push(`| ${t.label} | 1 | ${n(t.feeCharged)} | ${n(t.feeSplit.rent)} |`);
     out.push(`| **Restorations** | ${restores.length} | **${n(restoreSum)}** (${xlm(restoreSum)}) | ${n(restores.reduce((a, t) => a + t.feeSplit.rent, 0))} |`);
-    out.push(`| The recovery, mint to completion | ${recovery.length} | ${n(recoverySum)} (${xlm(recoverySum)}) | ${n(recovery.reduce((a, h) => a + tn.transactions.find((t) => t.hash === h).feeSplit.rent, 0))} |`);
+    out.push(`| The recovery, mint to completion | ${recovery.length} | ${n(recoverySum)} (${xlm(recoverySum)}) | ${n(recovery.reduce((a, t) => a + t.feeSplit.rent, 0))} |`);
     out.push(`| **Both** | ${restores.length + recovery.length} | **${n(restoreSum + recoverySum)}** (${xlm(restoreSum + recoverySum)}) | |`);
   }
   const a = json('archival-test-host.json');
@@ -476,6 +500,33 @@ function archivalBlock() {
     const wallet = total((r) => r.owner === 'wallet');
     out.push('');
     out.push(`A year of rent at mainnet's settings: ${n(nidoShared)} stroops (${xlm(nidoShared)}) for the email verifier, the DKIM key registry (instance and code) and the guardian's code, shared by every account; ${n(perAccount)} (${xlm(perAccount)}) per enrolled account for its guardian's instance; ${n(perch)} (${xlm(perch)}) for the Perch contracts a recovery runs (instances and code), which Perch's operator keeps; and ${n(wallet)} (${xlm(wallet)}) for an account's instance, without its other data entries.`);
+    // How the figures move with the rent rate, which follows mainnet's average Soroban state size.
+    if (a && code) {
+      const c = s.contract_ledger_cost_v0;
+      const target = Number(c.soroban_state_target_size_bytes);
+      const low = Number(c.rent_fee1_kb_soroban_state_size_low);
+      const span = Number(c.rent_fee1_kb_soroban_state_size_high) - low;
+      const sizeAt = (rate) => ((rate - low) * target) / span;
+      const rentSizes = {};
+      for (const st of [...a.steps, ...a.live]) for (const r of st.restored) {
+        const e = r.code && code.entries.find((x) => x.onNetwork && r.key.startsWith(`code ${x.hash.slice(0, 8)}`));
+        if (e) rentSizes[r.keyXdr] = codeRentBytes(e.dataBytes, e.costInputs, s);
+      }
+      const yearAt = (rate, f) => rows.filter(f).reduce((x, r) => {
+        if (r.size === undefined) return x;
+        const sch2 = { ...sch, rent1kb: BigInt(rate) };
+        return x + rentFee([{ persistent: true, code: /code$/.test(r.label), oldSize: r.size, newSize: r.size, oldLiveUntil: 1e9, newLiveUntil: 1e9 + YEAR_LEDGERS }], sch2, 1);
+      }, 0);
+      out.push('');
+      out.push(`The rent rate is not fixed: it follows the network's average Soroban state size, \`max(1,000, ⌈${n(span)} × size / ${n(target)}⌉ − ${n(-low)})\` per KB with mainnet's archived settings. Mainnet's average, ${(Number(averageStateSize(s)) / 1e9).toFixed(3)} GB, keeps it at the 1,000 floor, which holds while the average stays at most ${(sizeAt(1000) / 1e9).toFixed(1)} GB. Every rent figure above scales with the rate:`);
+      out.push('');
+      out.push('| Rent per KB | Mainnet average state size | Recovery, everything archived | Keeper, shared contracts, a year | Keeper, per account, a year |');
+      out.push('| --- | --- | --- | --- | --- |');
+      for (const rate of [1000, 5500, 10000]) {
+        const total = plan(a.steps, s, { rentSizes, rent1kb: rate }).reduce((x, t) => x + t.fee, 0);
+        out.push(`| ${n(rate)} (×${rate / 1000}) | ${rate === 1000 ? `up to ${(sizeAt(1000) / 1e9).toFixed(1)} GB` : `${(sizeAt(rate) / 1e9).toFixed(1)} GB`} | ${n(total)} (${xlm(total)}) | ${n(yearAt(rate, (r) => r.owner === 'nido' && !/guardian instance/.test(r.label)))} (${xlm(yearAt(rate, (r) => r.owner === 'nido' && !/guardian instance/.test(r.label)))}) | ${n(yearAt(rate, (r) => /guardian instance/.test(r.label)))} (${xlm(yearAt(rate, (r) => /guardian instance/.test(r.label)))}) |`);
+      }
+    }
   }
   return out.length ? out.join('\n') : 'No archival measurement is recorded.';
 }
