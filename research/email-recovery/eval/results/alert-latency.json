@@ -1,0 +1,139 @@
+{
+  "generated": "2026-11-02T18:00:49.761Z",
+  "test": "infra/email-alerts/test/e2e.test.ts",
+  "machine": {
+    "cpus": 18,
+    "loadAverageAtStart": 7.5,
+    "loadAverageAtEnd": 7.6
+  },
+  "runs": 10,
+  "summary": {
+    "eventsPollToEmailAcceptedMs": {
+      "min": 11,
+      "median": 11.5,
+      "max": 13
+    },
+    "eventsPollToPushAcceptedMs": {
+      "min": 12,
+      "median": 13.5,
+      "max": 15
+    },
+    "vaultRestoreMs": {
+      "min": 98.2,
+      "median": 101.3,
+      "max": 105.9
+    }
+  },
+  "readings": [
+    {
+      "attestationDocumentBytes": 3775,
+      "registrationRequestBytes": 1388,
+      "eventToVaultAnswerMs": 12.582458999999972,
+      "eventsPollToEmailAcceptedMs": 11,
+      "eventsPollToPushAcceptedMs": 13,
+      "pushBodyBytes": 508,
+      "emailRequestBytes": 1175,
+      "vaultRestoreMs": 104.84895800000004,
+      "hostMessagesScanned": 100
+    },
+    {
+      "attestationDocumentBytes": 3775,
+      "registrationRequestBytes": 1388,
+      "eventToVaultAnswerMs": 13.577416999999969,
+      "eventsPollToEmailAcceptedMs": 13,
+      "eventsPollToPushAcceptedMs": 15,
+      "pushBodyBytes": 508,
+      "emailRequestBytes": 1175,
+      "vaultRestoreMs": 105.85391699999991,
+      "hostMessagesScanned": 100
+    },
+    {
+      "attestationDocumentBytes": 3775,
+      "registrationRequestBytes": 1388,
+      "eventToVaultAnswerMs": 12.60891700000002,
+      "eventsPollToEmailAcceptedMs": 12,
+      "eventsPollToPushAcceptedMs": 14,
+      "pushBodyBytes": 508,
+      "emailRequestBytes": 1175,
+      "vaultRestoreMs": 101.36749999999995,
+      "hostMessagesScanned": 100
+    },
+    {
+      "attestationDocumentBytes": 3775,
+      "registrationRequestBytes": 1388,
+      "eventToVaultAnswerMs": 12.358624999999961,
+      "eventsPollToEmailAcceptedMs": 11,
+      "eventsPollToPushAcceptedMs": 13,
+      "pushBodyBytes": 508,
+      "emailRequestBytes": 1175,
+      "vaultRestoreMs": 102.97454099999993,
+      "hostMessagesScanned": 100
+    },
+    {
+      "attestationDocumentBytes": 3775,
+      "registrationRequestBytes": 1388,
+      "eventToVaultAnswerMs": 10.985459000000105,
+      "eventsPollToEmailAcceptedMs": 11,
+      "eventsPollToPushAcceptedMs": 12,
+      "pushBodyBytes": 508,
+      "emailRequestBytes": 1175,
+      "vaultRestoreMs": 98.24491599999999,
+      "hostMessagesScanned": 100
+    },
+    {
+      "attestationDocumentBytes": 3775,
+      "registrationRequestBytes": 1388,
+      "eventToVaultAnswerMs": 11.462166000000025,
+      "eventsPollToEmailAcceptedMs": 11,
+      "eventsPollToPushAcceptedMs": 13,
+      "pushBodyBytes": 508,
+      "emailRequestBytes": 1175,
+      "vaultRestoreMs": 98.35095799999999,
+      "hostMessagesScanned": 100
+    },
+    {
+      "attestationDocumentBytes": 3775,
+      "registrationRequestBytes": 1388,
+      "eventToVaultAnswerMs": 12.372457999999938,
+      "eventsPollToEmailAcceptedMs": 12,
+      "eventsPollToPushAcceptedMs": 14,
+      "pushBodyBytes": 508,
+      "emailRequestBytes": 1175,
+      "vaultRestoreMs": 99.73979200000008,
+      "hostMessagesScanned": 100
+    },
+    {
+      "attestationDocumentBytes": 3775,
+      "registrationRequestBytes": 1388,
+      "eventToVaultAnswerMs": 13.01683300000002,
+      "eventsPollToEmailAcceptedMs": 12,
+      "eventsPollToPushAcceptedMs": 14,
+      "pushBodyBytes": 508,
+      "emailRequestBytes": 1175,
+      "vaultRestoreMs": 101.95262500000001,
+      "hostMessagesScanned": 100
+    },
+    {
+      "attestationDocumentBytes": 3775,
+      "registrationRequestBytes": 1388,
+      "eventToVaultAnswerMs": 13.093582999999967,
+      "eventsPollToEmailAcceptedMs": 13,
+      "eventsPollToPushAcceptedMs": 14,
+      "pushBodyBytes": 508,
+      "emailRequestBytes": 1175,
+      "vaultRestoreMs": 101.31041600000003,
+      "hostMessagesScanned": 100
+    },
+    {
+      "attestationDocumentBytes": 3775,
+      "registrationRequestBytes": 1388,
+      "eventToVaultAnswerMs": 11.211790999999948,
+      "eventsPollToEmailAcceptedMs": 11,
+      "eventsPollToPushAcceptedMs": 12,
+      "pushBodyBytes": 508,
+      "emailRequestBytes": 1175,
+      "vaultRestoreMs": 100.746084,
+      "hostMessagesScanned": 100
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{"case":"propose_add","instructions":9347998,"mem_bytes":532837,"read_entries":6,"disk_read_bytes":0,"write_entries":3,"write_bytes":1596,"event_bytes":744,"fee_without_rent_stroops":23730,"rent_stroops":44372364}
+{"case":"approve","instructions":669842,"mem_bytes":300741,"read_entries":5,"disk_read_bytes":0,"write_entries":2,"write_bytes":496,"event_bytes":208,"fee_without_rent_stroops":10035,"rent_stroops":3474764}
+{"case":"attest","instructions":1163336,"mem_bytes":291341,"read_entries":3,"disk_read_bytes":0,"write_entries":1,"write_bytes":444,"event_bytes":412,"fee_without_rent_stroops":7270,"rent_stroops":1159950}
+{"case":"execute (activation: 16-level root recomputation)","instructions":22774204,"mem_bytes":1068056,"read_entries":37,"disk_read_bytes":0,"write_entries":20,"write_bytes":4400,"event_bytes":348,"fee_without_rent_stroops":102662,"rent_stroops":734515786}
+{"case":"is_accepted_root (accepted)","instructions":565410,"mem_bytes":286542,"read_entries":2,"disk_read_bytes":0,"write_entries":0,"write_bytes":0,"event_bytes":0,"fee_without_rent_stroops":396,"rent_stroops":0}
+{"case":"is_accepted_root (refused)","instructions":568054,"mem_bytes":286542,"read_entries":2,"disk_read_bytes":0,"write_entries":0,"write_bytes":0,"event_bytes":0,"fee_without_rent_stroops":398,"rent_stroops":0}
+{"case":"approve (revocation: removal and refusal)","instructions":20048562,"mem_bytes":880742,"read_entries":39,"disk_read_bytes":0,"write_entries":21,"write_bytes":1956,"event_bytes":516,"fee_without_rent_stroops":103549,"rent_stroops":4248911}

@@ -5,6 +5,7 @@
 // of §9.3 apply), applied by the owner's passkey. And the recovery side:
 // opening an attempt, the statement the controller builds for it, email and
 // helper approvals, the owner's cancellation, completion.
+import { PIN_LIFETIME_SECONDS } from '@nidohq/email-recovery';
 import { buildPolicyDoc, canonicalJson, perch } from '@nidohq/passkey-sdk';
 import { Keypair } from '@stellar/stellar-sdk';
 import { NidoAccount, Passkey } from './account.mjs';
@@ -151,7 +152,7 @@ export async function enroll({
   profile = 'loss',
   delayLedgers,
   expiryLedgers,
-  pinSeconds = 30 * 86_400,
+  pinSeconds = PIN_LIFETIME_SECONDS,
   allowedActions = ALLOW_ALL,
   registry = stack.registry.address,
   apex = { scheme: 'http:', host: 'localhost', port: 4399 },

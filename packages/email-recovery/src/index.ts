@@ -63,6 +63,7 @@ export {
   DOM_ENROLL,
   ENROLL_PHRASE,
   type EnrollmentEmailInput,
+  PIN_LIFETIME_SECONDS,
   type PinTree,
   type PinnedKey,
   RECOVERY_PHRASE_REFUSAL,

@@ -97,6 +97,5 @@ export function thisWalletApex(): WalletApex {
   return walletApex(NETWORK_NAME, local);
 }
 
-/** How long the guardian's key pin lasts (spec §7.4), in seconds of ledger
- *  close time: 30 days, within the 365-day cap. */
-export const PIN_LIFETIME_SECONDS = 30 * 86_400;
+/** How long the guardian's key pin lasts (spec §7.4): `@nidohq/email-recovery`'s. */
+export { PIN_LIFETIME_SECONDS } from '@nidohq/email-recovery';

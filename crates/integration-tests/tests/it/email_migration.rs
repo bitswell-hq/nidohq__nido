@@ -46,8 +46,26 @@ use crate::email_archival::reading;
 
 const SETTINGS: &str = "../../research/email-recovery/eval/results/settings/mainnet.json";
 
-/// The wallet's pin lifetime (`PIN_LIFETIME_SECONDS`, spec §13 item 2).
-const PIN_SECONDS: u64 = 30 * 24 * 60 * 60;
+/// The wallet's source, which defines its pin lifetime once.
+const WALLET_PIN_SOURCE: &str =
+    include_str!("../../../../packages/email-recovery/src/enrollmentEmail.ts");
+
+/// The wallet's pin lifetime (`PIN_LIFETIME_SECONDS`, spec §13 item 2), read
+/// from its definition rather than copied.
+fn pin_seconds() -> u64 {
+    WALLET_PIN_SOURCE
+        .split("export const PIN_LIFETIME_SECONDS = ")
+        .nth(1)
+        .and_then(|rest| rest.split(';').next())
+        .map(|literal| literal.replace('_', ""))
+        .and_then(|digits| digits.parse().ok())
+        .expect("the wallet defines PIN_LIFETIME_SECONDS as an integer literal")
+}
+
+#[test]
+fn pin_lifetime_is_the_wallets() {
+    assert_eq!(pin_seconds(), 30 * 24 * 60 * 60);
+}
 
 #[allow(clippy::too_many_lines)] // one account's migration, step by step
 fn migrate(profile: Profile, label: &str, salt: u8, settings: &NetworkSettings) -> Value {
@@ -100,7 +118,7 @@ fn migrate(profile: Profile, label: &str, salt: u8, settings: &NetworkSettings) 
     let mut key_pin = Vec::new(&w.env);
     key_pin.push_back(KeyPin {
         root: root_of(&w.env, &[pin_salt, leaf]),
-        valid_until: w.now() + PIN_SECONDS,
+        valid_until: w.now() + pin_seconds(),
     });
     let config = GuardianConfig {
         account: account.address.clone(),

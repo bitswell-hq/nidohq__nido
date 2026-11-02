@@ -185,6 +185,13 @@ export async function checkEnrollmentEmail(input: EnrollmentEmailInput): Promise
   };
 }
 
+/**
+ * How long the guardian's key pin lasts (spec §7.4), in seconds of ledger
+ * close time: 30 days, within the guardian's 365-day cap. The wallet, the
+ * evaluation's harness and the integration tests read this one definition.
+ */
+export const PIN_LIFETIME_SECONDS = 2_592_000;
+
 /** A key the pin holds: its domain (the `d=` it signs for) and modulus. */
 export interface PinnedKey {
   domain: string;
