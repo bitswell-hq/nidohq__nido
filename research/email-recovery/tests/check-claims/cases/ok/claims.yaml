@@ -17,7 +17,7 @@ claims:
     evidence:
       file: eval/verify.json
   - id: a-measured-figures
-    statement: A vote uses 121,639,784 instructions and writes 1,208 bytes, 12 entries.
+    statement: A vote uses 121,639,784 instructions and writes 1,208 bytes, 12 entries, about 97,000 per context.
     status: measured
     evidence:
       file: eval/figures.json

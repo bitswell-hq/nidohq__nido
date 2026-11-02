@@ -17,7 +17,9 @@
 #       measured  { file: <path> }                        the file exists, and
 #                 every figure of four or more digits in the statement
 #                 (121,639,784 or 1208 alike) occurs in one of the claim's
-#                 files, written with or without its thousands separators
+#                 files, written with or without its thousands separators,
+#                 unless "about", "around", "roughly" or "approximately"
+#                 introduces it as a rounded figure
 #       assumed   { assumption: <text> }
 #       unproven  no evidence
 #     Paths are relative to the repository root.
@@ -111,8 +113,9 @@ sub check_figures {
     }
     return unless length $text;
     my %seen;
-    while ($statement =~ /(?<![\d.,])(\d{1,3}(?:,\d{3})+|\d{4,})(?![\d,]|\.\d)/g) {
-        my $written = $1;
+    while ($statement =~ /(?:\b(about|around|roughly|approximately)\s+)?(?<![\d.,])(\d{1,3}(?:,\d{3})+|\d{4,})(?![\d,]|\.\d)/g) {
+        my ($rounded, $written) = ($1, $2);
+        next if $rounded;    # "about 97,000" states a rounded figure, not a measured one
         (my $bare = $written) =~ s/,//g;
         next if $seen{$bare}++;
         next if $text =~ /(?<![\d.])\Q$bare\E(?![\d])/ || $text =~ /(?<![\d,.])\Q$written\E(?![\d])/;
