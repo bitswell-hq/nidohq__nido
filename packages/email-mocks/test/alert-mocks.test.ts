@@ -1,10 +1,13 @@
-import { createECDH, createPrivateKey, randomBytes, sign } from 'node:crypto';
+import { createECDH, createPrivateKey, createPublicKey, randomBytes, sign, verify } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { encode as xdrFromJson, initSync } from '@stellar/stellar-xdr-json';
 import { encode } from 'cborg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CustodianMock, DEPOSIT_PURPOSE, RELEASE_PURPOSE } from '../src/custodian.js';
 import { NitroHypervisorMock, imageMeasurement, nitroTestRoot, testImage } from '../src/nitro.js';
 import { LettermintMock, SCALEWAY_PATH, ScalewayTemMock } from '../src/sending.js';
-import { type RpcEvent, StellarRpcMock, eventId, ledgerCloseTime } from '../src/stellarRpc.js';
+import { type RpcEvent, type RpcTransaction, StellarRpcMock, eventId, ledgerCloseTime } from '../src/stellarRpc.js';
 import { PushServiceMock, PushUserAgentMock, decryptWebPush } from '../src/webpush.js';
 
 const b64u = (b: Uint8Array) => Buffer.from(b).toString('base64url');
@@ -30,6 +33,19 @@ describe('Web Push mocks', () => {
       authSecret: unb64u(RFC8291.auth),
     });
     expect(Buffer.from(pt).toString('utf8')).toBe(RFC8291.plaintext);
+  });
+
+  it('the device key signs a probe acknowledgement over the label and the probe id', () => {
+    const ua = new PushUserAgentMock(new PushServiceMock());
+    expect(ua.deviceKey).toHaveLength(65);
+    expect(ua.deviceKey[0]).toBe(4);
+    const probe = new Uint8Array(randomBytes(16));
+    const sig = ua.acknowledge(probe);
+    expect(sig).toHaveLength(64);
+    const key = createPublicKey({ key: { kty: 'EC', crv: 'P-256', x: b64u(ua.deviceKey.subarray(1, 33)), y: b64u(ua.deviceKey.subarray(33)) }, format: 'jwk' });
+    const message = Buffer.concat([Buffer.from('nido/email-recovery/v1/probe-ack'), probe]);
+    expect(verify('sha256', message, { key, dsaEncoding: 'ieee-p1363' }, sig)).toBe(true);
+    expect(verify('sha256', Buffer.concat([message, Buffer.of(0)]), { key, dsaEncoding: 'ieee-p1363' }, sig)).toBe(false);
   });
 
   describe('the push service checks RFC 8030 and RFC 8292', () => {
@@ -210,6 +226,70 @@ describe('Stellar RPC getEvents mock', () => {
     expect(() => rpc.getEvents({ startLedger: 10 })).toThrow(/oldest ledger/);
     expect(() => rpc.getEvents({ pagination: { cursor: eventId(10, 1, 0, 0) } })).toThrow(/oldest ledger/);
     expect(() => rpc.getEvents({ startLedger: 100, pagination: { limit: 10_001 } })).toThrow(/limit/);
+  });
+});
+
+describe('Stellar RPC getTransactions mock', () => {
+  initSync(readFileSync(createRequire(import.meta.url).resolve('@stellar/stellar-xdr-json/stellar_xdr_json_bg.wasm')));
+  const envelope = (fn: string) => ({
+    tx: {
+      tx: {
+        source_account: 'GDSZJUBQ4JO2YZOID7S4HLEPGVST3Z2USQEFJGZG5MDNLCN25LDCXX6P',
+        fee: 100,
+        seq_num: '1',
+        cond: 'none',
+        memo: 'none',
+        operations: [
+          {
+            source_account: null,
+            body: { invoke_host_function: { host_function: { invoke_contract: { contract_address: 'CA3D5KRYM6CB7OWQ6TWYRR3Z4T7GNZLKERYNZGGA5SOAOPIFY6YQGAXE', function_name: fn, args: [] } }, auth: [] } },
+          },
+        ],
+        ext: 'v0',
+      },
+      signatures: [],
+    },
+  });
+  const tx = (ledger: number, applicationOrder: number, fn = 'f'): RpcTransaction => ({
+    status: 'SUCCESS',
+    txHash: `${ledger}`.padStart(64, '0'),
+    applicationOrder,
+    feeBump: false,
+    envelopeXdr: xdrFromJson('TransactionEnvelope', JSON.stringify(envelope(fn))),
+    resultXdr: xdrFromJson('TransactionResult', JSON.stringify({ fee_charged: '100', result: { tx_success: [] }, ext: 'v0' })),
+    resultMetaXdr: xdrFromJson('TransactionMeta', JSON.stringify({ v0: [] })),
+    ledger,
+  });
+  const rpc = new StellarRpcMock([], 100);
+  rpc.addTransactions([tx(101, 1), tx(100, 2), tx(100, 1, 'g'), tx(150, 1)]);
+  type Page = { transactions: Record<string, unknown>[]; cursor: string; latestLedger: number; oldestLedgerCloseTimestamp: number };
+
+  it('pages in ledger and application order and resumes from the cursor', () => {
+    const p1 = rpc.getTransactions({ startLedger: 100, pagination: { limit: 2 } }) as Page;
+    expect(p1.transactions.map((t) => [t.ledger, t.applicationOrder])).toEqual([[100, 1], [100, 2]]);
+    expect(p1.latestLedger).toBe(150);
+    expect(p1.oldestLedgerCloseTimestamp).toBe(Math.floor(ledgerCloseTime(51).getTime() / 1000));
+    const p2 = rpc.getTransactions({ pagination: { cursor: p1.cursor } }) as Page;
+    expect(p2.transactions.map((t) => t.ledger)).toEqual([101, 150]);
+    const p3 = rpc.getTransactions({ pagination: { cursor: p2.cursor } }) as Page;
+    expect(p3.transactions).toEqual([]);
+    rpc.addTransactions([tx(151, 1)]);
+    expect((rpc.getTransactions({ pagination: { cursor: p3.cursor } }) as Page).transactions.map((t) => t.ledger)).toEqual([151]);
+  });
+
+  it('answers in base64 by default and in stellar-xdr JSON on request', () => {
+    const b = (rpc.getTransactions({ startLedger: 100, pagination: { limit: 1 } }) as Page).transactions[0]!;
+    expect(Object.keys(b)).toEqual(['status', 'txHash', 'applicationOrder', 'feeBump', 'envelopeXdr', 'resultXdr', 'resultMetaXdr', 'ledger', 'createdAt']);
+    const j = (rpc.getTransactions({ startLedger: 100, xdrFormat: 'json', pagination: { limit: 1 } }) as Page).transactions[0]!;
+    expect(j.envelopeJson).toEqual(envelope('g'));
+    expect(j.resultMetaJson).toEqual({ v0: [] });
+    expect(j.envelopeXdr).toBeUndefined();
+  });
+
+  it('refuses a cursor with startLedger, a start outside the retention window, and a limit above 200', () => {
+    expect(() => rpc.getTransactions({ startLedger: 100, pagination: { cursor: '1' } })).toThrow(/omitted/);
+    expect(() => rpc.getTransactions({ startLedger: 10 })).toThrow(/must be between the oldest ledger/);
+    expect(() => rpc.getTransactions({ startLedger: 100, pagination: { limit: 201 } })).toThrow(/limit/);
   });
 });
 

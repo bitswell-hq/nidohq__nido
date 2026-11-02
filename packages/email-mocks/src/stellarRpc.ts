@@ -17,6 +17,24 @@
  * caught up; and a page that ends before `limit` events carries the cursor
  * `TOID(next ledger to scan) - 1` with event index `4294967295`.
  *
+ * Its `getTransactions` follows the same description
+ * (`methods/getTransactions.json`, `schemas/Transactions.json`, and
+ * `schemas/Pagination.json`'s `PaginationTransactions`, read 2026-11-02):
+ * `startLedger` (inclusive) or `pagination.cursor`, never both;
+ * `pagination.limit` 1 to 200, default 50; `xdrFormat` `base64` (default)
+ * or `json`. Each transaction carries `status`, `txHash`,
+ * `applicationOrder`, `feeBump`, the envelope, result and result meta
+ * (`envelopeXdr`, `resultXdr`, `resultMetaXdr` in base64; `envelopeJson`,
+ * `resultJson`, `resultMetaJson` as JSON, which the mock produces with
+ * stellar-xdr's own JSON encoding, `@stellar/stellar-xdr-json`), `ledger`
+ * and `createdAt`; the result carries `latestLedger`,
+ * `latestLedgerCloseTimestamp`, `oldestLedger`,
+ * `oldestLedgerCloseTimestamp` and `cursor`, an opaque string (the mock's is
+ * the last returned transaction's TOID for a full page, and the end of the
+ * latest ledger for a short one). A `startLedger` outside the
+ * retention window answers error -32600 with the message
+ * `soroban-testnet.stellar.org` was observed to answer on 2026-11-02.
+ *
  * `getHealth` reports the retention window it keeps (`status`,
  * `latestLedger`, `oldestLedger`, `ledgerRetentionWindow`). Its
  * `getLedgerEntries` answers with entries the test supplies (the
@@ -30,8 +48,11 @@
  * shape: `latestLedger`, `minResourceFee`, `results: [{auth, xdr}]`,
  * `transactionData`).
  */
+import { readFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
+import { createRequire } from 'node:module';
 import type { AddressInfo } from 'node:net';
+import { decode as xdrJson, initSync } from '@stellar/stellar-xdr-json';
 
 export interface RpcEvent {
   type: 'contract' | 'system';
@@ -44,6 +65,30 @@ export interface RpcEvent {
   topic: string[];
   value: string;
   txHash: string;
+}
+
+/** One transaction as the mock serves it: its XDR in base64, where it landed, and how it ended. */
+export interface RpcTransaction {
+  status: 'SUCCESS' | 'FAILED';
+  txHash: string;
+  /** 1-based index among the ledger's transactions. */
+  applicationOrder: number;
+  feeBump: boolean;
+  envelopeXdr: string;
+  resultXdr: string;
+  resultMetaXdr: string;
+  ledger: number;
+}
+
+let xdrJsonReady = false;
+/** stellar-xdr's JSON form of `base64`, decoded as the XDR type `type`. */
+function toJson(type: string, base64: string): unknown {
+  if (!xdrJsonReady) {
+    const wasm = createRequire(import.meta.url).resolve('@stellar/stellar-xdr-json/stellar_xdr_json_bg.wasm');
+    initSync(readFileSync(wasm));
+    xdrJsonReady = true;
+  }
+  return JSON.parse(xdrJson(type, base64));
 }
 
 /** TOID (SEP-35): ledger in the top 32 bits, then 20 bits of transaction order, then 12 of operation. */
@@ -81,6 +126,7 @@ class RpcError extends Error {
 export class StellarRpcMock {
   readonly calls: { method: string; params: unknown }[] = [];
   private events: RpcEvent[] = [];
+  private transactions: RpcTransaction[] = [];
   private failures = 0;
   private server?: Server;
   latestLedger: number;
@@ -111,6 +157,13 @@ export class StellarRpcMock {
   add(events: RpcEvent[]): void {
     this.events = [...this.events, ...events].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     for (const e of events) this.latestLedger = Math.max(this.latestLedger, e.ledger);
+  }
+
+  /** Transactions `getTransactions` serves, by ledger and application order. */
+  addTransactions(txs: RpcTransaction[]): void {
+    const key = (t: RpcTransaction) => toid(t.ledger, t.applicationOrder, 0);
+    this.transactions = [...this.transactions, ...txs].sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
+    for (const t of txs) this.latestLedger = Math.max(this.latestLedger, t.ledger);
   }
 
   get oldestLedger(): number {
@@ -195,6 +248,61 @@ export class StellarRpcMock {
     };
   }
 
+  getTransactions(params: Record<string, unknown>): unknown {
+    const pagination = (params.pagination ?? {}) as { cursor?: string; limit?: number };
+    const limit = pagination.limit ?? 50;
+    if (!Number.isInteger(limit) || limit < 1 || limit > 200) throw new RpcError(-32602, 'limit must be in [1, 200]');
+    const format = (params.xdrFormat as string | undefined) ?? 'base64';
+    if (format !== 'base64' && format !== 'json') throw new RpcError(-32602, `unknown xdrFormat ${format}`);
+    const start = params.startLedger as number | undefined;
+    let after: bigint;
+    if (pagination.cursor !== undefined) {
+      if (start !== undefined) throw new RpcError(-32602, 'startLedger must be omitted when a cursor is given');
+      if (!/^\d+$/.test(pagination.cursor)) throw new RpcError(-32602, 'invalid cursor');
+      after = BigInt(pagination.cursor);
+      if (Number(after >> 32n) + 1 < this.oldestLedger) {
+        throw new RpcError(-32600, `cursor is before the oldest ledger stored (${this.oldestLedger})`);
+      }
+    } else {
+      if (start === undefined) throw new RpcError(-32602, 'startLedger or cursor required');
+      if (start < this.oldestLedger || start > this.latestLedger) {
+        throw new RpcError(
+          -32600,
+          `start ledger (${start}) must be between the oldest ledger: ${this.oldestLedger} and the latest ledger: ${this.latestLedger} for this rpc instance`,
+        );
+      }
+      after = toid(start, 0, 0) - 1n;
+    }
+    const page = this.transactions
+      .filter((t) => toid(t.ledger, t.applicationOrder, 0) > after && t.ledger >= this.oldestLedger)
+      .slice(0, limit);
+    const last = page.at(-1);
+    // A full page ends at its last transaction; a short one at the end of the latest ledger.
+    const cursor = page.length === limit && last ? toid(last.ledger, last.applicationOrder, 0) : toid(this.latestLedger + 1, 0, 0) - 1n;
+    return {
+      transactions: page.map((t) => ({
+        status: t.status,
+        txHash: t.txHash,
+        applicationOrder: t.applicationOrder,
+        feeBump: t.feeBump,
+        ...(format === 'json'
+          ? {
+              envelopeJson: toJson('TransactionEnvelope', t.envelopeXdr),
+              resultJson: toJson('TransactionResult', t.resultXdr),
+              resultMetaJson: toJson('TransactionMeta', t.resultMetaXdr),
+            }
+          : { envelopeXdr: t.envelopeXdr, resultXdr: t.resultXdr, resultMetaXdr: t.resultMetaXdr }),
+        ledger: t.ledger,
+        createdAt: this.closeTimeAt(t.ledger),
+      })),
+      latestLedger: this.latestLedger,
+      latestLedgerCloseTimestamp: this.closeTimeAt(this.latestLedger),
+      oldestLedger: this.oldestLedger,
+      oldestLedgerCloseTimestamp: this.closeTimeAt(this.oldestLedger),
+      cursor: cursor.toString(),
+    };
+  }
+
   async listen(): Promise<string> {
     this.server = createServer(async (req, res) => {
       const chunks: Buffer[] = [];
@@ -215,6 +323,7 @@ export class StellarRpcMock {
         id = msg.id ?? null;
         this.calls.push({ method: msg.method, params: msg.params });
         if (msg.method === 'getEvents') return reply({ result: this.getEvents(msg.params ?? {}) });
+        if (msg.method === 'getTransactions') return reply({ result: this.getTransactions(msg.params ?? {}) });
         if (msg.method === 'simulateTransaction' && this.onSimulate) {
           const value = this.onSimulate(String(msg.params?.transaction ?? ''));
           return reply({

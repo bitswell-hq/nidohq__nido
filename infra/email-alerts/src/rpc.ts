@@ -1,10 +1,11 @@
 /**
  * Stellar RPC as the host uses it: `getEvents` for the controller's events
  * (filtered only by contract, so the query never singles out an account),
- * `simulateTransaction` to read contract views (an account's installed
- * rules, a watched attempt), and `getLedgerEntries` for a contract's
- * instance (its wasm hash). Request and result shapes follow Stellar RPC's
- * OpenRPC description.
+ * `getTransactions` for every transaction, in stellar-xdr JSON, to find
+ * guardian votes (`votes.ts`), `simulateTransaction` to read contract views
+ * (an account's installed rules, an attempt, an email guardian's
+ * configuration), and `getLedgerEntries` for a contract's instance (its wasm
+ * hash). Request and result shapes follow Stellar RPC's OpenRPC description.
  */
 import {
   Account,
@@ -18,12 +19,22 @@ import {
   xdr,
 } from '@stellar/stellar-sdk';
 import type { RpcEvent } from './events.js';
+import type { JsonTransaction } from './votes.js';
 
 export interface GetEventsResult {
   events: RpcEvent[];
   latestLedger: number;
   /** The latest ledger's close time, Unix seconds, as a decimal string. */
   latestLedgerCloseTime?: string;
+  oldestLedger?: number;
+  cursor: string;
+}
+
+export interface GetTransactionsResult {
+  transactions: JsonTransaction[];
+  latestLedger: number;
+  /** Unix seconds. */
+  latestLedgerCloseTimestamp?: number;
   oldestLedger?: number;
   cursor: string;
 }
@@ -62,6 +73,15 @@ export class StellarRpc {
     return this.call('getEvents', {
       ...('startLedger' in from ? { startLedger: from.startLedger } : {}),
       filters: [{ type: 'contract', contractIds: [contractId] }],
+      pagination: { ...('cursor' in from ? { cursor: from.cursor } : {}), limit },
+    });
+  }
+
+  /** A page of every transaction (no filter exists), decoded by the RPC as stellar-xdr JSON. */
+  getTransactions(from: { cursor: string } | { startLedger: number }, limit = 200): Promise<GetTransactionsResult> {
+    return this.call('getTransactions', {
+      ...('startLedger' in from ? { startLedger: from.startLedger } : {}),
+      xdrFormat: 'json',
       pagination: { ...('cursor' in from ? { cursor: from.cursor } : {}), limit },
     });
   }
@@ -110,14 +130,18 @@ export async function accountSigners(rpc: StellarRpc, account: string, networkPa
   return [...keys.values()];
 }
 
-/** What the host reads of a watched attempt (Perch's `Attempt`, `perch-recovery/src/types.rs`). */
+/** What the host reads of an attempt (Perch's `Attempt`, `perch-recovery/src/types.rs`). */
 export interface AttemptView {
   /** `Collecting`, `Authorized`, `Completed`, `Cancelled`, or `Invalidated`. */
   state: string;
   /** Distinct enrolled guardians that approved the initiation statement. */
   guardians: string[];
+  /** Distinct enrolled guardians that approved its cancellation. */
+  cancelGuardians: string[];
   /** The last ledger initiation evidence is accepted. */
   evidenceDeadline: number;
+  /** The configuration epoch it was opened under: it is dead under any other. */
+  epoch: bigint;
 }
 
 /** The controller's `attempt(account, attempt_id)` view, or `undefined` when there is no such attempt. */
@@ -133,12 +157,14 @@ export async function attemptView(
     'attempt',
     [new Address(account).toScVal(), nativeToScVal(attemptId, { type: 'u64' })],
     networkPassphrase,
-  )) as { state: unknown; guardians: unknown[]; evidence_deadline: unknown } | null | undefined;
+  )) as { state: unknown; guardians: unknown[]; cancel_guardians?: unknown[]; evidence_deadline: unknown; epoch?: unknown } | null | undefined;
   if (!v) return undefined;
   return {
     state: String(Array.isArray(v.state) ? v.state[0] : v.state),
     guardians: v.guardians.map(String),
+    cancelGuardians: (v.cancel_guardians ?? []).map(String),
     evidenceDeadline: Number(v.evidence_deadline),
+    epoch: BigInt((v.epoch as bigint | number | undefined) ?? 0),
   };
 }
 
@@ -165,8 +191,12 @@ export interface ChainReads {
   authorizedAttempt(account: string): Promise<bigint | undefined>;
   /** The id the account's next attempt will get (`next_attempt_id`). */
   nextAttemptId(account: string): Promise<bigint>;
+  /** The account's configuration epoch at the controller (`epoch`). */
+  epoch(account: string): Promise<bigint>;
   /** Whether a guardian runs the email guardian's wasm. */
   isEmailGuardian(address: string): Promise<boolean>;
+  /** The account and controller an email guardian's configuration names (its `config()` view; immutable). */
+  guardianAccount(address: string): Promise<{ account: string; controller: string }>;
 }
 
 /** [`ChainReads`] through Stellar RPC, for `controller` on the network `networkPassphrase`. */
@@ -181,8 +211,15 @@ export function chainReads(rpc: StellarRpc, controller: string, networkPassphras
     async nextAttemptId(account) {
       return BigInt((await rpc.view(controller, 'next_attempt_id', [acct(account)], networkPassphrase)) as bigint);
     },
+    async epoch(account) {
+      return BigInt((await rpc.view(controller, 'epoch', [acct(account)], networkPassphrase)) as bigint);
+    },
     async isEmailGuardian(address) {
       return address.startsWith('C') && (await contractWasmHash(rpc, address)) === emailGuardianWasmHash;
+    },
+    async guardianAccount(address) {
+      const c = (await rpc.view(address, 'config', [], networkPassphrase)) as { account: unknown; controller: unknown };
+      return { account: String(c.account), controller: String(c.controller) };
     },
   };
 }

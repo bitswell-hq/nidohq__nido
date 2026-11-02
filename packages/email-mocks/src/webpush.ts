@@ -16,15 +16,23 @@
  *   requires.
  * - The user agent holds the subscription's P-256 key pair and 16-byte
  *   authentication secret and decrypts RFC 8291 messages (one RFC 8188
- *   record).
+ *   record). It also stands in for the wallet's service worker
+ *   (`packages/frontend/public/sw.js`): the device key that worker creates
+ *   with the subscription (ECDSA P-256, a WebCrypto key), and the probe
+ *   acknowledgement it signs when the probe notification is tapped
+ *   (`docs/email-recovery/spec.md` §10.6). A device that is off, or whose
+ *   owner never taps, never acknowledges.
  */
 import {
+  type KeyObject,
   createECDH,
   createHmac,
   createDecipheriv,
   createPublicKey,
+  generateKeyPairSync,
   randomBytes,
   randomUUID,
+  sign,
   verify,
 } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
@@ -207,10 +215,16 @@ export function decryptWebPush(
   return new Uint8Array(padded.subarray(0, end));
 }
 
-/** The browser side of a subscription. */
+/** The label a probe acknowledgement signs before the probe id (`probeAckMessage` in `@nidohq/email-recovery`). */
+const PROBE_ACK_LABEL = 'nido/email-recovery/v1/probe-ack';
+
+/** The browser side of a subscription, and the wallet service worker's device key. */
 export class PushUserAgentMock {
   readonly publicKey: Uint8Array;
   endpoint = '';
+  /** The device key's public half (uncompressed P-256), registered with the subscription. */
+  readonly deviceKey: Uint8Array;
+  private readonly devicePrivate: KeyObject;
 
   constructor(
     private readonly service: PushServiceMock,
@@ -220,6 +234,20 @@ export class PushUserAgentMock {
     const ecdh = createECDH('prime256v1');
     ecdh.setPrivateKey(privateKey);
     this.publicKey = new Uint8Array(ecdh.getPublicKey());
+    const pair = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+    this.devicePrivate = pair.privateKey;
+    const jwk = pair.publicKey.export({ format: 'jwk' });
+    this.deviceKey = new Uint8Array(Buffer.concat([Buffer.of(4), unb64u(jwk.x!), unb64u(jwk.y!)]));
+  }
+
+  /**
+   * What the service worker posts when the probe notification `probeId`
+   * (16 octets) is tapped: ECDSA P-256 over SHA-256 of `label || probeId`,
+   * as `r || s` (WebCrypto's encoding).
+   */
+  acknowledge(probeId: Uint8Array): Uint8Array {
+    const message = Buffer.concat([Buffer.from(PROBE_ACK_LABEL), probeId]);
+    return new Uint8Array(sign('sha256', message, { key: this.devicePrivate, dsaEncoding: 'ieee-p1363' }));
   }
 
   /** `PushManager.subscribe({applicationServerKey})` then `toJSON()`. */

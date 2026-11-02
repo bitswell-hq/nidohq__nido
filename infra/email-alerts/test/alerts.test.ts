@@ -12,7 +12,7 @@ import { InProcessVault, type VaultApi } from '../src/channel.js';
 import { alertEventId } from '../src/events.js';
 import { accountSigners } from '../src/rpc.js';
 import { AlertService } from '../src/service.js';
-import { NEVER_ASKS, PASSKEY_DEVICE_LEAD } from '../src/vault/content.js';
+import { NEVER_ASKS, PASSKEY_DEVICE_LEAD, PREEMPT, alertText } from '../src/vault/content.js';
 import { Vault } from '../src/vault/vault.js';
 import { IMAGE, Wallet, type World, alertsTo, loadFixture, networkId, startWorld } from './harness.js';
 import { attemptBegun } from './synthetic.js';
@@ -83,17 +83,31 @@ describe('what each event sends', () => {
     for (const p of pushes) expect(JSON.stringify(p)).not.toContain(w.fixture.account);
   });
 
-  it('attempt_authorized: the push leads with cancelling, the email says who never asks for what, no code match reassures', async () => {
+  it('attempt_authorized: the push leads with cancelling, both pre-empt a caller, the email says who never asks for what, no code match reassures', async () => {
     w.rpcMock.add(recovery());
     await service.drain();
     const push = owner.device.receive().map((r) => JSON.parse(Buffer.from(r.payload).toString('utf8'))).find((p) => p.kind === 'attempt_authorized');
     expect(push.body.startsWith(PASSKEY_DEVICE_LEAD)).toBe(true);
-    expect(push.body).toMatch(/^This device has your passkey, so you do not need a recovery\. Cancel it unless you are deliberately replacing this passkey\./);
+    // What the vault knows: the device was set up for alerts, not that it still has the passkey.
+    expect(push.body).toMatch(/^This is the device you set up recovery alerts on\. If you can still sign in to your Nido, you do not need a recovery: cancel it/);
+    expect(push.body).not.toMatch(/has your passkey/);
+    expect(PREEMPT).toBe('If someone told you to expect this message, or to ignore it, they are trying to take your account.');
+    expect(push.body).toContain(PREEMPT);
     const email = alertsTo(w, ADDRESS).find((m) => /approved/.test(m.subject))!.text!;
+    expect(email).toContain(PREEMPT);
     expect(email).toContain('If you still have your passkey, you do not need a recovery: open your wallet and cancel it.');
     expect(email).toContain(NEVER_ASKS);
     expect(email).toContain('a matching code does not make it yours');
     expect(email).not.toMatch(/nothing needs doing/i);
+  });
+
+  it('every required alert pre-empts a caller; informational ones do not', () => {
+    for (const name of ['attempt_authorized', 'email_vote_recorded', 'email_cancel_recorded', 'email_change_recorded', 'attempts_many', 'recovery_completed', 'epoch_advanced'] as const) {
+      const t = alertText(name, '123456', 'https://nido.test', 0, true);
+      expect(t.body).toContain(PREEMPT);
+      expect(t.push).toContain(PREEMPT);
+    }
+    expect(alertText('attempt_cancelled', '123456', 'https://nido.test').body).not.toContain(PREEMPT);
   });
 
   it('attempt_begun sends nothing by default: anyone can open an attempt, and the wallet shows open ones', async () => {

@@ -97,6 +97,7 @@ export {
   type ContactOp,
   type ContactRequest,
   ENVELOPE_VERSION,
+  PROBE_ACK_LABEL,
   PURPOSE_PRODUCT_UPDATES,
   PURPOSE_SECURITY_ALERTS,
   type PushChannel,
@@ -117,12 +118,14 @@ export {
   openRequest,
   prepareConfirmation,
   prepareContactChange,
+  probeAckMessage,
   rawLowS,
   pushUpdateRequest,
   removalRequest,
   statusRequest,
   sealRequest,
 } from './enrollment.js';
+export { MANY_OPEN_ATTEMPTS } from './attempts.js';
 export {
   ADDR_MAX,
   DOMAIN_MAX,

@@ -4,13 +4,15 @@
  * (`docs/email-recovery/spec.md` §10.1) and points to the wallet's canonical
  * origin as plain text. No message carries a link to act on.
  *
- * A push goes only to the device registered with the account's passkey, so
- * its text can say that device has the passkey and lead with cancelling: a
- * device that still holds the passkey never needs a recovery. The code
- * identifies an attempt; it does not show that the attempt is the reader's
- * own, because anyone holding the recovery code computes the same one.
+ * A push goes only to devices the owner set up for alerts, each added with
+ * an account passkey, so its lead says that and that whoever can still sign
+ * in needs no recovery; the vault cannot know whether a device still holds
+ * the passkey. Every required alert also pre-empts the caller who prepared
+ * its reader for it ([`PREEMPT`]). The code identifies an attempt; it does
+ * not show that the attempt is the reader's own, because anyone holding the
+ * recovery code computes the same one.
  */
-import { formatAlertCode } from '@nidohq/email-recovery';
+import { MANY_OPEN_ATTEMPTS, formatAlertCode } from '@nidohq/email-recovery';
 import type { AlertName } from '../events.js';
 
 export interface AlertText {
@@ -23,14 +25,21 @@ export interface AlertText {
   push: string;
 }
 
-/** What only a passkey device reads first: it does not need a recovery. */
+/** What a device set up for alerts reads first: whoever can still sign in needs no recovery. */
 export const PASSKEY_DEVICE_LEAD =
-  'This device has your passkey, so you do not need a recovery. Cancel it unless you are deliberately replacing this passkey.';
+  'This is the device you set up recovery alerts on. If you can still sign in to your Nido, you do not need a recovery: ' +
+  'cancel it unless you are deliberately replacing your passkey.';
+
+/** What every required alert says about whoever prepared its reader for it. */
+export const PREEMPT = 'If someone told you to expect this message, or to ignore it, they are trying to take your account.';
 
 /** The one statement every alert makes about who asks for what. */
 export const NEVER_ASKS =
   'Nido never asks anyone to send a recovery email, to approve a recovery, or to read out a code. ' +
   'Your recovery code is typed only into your own Nido’s recovery page, by you, after you have lost every device with your passkey.';
+
+const INBOX_AND_CODE =
+  'That needs your inbox and your recovery code. If you did not send that email yourself because you lost your passkey, someone else has both, or talked you into sending it: ';
 
 const LEADS: Record<AlertName, { title: string; email: string; push?: string }> = {
   attempt_authorized: {
@@ -49,6 +58,29 @@ const LEADS: Record<AlertName, { title: string; email: string; push?: string }> 
       'If you did not send that email yourself because you lost your passkey, someone else has both, or talked you into sending it: ' +
       'open your wallet on a device with your passkey and cancel the attempt, then change your email password and set up email recovery again with a new recovery code.',
     push: `${PASSKEY_DEVICE_LEAD} Your recovery email just approved one. Open Nido, Security, Recovery.`,
+  },
+  email_cancel_recorded: {
+    title: 'Your email approved cancelling a recovery',
+    email:
+      'The email address set up to help recover one of your Nido accounts has just approved cancelling a recovery attempt. ' +
+      INBOX_AND_CODE +
+      'they can stop your own recoveries. Open your wallet on a device with your passkey, then change your email password and set up email recovery again with a new recovery code.',
+    push: 'Your recovery email just approved cancelling a recovery of your Nido. If you did not send it, someone has your inbox and your recovery code. Open Nido, Security, Recovery.',
+  },
+  email_change_recorded: {
+    title: 'Your email approved a settings change',
+    email:
+      'The email address set up to help recover one of your Nido accounts has just approved a change to its recovery settings, or an upgrade. ' +
+      INBOX_AND_CODE +
+      'open your wallet on a device with your passkey and check its recovery settings, then change your email password and set up email recovery again with a new recovery code.',
+    push: 'Your recovery email just approved a change to your Nido’s recovery settings. If you did not send it, someone has your inbox and your recovery code. Open Nido, Security, Recovery.',
+  },
+  attempts_many: {
+    title: 'Many recovery attempts opened',
+    email:
+      `More than ${MANY_OPEN_ATTEMPTS} recovery attempts are open for one of your Nido accounts. Anyone can open one, and opening one grants nothing, ` +
+      'but many at once can hide the one that matters. Open your wallet on a device with your passkey: it lists every open attempt, those your email or your helpers approved first.',
+    push: 'Many recovery attempts are open for your Nido, which can hide one that matters. Open Nido, Security, Recovery: it lists every one, approved ones first.',
   },
   recovery_completed: {
     title: 'Account recovery completed',
@@ -82,14 +114,19 @@ const LEADS: Record<AlertName, { title: string; email: string; push?: string }> 
 const footer = (walletOrigin: string) =>
   `Open your wallet yourself at ${walletOrigin} to see the details. Nido alerts never contain links to act on. ${NEVER_ASKS}`;
 
-export function alertText(name: AlertName, code: string, walletOrigin: string, suppressed = 0): AlertText {
+/**
+ * The alert for `name`. A `required` one (every channel) carries
+ * [`PREEMPT`] in the email and the push.
+ */
+export function alertText(name: AlertName, code: string, walletOrigin: string, suppressed = 0, required = false): AlertText {
   const { title, email, push } = LEADS[name];
   const more = suppressed > 0 ? `\n\n${suppressed} more like this were opened since the last notice.` : '';
+  const pre = required ? ` ${PREEMPT}` : '';
   return {
     subject: `Nido security alert: ${title.toLowerCase()}`,
     title,
-    body: `${email}${more}\n\nVerification code: ${formatAlertCode(code)}\n\n${footer(walletOrigin)}`,
-    push: push ?? email,
+    body: `${email}${pre}${more}\n\nVerification code: ${formatAlertCode(code)}\n\n${footer(walletOrigin)}`,
+    push: `${push ?? email}${pre}`,
   };
 }
 
@@ -107,12 +144,12 @@ export function contactChangeNotice(kind: 'replace' | 'remove', walletOrigin: st
   };
 }
 
-/** Told to the contact's address when the vault finds its push subscription gone (spec §10.6). */
+/** Told to the contact's address when the vault finds a push subscription gone (spec §10.6). */
 export function pushLapsedNotice(walletOrigin: string): AlertText {
   const body =
-    'Notifications for the recovery alerts of one of your Nido accounts no longer reach the device they were set up on, ' +
-    'so recovery alerts now come only to this address. Email can help recover a Nido only while a second alert channel works: ' +
-    'open your wallet on a device with your passkey, go to Security, Recovery, and turn notifications on again.';
+    'Notifications for the recovery alerts of one of your Nido accounts no longer reach a device they were set up on: its browser dropped them. ' +
+    'Email can help recover a Nido only while a second alert channel works: ' +
+    'open your wallet on the device you use now, with your passkey, go to Security, Recovery, and add that device.';
   return {
     subject: 'Nido security alert: notifications stopped',
     title: 'Notifications stopped',
@@ -121,14 +158,29 @@ export function pushLapsedNotice(walletOrigin: string): AlertText {
   };
 }
 
-/** Told to the contact's address when a new device takes over its notifications. */
-export function pushMovedNotice(walletOrigin: string): AlertText {
+/** Told to the contact's address when a device's subscription went unconfirmed for two probe intervals (spec §10.6). */
+export function pushUnconfirmedNotice(walletOrigin: string): AlertText {
   const body =
-    'Notifications for the recovery alerts of one of your Nido accounts now go to a new device, set up with the account’s passkey ' +
-    'after the previous device stopped receiving them. If you did not do this, open your wallet now.';
+    'Nido could not confirm that the recovery notifications of one of your Nido accounts reach you: a device they go to has not confirmed ' +
+    'the last two checks, which ask you to tap a notification. Email can help recover a Nido only while a second alert channel works, ' +
+    'so until a device confirms again, Nido treats your email helper as not allowed. Tap the next check on that device, or open your wallet ' +
+    'on the device you use now, with your passkey, go to Security, Recovery, and add that device.';
   return {
-    subject: 'Nido security alert: notifications moved',
-    title: 'Notifications moved',
+    subject: 'Nido security alert: notifications not confirmed',
+    title: 'Notifications not confirmed',
+    body: `${body}\n\n${footer(walletOrigin)}`,
+    push: body,
+  };
+}
+
+/** Told to the contact's address when a device is added to its notifications (spec §10.3 rule 8). */
+export function pushAddedNotice(walletOrigin: string): AlertText {
+  const body =
+    'A new device now also receives the recovery notifications of one of your Nido accounts. It was added with the account’s passkey. ' +
+    'If you did not do this, open your wallet now.';
+  return {
+    subject: 'Nido security alert: notifications added to a device',
+    title: 'Notifications added to a device',
     body: `${body}\n\n${footer(walletOrigin)}`,
     push: body,
   };

@@ -9,10 +9,12 @@
  * never receives an address, a push subscription, `k_code`, `k_alert`, or a
  * verification code.
  */
-import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
+import { createHash, createPublicKey, randomBytes, randomInt, timingSafeEqual, verify } from 'node:crypto';
 import {
   type AlertSubject,
   type ContactRequest,
+  MANY_OPEN_ATTEMPTS,
+  type PushChannel,
   type SealedRequest,
   alertCode,
   authorizationChallenge,
@@ -20,6 +22,7 @@ import {
   contractIdFromStrkey,
   encodeVaultUserData,
   openRequest,
+  probeAckMessage,
   spkiFromRawPublicKey,
   strkeyFromContractId,
 } from '@nidohq/email-recovery';
@@ -28,8 +31,9 @@ import {
   alertText,
   confirmationText,
   contactChangeNotice,
+  pushAddedNotice,
   pushLapsedNotice,
-  pushMovedNotice,
+  pushUnconfirmedNotice,
   type AlertText,
 } from './content.js';
 import { type CustodianEndpoint, type Nsm, genesis, restore } from './custody.js';
@@ -39,8 +43,8 @@ import {
   type AccountRecord,
   type Contact,
   type Deliveries,
-  type WatchedAttempt,
   type PendingChange,
+  type PushDevice,
   sealDeliveries,
   sealRecord,
   unsealDeliveries,
@@ -60,16 +64,24 @@ export const CONFIRMATION_ATTEMPTS = 5;
 export const NONCE_TTL_MS = 10 * 60_000;
 const DELIVERY_LOG_RETENTION_MS = 30 * 24 * 3600_000;
 /**
- * A push subscription is probed when the push service has accepted nothing
- * for it this long (spec §10.6): the default of `VaultConfig.probeIntervalMs`.
- * Each probe shows one quiet notification; a longer interval finds a lapse
- * later.
+ * How often each push subscription is probed (spec §10.6): the default of
+ * `VaultConfig.probeIntervalMs`, 30 days. Each probe shows one notification
+ * that asks to be tapped; a longer interval shows fewer of them and finds
+ * an unreachable device later.
  */
-export const PROBE_INTERVAL_MS = 7 * 24 * 3600_000;
+export const PROBE_INTERVAL_MS = 30 * 24 * 3600_000;
 /** After a probe the push service could not answer, the next one is due this much later. */
 export const PROBE_RETRY_MS = 3600_000;
-/** Open attempts watched per account at once; opening one is permissionless, so the list is bounded. */
-export const WATCH_MAX = 32;
+/**
+ * A subscription whose device acknowledged none of this many probes, each
+ * given a full interval, is unacknowledged: rule 2 treats it like lapsed
+ * until the device acknowledges again.
+ */
+export const ACK_MISSED_PROBES = 2;
+/** Devices one contact's push alerts go to at most. */
+export const MAX_PUSH_DEVICES = 4;
+/** `attempts_many` goes to an account at most once in this long. */
+export const MANY_ALERT_EVERY_MS = 24 * 3600_000;
 
 export interface VaultConfig {
   /** `sha256(network passphrase)`. */
@@ -80,7 +92,7 @@ export interface VaultConfig {
   sending: SendingConfig;
   /** VAPID `sub` claim, e.g. `mailto:alerts@nido.fyi`. */
   pushSubject: string;
-  /** How long a subscription may go without an accepted push before it is probed (default [`PROBE_INTERVAL_MS`], a week). */
+  /** How often each push subscription is probed (default [`PROBE_INTERVAL_MS`], 30 days). */
   probeIntervalMs?: number;
   /** Accept `http://127.0.0.1` push endpoints (local test push services only). */
   allowLoopbackPush?: boolean;
@@ -129,18 +141,25 @@ export interface DispatchRequest {
   subject: AlertSubject;
   /** For rate-limited events: how many were suppressed since the last one sent. */
   suppressed?: number;
+  /**
+   * For `attempt_begun`: the attempt's evidence deadline and the latest
+   * ledger, which the host read, so the vault counts it while it is open.
+   */
+  open?: { until: number; ledger: number };
 }
+
+/** A push device's state: `live`, `unacknowledged` (two probe intervals without a tap), or `lapsed` (the push service answered 404 or 410). */
+export type DeviceState = 'live' | 'unacknowledged' | 'lapsed';
 
 /** One contact's channels, as a `status` read answers (no address: the host relays the answer). */
 export interface ChannelStatus {
   /** The contact id, hex. */
   contact: string;
   state: 'unconfirmed' | 'active';
-  /** `lapsed`: the push service answered 404 or 410 for the subscription. */
-  push: 'live' | 'lapsed' | 'none';
-  /** When the push service last accepted a push or probe for it (ms). */
-  pushCheckedAt?: number;
-  lapsedAt?: number;
+  /** The best of its devices: `live` when any is, then `unacknowledged`, then `lapsed`; `none` without one. */
+  push: DeviceState | 'none';
+  /** Each device: `id` is hex of the first 8 octets of `sha256(endpoint)`, which the device computes for itself. */
+  devices: { id: string; state: DeviceState; addedAt: number; ackedAt: number; lapsedAt?: number }[];
   /** A pending replacement or removal of this contact: from when it applies, a
    *  close time (`maturesAt`), or a ledger number for a change sealed with
    *  only `maturesLedger`. */
@@ -148,7 +167,7 @@ export interface ChannelStatus {
 }
 
 export type ContactResult =
-  | { ok: true; status: 'pending-confirmation' | 'change-pending' | 'confirmed' | 'push-updated'; maturesAt?: number }
+  | { ok: true; status: 'pending-confirmation' | 'change-pending' | 'confirmed' | 'push-added'; maturesAt?: number }
   | { ok: true; status: 'channels'; channels: ChannelStatus[] }
   | { ok: false; error: string };
 
@@ -156,10 +175,30 @@ export class ContactRefused extends Error {}
 
 const sha256 = (b: Uint8Array | string) => new Uint8Array(createHash('sha256').update(b).digest());
 
+/** A device's id in a `status` answer: hex of the first 8 octets of `sha256(endpoint)`. */
+export const deviceId = (endpoint: string): string => toHex(sha256(endpoint).subarray(0, 8));
+
+function deviceState(d: PushDevice): DeviceState {
+  return d.gone ? 'lapsed' : d.unacknowledged ? 'unacknowledged' : 'live';
+}
+
+/** Whether a device key signed the acknowledgement of probe `probeId`. */
+function acknowledged(deviceKey: Uint8Array, probeId: Uint8Array, signature: Uint8Array): boolean {
+  if (signature.length !== 64) return false;
+  const b64u = (b: Uint8Array) => Buffer.from(b).toString('base64url');
+  const key = createPublicKey({
+    key: { kty: 'EC', crv: 'P-256', x: b64u(deviceKey.subarray(1, 33)), y: b64u(deviceKey.subarray(33, 65)) },
+    format: 'jwk',
+  });
+  return verify('sha256', probeAckMessage(probeId), { key, dsaEncoding: 'ieee-p1363' }, signature);
+}
+
 export class Vault {
   private readonly records = new Map<string, AccountRecord>();
   private deliveries: Deliveries = {};
   private readonly nonces = new Map<string, number>();
+  /** Outstanding probe id (hex) → the lookup of the record holding it. */
+  private readonly probes = new Map<string, string>();
   private readonly inboundBox: InboundBox;
 
   private constructor(
@@ -203,7 +242,9 @@ export class Vault {
       : await genesis(opts.nsm, opts.cfg.custodians, f);
     const v = new Vault(opts.cfg, opts.nsm, keys, f, opts.now ?? Date.now);
     for (const [lookup, blob] of Object.entries(opts.state?.records ?? {})) {
-      v.records.set(lookup, unsealRecord(keys.kStore, fromHex(lookup), blob));
+      const r = unsealRecord(keys.kStore, fromHex(lookup), blob);
+      v.records.set(lookup, r);
+      for (const c of r.contacts) for (const d of c.pushes) if (d.probe) v.probes.set(toHex(d.probe.id), lookup);
     }
     if (opts.state?.deliveries) v.deliveries = unsealDeliveries(keys.kStore, opts.state.deliveries);
     return v;
@@ -271,7 +312,7 @@ export class Vault {
     chain: ChainView,
     writes: Writes,
   ): Promise<
-    | { status: 'pending-confirmation' | 'change-pending' | 'confirmed' | 'push-updated'; maturesAt?: number }
+    | { status: 'pending-confirmation' | 'change-pending' | 'confirmed' | 'push-added'; maturesAt?: number }
     | { status: 'channels'; channels: ChannelStatus[] }
   > {
     const account = contractIdFromStrkey(req.account);
@@ -307,7 +348,7 @@ export class Vault {
     const authorizer = req.authorization.publicKey;
 
     if (inner.op === 'status') return { status: 'channels', channels: channelStatus(record) };
-    if (inner.op === 'push') return this.updatePush(record, inner.contact, inner.push, writes);
+    if (inner.op === 'push') return this.addPush(record, inner.contact, inner.push, writes);
 
     if (inner.op === 'remove') {
       const target = record?.contacts.find((c) => equal(c.id, inner.contact) && c.state === 'active');
@@ -324,16 +365,14 @@ export class Vault {
     if (inner.emailGuardian && !inner.push) {
       throw new ContactRefused('an account with an email guardian needs a Web Push channel as well');
     }
-    if (inner.push) {
-      const loopback = this.cfg.allowLoopbackPush && inner.push.endpoint.startsWith('http://127.0.0.1:');
-      if (!inner.push.endpoint.startsWith('https://') && !loopback) throw new ContactRefused('push endpoint must be https');
-    }
+    if (inner.push) this.checkEndpoint(inner.push);
     if (!(inner.purposes & 1)) throw new ContactRefused('security alerts are always a purpose');
     const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
     const contact: Contact = {
       id: inner.contact,
       address: inner.address,
-      ...(inner.push ? { push: inner.push } : {}),
+      // The browser created the subscription for this request: it is live now.
+      pushes: inner.push ? [this.newDevice(inner.push)] : [],
       kCode: inner.kCode,
       emailGuardian: inner.emailGuardian,
       purposes: inner.purposes,
@@ -342,8 +381,6 @@ export class Vault {
       confirm: { codeHash: sha256(code), expiresAt: this.now() + CONFIRMATION_TTL_MS, attempts: 0 },
       authorizer,
       createdLedger: chain.ledger,
-      // The browser created the subscription for this request: it is live now.
-      ...(inner.push ? { pushCheckedAt: this.now() } : {}),
     };
 
     if (inner.op === 'register') {
@@ -411,125 +448,176 @@ export class Vault {
     for (const c of record.contacts.filter((x) => x.state === 'active')) {
       const sent = await sendEmail(this.cfg.sending, { to: c.address, subject: t.subject, text: t.body, idempotencyKey: key }, this.fetchImpl);
       if (!sent.provider) throw new ContactRefused('the existing contact could not be notified');
-      if (c.push && !c.pushGone) await this.push(c, t, { kind: 'contact_change', code: '' }, key, true);
+      await this.pushAll(c, t, { kind: 'contact_change', code: '' }, key);
     }
   }
 
-  private async push(
-    c: Contact,
-    t: AlertText,
-    extra: { kind: string; code: string },
-    topicSeed: string,
-    required: boolean,
-  ): Promise<PushOutcome> {
-    const payload = new TextEncoder().encode(JSON.stringify({ v: 1, kind: extra.kind, title: t.title, body: t.push, code: extra.code }));
-    return this.send(c, payload, {
-      ttl: required ? 7 * 86_400 : 86_400,
-      urgency: required ? 'high' : 'normal',
-      topic: toBase64Url(sha256(topicSeed).subarray(0, 24)),
-    });
+  private checkEndpoint(push: PushChannel): void {
+    const loopback = this.cfg.allowLoopbackPush && push.endpoint.startsWith('http://127.0.0.1:');
+    if (!push.endpoint.startsWith('https://') && !loopback) throw new ContactRefused('push endpoint must be https');
   }
 
-  /** One push to `c`'s subscription; an accepted one records that the subscription is live. */
-  private async send(c: Contact, payload: Uint8Array, o: { ttl: number; urgency: string; topic: string }): Promise<PushOutcome> {
+  /** A device the owner's browser subscribed just now: live, acknowledged, first probe one interval away. */
+  private newDevice(channel: PushChannel): PushDevice {
+    const now = this.now();
+    return { channel, addedAt: now, ackedAt: now, nextProbeAt: now + (this.cfg.probeIntervalMs ?? PROBE_INTERVAL_MS), unanswered: 0 };
+  }
+
+  /** A push to every device of `c` whose subscription is not gone. */
+  private async pushAll(c: Contact, t: AlertText, extra: { kind: string; code: string }, topicSeed: string): Promise<void> {
+    for (const d of c.pushes) if (!d.gone) await this.push(c, d, t, extra, topicSeed);
+  }
+
+  private async push(c: Contact, d: PushDevice, t: AlertText, extra: { kind: string; code: string }, topicSeed: string): Promise<PushOutcome> {
+    const payload = new TextEncoder().encode(JSON.stringify({ v: 1, kind: extra.kind, title: t.title, body: t.push, code: extra.code }));
+    const outcome = await this.send(d, payload, { ttl: 7 * 86_400, urgency: 'high', topic: toBase64Url(sha256(topicSeed).subarray(0, 24)) });
+    if (outcome === 'gone') await this.lapse(c, d, true);
+    return outcome;
+  }
+
+  /** One push to device `d`. */
+  private async send(d: PushDevice, payload: Uint8Array, o: { ttl: number; urgency: string; topic: string }): Promise<PushOutcome> {
     const r = await pushMessage(
-      c.push!,
+      d.channel,
       payload,
       { vapid: { privateKey: this.keys.vapidPrivate, publicKey: this.keys.vapidPublic }, subject: this.cfg.pushSubject, ...o },
       this.fetchImpl,
     );
-    if (r.outcome === 'accepted') c.pushCheckedAt = this.now();
     return r.outcome;
   }
 
   /**
-   * The liveness probe (spec §10.6): an RFC 8030 push with `TTL: 0` and
-   * `Urgency: very-low`, one `Topic` so a newer probe replaces an
-   * undelivered one. The service worker shows it as a quiet status
-   * notification under one tag (WebKit revokes a subscription whose pushes
-   * show nothing).
+   * The liveness probe (spec §10.6): an RFC 8030 push kept a week for a
+   * device that is offline (`TTL`), `Urgency: low`, and one `Topic`, so a
+   * newer probe replaces an undelivered one, carrying a fresh 16-octet probe
+   * id. The service worker shows a
+   * notification that asks to be tapped (WebKit revokes a subscription whose
+   * pushes show nothing); a tap posts the id signed by the device key
+   * ([`ack`]).
    */
-  private probeOne(c: Contact): Promise<PushOutcome> {
-    const payload = new TextEncoder().encode(JSON.stringify({ v: 1, kind: 'probe' }));
-    return this.send(c, payload, { ttl: 0, urgency: 'very-low', topic: 'probe' });
+  private probeOne(d: PushDevice, lookup: string): Promise<PushOutcome> {
+    if (d.probe) this.probes.delete(toHex(d.probe.id));
+    const id = new Uint8Array(randomBytes(16));
+    d.probe = { id, sentAt: this.now() };
+    this.probes.set(toHex(id), lookup);
+    const payload = new TextEncoder().encode(JSON.stringify({ v: 1, kind: 'probe', probe: toBase64Url(id) }));
+    return this.send(d, payload, { ttl: 7 * 86_400, urgency: 'low', topic: 'probe' });
   }
 
-  /** The subscription is gone: mark it, and tell the contact's address once. */
-  private async lapse(c: Contact, notify: boolean): Promise<void> {
-    if (c.pushGone) return;
-    c.pushGone = true;
-    c.lapsedAt = this.now();
+  /** Device `d`'s subscription is gone: mark it, and tell the contact's address once. */
+  private async lapse(c: Contact, d: PushDevice, notify: boolean): Promise<void> {
+    if (d.gone) return;
+    d.gone = true;
+    d.lapsedAt = this.now();
+    if (d.probe) this.probes.delete(toHex(d.probe.id));
+    delete d.probe;
     if (!notify) return;
     const t = pushLapsedNotice(this.cfg.walletOrigin);
-    const key = toHex(sha256(`lapsed|${toHex(c.id)}|${c.push?.endpoint ?? ''}`));
+    const key = toHex(sha256(`lapsed|${toHex(c.id)}|${d.channel.endpoint}`));
     await sendEmail(this.cfg.sending, { to: c.address, subject: t.subject, text: t.body, idempotencyKey: key }, this.fetchImpl);
   }
 
   /**
-   * `push`: a new subscription for an existing contact. It applies at once
-   * only when the contact has none or the current one is gone, checked by a
-   * probe now; a contact whose notifications still work moves them only by
-   * a replacement, under its 14-day delay. The address is told.
+   * `push`: add this device's subscription to an existing contact, at once
+   * (spec §10.3 rule 8). Adding a device cannot take alerts away from the
+   * owner, and whoever holds an administrative passkey controls the account
+   * anyway; only replacing or removing the contact waits 14 days. A device
+   * already listed (the same endpoint) gets its new keys. Lapsed devices
+   * make room first; past [`MAX_PUSH_DEVICES`] the request is refused. The
+   * address is told.
    */
-  private async updatePush(
+  private async addPush(
     record: AccountRecord | undefined,
     id: Uint8Array,
-    push: NonNullable<Contact['push']>,
+    push: PushChannel,
     writes: Writes,
-  ): Promise<{ status: 'push-updated' }> {
+  ): Promise<{ status: 'push-added' }> {
     const c = record?.contacts.find((x) => equal(x.id, id));
     if (!record || !c) throw new ContactRefused('no such contact');
-    const loopback = this.cfg.allowLoopbackPush && push.endpoint.startsWith('http://127.0.0.1:');
-    if (!push.endpoint.startsWith('https://') && !loopback) throw new ContactRefused('push endpoint must be https');
-    if (c.push && !c.pushGone) {
-      const now = await this.probeOne(c);
-      if (now === 'accepted') {
-        await this.write(record.account, record, writes);
-        throw new ContactRefused('the current notifications still reach their device; replace the contact to move them');
+    this.checkEndpoint(push);
+    const device = this.newDevice(push);
+    const same = c.pushes.findIndex((d) => d.channel.endpoint === push.endpoint);
+    for (const d of same >= 0 ? [c.pushes[same]!] : []) if (d.probe) this.probes.delete(toHex(d.probe.id));
+    if (same >= 0) c.pushes[same] = device;
+    else {
+      if (c.pushes.length >= MAX_PUSH_DEVICES) c.pushes = c.pushes.filter((d) => !d.gone);
+      if (c.pushes.length >= MAX_PUSH_DEVICES) {
+        throw new ContactRefused(`this alert contact already has ${MAX_PUSH_DEVICES} devices; replace the contact to start over`);
       }
-      if (now === 'retry') throw new ContactRefused('the current notifications could not be checked; try again');
-      await this.lapse(c, false);
+      c.pushes.push(device);
     }
-    c.push = push;
-    delete c.pushGone;
-    delete c.lapsedAt;
-    c.pushCheckedAt = this.now();
-    const t = pushMovedNotice(this.cfg.walletOrigin);
+    const t = pushAddedNotice(this.cfg.walletOrigin);
     await sendEmail(
       this.cfg.sending,
-      { to: c.address, subject: t.subject, text: t.body, idempotencyKey: toHex(sha256(`moved|${toHex(c.id)}|${push.endpoint}`)) },
+      { to: c.address, subject: t.subject, text: t.body, idempotencyKey: toHex(sha256(`added|${toHex(c.id)}|${push.endpoint}`)) },
       this.fetchImpl,
     );
     await this.write(record.account, record, writes);
-    return { status: 'push-updated' };
+    return { status: 'push-added' };
   }
 
   /**
-   * Probe every active subscription the push service has accepted nothing
-   * for in the probe interval. A 404 or 410 marks it lapsed and emails the
-   * contact (spec §10.6). Counts only: the host learns no account.
+   * A device's acknowledgement of probe `probeId` (spec §10.6): its device
+   * key's signature over [`probeAckMessage`]. Single use. It makes the
+   * device acknowledged again. The host relays it and learns nothing but
+   * that some probe was acknowledged.
    */
-  async probe(): Promise<{ probed: number; lapsed: number; writes: Writes }> {
+  async ack(probeId: Uint8Array, signature: Uint8Array): Promise<{ ok: boolean; writes: Writes }> {
     const writes: Writes = {};
-    let probed = 0;
-    let lapsed = 0;
+    const lookup = probeId.length === 16 ? this.probes.get(toHex(probeId)) : undefined;
+    const r = lookup ? this.records.get(lookup) : undefined;
+    const d = r?.contacts.flatMap((c) => c.pushes).find((x) => x.probe && equal(x.probe.id, probeId));
+    if (!r || !d || !acknowledged(d.channel.deviceKey, probeId, signature)) return { ok: false, writes };
+    this.probes.delete(toHex(probeId));
+    delete d.probe;
+    d.ackedAt = this.now();
+    d.unanswered = 0;
+    delete d.unacknowledged;
+    await this.write(r.account, r, writes);
+    return { ok: true, writes };
+  }
+
+  /**
+   * Probe every active device whose probe is due. A 404 or 410 marks it
+   * lapsed and emails the contact; a device that acknowledged none of
+   * [`ACK_MISSED_PROBES`] probes the push service accepted is marked
+   * unacknowledged, and the contact emailed once (spec §10.6). Counts only:
+   * the host learns no account.
+   */
+  async probe(): Promise<{ probed: number; lapsed: number; unacknowledged: number; writes: Writes }> {
+    const writes: Writes = {};
+    const out = { probed: 0, lapsed: 0, unacknowledged: 0 };
     const now = this.now();
     const interval = this.cfg.probeIntervalMs ?? PROBE_INTERVAL_MS;
-    for (const r of [...this.records.values()]) {
+    for (const [lookup, r] of [...this.records.entries()]) {
       let changed = false;
       for (const c of r.contacts) {
-        if (c.state !== 'active' || !c.push || c.pushGone || now - (c.pushCheckedAt ?? 0) < interval) continue;
-        probed++;
-        changed = true;
-        const outcome = await this.probeOne(c);
-        if (outcome === 'gone') {
-          await this.lapse(c, true);
-          lapsed++;
-        } else if (outcome === 'retry') c.pushCheckedAt = now - interval + PROBE_RETRY_MS;
+        if (c.state !== 'active') continue;
+        for (const d of c.pushes) {
+          if (d.gone || now < d.nextProbeAt) continue;
+          changed = true;
+          if (d.unanswered >= ACK_MISSED_PROBES && !d.unacknowledged) {
+            d.unacknowledged = true;
+            out.unacknowledged++;
+            const t = pushUnconfirmedNotice(this.cfg.walletOrigin);
+            const key = toHex(sha256(`unacknowledged|${toHex(c.id)}|${d.channel.endpoint}|${d.ackedAt}`));
+            await sendEmail(this.cfg.sending, { to: c.address, subject: t.subject, text: t.body, idempotencyKey: key }, this.fetchImpl);
+          }
+          out.probed++;
+          const outcome = await this.probeOne(d, lookup);
+          if (outcome === 'gone') {
+            await this.lapse(c, d, true);
+            out.lapsed++;
+          } else if (outcome === 'retry') d.nextProbeAt = now + PROBE_RETRY_MS;
+          else {
+            d.unanswered++;
+            d.nextProbeAt = now + interval;
+          }
+        }
       }
       if (changed) await this.write(r.account, r, writes);
     }
-    return { probed, lapsed, writes };
+    return { ...out, writes };
   }
 
   /** Accounts with an active contact, for the host to reconcile from controller state (spec §10.2). */
@@ -539,62 +627,53 @@ export class Vault {
       .map((r) => strkeyFromContractId(r.account));
   }
 
-  /** Every watched attempt, for the host to read (spec §10.2). */
-  watched(): { account: string; attemptId: string }[] {
-    return [...this.records.values()].flatMap((r) =>
-      (r.watch ?? []).map((w) => ({ account: strkeyFromContractId(r.account), attemptId: w.attemptId })),
-    );
-  }
-
-  /** Stop watching an attempt: it left `Collecting`, its evidence deadline passed, or its email vote was alerted. */
-  async unwatch(account: string, attemptId: string): Promise<{ writes: Writes }> {
-    const writes: Writes = {};
-    const id = contractIdFromStrkey(account);
-    const r = this.records.get(await this.lookup(id));
-    if (r?.watch?.some((w) => w.attemptId === attemptId)) {
-      r.watch = r.watch.filter((w) => w.attemptId !== attemptId);
-      if (!r.watch.length) delete r.watch;
-      await this.write(r.account, r, writes);
-    }
-    return { writes };
-  }
-
-  /** `attempt_begun` on an account with an email-guardian contact: watch the attempt. */
-  private watch(r: AccountRecord, attemptId: string): boolean {
-    if (!r.contacts.some((c) => c.state === 'active' && c.emailGuardian)) return false;
-    const list = (r.watch ??= []);
-    if (list.some((w: WatchedAttempt) => w.attemptId === attemptId)) return false;
-    list.push({ attemptId, since: this.now() });
-    if (list.length > WATCH_MAX) list.splice(0, list.length - WATCH_MAX);
-    return true;
+  /**
+   * Count an open attempt (`attempt_begun`, or one reconciliation found)
+   * among the account's; whether more than `MANY_OPEN_ATTEMPTS` are open
+   * at `open.ledger`.
+   */
+  private count(r: AccountRecord, attemptId: string, open: { until: number; ledger: number }): boolean {
+    const list = (r.open ?? []).filter((a) => a.until >= open.ledger && a.attemptId !== attemptId);
+    if (open.until >= open.ledger) list.push({ attemptId, until: open.until });
+    list.sort((a, b) => b.until - a.until);
+    r.open = list.slice(0, MANY_OPEN_ATTEMPTS + 1);
+    if (!r.open.length) delete r.open;
+    return (r.open?.length ?? 0) > MANY_OPEN_ATTEMPTS;
   }
 
   /**
    * Send the alert for one event to every active contact of its account:
-   * email always, Web Push too for required alerts. Each (event, contact,
-   * channel) is sent at most once (the sealed delivery log); a failed
-   * channel makes the answer `retry`, and only that channel is tried again.
+   * email always, Web Push to every device too for required alerts. Each
+   * (event, contact, channel) is sent at most once (the sealed delivery
+   * log); a failed channel makes the answer `retry`, and only that channel
+   * is tried again. A counted attempt (`attempt_begun` with `open`) sends
+   * nothing itself; while more than `MANY_OPEN_ATTEMPTS` are open it sends
+   * `attempts_many`, under one delivery id per account and
+   * [`MANY_ALERT_EVERY_MS`] window, so at most once per window.
    */
   async dispatch(ev: DispatchRequest): Promise<{ status: 'done' | 'retry'; writes: Writes }> {
     const writes: Writes = {};
     const record = this.records.get(await this.lookup(ev.account));
-    let recordChanged = false;
-    const attemptId = ev.subject.kind === 'attempt' ? ev.subject.attemptId.toString() : undefined;
-    if (record && attemptId !== undefined) {
-      if (ev.name === 'attempt_begun') recordChanged = this.watch(record, attemptId);
-      if (ev.name === 'email_vote_recorded' && record.watch?.some((w) => w.attemptId === attemptId)) {
-        record.watch = record.watch.filter((w) => w.attemptId !== attemptId);
-        if (!record.watch.length) delete record.watch;
-        recordChanged = true;
+    let retry = false;
+    if (record && ev.open && ev.subject.kind === 'attempt') {
+      const many = this.count(record, ev.subject.attemptId.toString(), ev.open);
+      await this.write(record.account, record, writes);
+      if (many) {
+        const window = Math.floor(this.now() / MANY_ALERT_EVERY_MS);
+        const eventId = `attempts_many:${strkeyFromContractId(ev.account)}:${window}`;
+        retry = await this.deliver({ ...ev, eventId, name: 'attempts_many', class: 'required' }, record, writes);
       }
     }
-    if (ev.class === 'watch') {
-      if (recordChanged && record) await this.write(record.account, record, writes);
-      return { status: 'done', writes };
-    }
+    if (ev.class !== 'count') retry = (await this.deliver(ev, record, writes)) || retry;
+    return { status: retry ? 'retry' : 'done', writes };
+  }
+
+  /** `dispatch`'s sending; `true` when a channel must be retried. */
+  private async deliver(ev: DispatchRequest, record: AccountRecord | undefined, writes: Writes): Promise<boolean> {
     const contacts = record?.contacts.filter((c) => c.state === 'active') ?? [];
     let retry = false;
     let logged = false;
+    let lapsed = false;
     for (const c of contacts) {
       const code = await alertCode({
         key: c.kCode,
@@ -603,7 +682,7 @@ export class Vault {
         account: ev.account,
         subject: ev.subject,
       });
-      const t = alertText(ev.name, code, this.cfg.walletOrigin, ev.suppressed ?? 0);
+      const t = alertText(ev.name, code, this.cfg.walletOrigin, ev.suppressed ?? 0, ev.class === 'required');
       const base = `${ev.eventId}|${toHex(c.id)}`;
       if (!(`${base}|email` in this.deliveries)) {
         const r = await sendEmail(
@@ -616,25 +695,25 @@ export class Vault {
           logged = true;
         } else retry = true;
       }
-      if (ev.class === 'required' && c.push && !c.pushGone && !(`${base}|push` in this.deliveries)) {
-        const outcome = await this.push(c, t, { kind: ev.name, code }, ev.eventId, true);
+      if (ev.class !== 'required') continue;
+      for (const d of c.pushes) {
+        const slot = `${base}|push|${deviceId(d.channel.endpoint)}`;
+        if (d.gone || slot in this.deliveries) continue;
+        const outcome = await this.push(c, d, t, { kind: ev.name, code }, ev.eventId);
         if (outcome === 'accepted') {
-          this.deliveries[`${base}|push`] = this.now();
+          this.deliveries[slot] = this.now();
           logged = true;
-          recordChanged = true;
-        } else if (outcome === 'gone') {
-          await this.lapse(c, true);
-          recordChanged = true;
-        } else retry = true;
+        } else if (outcome === 'gone') lapsed = true;
+        else retry = true;
       }
     }
-    if (recordChanged && record) await this.write(record.account, record, writes);
+    if (lapsed && record) await this.write(record.account, record, writes);
     if (logged) {
       const cutoff = this.now() - DELIVERY_LOG_RETENTION_MS;
       for (const [k, at] of Object.entries(this.deliveries)) if (at < cutoff) delete this.deliveries[k];
       writes.deliveries = sealDeliveries(this.keys.kStore, this.deliveries);
     }
-    return { status: retry ? 'retry' : 'done', writes };
+    return retry;
   }
 
   /** Accounts (C... addresses) whose pending change is due at `at`. */
@@ -686,9 +765,14 @@ function channelStatus(record: AccountRecord | undefined): ChannelStatus[] {
   return (record?.contacts ?? []).map((c) => ({
     contact: toHex(c.id),
     state: c.state,
-    push: !c.push ? 'none' : c.pushGone ? 'lapsed' : 'live',
-    ...(c.pushCheckedAt !== undefined ? { pushCheckedAt: c.pushCheckedAt } : {}),
-    ...(c.lapsedAt !== undefined ? { lapsedAt: c.lapsedAt } : {}),
+    push: (['live', 'unacknowledged', 'lapsed'] as const).find((s) => c.pushes.some((d) => deviceState(d) === s)) ?? 'none',
+    devices: c.pushes.map((d) => ({
+      id: deviceId(d.channel.endpoint),
+      state: deviceState(d),
+      addedAt: d.addedAt,
+      ackedAt: d.ackedAt,
+      ...(d.lapsedAt !== undefined ? { lapsedAt: d.lapsedAt } : {}),
+    })),
     ...(record?.change && equal(record.change.target, c.id)
       ? {
           change: {

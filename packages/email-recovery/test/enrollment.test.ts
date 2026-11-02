@@ -17,6 +17,7 @@ import {
   encodeSealedRequest,
   openRequest,
   prepareContactChange,
+  probeAckMessage,
   pushUpdateRequest,
   rawLowS,
   removalRequest,
@@ -35,12 +36,14 @@ const push = {
     auth: Buffer.alloc(16, 3).toString('base64url'),
   },
 };
+const deviceKey = Uint8Array.from([4, ...Array(64).fill(5)]);
 const base = {
   account,
   address: 'Test.User+tag@proton.me',
   accountCode,
   emailGuardian: true,
   push,
+  deviceKey,
   purposes: PURPOSE_SECURITY_ALERTS,
   consentVersion: 1,
 };
@@ -97,12 +100,14 @@ describe('alert contact requests', () => {
 
   it('round-trips push updates and status reads, which sign purposes and consent version 0', async () => {
     const id = new Uint8Array(16).fill(4);
-    const update = pushUpdateRequest(account, id, push);
+    const update = pushUpdateRequest(account, id, push, deviceKey);
+    expect(update.op === 'push' && update.push.deviceKey).toEqual(deviceKey);
     const status = statusRequest(account);
     for (const r of [update, status]) expect(decodeSealedRequest(encodeSealedRequest(r))).toEqual(r);
     expect(status.contact).toEqual(new Uint8Array(16));
-    expect(() => pushUpdateRequest(account, id, { ...push, endpoint: 'http://push.example/x' })).toThrow(/https/);
-    expect(() => pushUpdateRequest(account, new Uint8Array(15), push)).toThrow(/16 octets/);
+    expect(() => pushUpdateRequest(account, id, { ...push, endpoint: 'http://push.example/x' }, deviceKey)).toThrow(/https/);
+    expect(() => pushUpdateRequest(account, new Uint8Array(15), push, deviceKey)).toThrow(/16 octets/);
+    expect(() => pushUpdateRequest(account, id, push, new Uint8Array(33))).toThrow(/device key/);
     // A status read names no contact.
     const named = encodeSealedRequest({ ...status, contact: id });
     expect(() => decodeSealedRequest(named)).toThrow(/names no contact/);
@@ -123,11 +128,20 @@ describe('alert contact requests', () => {
     await expect(contactRequest({ ...base, purposes: PURPOSE_PRODUCT_UPDATES })).rejects.toThrow(/purposes/);
     await expect(contactRequest({ ...base, consentVersion: 0 })).rejects.toThrow(/consent/);
     await expect(contactRequest({ ...base, push: { ...push, endpoint: 'http://push.example/x' } })).rejects.toThrow(/https/);
+    const { deviceKey: _, ...noDeviceKey } = base;
+    await expect(contactRequest(noDeviceKey)).rejects.toThrow(/device key/);
     await expect(
       contactRequest({ ...base, push: { ...push, endpoint: 'http://127.0.0.1:9/x' }, allowLoopbackPush: true }),
     ).resolves.toBeTruthy();
     expect(() => confirmationRequest(account, new Uint8Array(16), '12345')).toThrow();
     expect(() => decodeSealedRequest(encodeSealedRequest(removalRequest(account, new Uint8Array(16))).slice(0, -1))).toThrow();
+  });
+
+  it('a probe acknowledgement signs the label and the 16-octet probe id', () => {
+    const id = new Uint8Array(16).fill(0x7e);
+    const m = probeAckMessage(id);
+    expect(Buffer.from(m).toString('latin1')).toBe(`nido/email-recovery/v1/probe-ack${Buffer.from(id).toString('latin1')}`);
+    expect(() => probeAckMessage(new Uint8Array(15))).toThrow(/16 octets/);
   });
 
   it('binds every authorized field into the challenge', async () => {

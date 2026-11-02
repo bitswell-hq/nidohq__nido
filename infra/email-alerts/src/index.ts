@@ -19,6 +19,7 @@ export {
   type AttemptView,
   type ChainReads,
   type GetEventsResult,
+  type GetTransactionsResult,
   RpcError,
   StellarRpc,
   accountSigners,
@@ -31,8 +32,8 @@ export {
   AlertService,
   INBOUND_LIMIT,
   INBOUND_KEEP_MS,
+  ACK_LIMIT,
   RECONCILE_EVERY_MS,
-  RECONCILE_SCAN,
   type PollReport,
   type ServiceConfig,
   WindowLimiter,
@@ -42,11 +43,13 @@ export { type HostState, emptyState, loadState, saveState } from './store.js';
 export {
   NEVER_ASKS,
   PASSKEY_DEVICE_LEAD,
+  PREEMPT,
   alertText,
   confirmationText,
   contactChangeNotice,
+  pushAddedNotice,
   pushLapsedNotice,
-  pushMovedNotice,
+  pushUnconfirmedNotice,
 } from './vault/content.js';
 export { type CustodianEndpoint, type Nsm, genesis, restore } from './vault/custody.js';
 export { alertLookup, combineShares, deriveVaultKeys, splitSecret, type VaultKeys } from './vault/keys.js';
@@ -57,10 +60,14 @@ export {
   CONTACT_CHANGE_DELAY_SECONDS,
   type ChainTime,
   type ChainView,
+  ACK_MISSED_PROBES,
   type ChannelStatus,
+  type DeviceState,
+  MANY_ALERT_EVERY_MS,
+  MAX_PUSH_DEVICES,
   PROBE_INTERVAL_MS,
-  WATCH_MAX,
   changeDue,
+  deviceId,
   type ContactResult,
   type DispatchRequest,
   Vault,
@@ -69,3 +76,4 @@ export {
 } from './vault/vault.js';
 export { checkAuthorization, type RelyingParty } from './vault/webauthn.js';
 export { encryptWebPush, pushMessage, vapidAuthorization } from './vault/webpush.js';
+export { type GuardianVote, type JsonTransaction, type WrittenAttempt, guardianVotes, scValFromJson, writtenAttempts } from './votes.js';

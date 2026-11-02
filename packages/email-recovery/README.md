@@ -11,7 +11,7 @@ same code runs in browsers and in Node 20+.
 | `alertCode.ts` | The 6-digit verification code an alert carries: `k_code = HKDF(account_code)`, then `HMAC(k_code, network, controller, account, subject)` | §10.1 |
 | `attestation.ts`, `x509.ts` | Verifies an AWS Nitro Enclaves attestation document as AWS's attestation process document prescribes (COSE_Sign1 ES384, CBOR field rules, certificate path to a pinned root), plus freshness, a non-debug enclave, and an allowed image measurement | §10.5 |
 | `hpke.ts` | HPKE (RFC 9180) base mode, DHKEM(P-256, HKDF-SHA256), HKDF-SHA256, AES-128-GCM, through `@hpke/core` | §10.3 |
-| `enrollment.ts` | Sealed alert-contact requests (register, replace, remove, confirm), the WebAuthn challenge an account passkey signs, and §9.3 rule 2 | §10.3 |
+| `enrollment.ts` | Sealed alert-contact requests (register, replace, remove, add a push device, status, confirm), the WebAuthn challenge an account passkey signs, the message a device key signs to acknowledge a probe, and §9.3 rule 2 | §10.3, §10.6 |
 | `strkey.ts` | `C...` addresses to and from 32-byte contract ids | |
 | `prover/` | The browser prover: `RecoveryProver` starts a Web Worker per proof (`worker.ts`, serving `serve.ts`'s protocol), which downloads and caches the artifact, key and CRS (`assets.ts`, pinned CRS digests), solves the witness with noir_js, proves with Barretenberg on threads when the page is cross-origin isolated, verifies the proof under the circuit's key, and reports each stage (`protocol.ts`) | §6.5 |
 | `enrollmentEmail.ts` | The enrollment Subject (`E`), the wallet's check of the enrollment email with the circuit's rules, and the salted key pin tree | §5.4, §7.4 |
@@ -29,7 +29,8 @@ const vault = await attestedVaultKey(await fetchAttestation(nonce), {
   nonce,
 });
 const sub = await registration.pushManager.subscribe({ applicationServerKey: vault.vapid, userVisibleOnly: true });
-const request = await contactRequest({ account, address, accountCode, emailGuardian: true, push: sub.toJSON(), purposes: 1, consentVersion: 1 });
+const deviceKey = await serviceWorkerDeviceKey();      // the P-256 key that signs probe acknowledgements
+const request = await contactRequest({ account, address, accountCode, emailGuardian: true, push: sub.toJSON(), deviceKey, purposes: 1, consentVersion: 3 });
 const { challenge, finish } = await prepareContactChange(vault, request, await fetchVaultNonce());
 const a = await navigator.credentials.get({ publicKey: { challenge, rpId, userVerification: 'required' } });
 await postContact(encodeContactRequest(finish({ publicKey: accountSignerKey, ...assertionFields(a) })));

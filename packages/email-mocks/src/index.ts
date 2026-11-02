@@ -54,5 +54,5 @@ export {
 } from './custodian.js';
 export { type InjectedFailure, LettermintMock, SCALEWAY_PATH, ScalewayTemMock, type SentEmail } from './sending.js';
 export { type PushMessage, PushServiceMock, PushUserAgentMock, decryptWebPush } from './webpush.js';
-export { type RpcEvent, SCAN_WINDOW_LEDGERS, StellarRpcMock, cursorLedger, eventId, ledgerCloseTime, toid } from './stellarRpc.js';
+export { type RpcEvent, type RpcTransaction, SCAN_WINDOW_LEDGERS, StellarRpcMock, cursorLedger, eventId, ledgerCloseTime, toid } from './stellarRpc.js';
 export { type AssertOptions, type Assertion, AuthenticatorMock, FLAG_BE, FLAG_BS, FLAG_UP, FLAG_UV } from './webauthn.js';
