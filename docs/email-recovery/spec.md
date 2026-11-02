@@ -492,17 +492,30 @@ holds the account's passkey **[built, tested]**:
    page warns, without blocking, that someone who takes over that inbox can
    delete the alerts sent to it, and recommends an address at another
    provider (`alertAddressWarning`). When the inbox's provider is the
-   platform that likely syncs this device's passkey (`gmail.com` or
-   `googlemail.com` in Chrome or on Android, `icloud.com`, `me.com` or
-   `mac.com` on Apple platforms, read from the user agent), the page notes
-   that losing that one account would lose the passkey and the inbox
-   together, and recommends another inbox or another helper
-   (`syncedPasskeyNote`). The page names what each party sees: the mail
+   platform that syncs this device's passkey (`gmail.com` or
+   `googlemail.com` for Google Password Manager, `icloud.com`, `me.com` or
+   `mac.com` for Apple's), the page notes that losing that one account
+   would lose the passkey and the inbox together, and recommends another
+   inbox or another helper (`syncedPasskeyNote`). It reads that from the
+   passkey's own authenticator data once the passkey has signed on this
+   device (W3C WebAuthn Level 3 §6.1: no note for a passkey whose BS flag
+   says it is not synced; the platform from the AAGUID where attested
+   credential data carries one, none for another credential manager's,
+   AAGUIDs as listed by passkeydeveloper/passkey-authenticator-aaguids),
+   and from the user agent where those are silent (Chrome other than Edge,
+   Opera or Samsung Internet, or Android, for Google; Apple platforms for
+   Apple) (`passkeyBackup`). The page names what each party sees: the mail
    provider sees that a Nido recovery email was sent and when, and a chain
    watcher may link it to the account by timing (`PROVIDER_SEES`); the
    address is stored only in the vault and only when alerts go to it, and
    the sending services that deliver alerts, named, see it then
-   (`ENROLLED_ADDRESS_NOTE`, `CONSENT_TEXT` version 3; §10.7).
+   (`ENROLLED_ADDRESS_NOTE`, `CONSENT_TEXT` version 4; §10.7). On an iPhone
+   or iPad outside the web app added to the Home Screen, where Web Push
+   does not work ("Web Push for Web Apps on iOS and iPadOS",
+   https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/),
+   the page says before asking for notifications to add this Nido's own
+   address to the Home Screen and continue from there (`homeScreenNeeded`);
+   *Add this device* on the settings page does the same.
 4. Deploy the guardian with `C` and the pin (§7.4), paid by the wallet's
    submitter account (§13 question 10), then read back its wasm hash and
    `config()` and compare every field with what it intended (§5.5).
@@ -574,7 +587,9 @@ testnet: a constant of the build, never read from the page's own address),
 and the page advises keeping it outside the account behind the enrolled
 inbox (not in that provider's password manager or cloud drive), since
 whoever takes over that account would hold both the inbox and the code
-(`recoveryKitText`, `KIT_STORAGE_ADVICE`, `walletApex`).
+(`recoveryKitText`, `KIT_STORAGE_ADVICE`, `walletApex`). Next to *Copy* it
+says that the clipboard can sync the code to the user's other devices and
+that keyboard apps can read it (`COPY_KIT_NOTE`).
 
 **[built, tested]**: `packages/email-recovery/src/backup.ts` (the Argon2id
 of `@noble/hashes`, checked against RFC 9106 §5.3's test vector; the EFF
@@ -598,7 +613,11 @@ guardian's `config()`. A match means the code is the guardian's. No match
 means either a wrong code or an enrollment key the key list does not hold;
 the page tells the user to look for another copy and, failing that, to
 enroll again while the passkey still works (`checkCodeAgainstPin`,
-`codeCheckText` in `emailModel.ts`; `settingsPage.ts`).
+`codeCheckText` in `emailModel.ts`; `settingsPage.ts`). The device records
+when the code last matched (here, or typed back at enrollment) and, when
+that was more than 182 days ago or never on this device, opens the check
+with a reminder: in the wallet only, never as a notification
+(`codeCheckReminder`, `CODE_CHECK_EVERY_MS`; `settingsEmail.test.ts`).
 
 ### 5.7 Finding the account after losing every device
 
@@ -1505,15 +1524,36 @@ exactly what that validator refuses.)
    second vote for it.
 2. **Second alert channel.** A member that lists an email guardian requires
    a second alert channel registered with the alert service (Web Push to a
-   passkey device, §10). The rule holds at runtime, not only at enrollment:
-   the recovery settings page checks the channel (this device's own
+   passkey device, §10): the builder refuses one without
+   `secondAlertChannel`, and the vault refuses an email-guardian contact
+   without a push subscription (§10.3 rule 6). **What is enforced, and
+   when.** The rule binds the wallet when it builds a member: at
+   enrollment and at every later save. On chain nothing changes when the
+   channel later lapses or goes unacknowledged: the guardian is immutable
+   and Perch counts its vote under the applied member, so under email plus
+   delay (rule 3) the email vote alone still authorizes an attempt. The
+   recovery settings page checks the channel (this device's own
    subscription and its last acknowledged probe at once; the vault's view
-   of every device, `status` of §10.3, with the passkey) and, while no
-   device is live (each one lapsed, the push service having answered 404 or
-   410, or unacknowledged, having confirmed none of two probes, §10.6; or
-   this device's subscription is gone), shows it prominently, offers to add
-   this device (`push` of §10.3, at once), and refuses to save a
-   configuration that keeps the email guardian until a device is live.
+   of every device, `status` of §10.3, with the passkey). While no device
+   is live (each one lapsed, the push service having answered 404 or 410,
+   or unacknowledged, having confirmed none of two probes, §10.6; or this
+   device's subscription is gone) it says what still holds: under email
+   plus delay, *Your email helper can still approve a recovery alone, and
+   your second alert channel is not working: fix the channel now, or add
+   another helper*, and that a recovery the email approves finishes after
+   the waiting period unless cancelled; otherwise, that the email helper
+   still counts as one approval and that its approvals now reach the owner
+   only by email (`secondChannelWarning`). It offers the remedies in one
+   click: *Add this device* (`push` of §10.3, at once) and, under email
+   plus delay, *Add another helper*, which sets the settings below to need
+   two approvals and focuses the helpers' field. Until a device is live it
+   refuses to save a member in which the email vote alone authorizes
+   (`emailAloneAuthorizes`: `guardian-only` at quorum 1 with the email
+   guardian listed) and accepts one that keeps the email guardian but needs
+   another approval as well, which reduces the exposure the warning is
+   about. The vault tells the contact's address when a device lapses or
+   goes unacknowledged, and whether another device still receives the
+   notifications; when none does, it says the same as the page (§10.6).
 3. **Email plus delay.** If the email vote alone authorizes an attempt
    (`guardian-only` mode with `quorum = 1`), the member must use the `loss`
    profile and a delay of at least 7 days of ledgers at the network's target
@@ -1558,20 +1598,28 @@ email-guardian contact without it (§10.3) **[built, tested]**.
 Every save on the recovery settings page lists the account's email guardian
 (found by its wasm hash, as at recovery) with its typed marker, so these
 rules apply to later changes as well as to enrollment; the channel's
-runtime state decides `secondAlertChannel` (`channelView` in
+runtime state decides whether a member in which the email vote alone
+authorizes may be saved (`channelView` and `emailAloneAuthorizes` in
 `emailModel.ts`, tested in `emailModel.test.ts`, "the second alert channel
-at runtime (rule 2)"; `settingsEmail.test.ts` shows a lapsed channel and an
-unacknowledged one refusing a save that keeps the email helper, and a save
-keeping it under the rules otherwise) **[built, tested]**.
+at runtime (rule 2)"; `settingsEmail.test.ts` shows a lapsed channel under
+email plus delay saying the helper still approves alone, offering this
+device and another helper, refusing a save at quorum 1 and accepting the
+save *Add another helper* sets up at quorum 2; an unacknowledged channel at
+quorum 2 saying the helper still counts and refusing a change to quorum 1;
+and a save keeping the helper under the rules while the channel works)
+**[built, tested]**.
 
 **What each layer guarantees.** On chain, for every configuration: email
 approvals alone never complete a recovery without the delay passing, and
 with `quorum ≥ 2` (or in `combined` mode) they never authorize one. The
 wallet rules add that Nido never produces a configuration in which the
 email vote alone authorizes, except under `loss` with a delay of at least 7
-days at the network's target close time when the member is built, and a
-second alert channel. The chain accepts any configuration the owner applies, so a
-different wallet could build one Nido would refuse.
+days at the network's target close time and a second alert channel, both
+as they stand when the member is built. If the channel later lapses or
+goes unacknowledged, the chain still accepts the email vote alone under
+such a member; the wallet tells the owner and offers to add a device or
+another helper (rule 2). The chain accepts any configuration the owner
+applies, so a different wallet could build one Nido would refuse.
 
 `crates/integration-tests/tests/it/email_guardian.rs` pins the on-chain part
 on Nido's stack (Perch's controller and account from their deployed wasm,
@@ -1602,12 +1650,11 @@ alerts: no tag, no registration, no event from the guardian.
 | none: the email guardian's vote on a collecting attempt (`email_vote_recorded`) | — | **Required:** the inbox and the account code were used for an attempt that still needs other approvals; found in the vote's transaction (§10.2) | Every channel |
 | none: the email guardian's vote to cancel an attempt (`email_cancel_recorded`) | — | **Required:** the inbox and the account code were used to stop a recovery, perhaps the owner's own; found in the vote's transaction (§10.2) | Every channel |
 | none: the email guardian's approval of a reconfiguration or upgrade (`email_change_recorded`) | — | **Required:** the inbox and the account code were used to approve a settings change; found in the approval's transaction; its code is the change digest's (§10.1) | Every channel |
-| none: more than `MANY_OPEN_ATTEMPTS` (8) open attempts (`attempts_many`) | — | **Required:** many open attempts can hide the one that matters; raised by the vault when it counts `attempt_begun`, at most once per account per 24 hours (§10.2) | Every channel |
 | `recovery_completed` | account | Required: the account's signers changed | Every channel |
 | `epoch_advanced` | account | Required: the recovery configuration (guardians, timing, the email guardian itself) changed | Every channel |
 | `attempt_cancelled` | account | Informational | Email |
 | `change_evidence_recorded` | account | Informational: approvals for a reconfiguration or upgrade are being collected | Email |
-| `attempt_begun` | account | None by default: opening an attempt is permissionless and grants nothing, so alerting each one would teach users to ignore recovery alerts. The vault counts the attempt among the account's open ones (`attempts_many` above), and the wallet shows open attempts itself (§10.2). A service configured with `emailOnAttemptBegun` emails it, at most one per account per 24 hours of ledger close time | None (configurable: email, rate-limited) |
+| `attempt_begun` | account | None by default, however many are open: opening an attempt is permissionless and grants nothing, so any notice of openings is one a stranger could trigger, which would teach users to ignore recovery alerts. The wallet shows open attempts itself, with a warning above the list when more than `MANY_OPEN_ATTEMPTS` (8) are open (§10.2). A service configured with `emailOnAttemptBegun` emails it, at most one per account per 24 hours of ledger close time (§11.4) | None (configurable: email, rate-limited) |
 | `attempt_invalidated` | account | None | None |
 
 Each alert is delivered under an id naming what it is about
@@ -1615,8 +1662,7 @@ Each alert is delivered under an id naming what it is about
 reported it, so the same alert found by the event stream and by
 reconciliation (§10.2) is sent once. `change_evidence_recorded`, emitted for
 each approval of one change, keeps its event id; `email_change_recorded` is
-about the change's digest; `attempts_many` about the account and the
-24-hour window it is sent in.
+about the change's digest.
 
 Topic 0 is the event struct's name in snake case, topic 1 the account, and
 the data the struct's other fields as a map (`#[contractevent]` with one
@@ -1656,8 +1702,7 @@ account.
 k_code  = HKDF-SHA-256(ikm = account_code, salt = "", info = "nido/email-recovery/v1/alert-code-key", L = 32)
 
 subject = 0x01 || BE64(attempt_id)     attempt_begun, attempt_authorized, attempt_cancelled, recovery_completed,
-                                       email_vote_recorded, email_cancel_recorded,
-                                       attempts_many (the attempt whose count raised it)
+                                       email_vote_recorded, email_cancel_recorded
         / 0x02 || BE64(epoch)          epoch_advanced
         / 0x03 || digest               change_evidence_recorded, email_change_recorded (the 32-byte change digest)
 
@@ -1744,11 +1789,23 @@ host can suppress alerts but cannot read or redirect them. It
   authorization entry for the controller's `submit_guardian` or
   `approve_change` (`require_auth_for_args((digest,))`, §8.3), and the
   attempt it changed is in the transaction's meta. So each poll the host
-  also reads the next page of every transaction on the network with Stellar
-  RPC `getTransactions` and `xdrFormat: "json"`, under its own cursor; the
-  method has no filter, so the query singles out nothing, and the RPC
-  decodes the XDR, so a transaction using XDR newer than the host's SDK
-  still reads. In each, `src/votes.ts` takes every authorization entry whose
+  also reads the next pages of every transaction on the network with
+  Stellar RPC `getTransactions` and `xdrFormat: "json"`, pages of 200, up
+  to `TX_PAGES_PER_POLL` = 4 a poll, under its own cursor; the method has
+  no filter, so the query singles out nothing, and the RPC decodes the XDR,
+  so a transaction using XDR newer than the host's SDK still reads. The
+  cursor is a TOID, its ledger in the high 32 bits. The scan is caught up
+  when a page is short and its cursor has reached the latest ledger: a
+  request scans a bounded ledger range (10,000 ledgers in stellar-rpc's
+  current source, `CHANGELOG.md` #908), so a short page alone does not
+  mean caught up. The cursor never moves backwards: Stellar RPC 29.0.1 and
+  30.0.0 answer a caught-up request with a cursor below the request's,
+  the latest ledger's start (observed on `soroban-testnet.stellar.org`,
+  30.0.0, on 2026-11-02), which re-delivers that ledger's transactions,
+  or `"0"` when the request's ledger is past that node's latest, which the
+  next request fails on (stellar/stellar-rpc#745, fixed in the source after
+  30.0.0); the host keeps the request's cursor whenever the answer's is
+  lower. In each, `src/votes.ts` takes every authorization entry whose
   credentials name a contract and whose invocation tree (root or any
   sub-invocation, so a vote nested under another contract's call counts)
   calls one of those two functions of the controller, and the `Attempt`
@@ -1770,13 +1827,11 @@ host can suppress alerts but cannot read or redirect them. It
   `test/liveness.test.ts` the vault's answer comes within milliseconds, and
   on the local network the attack suite records it per run
   (`inbox-email-vote-alerted`, `griefing-then-vote`). **[built, tested]**
-- **Counts open attempts.** For `attempt_begun` on an account the vault
-  holds contacts for, the host reads the attempt's evidence deadline
-  (`attempt`) and has the vault count it. The vault keeps, sealed, the
-  open attempts with the latest deadlines (at most `MANY_OPEN_ATTEMPTS + 1`,
-  enough to tell when more than `MANY_OPEN_ATTEMPTS` = 8 are open) and,
-  while more are open, sends `attempts_many` on every channel under one
-  delivery id per account and 24 hours. **[built, tested]**
+- **Notifies nobody of openings.** `attempt_begun` sends nothing by
+  default, however many attempts are open and however long a stranger
+  keeps opening them, and the host reads nothing for it: any notice of
+  openings would be one anyone could trigger for a fee. The wallet lists
+  open attempts itself (below). **[built, tested]**
 - **Reconciles from controller state** on its first poll, every 6 hours
   (`RECONCILE_EVERY_MS`), and after the RPC refuses a cursor (events or
   transactions aged out of retention; both cursors restart together). For
@@ -1788,18 +1843,32 @@ host can suppress alerts but cannot read or redirect them. It
   within an epoch the evidence windows close in id order, and attempts of
   an earlier epoch are dead. An authorized attempt is alerted, and email
   votes (on the attempt or to cancel it) on open attempts, under the same
-  delivery ids the stream uses (§10), so nothing is sent twice; open
-  attempts are counted. A completed recovery the stream missed is not
+  delivery ids the stream uses (§10), so nothing is sent twice. A
+  completed recovery the stream missed is not
   re-alerted: reconciliation restores the alerts that can still change the
   outcome. How many attempts are open bounds the reads, as the attacker's
   fees bound how many there are. **[built, tested]**
 - **Raises a lag alarm** (the log, an `onAlarm` hook for an operator's pager,
-  and `GET /v1/health`) when its cursor is more than 720 ledgers (an hour)
-  behind the chain, once per episode, and when the RPC refuses its cursor;
-  it then resumes at the oldest ledger the RPC keeps (`getHealth`) and
-  reconciles. A stopped watcher cannot raise an alarm itself:
-  `GET /v1/health` reports its last poll for a monitor outside it (not
-  built). **[built, tested]**
+  and `GET /v1/health`) when either cursor, the events watcher's or the
+  transaction scan's, is more than 720 ledgers (an hour) behind the chain,
+  once per episode, naming which; and when the RPC refuses a cursor; it
+  then resumes at the oldest ledger the RPC keeps (`getHealth`) and
+  reconciles. Every poll reports both lags (`PollReport.lag`), and
+  `GET /v1/health` both cursors and their lags. A stopped watcher cannot
+  raise an alarm itself: `GET /v1/health` reports its last poll for a
+  monitor outside it (not built). **[built, tested]**
+- **Is polled by the production driver** (`src/driver.ts`, `runWatcher`).
+  A poll that is not caught up is followed by the next at once, so the
+  scan drains while behind; once caught up, the next poll waits
+  `POLL_INTERVAL_MS` = 5,000 ms, one ledger at the 5-second target close
+  time, and so does one after a poll that read nothing at all, so a cursor
+  short of the head is not read in a tight loop. A failed poll (the RPC
+  unreachable, an HTTP 429 or 5xx, a timeout) waits 1 s, doubling to at
+  most 60 s; polls failing for 5 minutes raise the alarm, which the next
+  caught-up poll clears. A cursor the RPC refuses because the ledgers after
+  it aged out of retention is the poll's own case above. The end-to-end
+  test's services run the same driver (`tests/support/emailServices.mjs`).
+  **[built, tested]**
 - **Probes push subscriptions** through the vault each poll, and relays
   each device's signed acknowledgement of a probe (`POST /v1/ack`, at most
   30 per client per hour) (§10.6).
@@ -1808,14 +1877,27 @@ host can suppress alerts but cannot read or redirect them. It
 on every channel, with the attempt's code; under forty newer attempts,
 reading no attempt to find it; nested under another contract's call; not
 for another guardian's vote, a failed transaction, or a vote that
-authorizes), the cancellation and change alerts, the many-attempts alert, a
-vote the meta does not place, the restart after the events aged out of
-retention (one alarm, resume, one alert from controller state),
-reconciliation paging through forty open attempts and stopping at the first
-closed one, the shared delivery id of a reconciled and a streamed alert, the
-lag alarm, and `chainReads` against the RPC mock in Stellar RPC's
-encodings. The RPC mock serves `getTransactions` in base64 and in
-stellar-xdr's JSON (`packages/email-mocks/src/stellarRpc.ts`).
+authorizes), the cancellation and change alerts, openings notifying nobody
+(forty at once; 8 and then one a day for 30 days, the clock advanced a day
+each time, with the monthly probe the device's only push), a vote the meta
+does not place, the restart after the events aged out of retention (one
+alarm, resume, one alert from controller state), reconciliation paging
+through forty open attempts and stopping at the first closed one, the
+shared delivery id of a reconciled and a streamed alert, the lag alarm on
+the events cursor and on the transaction cursor (1,500 unrelated
+transactions ahead of a vote while the events are caught up: the alarm
+names the scan, `GET /v1/health` reports both cursors, and the driver
+drains the scan, alerts the vote and clears the alarm), a transaction
+cursor that never moves backwards (a caught-up answer of `"0"` or of the
+ledger's start), a vote past an empty 25,000-ledger stretch, and
+`chainReads` against the RPC mock in Stellar RPC's encodings.
+`test/driver.test.ts` pins the driver's waits, back-off and alarm;
+`test/mainnet.test.ts` runs the vote walk over 17 recorded mainnet
+transactions (classic, Soroban and fee-bumped, successful and failed) and
+over one of them with an authorization entry turned into a nested
+`submit_guardian`. The RPC mock serves `getTransactions` in base64 and in
+stellar-xdr's JSON, scanning at most 10,000 ledgers a request
+(`packages/email-mocks/src/stellarRpc.ts`).
 
 **The wallet's own read.** Independent of the alert service, the wallet
 reads the account's live attempts from the controller whenever it opens (the
@@ -1840,7 +1922,13 @@ answered `getTransactions` with exactly that window on 2026-11-02), which
 equals the email-plus-delay profile's minimum delay. Reconciliation recovers
 authorized attempts and email votes after a longer outage; it reads only
 accounts the vault holds contacts for. Reading every transaction costs the
-host the network's throughput in bandwidth (not run against mainnet here).
+host the network's throughput. Over an hour of mainnet ledgers (§12): 263
+transactions a ledger on average and up to 1,011, 1.31 pages of 200, 285 KB
+a ledger on the wire (gzip) and 4.1 MB decoded, 1.44 s of sequential
+requests and 17 ms of the host's own parsing and walking per 5-second
+ledger; a day is about 22,600 requests, 4.9 GB on the wire and 71 GB
+decoded. At that rate a scan reads about 3.4 ledgers while the chain closes
+one, so an hour's backlog takes about 25 minutes to drain.
 
 ### 10.3 Alert contacts
 
@@ -1934,8 +2022,8 @@ last acknowledged a probe). The settings page shows the channel as
 `channelView` (`emailModel.ts`) reads it: on a device the vault lists as
 live, or that acknowledged a probe within `RECENT_ACK_MS` (60 days), *they
 reach this device*; on another device, where notifications go (since when)
-with *Add this device*; with no live device, rule 2 broken
-(`settingsEmail.test.ts`).
+with *Add this device*; with no live device, rule 2 broken, with what still
+holds on chain and the remedies of §9.3 rule 2 (`settingsEmail.test.ts`).
 `recoverySpec` refuses an email guardian without a declared second channel
 (§9.3 rule 2). The wallet's enrollment flow (§5.4) registers the contact
 with a Web Push subscription for the vault's attested VAPID key, confirms it
@@ -2106,7 +2194,15 @@ acknowledged device is live again. A device that acknowledged none of
 interval, is *unacknowledged* when the next probe is due: the contact's
 address is told once (*notifications not confirmed*), alerts still go to
 it, and the wallet treats it like a lapsed one for rule 2 (§9.3) until it
-acknowledges again. A 404 or 410 to a probe marks the device lapsed. A probe
+acknowledges again. That notice, and the one for a lapsed device
+(*notifications stopped*), say whether another of the contact's devices
+still receives the notifications; when none does and the account has an
+email guardian, they say that nothing changed on chain, that the email
+helper still counts and, if it is the only approval needed, can still
+approve a recovery alone, which finishes after the waiting period unless
+cancelled, and ask the owner to fix the channel or add another helper
+(`pushLapsedNotice`, `pushUnconfirmedNotice` in `src/vault/content.ts`;
+`test/liveness.test.ts`). A 404 or 410 to a probe marks the device lapsed. A probe
 the push service cannot answer is tried again an hour later. The probe
 counts are all the host learns. This shows that a device and its browser are
 alive and that someone tapped, not that the person read an alert. The
@@ -2144,7 +2240,10 @@ leads with cancelling, both pre-empt a caller…", "every required alert
 pre-empts a caller…") **[built, tested]**. Alerts and the probe look
 different: an alert's title starts *Security alert:*, it carries a red alert
 icon and stays until dismissed; the probe carries the wallet's own icon and
-asks to be tapped (`sw.js`). A click on a recovery alert opens the wallet's
+asks to be tapped (`sw.js`). Each alert is its own notification, tagged by
+its kind and code, and sounds again when the same one arrives
+(`renotify`), so a second alert of one kind neither replaces the first
+silently nor arrives without sound (`serviceWorker.test.ts`). A click on a recovery alert opens the wallet's
 recovery page, where the cancel is.
 
 ### 10.7 Who sees what
@@ -2157,7 +2256,7 @@ recovery page, where the cancel is.
 | Sending service (Lettermint, Scaleway; named in the consent text) | The address and the alert text, including the code |
 | The user's mail provider | The alert text, including the code |
 | Push service | The subscription endpoint and an encrypted payload |
-| Stellar RPC | Bulk `getEvents` queries by contract and `getTransactions` queries of every transaction; `installed_rules` reads of accounts that change contacts; `attempt` reads of attempts opened on accounts with contacts, and `activity_gate`, `next_attempt_id`, `epoch` and `attempt` reads of those accounts in reconciliation (§10.2); `getLedgerEntries` and `config()` of guardians that voted |
+| Stellar RPC | Bulk `getEvents` queries by contract and `getTransactions` queries of every transaction; `installed_rules` reads of accounts that change contacts; `activity_gate`, `next_attempt_id`, `epoch` and `attempt` reads of accounts with contacts in reconciliation (§10.2); `getLedgerEntries` and `config()` of guardians that voted |
 | Anyone | The registry's approvals and activations |
 | The vault, for inbound mail (§4.6) | The recovery or enrollment email in transit, so the address; the Subject value it routes by |
 | The host, for inbound mail | Registration envelopes, inbox ids, sealed messages, their sizes and times, and the IP addresses that register and fetch them |
@@ -2295,8 +2394,9 @@ Let `G` be an email guardian with configuration
    Nido's wallet policy, `G` alone reaches the quorum only under `loss` with
    a delay lasting at least 7 days at the network's target ledger close time
    when the member was built (`t · delay_ledgers ≥ 604,800,000` ms; 120,960
-   ledgers at 5,000 ms) and a second alert channel. In wall-clock time the
-   delay lasts 7 days under A9 (b).
+   ledgers at 5,000 ms) and a second alert channel registered when it was
+   built; a channel that lapses later changes nothing on chain (§9.3 rule
+   2). In wall-clock time the delay lasts 7 days under A9 (b).
 
 ### 11.3 Obligation table
 
@@ -2416,8 +2516,12 @@ service drops is found lapsed by the next probe or alert; a device that is
 off, retired or never tapped keeps its subscription, so the probe asks for a
 signed acknowledgement, and a device that gave none for two probes is
 unacknowledged (§10.6). Either way the contact's address is told, and the
-wallet treats the email helper as breaking rule 2 until a device receives
-and confirms notifications again (§9.3). A new phone is added at once with
+wallet shows rule 2 broken until a device receives and confirms
+notifications again: it says that the email helper still counts, alone
+under email plus delay, offers to add a device or another helper, and
+refuses to save a member in which the email vote alone authorizes (§9.3).
+Nothing on chain changes: an email-plus-delay member keeps authorizing on
+the email vote alone, so the owner's action is what closes the gap. A new phone is added at once with
 the passkey (§10.3 rule 8; `alerts-phone-switched`). **Residual risk:**
 with alerts going to the stolen inbox and the push lapsed, or the only
 subscribed device unacknowledged and unused, no alert reaches the owner
@@ -2427,11 +2531,17 @@ attempt (`alerts-lapsed-push`). A lying or stopped host can suppress every
 alert (§10.2); the wallet's own read does not depend on it.
 
 **Repeated attempts.** Anyone may open attempts at the cost of a
-transaction fee. Each alerts nothing by default: the wallet lists them, each
-granting nothing. More than `MANY_OPEN_ATTEMPTS` (8) open at once send one
-alert a day on every channel, since many can hide one that matters
-(`griefing-repeated-attempts`); they hide no email vote
-(`griefing-then-vote`).
+transaction fee (22,649 or 22,650 stroops for each opening after an
+account's first at mainnet's settings, `attacks-local.json`). They notify nobody, however
+many are open and however long they continue: a notice a stranger can
+trigger would teach the owner to ignore the alerts that matter, and votes
+are found per vote, so openings hide none (`griefing-repeated-attempts`,
+`griefing-sustained`, `griefing-then-vote`). The wallet lists every open
+attempt, those the email helper or a helper approved first, with a warning
+above the list when more than `MANY_OPEN_ATTEMPTS` (8) are open.
+**Residual risk:** an operator that sets `emailOnAttemptBegun` (off by
+default) gives a stranger one email a day per account, by email only, for
+one opening a day, about 0.83 XLM a year at that fee.
 
 ## 12. Measurements
 
@@ -2457,11 +2567,11 @@ network's.
 | Enrollment and recovery end to end on a local network | Passes in 1.7 minutes: in Chromium, the owner's Nido turns on recovery, enrolls an inbox (two groups of the recovery code typed back; the Gmail mock signs the enrollment email; the vault seals it back; the page checks it, warns when the alert address is the enrolled inbox, registers an alert contact at another address with Web Push, deploys the guardian with its pin, and lists it with a quorum of two); a new device opens a lost-key attempt, the page warns where the code is typed, prefills the warning line in the email's body and shows the pickup deadline, the vault seals the recovery email back, the page proves it in the browser and submits `submit_guardian`, the alert service alerts the email vote, the other helper approves, the alert email and push carry the code the page showed, and after the delay the page completes the recovery | `tests/e2e/local/email-recovery.local.spec.ts` (`just test-e2e-email-local`) on `stellar/quickstart --local` (core and RPC v29, protocol 28) with Perch's stack built for that network and Nido's contracts from source. Mocked (TEST-ONLY): the mail provider and MX, DNS, the sending services, the push service, the Nitro enclave and its custodians, and the enclave-image registry (a stand-in answering `is_active`, since its 14-day timelock cannot elapse locally); the test's passkeys are the repository's test authenticator. Not in CI **[built, tested]** |
 | The circuit's header parsing on real mail | 5,154 DKIM-signed posts from all 11 launch domains (18 GNU mailing lists, October 2025 and May to October 2026), 5,327 signatures: the circuit and the reference (mailauth 8.0.4 strict mode for RFC 6376, node:crypto for RSA, Python 3.14's RFC 5322 reader for From) agree on every one. 4,619 are accepted by both with the same address and domain; 708 are refused by both: 316 do not verify under any known key (an archived copy whose signed fields the list changed, or a key no public source still holds), 229 signed blocks exceed `HEADER_MAX` (in 197 the longest signed field is `References` or `In-Reply-To`; the others sign a long `Cc`, `Autocrypt`, `Face` or `Mail-Followup-To`), 162 have a `d=` other than the From domain, 1 has two signed Subjects. The committed recovery artifact agrees with the harness on all 10,320 executions; the encoder's signed block equals the reference's for every signature; 592 signatures verify only under a key from zkEmail's public archive | `research/email-recovery/eval/parser/results/differential.json` (`just email-recovery-parser-check`). These are list archives' copies of ordinary posts, not the providers' outbound recovery mail; no Fastmail signature verifies under any key the DNS or zkEmail's archive holds, so Fastmail is tested on the refusing side only **[measured]** |
 | Grammar-based fuzzing of the circuit's parsing | 50,000 seeded cases around the §4.5 From grammar and the §4.3 tag list (49,779 signatures, 51,814 circuit executions, 35 minutes on 18 cores), each compared with mailauth's strict RFC 6376 verifier and Python's RFC 5322 reader: 22,409 signatures accepted and 23,967 refused by both. Every From value the circuit accepts, Python reads as exactly the mailbox it binds; among the refused are 600 that Python reads as one mailbox but whose display name §4.5 excludes (of the 596 nothing else refuses, 498 hold a comment and 98 an RFC 2047 encoded-word with an `@`). The circuit accepts 2,692 that mailauth ignores for a defect in a tag the circuit does not read (§4.3), and refuses 711 that RFC 6376 allows, each for whitespace in a tag it reads (§4.3). The recovery artifact agreed with the harness on all 1,994 cross-checked signatures, and refuses each of the four From values of `from-finding.mjs` (an address list, an address before the angle-addr, a quoted word before an address, an unclosed quoted string) at the display-name check | `research/email-recovery/eval/parser/results/fuzz.json`, `results/from-finding.json` (`just email-recovery-parser-check`); seeded and reproducible case by case (`fuzz.mjs --show`); signed with a TEST-ONLY key **[measured]** |
-| Attack suite on a local network | 70 scenario rows in eleven classes (forged emails, replayed emails and proofs, a wrong account or new key in the statement, stale or malicious registry keys, a compromised inbox, the alert path, phishing and social engineering, repeated attempts, provider header quirks, front-running, privacy on chain), each outcome as expected and each refusal named by its layer (circuit assertion, guardian check number, registry rule, Perch controller error, alert path); the three registry scenarios that need an elapsed timelock or grace period on the test host with the registry's real timelocks | `research/email-recovery/eval/README.md` (`just email-recovery-attacks`; `network/attacks.mjs` on `stellar/quickstart --local` at protocol 29 with mainnet's settings, every approval a real proof by bb.js in Node; `email_guardian.rs::registry_*`). Mocked (TEST-ONLY): the mail providers, DNS, the sending services, the push service, the enclave and its custodians, and the enclave-image registry (the end-to-end test's stand-in). In CI (`email-recovery-attacks.yml`) **[built, tested]** |
-| Enrolling an account at mainnet's settings | minting the account 2,876,016 stroops, deploying its email guardian 1,609,367, the recovery document that lists it with one helper 6,949,238: 11,434,621 stroops (1.1 XLM), almost all of it rent (2,863,021, 1,603,056 and 6,918,606), since new entries live at least mainnet's 2,073,600-ledger minimum and the guardian and the account extend theirs to the maximum. The testnet recovery run's enrollment: 1,344,343, 1,997,088 and 5,711,756 | `research/email-recovery/eval/results/attacks-local.json`, medians over the attack run's 11 launch-domain accounts on the local network with mainnet's settings; testnet from `testnet.json` **[measured]** |
-| One `submit_guardian` with an email approval on a local network | metered: 121.6 million instructions (121,576,077 to 121,664,431 across 20 votes, median 121,641,679), 12 entries read, 2 entries and 1,208 bytes written; 126,485,435 to 126,577,531 instructions declared after simulation, which the fee is charged on; 18,080-byte transaction around a 16,784-byte authorization entry; 83,125 to 83,153 stroops charged, 2,047 to 2,049 of them rent. The vote that authorizes an attempt with a 7-day delay also writes the authorized attempt: 122.5 million instructions (127,443,767 declared), 4 entries and 1,488 bytes written, 3,632,052 stroops charged, 3,545,582 of them rent | `research/email-recovery/eval/results/attacks-local.json`, read from each transaction's result and the host's `core_metrics` events, on `stellar/quickstart --local` at protocol 29 with mainnet's settings loaded (`eval/network/start-local.sh`, settings archived in `eval/results/settings/`); the approvals use the guardian's pin, so the registry is not called (spec §7.4) **[measured]** |
+| Attack suite on a local network | 71 scenario rows in eleven classes (forged emails, replayed emails and proofs, a wrong account or new key in the statement, stale or malicious registry keys, a compromised inbox, the alert path, phishing and social engineering, repeated attempts, provider header quirks, front-running, privacy on chain), each outcome as expected and each refusal named by its layer (circuit assertion, guardian check number, registry rule, Perch controller error, alert path); the three registry scenarios that need an elapsed timelock or grace period on the test host with the registry's real timelocks | `research/email-recovery/eval/README.md` (`just email-recovery-attacks`; `network/attacks.mjs` on `stellar/quickstart --local` at protocol 29 with mainnet's settings, every approval a real proof by bb.js in Node; `email_guardian.rs::registry_*`). Mocked (TEST-ONLY): the mail providers, DNS, the sending services, the push service, the enclave and its custodians, and the enclave-image registry (the end-to-end test's stand-in). In CI (`email-recovery-attacks.yml`) **[built, tested]** |
+| Enrolling an account at mainnet's settings | minting the account 2,876,016 stroops, deploying its email guardian 1,609,281, the recovery document that lists it with one helper 6,949,238: 11,434,535 stroops (1.1 XLM), almost all of it rent (2,863,021, 1,602,970 and 6,918,606), since new entries live at least mainnet's 2,073,600-ledger minimum and the guardian and the account extend theirs to the maximum. The testnet recovery run's enrollment: 1,344,343, 1,997,088 and 5,711,756 | `research/email-recovery/eval/results/attacks-local.json`, medians over the attack run's 11 launch-domain accounts on the local network with mainnet's settings; testnet from `testnet.json` **[measured]** |
+| One `submit_guardian` with an email approval on a local network | metered: 121.6 million instructions (121,597,527 to 121,671,913 across 20 votes, median 121,635,203), 12 entries read, 2 entries and 1,208 bytes written; 126,505,850 to 126,585,104 instructions declared after simulation, which the fee is charged on; 18,080-byte transaction around a 16,784-byte authorization entry; 83,131 to 83,155 stroops charged, 2,047 to 2,049 of them rent. The vote that authorizes an attempt with a 7-day delay also writes the authorized attempt: 122.5 million instructions (127,426,825 declared), 4 entries and 1,488 bytes written, 3,632,047 stroops charged, 3,545,582 of them rent | `research/email-recovery/eval/results/attacks-local.json`, read from each transaction's result and the host's `core_metrics` events, on `stellar/quickstart --local` at protocol 29 with mainnet's settings loaded (`eval/network/start-local.sh`, settings archived in `eval/results/settings/`); the approvals use the guardian's pin, so the registry is not called (spec §7.4) **[measured]** |
 | One `submit_guardian` with an email approval on testnet | metered: 121,609,311 to 121,696,841 instructions across 6 votes, 12 entries read, 2 entries and 1,208 bytes written; 126,516,681 to 126,607,608 instructions declared; 18,080-byte transaction; 82,419 to 82,446 stroops charged, 1,333 of them rent; 2,215 to 3,397 ms from simulation to confirmation. The recovery run's vote: 121,675,439 instructions (126,586,879 declared), 82,440 stroops | `research/email-recovery/eval/results/testnet-votes.json` (`testnet/votes.mjs`) and `testnet.json` (`testnet/run.sh`), read back from Stellar RPC 30.0.0 (protocol 29). Both runs are of commit `ab274154` on `main`, each contract's wasm sha256 recorded, and read the deployed verifier's circuit id back (`a998d03e…`, this tree's verification key); every transaction's envelope, result and metadata XDR is in `testnet-xdr.json` (`testnet/evidence.mjs`). The approvals use the guardian's pin **[measured]** |
-| The same vote's fee by component at mainnet's settings | 37,969 compute, 3,016 for the 2 entries and 1,208 bytes written, 36,419 history, 3,585 transaction size, 10 events: 80,989 non-refundable; 2,049 rent and the 100-stroop inclusion fee: 83,148 stroops, the Gmail vote's charge on the local network. Testnet charges the same components except rent (1,333: its minimum temporary lifetime is 720 ledgers, mainnet's 17,280) | `eval/fees/model.mjs` over each transaction's declared resources and the archived settings, which reproduces every fee charged in the evaluation's network runs to the stroop; table in `research/email-recovery/eval/README.md` **[measured]** |
+| The same vote's fee by component at mainnet's settings | 37,971 compute, 3,016 for the 2 entries and 1,208 bytes written, 36,419 history, 3,585 transaction size, 10 events: 80,991 non-refundable; 2,049 rent and the 100-stroop inclusion fee: 83,150 stroops, the Gmail vote's charge on the local network. Testnet charges the same components except rent (1,333: its minimum temporary lifetime is 720 ledgers, mainnet's 17,280) | `eval/fees/model.mjs` over each transaction's declared resources and the archived settings, which reproduces every fee charged in the evaluation's network runs to the stroop; table in `research/email-recovery/eval/README.md` **[measured]** |
 | How many email votes a mainnet ledger holds | at most 12 (CAP-0063: 3 clusters per stage, each within 580,000,000 declared instructions, which 4 votes of about 126.5 million fill); 47 by transaction size, 245 by bytes written; 2.4 votes a second at 5-second ledgers. Past that, transactions compete on their inclusion fee; the resource fee is fixed by the settings | mainnet's settings (`eval/results/settings/mainnet.json`) and the local votes' declared resources **[measured]** |
 | Votes against a registry root on a network | **Not yet measured; scheduled.** A registry root holds a key only after its addition's attested timelock, 72 hours of ledger close time. The local network's run (`eval/network/run-registry-root.sh`: one account per launch domain with no pin and one with the wallet's pin) and the testnet run (`eval/testnet/votes.mjs`) are enrolled; both were set up from commit `ab274154` and check the verifier's circuit id before they vote; their additions are eligible from close time 2026-11-05 13:01:51 UTC and 13:04:40 UTC, when they vote against the registry's root. Until then the registry-root figures are the test host's: the two `submit_guardian` rows below, whose approvals use a registry root, and `is_accepted_root` | — |
 | One complete email-factor recovery on testnet | every step succeeded: mint, guardian deployment, the recovery document, `begin_lost_key`, the email vote, the helper's vote (which authorizes the attempt and pays its record's rent: 3,664,629 stroops charged, 3,653,812 rent), a 12-ledger delay (57,099 ms), and completion; 13,758,804 stroops charged over those 7 transactions; the account's document then holds the new passkey and not the lost one. An earlier run on the same Perch deployment found Perch's doc compiler and recovery controller archived and restored them first, one transaction per entry: 112,447,907 stroops over 4 transactions, 8.4 times that run's recovery (13,384,714); this run found them live | same, and `testnet-restorations.json` for the earlier run; deployment in `DEPLOYED.md`, "Email recovery (evaluation, TEST-ONLY)". Mocked (TEST-ONLY): the mail provider, DNS **[measured]** |
@@ -2485,6 +2595,7 @@ network's.
 | Contact registration request as the wallet posts it | 1,284 bytes of JSON | same **[measured on mocks]** |
 | Web Push body (RFC 8291, one record) | 353 bytes | same **[measured on mocks]** |
 | Lettermint request body of an alert | 1,076 bytes | same **[measured on mocks]** |
+| The alert host's transaction scan at mainnet volume (§10.2) | 720 consecutive mainnet ledgers (65,270,019 to 65,270,738, read on 2026-11-02 from 17:13 UTC): 189,094 transactions, 263 a ledger on average (median 237, 95th percentile 475, at most 1,011), 24% of them Soroban; 946 pages of 200, 1.31 a ledger; 285,059 bytes a ledger on the wire with gzip (205 MB in all) and 4,095,557 decoded (15,594 a transaction); 1,098 ms a page to the last byte (1,443 ms a ledger, one request at a time); parsing 11.5 ms and the vote walk 1.1 ms a page (17 ms a ledger); no vote at a controller not on mainnet. A day at that rate: about 22,600 requests, 4.9 GB on the wire, 71 GB decoded. The first 60 of those ledgers in base64 decode to 55% of the JSON's bytes and take 8% more on the wire | `research/email-recovery/eval/mainnet/scan.mjs`, results in `eval/results/mainnet-scan.json`: read-only `getTransactions` with `xdrFormat: "json"` and pages of 200 from the previous cursor, as the host reads, against `https://mainnet.sorobanrpc.com` (Stellar RPC 29.0.1, protocol 29), one client on a shared machine, Node 24.18.0, darwin arm64; the vote walk is `guardianVotes` of `infra/email-alerts/src/votes.ts` **[measured]** |
 
 The `submit_guardian` figures include the proof verification: Perch's
 controller and account, the guardian, the registry, and the verifier all
@@ -2528,8 +2639,8 @@ proof verification. The transaction figures above enforce the entry and so
 include both. So do the local-network and testnet figures: the evaluation
 simulates every email vote with its entry enforced (`authMode: enforce`).
 
-In production, alert latency adds the watcher's polling interval and the
-providers' own delivery to these figures.
+In production, alert latency adds the driver's polling interval (5 s once
+caught up, §10.2) and the providers' own delivery to these figures.
 
 ## 13. Open questions
 
@@ -2637,10 +2748,11 @@ providers' own delivery to these figures.
     that publishes PCR0 to PCR2 are not built.
 15. **Outages longer than RPC retention.** A watcher stopped for longer than
     the RPC's history (120,960 ledgers by default) loses events;
-    reconciliation from controller state and the lag alarm are built
-    (§10.2). Not built: a monitor outside the watcher that alarms when it
-    stops polling (it reads `GET /v1/health`), and a choice of whether the
-    email-plus-delay floor should exceed the longest tolerated outage.
+    reconciliation from controller state, the lag alarm on both cursors and
+    the poll driver are built (§10.2). Not built: a monitor outside the
+    watcher that alarms when it stops polling (it reads `GET /v1/health`),
+    and a choice of whether the email-plus-delay floor should exceed the
+    longest tolerated outage.
 16. **Accounts without an email guardian.** `k_code` comes from
     `account_code`, which such accounts do not have. Their alerts would need
     another key for the code, for example one kept in the recovery kit.

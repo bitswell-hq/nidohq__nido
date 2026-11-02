@@ -30,7 +30,10 @@ approval in Perch's recovery~\cite{perch-recovery-spec}, used unchanged.
 Perch's quorum and delay still apply: email approvals never complete a
 recovery before the delay has passed, and they authorize one alone only
 under a lost-key profile with at least seven days of delay and a second
-alert channel, where the owner's cancellation is the defence.
+alert channel registered when the wallet builds the configuration, where the
+owner's cancellation is the defence. A channel that later lapses changes
+nothing on chain: the wallet then tells the owner that the email helper can
+still approve alone and offers to add a device or another helper.
 
 Five problems shape the design. \emph{Binding}: an email must approve exactly
 one recovery statement (one account, new key, attempt and deadline), and a
@@ -80,7 +83,7 @@ time stops a wrongful recovery.
     reads\claims{parser-real-mail,parser-fuzzing}.
   \item An evaluation on the test host, a local network running mainnet's
     settings, and testnet, from a recorded commit (\S\ref{sec:eval}): a
-    73-row attack suite with phishing, deleted alerts, a lapsed push, a
+    74-row attack suite with phishing, deleted alerts, a lapsed push, a
     switched phone and an email vote among repeated
     attempts\claims{network-attack-suite,registry-timelock-attacks}. Fees
     are attributed to each network's settings, and enrollment, archival and

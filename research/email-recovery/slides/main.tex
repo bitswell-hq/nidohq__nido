@@ -38,7 +38,8 @@
   \textbf{Thesis:} inbox control can be \emph{one} recovery factor while the
   chain holds only a salted commitment to the address. Email never skips the
   recovery delay; alone it authorizes only under email plus delay (7 days, a
-  second alert channel), where the owner's veto is the defence.
+  second alert channel registered when the wallet builds it), where the
+  owner's veto is the defence\claim{wallet-policy-one-factor}.
   \par\smallskip\footnotesize
   \begin{itemize}
     \item The operator sees the address only in an attested enclave, not yet
@@ -217,11 +218,15 @@
   \small
   \begin{itemize}
     \item From Perch's events and each email vote's own transaction: an
-      authorized attempt, and every email vote, on every channel; opening
-      attempts hides none\claims{alert-code,compromised-inbox-alerted}.
+      authorized attempt, and every email vote, on every channel; openings
+      hide none and notify nobody\claims{alert-code,compromised-inbox-alerted}.
+    \item Lag alarm on either cursor; the poll driver drains while
+      behind\claim{alert-scan-lag}.
     \item Web Push required; a monthly ``tap to confirm'' probe, unlike an
       alert; a device silent for two probes is unacknowledged, and a new one
-      is added at once\claim{wallet-second-alert-channel}.
+      is added at once. A lapsed channel changes nothing on chain: the wallet
+      says email can still approve, offers a device or a
+      helper\claim{wallet-second-alert-channel}.
     \item A12 rests on a device the owner still uses: a silent one is found
       only 60 to 90 days later\claim{alert-liveness}.
     \item The wallet's claim, \PrivacyClaim, holds only under A8, A10,
@@ -311,8 +316,9 @@
       authorized only at quorum one, guardian-only, and completes only after
       a positive delay\claim{one-factor-safety}.
     \item[Wallet] Email alone reaches the quorum only under \texttt{Loss},
-      with 7 days at the target close time and a second alert
-      channel\claim{wallet-policy-one-factor}; in wall-clock time under A9.
+      with 7 days at the target close time and a second alert channel, as
+      declared when the member is built\claim{wallet-policy-one-factor}; in
+      wall-clock time under A9.
   \end{description}
 \end{frame}
 
@@ -360,7 +366,7 @@
         Compromised inbox & 13 & 7 \\
         Alert path & 6 & --- \\
         Phishing & 6 & 2 \\
-        Repeated attempts & 2 & --- \\
+        Repeated attempts & 3 & --- \\
         Header quirks & 5 & 2 \\
         Front-running & 4 & 4 \\
         Privacy on chain & 1 & --- \\
@@ -369,14 +375,14 @@
     \end{column}
     \begin{column}{0.48\textwidth}
       \footnotesize
-      73 rows, each with its expected outcome: 70 on a local network, 3 on
+      74 rows, each with its expected outcome: 71 on a local network, 3 on
       the test host\claims{network-attack-suite,registry-timelock-attacks}.\\[4pt]
       Thief with the code, email plus delay: deletes the alert emails; the
       push is accepted for the owner's device and the owner cancels; an email
       vote among 32 newer attempts is still alerted; a missed event is found
       by reconciliation\claim{compromised-inbox-alerted}.\\[4pt]
       Residual: a phished user with no device; a lapsed push.\\[4pt]
-      No address or code in 263 transactions\claim{privacy-no-address-on-chain}.
+      No address or code in 293 transactions\claim{privacy-no-address-on-chain}.
     \end{column}
   \end{columns}
 \end{frame}
@@ -390,16 +396,16 @@
     Settings & SDK snapshot & mainnet's & testnet's \\
     Instructions, metered (M) & 131.2 & 121.6 & 121.7 \\
     Transaction (bytes) & 18{,}148 & 18{,}080 & 18{,}080 \\
-    Fee (stroops) & 178{,}196 & 83{,}125--83{,}153 & 82{,}419--82{,}446 \\
+    Fee (stroops) & 178{,}196 & 83{,}131--83{,}155 & 82{,}419--82{,}446 \\
     \bottomrule
   \end{tabular}
   \par\smallskip{\footnotesize\claims{onchain-verification-cost,network-verification-cost,testnet-email-recovery}}
   \par\medskip
   \begin{itemize}\footnotesize
-    \item Mainnet projection: 83{,}148 stroops (0.0083 XLM) for the Gmail
-      vote: 37{,}969 compute, 36{,}419 history (an 18\,KB envelope),
+    \item Mainnet projection: 83{,}150 stroops (0.0083 XLM) for the Gmail
+      vote: 37{,}971 compute, 36{,}419 history (an 18\,KB envelope),
       2{,}049 rent\claim{fee-attribution}.
-    \item Enrollment at mainnet's settings: 11{,}434{,}621 stroops (1.1
+    \item Enrollment at mainnet's settings: 11{,}434{,}535 stroops (1.1
       XLM)\claim{enrollment-cost}.
     \item Everything archived: 3{,}959{,}831{,}748 stroops (396 XLM); the
       keeper, 330.4 XLM a year; both at the rent floor, ten times at 3\,GB of

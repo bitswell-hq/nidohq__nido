@@ -239,10 +239,10 @@ completion and a configuration change alert every channel. So does each
 email vote that Perch emits no event for (one that leaves an attempt below
 quorum, one to cancel, one approving a change): the host finds it in the
 vote's own transaction, so opening many attempts hides none. Opening an
-attempt, which anyone can do, alerts nothing by default, so that repeated
-openings cannot train users to ignore alerts~\cite{anderson-habituation};
-more than eight open at once send one alert a day, and the wallet shows
-every open attempt itself. An alert has generic text and no link and carries
+attempt, which anyone can do, notifies nobody, however many are open and for
+however long, so that no stranger can make Nido send an alert and train users
+to ignore alerts~\cite{anderson-habituation}; the wallet shows every open
+attempt itself, warning when more than eight are open. An alert has generic text and no link and carries
 a six-digit code keyed from $\code$, which the wallet shows for the attempt
 it knows\claim{alert-code}. The code is not an authenticator: whoever holds
 $\code$ computes it, a social engineer included, so no alert says a matching
@@ -251,25 +251,33 @@ required alert pre-empts a caller's script (``If someone told you to expect
 this message, or to ignore it, they are trying to take your
 account'')\claim{phishing-defences}.
 
-When email is a recovery factor, a second channel is required: Web Push to a
-device the owner sets up~\cite{rfc8030,rfc8291,rfc8292}. A real alert's
+When email is a recovery factor, the wallet requires a second channel when
+it builds the configuration: Web Push to a device the owner sets
+up~\cite{rfc8030,rfc8291,rfc8292}. A real alert's
 title starts ``Security alert:'' and carries its own icon. Once a month the
 vault instead sends each device a probe worded as an action, ``tap to
 confirm your alerts'', and the tap posts the probe's id signed by a key the
 device made. A device that acknowledged none of two probes is
 unacknowledged, one the push service no longer accepts is lapsed, and either
-way the address is told; while no device is live the wallet says so and
-refuses configurations that keep the email guardian. The wallet says alerts
-reach a device only when the vault lists it as live or it confirmed
+way the address is told. Nothing on chain changes then: while no device is
+live, the wallet says that the email helper still counts, and under email
+plus delay can still approve a recovery alone; it offers in one click to add
+this device and, under email plus delay, another helper, and refuses
+configurations in which the email vote alone authorizes. The wallet says
+alerts reach a device only when the vault lists it as live or it confirmed
 recently, and adds another device at once\claim{wallet-second-alert-channel}.
 A contact is registered, replaced or removed only with an assertion by an
 administrative passkey~\cite{webauthn3}; a replacement or removal takes
 effect after 14 days of close time, longer than the 7-day minimum delay,
 while the old contact keeps receiving alerts, and removal is refused during
 an authorized recovery\claim{alert-contacts}. A watcher that missed
-events reconciles from the controller's state after it restarts and raises a
-lag alarm, and independently the wallet reads every live attempt from the
-controller whenever it opens\claims{compromised-inbox-alerted,wallet-live-attempts}.
+events reconciles from the controller's state after it restarts. It raises a
+lag alarm when either its event cursor or its transaction scan falls an hour
+behind; its poll driver reads the next page at once while behind, polls
+every five seconds once caught up, and backs off on
+failures\claim{alert-scan-lag}. Independently, the wallet reads every live
+attempt from the controller whenever it
+opens\claims{compromised-inbox-alerted,wallet-live-attempts}.
 Alert email goes through an EU-owned sending service, with failover to a
 second\claim{alert-formats}.
 
@@ -301,7 +309,10 @@ Perch's controller accepts any configuration its owner applies, so the
 remaining rules bind the operator's wallet, which builds every recovery
 member through one builder that tells the email guardian apart by a typed
 marker: (1) at most one email guardian per member; (2) an email guardian
-only with a live second alert channel; (3) if the email vote alone can
+only with a registered second alert channel, and, while no device receives
+it, no member in which the email vote alone authorizes, both checked when a
+member is built, since the chain keeps counting an applied member's email
+vote whatever the channel later does; (3) if the email vote alone can
 authorize (guardian-only, quorum one), the \texttt{Loss} profile and a delay
 of at least seven days at the network's target close time, 120{,}960 ledgers
 at 5\,s; (4) every action allowed whenever the quorum needs the email vote,

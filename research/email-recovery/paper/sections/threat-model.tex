@@ -110,9 +110,13 @@ formally in \S\ref{sec:properties}.
 \end{description}
 G4 is the precise sense of ``email is never sufficient alone'': it never
 skips the delay. Under the lost-key profile with the email guardian as the
-only one needed (\emph{email plus delay}: at least seven days and a second
-alert channel), email alone authorizes, and what stops a wrongful recovery is
-the owner's cancellation within the delay, which rests on A12.
+only one needed (\emph{email plus delay}: at least seven days, and a second
+alert channel registered when the wallet builds the configuration), email
+alone authorizes, and what stops a wrongful recovery is the owner's
+cancellation within the delay, which rests on A12. The wallet checks the
+channel when it builds a configuration; if the channel later lapses or goes
+unacknowledged, the chain still accepts the email vote alone, and the wallet
+tells the owner and offers to add a device or another helper.
 
 Off chain the goal is scoped. The wallet tells users exactly
 \PrivacyClaim, a claim against the operator's servers and staff that holds

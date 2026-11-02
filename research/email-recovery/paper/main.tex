@@ -37,7 +37,9 @@ the proof on Soroban and counts it as one approval in Perch's delayed,
 quorum-based recovery, used unchanged. Email approvals never complete a
 recovery before its delay has passed; email alone authorizes one only under
 a lost-key profile with at least seven days of delay and a second alert
-channel, where the owner's cancellation is the defence. Over a Lean model of
+channel registered when the wallet builds the configuration, where the
+owner's cancellation is the defence. If that channel later lapses, the chain
+still accepts the email vote alone; the wallet says so and offers a fix. Over a Lean model of
 the guardian, the circuit's relation and Perch's controller, we prove
 soundness, including that an accepted email binds one recovery statement,
 and replay resistance as reductions to named hash collisions and to the
@@ -55,10 +57,10 @@ it does not read and on whitespace it
 refuses\claims{parser-real-mail,parser-fuzzing}. The Noir circuit has
 248{,}996 UltraHonk gates\claim{circuit-size}. On a local Stellar network
 running mainnet's settings, an email vote is metered at 121.6 million of a
-transaction's 400 million instructions and charged 83{,}125 to 83{,}153
+transaction's 400 million instructions and charged 83{,}131 to 83{,}155
 stroops (0.0083 XLM), and desktop Chrome proves in 1.44\,s on 18
 threads\claims{network-verification-cost,browser-proving-cost}. Phones are not
-measured, and no user study was run. All 73 rows of an attack suite,
+measured, and no user study was run. All 74 rows of an attack suite,
 phishing, deleted alerts, a lapsed push and a switched phone among them, have
 their expected outcome, two of them residual risks the design does not
 stop\claims{network-attack-suite,registry-timelock-attacks}.

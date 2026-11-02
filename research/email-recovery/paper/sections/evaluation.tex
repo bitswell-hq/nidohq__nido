@@ -57,18 +57,18 @@ registry's production WebAssembly.
     Compromised inbox & 13 & 7 & circuit; checks 2, 11; backup; Perch & 4 \\
     Alert path & 6 & --- & alerts & 4 \\
     Phishing & 6 & 2 & Perch & 1, 4 \\
-    Repeated attempts & 2 & --- & alerts & 4 \\
+    Repeated attempts & 3 & --- & alerts & 4 \\
     Header quirks & 5 & 2 & circuit & 1 \\
     Front-running & 4 & 4 & Perch; check 2 & 3 \\
     Privacy on chain & 1 & --- & --- & 2 \\
     \midrule
-    Total & 73 & 49 & & \\
+    Total & 74 & 49 & & \\
     \bottomrule
   \end{tabularx}
 \end{table}
 
-\paragraph{Results.} Table~\ref{tab:attack-summary} summarizes the 73 rows,
-70 on the local network and 3 on the test host; every observed outcome is the
+\paragraph{Results.} Table~\ref{tab:attack-summary} summarizes the 74 rows,
+71 on the local network and 3 on the test host; every observed outcome is the
 expected one\claims{network-attack-suite,registry-timelock-attacks}. Forged
 emails fail at the circuit; a real proof under a key no tree holds fails
 check 11; a 1024-bit key or a domain outside the allowlist fails at the
@@ -90,6 +90,12 @@ stolen inbox, which the worst allowed setup uses as the alert address, a
 push is still accepted for the device the owner set up for alerts, and the
 owner's cancellation succeeds. A watcher that missed the events finds the authorized attempt from
 the controller's state after it restarts\claim{compromised-inbox-alerted}.
+The transaction scan that finds email votes, read as the host reads it over
+an hour of mainnet ledgers (263 transactions each on average, at most
+1{,}011), took 1.31 requests, 285\,KB on the wire and 1.44\,s of requests,
+one at a time, per five-second ledger, so its driver reads about 3.4 ledgers
+while one closes and drains an hour's backlog in about 25
+minutes\claim{scan-mainnet-cost}.
 With the push lapsed as well, the vault marks it and emails the stolen
 inbox, so nothing reaches the owner; a wallet opened during the delay reads
 the attempt from the controller and offers to cancel it. That row, a residual
@@ -105,16 +111,17 @@ cancelling and cancels within the delay. A victim with no device left cannot
 cancel, so under email plus delay the attempt completes, the second residual
 risk (run with a delay shortened outside the wallet's policy so it elapses);
 with a second helper required, the phished vote leaves it collecting. Ten
-attempts opened by a stranger send the owner one alert, that many are open;
-the wallet lists all ten. With 32 attempts opened after the voted one, the
+attempts opened by a stranger at once, and thirty more one at a time, send
+the owner nothing on any channel; the wallet lists all
+forty\claim{alert-code}. With 32 attempts opened after the voted one, the
 email vote is still alerted and the wallet still lists it. No envelope,
-result or metadata of the run's 263
+result or metadata of the run's 293
 transactions contains any of its 27 inboxes' addresses, in any encoding,
 account codes or pin salt leaves, a sanity check behind
 Theorem~\ref{thm:privacy}, not evidence of hiding\claim{privacy-no-address-on-chain}.
 
 An expert walkthrough of the current pages, by their designers rather than
-participants or an independent expert, leaves ten issues open, among them
+participants or an independent expert, leaves eight issues open, among them
 that a phished user sees no warning of the operator's before sending the
 email\claim{expert-walkthrough}. No user study was run: nobody enrolled,
 recovered, read an alert or faced a phishing script, so how often people
@@ -161,11 +168,11 @@ Fees are charged on declared resources, so the table gives both counts.
     \toprule
     & Test host & Local & Testnet \\
     \midrule
-    Instr.\ metered (M) & 131.17--131.25 & 121.58--121.66 & 121.61--121.70 \\
-    Instr.\ declared (M) & --- & 126.49--126.58 & 126.52--126.61 \\
+    Instr.\ metered (M) & 131.17--131.25 & 121.60--121.67 & 121.61--121.70 \\
+    Instr.\ declared (M) & --- & 126.51--126.59 & 126.52--126.61 \\
     Entries read / written & 14 / 2 & 12 / 2 & 12 / 2 \\
     Transaction (bytes) & 18{,}148 & 18{,}080 & 18{,}080 \\
-    Fee (stroops) & 178{,}196--178{,}249 & 83{,}125--83{,}153 & 82{,}419--82{,}446 \\
+    Fee (stroops) & 178{,}196--178{,}249 & 83{,}131--83{,}155 & 82{,}419--82{,}446 \\
     \quad mainnet's rates & 82{,}530 & as charged & --- \\
     \quad of which rent & --- & 2{,}047--2{,}049 & 1{,}333 \\
     Key path & registry root & pin & pin \\
@@ -177,10 +184,10 @@ Fees are charged on declared resources, so the table gives both counts.
 SDK's 2026-07-10 snapshot; at mainnet's current settings the same
 transaction costs 82{,}530 stroops before
 rent\claim{onchain-verification-cost}. The local network runs mainnet's
-settings, so its charge, 83{,}125 to 83{,}153 stroops a vote, is the mainnet
+settings, so its charge, 83{,}131 to 83{,}155 stroops a vote, is the mainnet
 projection, and at most 12 votes fit a ledger\claim{network-verification-cost}.
 A port of the host's fee computation reproduces every fee charged; of the
-Gmail vote's 83{,}148, compute is 37{,}969 and history, the 18\,KB envelope
+Gmail vote's 83{,}150, compute is 37{,}971 and history, the 18\,KB envelope
 around the 16\,KB proof, 36{,}419\claim{fee-attribution}. The
 release-profile build meters 1.57 million fewer instructions per vote than
 the size-optimized wasm the networks run\claim{metering-attribution}. Every
@@ -189,8 +196,8 @@ a registry root adds \texttt{is\_accepted\_root}, 565{,}410 instructions, and
 the registry's instance and code to the footprint on the test
 host\claim{registry-costs}. Votes against a registry root have not been
 measured on a network. The vote that authorizes an attempt also writes it
-and pays its rent: 3{,}632{,}052 stroops, 3{,}545{,}582 of it
-rent\claim{authorizing-vote-cost}. Enrolling costs 11{,}434{,}621 stroops
+and pays its rent: 3{,}632{,}047 stroops, 3{,}545{,}582 of it
+rent\claim{authorizing-vote-cost}. Enrolling costs 11{,}434{,}535 stroops
 (1.1 XLM) at mainnet's settings, almost all of it rent for the new
 account, its guardian and its recovery document\claim{enrollment-cost}.
 
