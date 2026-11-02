@@ -19,13 +19,11 @@ optional key pin, the actions it may approve, and the proof verifier.
 
 \subsection{What the user sees}\label{sec:design-ux}
 \emph{Enrollment}, in the wallet's settings while the passkey works: the
-wallet shows a 26-character recovery code and asks for two of its groups,
-picked at random, to be typed back, advising that it be kept outside the
-inbox provider's account; the user sends one prepared email from the inbox
-(the mail app opens with recipient and Subject filled in); enters an alert
-address, preferably at another provider, allows notifications on the device,
-and confirms the emailed code; the wallet then deploys the email helper and
-lists it\claim{enrollment-safeguards}. \emph{Recovery}, on a new device: the
+user saves a 26-character recovery code and types two random groups of it
+back with the code off the screen; sends one prepared email from the inbox;
+enters an alert address, preferably at another provider, allows
+notifications on the device, and confirms the emailed code; the wallet then
+deploys the email helper and lists it\claim{enrollment-safeguards}. \emph{Recovery}, on a new device: the
 recovery page, found from the kit's account address, creates a new passkey
 and opens an attempt; the user types the recovery code below a warning that
 nobody will ask for it, and sends one prepared email whose body tells a user
@@ -68,9 +66,9 @@ makes the email unprovable, while a fold at a space is harmless, because
 relaxed canonicalization restores the bytes\claim{subject-blinding}. The
 proof binds neither the recipient, the body, nor \texttt{t=}: not every launch
 provider signs \texttt{To:} or sets \texttt{t=}, and freshness comes from the
-statement's deadline and single-use attempt id. Binding \texttt{To:} would
-not stop a social engineer, whose requested email already goes to
-\textsf{RECOVERY\_INBOX}.
+statement's deadline and single-use attempt id. Binding \texttt{To:} where it
+is signed matters only together with a reply to the approval's sender, which
+is open (\S\ref{sec:threat}).
 
 The signed octets reach the browser through the sealed vault, which in a
 deployment runs the recovery address's mail exchanger: the browser first
@@ -97,13 +95,12 @@ where $\mathrm{pack}$ cuts the address, padded to 124 bytes, into four
 checks the enrollment email under the recovery circuit's own rules before
 deploying a guardian, so an inbox whose recovery email could never be proven
 is refused at enrollment\claim{enrollment-email-check}. The two Subject
-phrases differ in their first byte\claim{enrollment-subject-distinct}. That
-the circuit requires the recovery phrase is tested\claim{subject-blinding}. Nothing on chain verifies the enrollment
-email: a wrong $\Cm$ disables only its owner's email factor. The wallet
-deploys the guardian with $\Cm$ and a key pin, reads back its configuration
-and code hash, and applies a document that lists it, an ordinary Perch
-reconfiguration; changing the address, the code, the pin or the actions means
-deploying a new guardian through the same gate.
+phrases differ in their first byte\claim{enrollment-subject-distinct}. A
+wrong $\Cm$ disables only its owner's email factor. The wallet deploys the
+guardian with $\Cm$ and a key pin, reads back its configuration and code
+hash, and applies a document that lists it, an ordinary Perch
+reconfiguration; changing the address, the code, the pin or the actions
+means a new guardian through the same gate.
 
 Recovery needs $\code$, so the email factor is really the inbox and a
 128-bit code. The wallet offers two backups: a block in the enrollment
@@ -114,7 +111,7 @@ kit was copied, and recovery settings check a typed code against the
 guardian's pin root, storing nothing (\S\ref{sec:design-registry}).
 
 \subsection{The circuit relation}\label{sec:design-circuit}
-The recovery circuit (Fig.~\ref{fig:relation}) has four public inputs, in
+The recovery circuit (Fig.~\ref{fig:relation} in Appendix~\ref{app:obligations}) has four public inputs, in
 order: $\Cm$, $\digest_{hi}$, $\digest_{lo}$, and $\mathit{root}$, the root of
 the key tree the signing key is proven against. The guardian builds all four
 itself. The private inputs are the signed header block $H$ (at most 1536
@@ -122,15 +119,6 @@ bytes), the RSA signature $s$ and modulus $n$, $\blind$, $\code$, and the
 key's leaf index with 16 Merkle siblings. Positions in $H$ are hints the
 circuit computes in unconstrained code and then checks. There is no action
 input, timestamp or nullifier: Perch's controller stops double counting.
-
-\begin{figure}[t]
-  \centering
-  \resizebox{\columnwidth}{!}{\input{figures/circuit-relation}}
-  \Description{Three columns. Private inputs on the left: the signed header block H of at most 1536 bytes, the RSA signature and modulus, the account code, rho, and the leaf index with 16 siblings. Obligations C1 to C6 in the middle. Public inputs on the right: the commitment, the two digest limbs, and the key-tree root. Arrows show that the header feeds C1 to C5, the signature and modulus feed C1 and C6, the account code feeds C3, rho feeds C5, the Merkle path feeds C6, and C3, C5 and C6 open the commitment, the digest limbs and the root.}
-  \caption{The recovery circuit's relation. Domain tags and lengths inside
-    the Poseidon2 hashes are omitted.}
-  \label{fig:relation}
-\end{figure}
 
 The circuit enforces six obligations:
 \begin{description}
@@ -176,33 +164,11 @@ one\claim{guardian-construction}. Perch's controller calls
 \texttt{guardian.require\_auth\_for\_args((d,))}; the host then runs the
 guardian's \texttt{\_\_check\_auth} with the approval $(S, \mathit{root},
 \pi)$ from its authorization entry. The guardian refuses at the first failing
-check of Table~\ref{tab:guardian}, building the public inputs only from its
+check of Table~\ref{tab:guardian} (Appendix~\ref{app:obligations}), building the public inputs only from its
 configuration, the authorized digest and the accepted
 root\claim{guardian-checks}; a registry or verifier that traps, for example
 because it is archived, is a refusal. Email approvals count toward a
 \texttt{Protected} reconfiguration like any guardian's\claim{guardian-on-perch}.
-
-\begin{table}[t]
-  \caption{The guardian's checks, in order.}
-  \label{tab:guardian}
-  \small
-  \begin{tabularx}{\columnwidth}{@{}r>{\raggedright\arraybackslash}X l@{}}
-    \toprule
-    \# & Check & Error \\
-    \midrule
-    1 & One contract call, on the controller, with one 32-byte argument $\digest$ & \texttt{UnexpectedContext} \\
-    2 & $\Sha(S) = \digest$ & \texttt{DigestMismatch} \\
-    3 & $S$ is a version-2 Perch statement of a known action & \texttt{MalformedStatement} \\
-    4--6 & $S$ names this network, account and controller & \texttt{Wrong\ldots} \\
-    7 & The action is allowed & \texttt{ActionNotAllowed} \\
-    8 & The call is that action's entry point & \texttt{WrongEntryPoint} \\
-    9 & Ledger $\le$ \texttt{valid\_until\_ledger} & \texttt{StatementExpired} \\
-    10 & $\mathit{root}$ is canonical & \texttt{NonCanonicalRoot} \\
-    11 & $\mathit{root}$ is the unexpired pin, or the registry accepts it & \texttt{UnknownRoot} \\
-    12 & $\pi$ verifies for $(\Cm, \digest_{hi}, \digest_{lo}, \mathit{root})$ & \texttt{ProofRejected} \\
-    \bottomrule
-  \end{tabularx}
-\end{table}
 
 One guardian per account keeps the email factor under Perch's
 reconfiguration gate: Perch binds guardian addresses into
@@ -214,6 +180,23 @@ only the same digest, which the controller counts
 once\claim{guardian-payload-irrelevant}. Quorum, delay, cancellation and
 epoch are the controller's. The verifier embeds Perch's UltraHonk verifier
 with the circuit's verification key\claim{verifier-contract}.
+
+\paragraph{A fix of the circuit.} A guardian's circuit is fixed for its
+lifetime, including a relation later found to admit an email it should not.
+A fix reaches an account only through a new verifier, deployed once, and a
+new guardian on it that keeps $\Cm$, listed through Perch's reconfiguration
+gate: at mainnet's settings, 2 transactions and 2{,}631{,}221 stroops (0.26
+XLM) under \texttt{Loss}, 4 and 3{,}159{,}077 (0.32 XLM) under
+\texttt{Protected}\claim{circuit-fix-migration}. When a gap is found, the
+registry's emergency threshold revokes the affected providers' keys; pins
+holding them last until they expire, at most 30 days for the wallet's; and
+the wallet prompts owners to move. That cannot reach a \texttt{Loss} owner
+who lost the passkey, a \texttt{Protected} account whose condition needs the
+old guardian's vote, or an owner who does not act, and once the registry
+readmits the keys, old guardians accept them again. An exploiting approval
+still needs the victim's address and $\code$ and is one vote under the
+quorum, the delay and the alerts. Alternatives are open
+(Appendix~\ref{app:open}).
 
 \subsection{The DKIM key registry and the pin}\label{sec:design-registry}
 Keys are identified by $\kh(n)$, never by selector. The registry holds a
@@ -252,36 +235,54 @@ Alerts are driven by the controller's events and state; nothing is written
 on chain for them. The host watches the controller by contract id and hands
 each event to the vault, which finds the account's record under
 $\mathrm{HMAC}(k_\mathit{alert}, \mathit{account})$. An authorized attempt, a
-completion and a configuration change alert every channel; so does an email
-vote that leaves an attempt below quorum, which Perch emits no event for, so
-the host finds it in the vote's own transaction, as it finds an email vote
-to cancel or to approve a change; opening many attempts hides none. Opening
-an attempt, which anyone can do, alerts nothing by default, so that repeated
+completion and a configuration change alert every channel. So does each
+email vote that Perch emits no event for (one that leaves an attempt below
+quorum, one to cancel, one approving a change): the host finds it in the
+vote's own transaction, so opening many attempts hides none. Opening an
+attempt, which anyone can do, alerts nothing by default, so that repeated
 openings cannot train users to ignore alerts~\cite{anderson-habituation};
 more than eight open at once send one alert a day, and the wallet shows
-every open attempt itself. An alert has generic text and no link
-and carries a six-digit code keyed from $\code$, which the wallet shows for
-the attempt it knows\claim{alert-code}. The code is not an authenticator:
-whoever holds $\code$ computes it, a social engineer included, so no alert
-says a matching code means nothing needs doing, and the push leads with
-cancelling\claim{phishing-defences}.
+every open attempt itself. An alert has generic text and no link and carries
+a six-digit code keyed from $\code$, which the wallet shows for the attempt
+it knows\claim{alert-code}. The code is not an authenticator: whoever holds
+$\code$ computes it, a social engineer included, so no alert says a matching
+code means nothing needs doing, the push leads with cancelling, and every
+required alert pre-empts a caller's script (``If someone told you to expect
+this message, or to ignore it, they are trying to take your
+account'')\claim{phishing-defences}.
 
 When email is a recovery factor, a second channel is required: Web Push to a
-passkey device~\cite{rfc8030,rfc8291,rfc8292}. The vault probes each device
-monthly with a notification that asks for a tap, which the device signs; a
-device that answers none of two probes is unacknowledged and one the push
-service no longer accepts is lapsed, and while no device is live the wallet
-shows it and refuses configurations that keep the email guardian; another
-device is added at once\claim{wallet-second-alert-channel}.
+device the owner sets up~\cite{rfc8030,rfc8291,rfc8292}. A real alert's
+title starts ``Security alert:'' and carries its own icon. Once a month the
+vault instead sends each device a probe worded as an action, ``tap to
+confirm your alerts'', and the tap posts the probe's id signed by a key the
+device made. A device that acknowledged none of two probes is
+unacknowledged, one the push service no longer accepts is lapsed, and either
+way the address is told; while no device is live the wallet says so and
+refuses configurations that keep the email guardian. The wallet says alerts
+reach a device only when the vault lists it as live or it confirmed
+recently, and adds another device at once\claim{wallet-second-alert-channel}.
 A contact is registered, replaced or removed only with an assertion by an
 administrative passkey~\cite{webauthn3}; a replacement or removal takes
 effect after 14 days of close time, longer than the 7-day minimum delay,
 while the old contact keeps receiving alerts, and removal is refused during
 an authorized recovery\claim{alert-contacts}. A watcher that missed
 events reconciles from the controller's state after it restarts and raises a
-lag alarm, and independently the wallet reads live attempts from the
-controller whenever it opens\claims{compromised-inbox-alerted,wallet-live-attempts}. Alert email goes through an EU-owned
-sending service, with failover to a second\claim{alert-formats}.
+lag alarm, and independently the wallet reads every live attempt from the
+controller whenever it opens\claims{compromised-inbox-alerted,wallet-live-attempts}.
+Alert email goes through an EU-owned sending service, with failover to a
+second\claim{alert-formats}.
+
+The probe trades habituation against detection. It must show something,
+since WebKit revokes subscriptions whose pushes show nothing; so that it
+does not train users to dismiss alerts, it asks for an action, looks unlike
+an alert and comes monthly, and so finds a device that stopped answering
+only 60 to 90 days later, longer than a 7-day delay. A12 rests on this:
+under email plus delay the owner learns of an authorized attempt because the
+service runs or reconciles within the delay and the owner still uses a
+subscribed device, keeps the alert address from the thief, or opens the
+wallet. The probe detects revocation and silence, not whether a person
+reads\claim{alert-liveness}.
 
 The browser encrypts each address to the vault with HPKE after verifying its
 attestation~\cite{aws-nitro-attestation}. The vault's key is split 2-of-3

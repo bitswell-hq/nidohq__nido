@@ -1,4 +1,4 @@
-\section{Reproducibility}\label{app:repro}
+\section{Reproducibility and threats to validity}\label{app:repro}
 
 Every artifact builds from the repository with one command, run from its
 root after \texttt{git submodule update --init}, which fetches Perch at the
@@ -12,6 +12,20 @@ must occur in its measurement files), and fails on any undefined reference
 or citation; continuous integration runs it on every
 change, and runs the Lean build, the circuit tests, the contracts' tests and
 the local-network attack suite on the changes that touch them.
+
+\paragraph{Threats to validity.}\label{sec:eval-threats}
+Every email is signed by a mock in its provider's published layout, and DNS,
+the sending and push services, the enclave and the custodians are mocks; the
+real-mail corpus checks the parser, not each provider's outbound recovery
+mail. No registry addition leaves its timelock during a network run, so
+network votes use the pin, and scenarios needing an active key run on the
+test host, which runs the same contracts but is not a network; so does the
+recovery with everything archived. The local network closes about one ledger
+a second while reporting a 5-second target, so there a 120{,}960-ledger delay
+lasts about 34 hours; close-time windows are unaffected. A scenario reports
+only the first layer that refuses it. Timing comes from one shared machine,
+testnet figures from one period, and the alert rows show mechanisms, not
+people.
 
 \begin{table*}[t]
   \caption{One command per artifact. Needs: what the host must provide

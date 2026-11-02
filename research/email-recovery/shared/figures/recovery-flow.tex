@@ -1,23 +1,31 @@
-% The email factor inside one Perch recovery attempt. Shared by the paper
-% and the slides; scale it from the including document.
+% The email factor inside one Perch recovery attempt, with the sealed vault
+% and the alert path, for one 16:9 slide. Drawn at a size that is read
+% unscaled there: every label is 8 pt.
 \begin{tikzpicture}[
-    party/.style={draw, rounded corners=2pt, align=center, inner sep=3pt,
-                  minimum width=26mm, minimum height=10mm, font=\sffamily\figfontlarge},
+    party/.style={draw, rounded corners=2pt, align=center, inner sep=2pt,
+                  minimum width=20mm, minimum height=10mm, font=\sffamily\figfontlarge},
+    op/.style={party, fill=gray!12},
     msg/.style={-{Stealth[length=2mm]}, semithick},
-    lbl/.style={font=\sffamily\figfont, align=center},
+    lbl/.style={font=\sffamily\figfontlarge, align=center, inner sep=1.5pt, fill=white},
   ]
-  \node[party] (other)  at (-4.4, 0)   {Other guardian};
-  \node[party] (ctrl)   at (0, 0)      {Perch recovery\\controller};
-  \node[party] (guard)  at (4.4, 0)    {Email guardian\\(per account)};
-  \node[party] (reg)    at (8.8, 0)    {DKIM key\\registry};
-  \node[party] (wallet) at (0, 2.8)    {Wallet\\(new device)};
-  \node[party] (inbox)  at (6.6, 2.8)  {User's\\mail provider};
+  \node[party] (wallet)   at (0, 3.4)    {Wallet in the\\new device};
+  \node[party] (provider) at (3.9, 3.4)  {User's mail\\provider};
+  \node[op]    (vault)    at (7.8, 3.4)  {Sealed vault\\(enclave)};
+  \node[party] (owner)    at (11.7, 3.4) {Owner's alert\\device, address};
+  \node[party] (other)    at (0, 0)      {Other guardian};
+  \node[party] (ctrl)     at (3.9, 0)    {Perch recovery\\controller};
+  \node[party] (guard)    at (7.8, 0)    {Email guardian\\(per account)};
+  \node[party] (reg)      at (11.7, 0)   {Key registry\\and verifier};
 
-  \draw[msg] ([yshift=2mm]wallet.east) -- node[lbl, above] {email with $\Blinded$} ([yshift=2mm]inbox.west);
-  \draw[msg] ([yshift=-2mm]inbox.west) -- node[lbl, below] {DKIM-signed} ([yshift=-2mm]wallet.east);
-  \draw[msg] (wallet) -- node[lbl, left] {proof} (ctrl);
-  \draw[msg] (other) -- node[lbl, above] {approval} (ctrl);
-  \draw[msg] (ctrl) -- node[lbl, above] {check $\digest$} (guard);
-  \draw[msg] (guard) -- node[lbl, above] {key listed?} (reg);
-  \node[lbl, below=3mm of ctrl] {quorum, then the delay, then completion};
+  \draw[msg] (wallet) -- node[lbl, above=1pt] {email,\\Subject $T$} (provider);
+  \draw[msg] (provider) -- node[lbl, above=1pt] {signed\\copy} (vault);
+  \draw[msg] (vault.north) to[bend right=14] node[lbl, above] {sealed to the browser} (wallet.north);
+  \draw[msg] (wallet.south east) -- node[lbl, left=2pt, pos=0.45] {proof} (ctrl.north west);
+  \draw[msg] (other) -- node[lbl, above=1pt] {approval} (ctrl);
+  \draw[msg] (ctrl) -- node[lbl, above=1pt] {check $\digest$} (guard);
+  \draw[msg] (guard) -- node[lbl, above=1pt] {root,\\proof} (reg);
+  \draw[msg] (ctrl.north east) -- node[lbl, right=2pt, pos=0.55] {events, votes} (vault.south west);
+  \draw[msg] (vault) -- node[lbl, above=1pt] {alert,\\code} (owner);
+  \node[font=\sffamily\figfontlarge, below=2mm of ctrl, align=center]
+    {one vote toward the quorum; then the delay,\\in which the owner can cancel};
 \end{tikzpicture}
