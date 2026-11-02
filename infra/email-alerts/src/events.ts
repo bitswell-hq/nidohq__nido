@@ -16,17 +16,14 @@ export type PerchEventName =
   | 'epoch_advanced'
   | 'change_evidence_recorded';
 
-/**
- * `required` goes to every channel, `informational` and `rate-limited` to
- * email only; `count` sends nothing itself and has the vault count the
- * attempt among the account's open ones, which alerts when there are many
- * (the wallet shows open attempts itself).
- */
-export type AlertClass = 'required' | 'informational' | 'rate-limited' | 'count' | 'none';
+/** `required` goes to every channel, `informational` and `rate-limited` to email only. */
+export type AlertClass = 'required' | 'informational' | 'rate-limited' | 'none';
 
 /**
- * The §10 table. `attempt_begun` is `count` by default; a service
- * configured with `emailOnAttemptBegun` also emails it, `rate-limited`.
+ * The §10 table. `attempt_begun` sends nothing by default: anyone can open
+ * an attempt, so any notice of openings is one a stranger can trigger, and
+ * the wallet lists open attempts itself. A service configured with
+ * `emailOnAttemptBegun` emails it, `rate-limited`.
  */
 export const ALERTS: Record<PerchEventName, AlertClass> = {
   attempt_authorized: 'required',
@@ -34,7 +31,7 @@ export const ALERTS: Record<PerchEventName, AlertClass> = {
   epoch_advanced: 'required',
   attempt_cancelled: 'informational',
   change_evidence_recorded: 'informational',
-  attempt_begun: 'count',
+  attempt_begun: 'none',
   attempt_invalidated: 'none',
 };
 
@@ -44,16 +41,13 @@ export const ALERTS: Record<PerchEventName, AlertClass> = {
  * (spec §10.2): on an attempt that is still collecting
  * (`email_vote_recorded`), on an attempt's cancellation
  * (`email_cancel_recorded`), and on a change to the recovery settings or
- * an upgrade (`email_change_recorded`). The vault itself raises
- * `attempts_many` when an account has more open attempts than
- * `MANY_OPEN_ATTEMPTS`.
+ * an upgrade (`email_change_recorded`).
  */
 export type AlertName =
   | Exclude<PerchEventName, 'attempt_invalidated'>
   | 'email_vote_recorded'
   | 'email_cancel_recorded'
-  | 'email_change_recorded'
-  | 'attempts_many';
+  | 'email_change_recorded';
 
 /** One event as Stellar RPC's `getEvents` returns it. */
 export interface RpcEvent {

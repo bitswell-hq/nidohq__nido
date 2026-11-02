@@ -13,7 +13,6 @@ import { createHash, createPublicKey, randomBytes, randomInt, timingSafeEqual, v
 import {
   type AlertSubject,
   type ContactRequest,
-  MANY_OPEN_ATTEMPTS,
   type PushChannel,
   type SealedRequest,
   alertCode,
@@ -80,8 +79,6 @@ export const PROBE_RETRY_MS = 3600_000;
 export const ACK_MISSED_PROBES = 2;
 /** Devices one contact's push alerts go to at most. */
 export const MAX_PUSH_DEVICES = 4;
-/** `attempts_many` goes to an account at most once in this long. */
-export const MANY_ALERT_EVERY_MS = 24 * 3600_000;
 
 export interface VaultConfig {
   /** `sha256(network passphrase)`. */
@@ -141,11 +138,6 @@ export interface DispatchRequest {
   subject: AlertSubject;
   /** For rate-limited events: how many were suppressed since the last one sent. */
   suppressed?: number;
-  /**
-   * For `attempt_begun`: the attempt's evidence deadline and the latest
-   * ledger, which the host read, so the vault counts it while it is open.
-   */
-  open?: { until: number; ledger: number };
 }
 
 /** A push device's state: `live`, `unacknowledged` (two probe intervals without a tap), or `lapsed` (the push service answered 404 or 410). */
@@ -512,7 +504,7 @@ export class Vault {
     if (d.probe) this.probes.delete(toHex(d.probe.id));
     delete d.probe;
     if (!notify) return;
-    const t = pushLapsedNotice(this.cfg.walletOrigin);
+    const t = pushLapsedNotice(this.cfg.walletOrigin, channelLeft(c));
     const key = toHex(sha256(`lapsed|${toHex(c.id)}|${d.channel.endpoint}`));
     await sendEmail(this.cfg.sending, { to: c.address, subject: t.subject, text: t.body, idempotencyKey: key }, this.fetchImpl);
   }
@@ -599,7 +591,7 @@ export class Vault {
           if (d.unanswered >= ACK_MISSED_PROBES && !d.unacknowledged) {
             d.unacknowledged = true;
             out.unacknowledged++;
-            const t = pushUnconfirmedNotice(this.cfg.walletOrigin);
+            const t = pushUnconfirmedNotice(this.cfg.walletOrigin, channelLeft(c));
             const key = toHex(sha256(`unacknowledged|${toHex(c.id)}|${d.channel.endpoint}|${d.ackedAt}`));
             await sendEmail(this.cfg.sending, { to: c.address, subject: t.subject, text: t.body, idempotencyKey: key }, this.fetchImpl);
           }
@@ -628,43 +620,16 @@ export class Vault {
   }
 
   /**
-   * Count an open attempt (`attempt_begun`, or one reconciliation found)
-   * among the account's; whether more than `MANY_OPEN_ATTEMPTS` are open
-   * at `open.ledger`.
-   */
-  private count(r: AccountRecord, attemptId: string, open: { until: number; ledger: number }): boolean {
-    const list = (r.open ?? []).filter((a) => a.until >= open.ledger && a.attemptId !== attemptId);
-    if (open.until >= open.ledger) list.push({ attemptId, until: open.until });
-    list.sort((a, b) => b.until - a.until);
-    r.open = list.slice(0, MANY_OPEN_ATTEMPTS + 1);
-    if (!r.open.length) delete r.open;
-    return (r.open?.length ?? 0) > MANY_OPEN_ATTEMPTS;
-  }
-
-  /**
    * Send the alert for one event to every active contact of its account:
    * email always, Web Push to every device too for required alerts. Each
    * (event, contact, channel) is sent at most once (the sealed delivery
    * log); a failed channel makes the answer `retry`, and only that channel
-   * is tried again. A counted attempt (`attempt_begun` with `open`) sends
-   * nothing itself; while more than `MANY_OPEN_ATTEMPTS` are open it sends
-   * `attempts_many`, under one delivery id per account and
-   * [`MANY_ALERT_EVERY_MS`] window, so at most once per window.
+   * is tried again.
    */
   async dispatch(ev: DispatchRequest): Promise<{ status: 'done' | 'retry'; writes: Writes }> {
     const writes: Writes = {};
     const record = this.records.get(await this.lookup(ev.account));
-    let retry = false;
-    if (record && ev.open && ev.subject.kind === 'attempt') {
-      const many = this.count(record, ev.subject.attemptId.toString(), ev.open);
-      await this.write(record.account, record, writes);
-      if (many) {
-        const window = Math.floor(this.now() / MANY_ALERT_EVERY_MS);
-        const eventId = `attempts_many:${strkeyFromContractId(ev.account)}:${window}`;
-        retry = await this.deliver({ ...ev, eventId, name: 'attempts_many', class: 'required' }, record, writes);
-      }
-    }
-    if (ev.class !== 'count') retry = (await this.deliver(ev, record, writes)) || retry;
+    const retry = await this.deliver(ev, record, writes);
     return { status: retry ? 'retry' : 'done', writes };
   }
 
@@ -758,6 +723,11 @@ export class Vault {
     }
     return out;
   }
+}
+
+/** What contact `c`'s devices leave of its second channel, for a notice about one of them. */
+function channelLeft(c: Contact): { othersLive: boolean; emailGuardian: boolean } {
+  return { othersLive: c.pushes.some((d) => deviceState(d) === 'live'), emailGuardian: c.emailGuardian };
 }
 
 /** Each contact's channels, without its address. */

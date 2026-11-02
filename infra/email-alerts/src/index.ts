@@ -27,6 +27,7 @@ export {
   chainReads,
   contractWasmHash,
 } from './rpc.js';
+export { BACKOFF_MS, type DriverConfig, FAILING_ALARM_MS, MAX_BACKOFF_MS, POLL_INTERVAL_MS, nextPollIn, runWatcher, sleep } from './driver.js';
 export { RegistryEventsView } from './registryView.js';
 export {
   AlertService,
@@ -34,6 +35,7 @@ export {
   INBOUND_KEEP_MS,
   ACK_LIMIT,
   RECONCILE_EVERY_MS,
+  TX_PAGES_PER_POLL,
   type PollReport,
   type ServiceConfig,
   WindowLimiter,
@@ -63,7 +65,6 @@ export {
   ACK_MISSED_PROBES,
   type ChannelStatus,
   type DeviceState,
-  MANY_ALERT_EVERY_MS,
   MAX_PUSH_DEVICES,
   PROBE_INTERVAL_MS,
   changeDue,

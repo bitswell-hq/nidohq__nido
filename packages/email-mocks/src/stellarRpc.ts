@@ -29,10 +29,14 @@
  * stellar-xdr's own JSON encoding, `@stellar/stellar-xdr-json`), `ledger`
  * and `createdAt`; the result carries `latestLedger`,
  * `latestLedgerCloseTimestamp`, `oldestLedger`,
- * `oldestLedgerCloseTimestamp` and `cursor`, an opaque string (the mock's is
- * the last returned transaction's TOID for a full page, and the end of the
- * latest ledger for a short one). A `startLedger` outside the
- * retention window answers error -32600 with the message
+ * `oldestLedgerCloseTimestamp` and `cursor`, a TOID as a decimal string (the
+ * last returned transaction's for a full page, and the end of the last
+ * ledger scanned for a short one). Like getEvents, one request scans at most
+ * 10,000 ledgers, as stellar-rpc's `getTransactions` does from its change
+ * #908 (stellar/stellar-rpc `CHANGELOG.md`, read 2026-11-02): on a sparse
+ * range a page comes back short, even empty, before the latest ledger, and
+ * only the cursor's ledger against `latestLedger` tells. A `startLedger`
+ * outside the retention window answers error -32600 with the message
  * `soroban-testnet.stellar.org` was observed to answer on 2026-11-02.
  *
  * `getHealth` reports the retention window it keeps (`status`,
@@ -256,10 +260,13 @@ export class StellarRpcMock {
     if (format !== 'base64' && format !== 'json') throw new RpcError(-32602, `unknown xdrFormat ${format}`);
     const start = params.startLedger as number | undefined;
     let after: bigint;
+    let scanFrom: number;
     if (pagination.cursor !== undefined) {
       if (start !== undefined) throw new RpcError(-32602, 'startLedger must be omitted when a cursor is given');
       if (!/^\d+$/.test(pagination.cursor)) throw new RpcError(-32602, 'invalid cursor');
       after = BigInt(pagination.cursor);
+      // The scan starts at the item after the cursor.
+      scanFrom = Number((after + 1n) >> 32n);
       if (Number(after >> 32n) + 1 < this.oldestLedger) {
         throw new RpcError(-32600, `cursor is before the oldest ledger stored (${this.oldestLedger})`);
       }
@@ -272,13 +279,15 @@ export class StellarRpcMock {
         );
       }
       after = toid(start, 0, 0) - 1n;
+      scanFrom = start;
     }
+    const lastScanned = Math.min(this.latestLedger, scanFrom + SCAN_WINDOW_LEDGERS - 1);
     const page = this.transactions
-      .filter((t) => toid(t.ledger, t.applicationOrder, 0) > after && t.ledger >= this.oldestLedger)
+      .filter((t) => toid(t.ledger, t.applicationOrder, 0) > after && t.ledger >= this.oldestLedger && t.ledger <= lastScanned)
       .slice(0, limit);
     const last = page.at(-1);
-    // A full page ends at its last transaction; a short one at the end of the latest ledger.
-    const cursor = page.length === limit && last ? toid(last.ledger, last.applicationOrder, 0) : toid(this.latestLedger + 1, 0, 0) - 1n;
+    // A full page ends at its last transaction; a short one at the end of the last ledger scanned.
+    const cursor = page.length === limit && last ? toid(last.ledger, last.applicationOrder, 0) : toid(lastScanned + 1, 0, 0) - 1n;
     return {
       transactions: page.map((t) => ({
         status: t.status,

@@ -14,9 +14,10 @@
  *
  * **Email votes.** Perch emits no event when a guardian's vote is recorded
  * below quorum, nor for an approval of a cancellation or a change. Each
- * poll the host also reads the next page of every transaction on the
- * network (`getTransactions`, stellar-xdr JSON, with its own cursor; no
- * filter exists, so the query singles out nothing) and finds the votes a
+ * poll the host also reads the next pages of every transaction on the
+ * network (`getTransactions`, stellar-xdr JSON, with its own cursor, up to
+ * `txPagesPerPoll` pages; no filter exists, so the query singles out
+ * nothing) and finds the votes a
  * transaction authorizes for a contract guardian at the controller
  * (`votes.ts`). A vote by an email guardian (a contract running the email
  * guardian's wasm, whose configuration names its account) of an account the
@@ -27,10 +28,10 @@
  * found per vote: how many attempts are open does not matter. The alert
  * follows the vote by at most one polling interval plus the reads.
  *
- * **Many attempts.** For `attempt_begun` on an account with contacts the
- * host reads the attempt's evidence deadline and has the vault count it;
- * while more than `MANY_OPEN_ATTEMPTS` are open the vault sends
- * `attempts_many` (spec §10).
+ * **Openings.** `attempt_begun` sends nothing (unless the service is
+ * configured to email it, rate-limited): anyone can open an attempt, so a
+ * notice of openings is one a stranger could buy, and the wallet lists open
+ * attempts itself (spec §10).
  *
  * **Reconciliation.** On its first poll, every [`RECONCILE_EVERY_MS`], and
  * after the RPC refuses a cursor (events or transactions aged out of
@@ -40,14 +41,16 @@
  * newest until one is gone, of another epoch, or past its evidence deadline
  * (Perch's evidence windows close in id order within an epoch). An
  * authorized attempt, and email votes on open ones, are alerted under the
- * same delivery ids the stream uses, so nothing is sent twice; open
- * attempts are counted. A completed recovery is not re-alerted:
+ * same delivery ids the stream uses, so nothing is sent twice. A completed
+ * recovery is not re-alerted:
  * reconciliation restores the alerts that can still change the outcome.
  *
- * **Lag alarm.** A watcher whose cursor is more than `lagAlarmLedgers`
- * behind the chain, or whose cursor the RPC refused, raises an alarm
- * (`onAlarm`, the log, and `GET /v1/health`). A stopped watcher cannot
- * raise one; `GET /v1/health` reports the last poll for an outside monitor.
+ * **Lag alarm.** A watcher whose events cursor or transaction cursor is
+ * more than `lagAlarmLedgers` behind the chain, or whose cursor the RPC
+ * refused, raises an alarm (`onAlarm`, the log, and `GET /v1/health`, which
+ * reports both cursors and their lags). A stopped watcher cannot raise one;
+ * `GET /v1/health` reports the last poll for an outside monitor. What runs
+ * the polls, and how it keeps up, is `driver.ts`.
  *
  * **Liveness.** Each poll asks the vault to probe the push subscriptions
  * that are due (one probe a month each, by default), and `POST /v1/ack`
@@ -83,12 +86,14 @@ export interface ServiceConfig {
   emailOnAttemptBegun?: boolean;
   /** `attempt_begun` alerts per account: at most one per this window (ledger close time). */
   begunWindowMs?: number;
-  /** Controller reads (`chainReads`); without them, no email-vote alerts, no attempt count, and no reconciliation. */
+  /** Controller reads (`chainReads`); without them, no email-vote alerts and no reconciliation. */
   reads?: ChainReads;
   /** How often to reconcile from controller state (default [`RECONCILE_EVERY_MS`]). */
   reconcileEveryMs?: number;
-  /** Alarm when the cursor is this many ledgers behind the chain (default 720, an hour). */
+  /** Alarm when either cursor is this many ledgers behind the chain (default 720, an hour). */
   lagAlarmLedgers?: number;
+  /** Transaction pages one poll reads at most while the scan is behind (default [`TX_PAGES_PER_POLL`]). */
+  txPagesPerPoll?: number;
   /** Called with each alarm, for an operator's pager. */
   onAlarm?: (reason: string) => void;
   /** `POST /v1/inbound` registrations per client and window (default [`INBOUND_LIMIT`]). */
@@ -109,6 +114,14 @@ export const INBOUND_KEEP_MS = 24 * 3600_000;
 
 /** How often the host reconciles from controller state. */
 export const RECONCILE_EVERY_MS = 6 * 3600_000;
+
+/**
+ * Transaction pages of 200 one poll reads at most: about three mainnet
+ * ledgers' worth (1.31 pages a ledger, about 1.1 s a page, in the hour of
+ * mainnet of spec §12), so a scan that fell behind gains on the chain at
+ * every poll while the lock the HTTP API shares is held for seconds.
+ */
+export const TX_PAGES_PER_POLL = 4;
 
 /** Probe acknowledgements one client may post per hour: a device posts one a month. */
 export const ACK_LIMIT = { perClient: 30, windowMs: 3600_000 } as const;
@@ -167,14 +180,17 @@ export interface PollReport {
   retriesQueued: number;
   retriesDone: number;
   matured: { applied: string[]; dropped: string[]; postponed: string[] };
-  /** Transactions read for votes. */
+  /** Transactions read for votes, and the pages they came in. */
   transactions: number;
+  txPages: number;
   /** Email-vote alerts dispatched (on attempts, cancellations and changes). */
   votes: number;
   /** Accounts reconciled from controller state, and the alerts that found (`undefined` when not run). */
   reconciled?: { accounts: number; found: number };
-  /** Ledgers between the cursor and the chain's latest. */
+  /** Ledgers between the further-behind cursor and the chain's latest. */
   lagLedgers: number;
+  /** Each cursor's lag in ledgers: the events watcher's and the transaction scan's. */
+  lag: { events: number; transactions: number };
   /** Why the watcher raised an alarm this poll. */
   alarm?: string;
   /** Push subscriptions probed, how many of them were gone, and how many became unacknowledged. */
@@ -247,9 +263,10 @@ export class AlertService {
   /** When reconciliation last ran (ms), and each account's `next_attempt_id` then. */
   private reconciledAt = 0;
   private readonly reconciledNext = new Map<string, bigint>();
-  /** The last alarm and the last completed poll, for `GET /v1/health`. */
+  /** The last alarm, the last completed poll, and each cursor's lag then, for `GET /v1/health`. */
   private alarm?: { at: number; reason: string };
   private lastPollAt?: number;
+  private lastLag = { events: 0, transactions: 0 };
 
   constructor(
     private readonly cfg: ServiceConfig,
@@ -300,24 +317,10 @@ export class AlertService {
     }
   }
 
-  /**
-   * The dispatch for `ev`, or why there is none. `attempt_begun` is
-   * counted only for an account with contacts (`contacts`), with the
-   * attempt's evidence deadline read from the controller.
-   */
-  private async plan(ev: PerchEvent, contacts: Set<string>): Promise<DispatchRequest | 'none' | 'suppressed'> {
-    let cls = ALERTS[ev.name];
+  /** The dispatch for `ev`, or why there is none. */
+  private plan(ev: PerchEvent): DispatchRequest | 'none' | 'suppressed' {
+    const cls = ev.name === 'attempt_begun' && this.cfg.emailOnAttemptBegun ? 'rate-limited' : ALERTS[ev.name];
     if (cls === 'none' || ev.name === 'attempt_invalidated') return 'none';
-    let open: DispatchRequest['open'];
-    if (ev.name === 'attempt_begun') {
-      const reads = this.cfg.reads;
-      if (reads && contacts.has(ev.accountStrkey)) {
-        const view = await reads.attempt(ev.accountStrkey, BigInt(ev.data.attempt_id as bigint)).catch(() => undefined);
-        if (view) open = { until: view.evidenceDeadline, ledger: this.state.latestLedger };
-      }
-      if (this.cfg.emailOnAttemptBegun) cls = 'rate-limited';
-      else if (!open) return 'none';
-    }
     let suppressed: number | undefined;
     if (cls === 'rate-limited') {
       const window = this.cfg.begunWindowMs ?? 24 * 3600_000;
@@ -338,7 +341,6 @@ export class AlertService {
       account: ev.account,
       subject,
       ...(suppressed !== undefined ? { suppressed } : {}),
-      ...(open ? { open } : {}),
     };
   }
 
@@ -363,8 +365,10 @@ export class AlertService {
         retriesDone: 0,
         matured: { applied: [], dropped: [], postponed: [] },
         transactions: 0,
+        txPages: 0,
         votes: 0,
         lagLedgers: 0,
+        lag: { events: 0, transactions: 0 },
         probes: { probed: 0, lapsed: 0, unacknowledged: 0 },
         latencyMs: {},
       };
@@ -402,7 +406,7 @@ export class AlertService {
         const ev = decodePerchEvent(raw);
         if (ev) {
           this.track(ev);
-          const plan = await this.plan(ev, contacts);
+          const plan = this.plan(ev);
           if (plan === 'suppressed') report.suppressed++;
           if (typeof plan === 'object') {
             const r = await this.vault.dispatch(plan);
@@ -429,12 +433,18 @@ export class AlertService {
       // A page can be short without reaching the chain's head: one request
       // scans a bounded ledger range.
       const cursorLedger = Number(BigInt(page.cursor.slice(0, 19)) >> 32n);
-      const votesCaughtUp = await this.scanVotes(report, contacts);
-      report.caughtUp = page.events.length < (this.cfg.pageLimit ?? 200) && cursorLedger >= page.latestLedger && votesCaughtUp;
-      report.lagLedgers = Math.max(0, page.latestLedger - cursorLedger);
+      const votes = await this.scanVotes(report, contacts);
+      report.caughtUp = page.events.length < (this.cfg.pageLimit ?? 200) && cursorLedger >= page.latestLedger && votes.caughtUp;
+      report.lag = { events: Math.max(0, page.latestLedger - cursorLedger), transactions: votes.lag };
+      report.lagLedgers = Math.max(report.lag.events, report.lag.transactions);
+      this.lastLag = report.lag;
       if (report.lagLedgers > (this.cfg.lagAlarmLedgers ?? 720)) {
         // One alarm per episode: a watcher catching up stays behind for several polls.
-        report.alarm = this.alarm?.reason ?? this.raise(`the watcher is ${report.lagLedgers} ledgers behind the chain`);
+        const behind =
+          report.lag.transactions > report.lag.events
+            ? `the transaction scan (email votes) is ${report.lag.transactions} ledgers behind the chain`
+            : `the event watcher is ${report.lag.events} ledgers behind the chain`;
+        report.alarm = this.alarm?.reason ?? this.raise(behind);
       } else if (report.caughtUp && this.alarm) {
         this.log(`watcher: caught up; alarm cleared (${this.alarm.reason})`);
         this.alarm = undefined;
@@ -451,36 +461,50 @@ export class AlertService {
   }
 
   /**
-   * One page of every transaction since the transaction cursor: alert each
-   * email guardian's vote at the controller for an account with contacts.
-   * `true` when the page reached the chain's latest ledger.
+   * Every transaction since the transaction cursor, up to `txPagesPerPoll`
+   * pages: alert each email guardian's vote at the controller for an
+   * account with contacts. The cursor is a TOID, its ledger in the high 32
+   * bits; `lag` is the ledgers between it and the latest. `caughtUp` when a
+   * page is short and its cursor reached the latest ledger: a request scans
+   * a bounded ledger range, so a short page alone does not mean caught up.
+   * The cursor never moves backwards: Stellar RPC 29.0.1 and 30.0.0 answer
+   * a caught-up request with a cursor below the request's (the latest
+   * ledger's start, which re-delivers its transactions; or `"0"` when the
+   * request's ledger is past that node's latest, which the next request
+   * fails on; stellar/stellar-rpc#745).
    */
-  private async scanVotes(report: PollReport, contacts: Set<string>): Promise<boolean> {
-    const reads = this.cfg.reads;
-    if (!reads) return true;
+  private async scanVotes(report: PollReport, contacts: Set<string>): Promise<{ caughtUp: boolean; lag: number }> {
+    if (!this.cfg.reads) return { caughtUp: true, lag: 0 };
     const limit = Math.min(this.cfg.pageLimit ?? 200, 200);
-    const from = this.state.txCursor ? { cursor: this.state.txCursor } : { startLedger: this.state.txStartLedger ?? this.state.startLedger };
-    let page;
-    try {
-      page = await this.cfg.rpc.getTransactions(from, limit);
-    } catch (e) {
-      if (!(e instanceof RpcError && e.code === -32600)) throw e;
-      const health = await this.cfg.rpc.call<{ oldestLedger: number }>('getHealth', {});
-      report.alarm = this.raise(`transactions aged out of RPC retention (${e.message}); resuming at ledger ${health.oldestLedger} and reconciling from controller state`);
-      this.state.txCursor = undefined;
-      this.state.txStartLedger = health.oldestLedger;
+    for (let n = 0; ; n++) {
+      const from = this.state.txCursor ? { cursor: this.state.txCursor } : { startLedger: this.state.txStartLedger ?? this.state.startLedger };
+      let page;
+      try {
+        page = await this.cfg.rpc.getTransactions(from, limit);
+      } catch (e) {
+        if (!(e instanceof RpcError && e.code === -32600)) throw e;
+        const health = await this.cfg.rpc.call<{ oldestLedger: number; latestLedger: number }>('getHealth', {});
+        report.alarm = this.raise(`transactions aged out of RPC retention (${e.message}); resuming at ledger ${health.oldestLedger} and reconciling from controller state`);
+        this.state.txCursor = undefined;
+        this.state.txStartLedger = health.oldestLedger;
+        this.persist();
+        this.forceReconcile();
+        return { caughtUp: false, lag: Math.max(0, health.latestLedger - health.oldestLedger) };
+      }
+      report.txPages++;
+      const readAt = performance.now();
+      for (const tx of page.transactions) {
+        report.transactions++;
+        await this.votesIn(report, tx, contacts, readAt);
+      }
+      const asked = 'cursor' in from ? from.cursor : undefined;
+      this.state.txCursor = asked !== undefined && BigInt(page.cursor) < BigInt(asked) ? asked : page.cursor;
       this.persist();
-      this.forceReconcile();
-      return false;
+      const cursorLedger = Number(BigInt(this.state.txCursor) >> 32n);
+      const lag = Math.max(0, page.latestLedger - cursorLedger);
+      if (page.transactions.length < limit && cursorLedger >= page.latestLedger) return { caughtUp: true, lag };
+      if (n + 1 >= (this.cfg.txPagesPerPoll ?? TX_PAGES_PER_POLL)) return { caughtUp: false, lag };
     }
-    const readAt = performance.now();
-    for (const tx of page.transactions) {
-      report.transactions++;
-      await this.votesIn(report, tx, contacts, readAt);
-    }
-    this.state.txCursor = page.cursor;
-    this.persist();
-    return page.transactions.length < limit;
   }
 
   /** The account an email guardian belongs to at this controller, or `undefined` for any other guardian. */
@@ -535,8 +559,8 @@ export class AlertService {
     }
   }
 
-  /** Raise an alarm: the log, `onAlarm`, and `GET /v1/health`. */
-  private raise(reason: string): string {
+  /** Raise an alarm: the log, `onAlarm`, and `GET /v1/health`. The next caught-up poll clears it. */
+  raise(reason: string): string {
     this.alarm = { at: this.now(), reason };
     this.log(`ALARM watcher: ${reason}`);
     this.cfg.onAlarm?.(reason);
@@ -630,7 +654,7 @@ export class AlertService {
    * Alert from controller state what the stream may have missed, for every
    * account with contacts (or the `only` ones): its authorized attempt and
    * an email vote to cancel it, and, on every open attempt, an email vote
-   * and an email vote to cancel; open attempts are counted.
+   * and an email vote to cancel.
    */
   private async reconcile(reads: ChainReads, only?: string[]): Promise<{ accounts: number; found: number }> {
     const report = { accounts: 0, found: 0 };
@@ -666,12 +690,10 @@ export class AlertService {
     return report;
   }
 
-  /** One open attempt reconciliation read: count it, and alert its email votes. */
+  /** One open attempt reconciliation read: alert its email votes. */
   private async reconcileAttempt(reads: ChainReads, sink: PollReport, account: string, id: bigint, view: AttemptView, readAt: number): Promise<number> {
     if (view.state !== 'Collecting') return 0;
     let found = 0;
-    const counted = this.found('attempt_begun', 'count', account, id);
-    await this.dispatchFound(sink, { ...counted, open: { until: view.evidenceDeadline, ledger: this.state.latestLedger } }, readAt);
     if (await this.emailVoter(reads, view.guardians)) {
       await this.dispatchFound(sink, this.found('email_vote_recorded', 'required', account, id), readAt);
       found++;
@@ -834,7 +856,9 @@ export class AlertService {
         if (req.method === 'GET' && url.pathname === '/v1/health') {
           return reply(200, {
             cursor: this.state.cursor ?? null,
+            txCursor: this.state.txCursor ?? null,
             latestLedger: this.state.latestLedger,
+            lag: this.lastLag,
             retries: Object.keys(this.state.retries).length,
             lastPollAt: this.lastPollAt ?? null,
             alarm: this.alarm ?? null,

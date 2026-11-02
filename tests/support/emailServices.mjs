@@ -37,7 +37,7 @@ import {
   launchDns,
   nitroTestRoot,
 } from '@nidohq/email-mocks';
-import { AlertService, ProcessVault, StellarRpc, accountSigners, chainReads } from '@nidohq/email-alerts';
+import { AlertService, ProcessVault, StellarRpc, accountSigners, chainReads, runWatcher } from '@nidohq/email-alerts';
 import { xdr } from '@stellar/stellar-sdk';
 
 const stack = JSON.parse(readFileSync(new URL('../../target/email-e2e/stack.json', import.meta.url), 'utf8'));
@@ -113,13 +113,9 @@ const svc = new AlertService(
   vault,
 );
 const alertUrl = await svc.listen(Number(process.env.E2E_ALERT_PORT || 0));
-let polling = true;
-(async () => {
-  while (polling) {
-    await svc.pollOnce().catch((e) => console.error(`[alerts] poll: ${e.message}`));
-    await new Promise((r) => setTimeout(r, 1_500));
-  }
-})();
+// The host's production driver (infra/email-alerts/src/driver.ts), every 1.5 s once caught up.
+const polling = new AbortController();
+void runWatcher(svc, { intervalMs: 1_500, signal: polling.signal, onError: (e) => console.error(`[alerts] poll: ${e.message}`) });
 
 const dns = launchDns();
 const doh = dohHandler(dns);
@@ -170,7 +166,7 @@ console.log(
 );
 
 const stop = async () => {
-  polling = false;
+  polling.abort();
   await Promise.allSettled([svc.close(), vault.close(), lettermint.close(), scaleway.close(), push.close(), ...custodians.map((c) => c.close())]);
   process.exit(0);
 };
