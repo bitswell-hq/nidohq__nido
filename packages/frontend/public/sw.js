@@ -7,7 +7,10 @@
 //
 // Real alerts and the liveness probe look different on purpose: an alert's
 // title starts "Security alert:", it carries the red alert icon and stays
-// until dismissed; the probe ({v, kind: 'probe', probe}, monthly by default)
+// until dismissed. Each alert is its own notification, tagged by its kind and
+// code, so a second one (another attempt, or the same alert sent again)
+// neither silently replaces the first nor arrives without sound
+// (`renotify`); the probe ({v, kind: 'probe', probe}, monthly by default)
 // carries the wallet's own icon and asks to be tapped. WebKit revokes a
 // subscription whose pushes show nothing
 // (https://webkit.org/blog/12945/meet-web-push/), so the probe is visible.
@@ -106,10 +109,12 @@ self.addEventListener('push', (event) => {
   const title = typeof data.title === 'string' ? data.title : 'Something changed in your Nido’s recovery';
   const code = typeof data.code === 'string' && /^\d{6}$/.test(data.code) ? `${data.code.slice(0, 3)} ${data.code.slice(3)}` : '';
   const body = (typeof data.body === 'string' ? data.body : 'Open your wallet to see what changed.') + (code ? ` Code ${code}.` : '');
+  const kind = typeof data.kind === 'string' ? data.kind : 'nido-alert';
   event.waitUntil(
     self.registration.showNotification(`Security alert: ${title}`, {
       body,
-      tag: typeof data.kind === 'string' ? data.kind : 'nido-alert',
+      tag: code ? `${kind}:${data.code}` : kind,
+      renotify: true,
       icon: '/alert.svg',
       requireInteraction: true,
     }),

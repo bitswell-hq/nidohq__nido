@@ -10,14 +10,19 @@ import {
   ENROLLED_ADDRESS_NOTE,
   PRIVACY_CLAIM,
   PROVIDER_SEES,
+  EMAIL_ALONE_REFUSED,
   RECENT_ACK_MS,
-  SECOND_CHANNEL_LAPSED,
-  SECOND_CHANNEL_UNACKNOWLEDGED,
   accountFromKitInput,
   channelView,
+  emailAloneAuthorizes,
+  secondChannelWarning,
+  homeScreenNeeded,
+  CODE_CHECK_EVERY_MS,
+  codeCheckReminder,
   kitActions,
   recoveryPageUrl,
   syncedPasskeyNote,
+  passkeyBackup,
   alertAddressWarning,
   checkCodeAgainstPin,
   chooseKeyPath,
@@ -99,7 +104,10 @@ describe('the email to send', () => {
         'the email services that deliver alerts, Lettermint, or Scaleway if Lettermint fails (both EU email services), then see it with every alert.',
     );
     expect(ENROLLED_ADDRESS_NOTE).not.toMatch(/never leaves this browser/);
-    expect(CONSENT_VERSION).toBe(3);
+    expect(CONSENT_VERSION).toBe(4);
+    // Openings, however many, notify nobody: anyone can open an attempt.
+    expect(CONSENT_TEXT).not.toMatch(/many recovery attempts/);
+    expect(CONSENT_TEXT).toContain('Recovery attempts that are only opened, which anyone can do, show in your wallet instead.');
     expect(CONSENT_TEXT).toContain('Alert emails are sent through Lettermint, or Scaleway if Lettermint fails (both EU email services), which see this address and each alert.');
     expect(CONSENT_TEXT).toContain('About once a month this device asks you to tap a notification');
     expect(CONSENT_TEXT).not.toMatch(/once a week|quiet notification/);
@@ -315,6 +323,38 @@ describe('phishing and the recovery code', () => {
     expect(syncedPasskeyNote('gmail.com', firefox)).toBeUndefined();
   });
 
+  it('the synced-passkey note follows the passkey flags and AAGUID, and the user agent only where they are silent', () => {
+    const edge = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0';
+    const chrome = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+    const android = 'Mozilla/5.0 (Linux; Android 15; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Mobile Safari/537.36';
+    // Authenticator data: rpIdHash, flags, counter, and with AT the AAGUID (W3C WebAuthn Level 3 §6.1).
+    const authData = (flags: number, aaguid?: string) => {
+      const b = new Uint8Array(aaguid ? 53 : 37);
+      b[32] = flags;
+      if (aaguid) b.set(Buffer.from(aaguid.replace(/-/g, ''), 'hex'), 37);
+      return b;
+    };
+    const UP_UV = 0x05;
+    const GPM = 'ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4';
+    const ONE_PASSWORD = 'bada5566-a7aa-401f-bd96-45619a55120d';
+    expect(passkeyBackup(authData(UP_UV))).toEqual({ eligible: false, synced: false });
+    expect(passkeyBackup(authData(UP_UV | 0x08 | 0x10))).toEqual({ eligible: true, synced: true });
+    expect(passkeyBackup(authData(UP_UV | 0x08 | 0x10 | 0x40, GPM))).toEqual({ eligible: true, synced: true, aaguid: GPM });
+    expect(passkeyBackup(authData(UP_UV | 0x40, '00000000-0000-0000-0000-000000000000'))).toEqual({ eligible: false, synced: false });
+    expect(passkeyBackup(new Uint8Array(36))).toBeUndefined();
+
+    // A passkey that is not synced cannot be lost with the inbox's account, whatever the browser.
+    expect(syncedPasskeyNote('gmail.com', android, passkeyBackup(authData(UP_UV | 0x08)))).toBeUndefined();
+    // The AAGUID names the platform, on any browser; another credential manager's is no match.
+    expect(syncedPasskeyNote('gmail.com', edge, passkeyBackup(authData(UP_UV | 0x18 | 0x40, GPM)))).toMatch(/^The passkey on this device is saved in your Google account \(Google Password Manager\), which syncs it/);
+    expect(syncedPasskeyNote('gmail.com', chrome, passkeyBackup(authData(UP_UV | 0x18 | 0x40, ONE_PASSWORD)))).toBeUndefined();
+    // Synced, no AAGUID: certain of the sync, a guess at who syncs it.
+    expect(syncedPasskeyNote('gmail.com', chrome, passkeyBackup(authData(UP_UV | 0x18)))).toMatch(/^The passkey on this device is synced to your other devices, probably by your Google account/);
+    // Nothing from the passkey: Edge, Opera and Samsung Internet carry "Chrome/" but do not default to Google's manager.
+    expect(syncedPasskeyNote('gmail.com', edge)).toBeUndefined();
+    expect(syncedPasskeyNote('gmail.com', chrome)).toMatch(/probably saved in your Google account/);
+  });
+
   it('the apex recovery page starts from the Nido address in a kit, its URL, or a name', () => {
     expect(accountFromKitInput(`  Nido: ${account}  `)).toEqual({ account });
     expect(accountFromKitInput(`https://${account.toLowerCase()}.nido.test/security/recover/`)).toEqual({ account });
@@ -344,6 +384,7 @@ describe('the second alert channel at runtime (rule 2)', () => {
       state: 'here',
       rule2: 'ok',
       offerAdd: false,
+      offerHelper: false,
       text: 'Alert notifications: they reach this device (last confirmed 2026-11-01).',
     });
     expect(channelView({ device: { state: 'live', id: 'aa', ackedAt: now - 3_600_000 }, now, date }).state).toBe('here');
@@ -354,20 +395,70 @@ describe('the second alert channel at runtime (rule 2)', () => {
 
   it('on another device than the one subscribed, it says where notifications go and offers this device', () => {
     const v = channelView({ vault: [dev('aa', 'live', Date.UTC(2026, 5, 3))], now, date });
-    expect(v).toEqual({ state: 'elsewhere', rule2: 'ok', offerAdd: true, text: 'Recovery notifications go to another device (set up on 2026-06-03). Add this device too.' });
+    expect(v).toEqual({ state: 'elsewhere', rule2: 'ok', offerAdd: true, offerHelper: false, text: 'Recovery notifications go to another device (set up on 2026-06-03). Add this device too.' });
     expect(channelView({ vault: [dev('aa', 'live')], device: { state: 'live', id: 'bb' }, now, date }).state).toBe('elsewhere');
     expect(channelView({ now, date })).toMatchObject({ state: 'unknown', offerAdd: true, text: expect.stringMatching(/does not receive them/) });
   });
 
   it('unacknowledged and lapsed devices break rule 2, as a lost subscription on this device does', () => {
-    expect(channelView({ vault: [dev('aa', 'unacknowledged')], device: { state: 'live', id: 'aa' }, now, date })).toEqual({ state: 'unacknowledged', rule2: 'broken', offerAdd: true, text: SECOND_CHANNEL_UNACKNOWLEDGED });
+    expect(channelView({ vault: [dev('aa', 'unacknowledged')], device: { state: 'live', id: 'aa' }, now, date })).toEqual({
+      state: 'unacknowledged',
+      rule2: 'broken',
+      offerAdd: true,
+      offerHelper: false,
+      text: secondChannelWarning('unacknowledged', false),
+    });
     expect(channelView({ vault: [dev('aa', 'lapsed')], now, date })).toMatchObject({ state: 'lapsed', rule2: 'broken' });
     expect(channelView({ vault: [], now, date })).toMatchObject({ state: 'lapsed', rule2: 'broken' });
     expect(channelView({ device: { state: 'gone', id: 'aa' }, now, date })).toMatchObject({ state: 'lapsed', rule2: 'broken', offerAdd: true });
     // One live device keeps rule 2, whatever the others.
     expect(channelView({ vault: [dev('aa', 'unacknowledged'), dev('bb', 'live')], device: { state: 'live', id: 'bb' }, now, date }).state).toBe('here');
-    expect(SECOND_CHANNEL_LAPSED).toMatch(/rule 2/);
-    expect(SECOND_CHANNEL_UNACKNOWLEDGED).toMatch(/rule 2/);
+  });
+
+  it('a broken channel never reads as email recovery being off: the helper still approves, alone under email plus delay', () => {
+    const alone = channelView({ device: { state: 'gone', id: 'aa' }, now, date, emailAlone: true });
+    expect(alone).toMatchObject({ state: 'lapsed', rule2: 'broken', offerAdd: true, offerHelper: true });
+    expect(alone.text).toBe(
+      'Your email helper can still approve a recovery alone, and your second alert channel is not working: fix the channel now, or add another helper. ' +
+        'Notifications for your recovery alerts no longer reach any of your devices. ' +
+        'A recovery your email approves finishes after its waiting period unless you cancel it, and you may hear of it only by email. ' +
+        'Until a device receives them again, Nido will not save settings in which your email helper can approve alone (rule 2).',
+    );
+    expect(secondChannelWarning('unacknowledged', true)).toMatch(/^Your email helper can still approve a recovery alone, .* no device has confirmed the last two checks/);
+    expect(secondChannelWarning('lapsed', false)).toMatch(/^Your second alert channel is not working: fix it now\. .* Your email helper still counts as one approval, and you would hear of its approvals only by email \(rule 2\)\.$/);
+    for (const t of [secondChannelWarning('lapsed', true), secondChannelWarning('lapsed', false), secondChannelWarning('unacknowledged', true), EMAIL_ALONE_REFUSED]) {
+      expect(t).not.toMatch(/not allowed|turned off|is off/);
+    }
+    expect(EMAIL_ALONE_REFUSED).toMatch(/Add this device, require another helper’s approval as well \(2 or more must approve\), or remove the email helper\.$/);
+  });
+
+  it('an iPhone or iPad outside its Home Screen app is told, before any request, to add the address of this Nido', () => {
+    const iphone = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1';
+    const ipadDesktop = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15';
+    const host = 'cabc.nido.fyi';
+    expect(homeScreenNeeded({ userAgent: iphone, standalone: false, maxTouchPoints: 5, host })).toBe(
+      'On an iPhone or iPad, notifications reach only Nido opened from your Home Screen, added from this Nido’s own address. ' +
+        'In Safari, with this page open at cabc.nido.fyi, tap Share, then Add to Home Screen. Then open Nido from that icon and come back here.',
+    );
+    expect(homeScreenNeeded({ userAgent: iphone, standalone: true, maxTouchPoints: 5, host })).toBeUndefined();
+    // iPadOS Safari reports a Mac; a Mac has no touch points.
+    expect(homeScreenNeeded({ userAgent: ipadDesktop, standalone: false, maxTouchPoints: 5, host })).toBeDefined();
+    expect(homeScreenNeeded({ userAgent: ipadDesktop, standalone: false, maxTouchPoints: 0, host })).toBeUndefined();
+  });
+
+  it('asks about twice a year to check the recovery code, and never right after a check', () => {
+    const now = Date.UTC(2026, 10, 2);
+    expect(CODE_CHECK_EVERY_MS).toBe(182 * 86_400_000);
+    expect(codeCheckReminder(undefined, now)).toBe('You have not checked your recovery code on this device yet. Check that you can still find it: recovering by email needs it, and Nido never has it.');
+    expect(codeCheckReminder(now - CODE_CHECK_EVERY_MS + 1, now)).toBeUndefined();
+    expect(codeCheckReminder(now - CODE_CHECK_EVERY_MS, now)).toMatch(/^It is six months since you last checked your recovery code here\./);
+  });
+
+  it('the email vote alone authorizes only in guardian-only mode at a quorum of one', () => {
+    expect(emailAloneAuthorizes({ mode: 'guardian-only', quorum: 1, emailListed: true })).toBe(true);
+    expect(emailAloneAuthorizes({ mode: 'guardian-only', quorum: 2, emailListed: true })).toBe(false);
+    expect(emailAloneAuthorizes({ mode: 'combined', quorum: 1, emailListed: true })).toBe(false);
+    expect(emailAloneAuthorizes({ mode: 'guardian-only', quorum: 1, emailListed: false })).toBe(false);
   });
 });
 

@@ -2,9 +2,12 @@
  * The alert path's own liveness (spec §10, §10.2, §10.3, §10.6): the
  * email-guardian votes Perch has no event for, found per vote in the
  * network's transactions however many attempts are open (on an attempt, on
- * a cancellation, on a change); the many-attempts alert; reconciliation
- * from controller state, which pages through every open attempt, after the
- * events aged out of the RPC's retention; the lag alarm; the monthly push
+ * a cancellation, on a change); openings, however many and however long,
+ * notifying nobody; reconciliation from controller state, which pages
+ * through every open attempt, after the events aged out of the RPC's
+ * retention; the lag alarm on either cursor, a transaction cursor that
+ * never moves backwards, and the poll driver draining a scan that fell
+ * behind; the monthly push
  * probe, its signed acknowledgement, and the unacknowledged or lapsed
  * device it finds; and the owner's `status` and `push` requests, which add
  * a device at once. Controller reads go through a fake [`ChainReads`];
@@ -14,12 +17,14 @@
  */
 import { join } from 'node:path';
 import { NitroHypervisorMock, PushUserAgentMock, testImage } from '@nidohq/email-mocks';
-import { MANY_OPEN_ATTEMPTS, alertCode, bytes, contractIdFromStrkey, deriveAlertCodeKey } from '@nidohq/email-recovery';
+import { alertCode, bytes, contractIdFromStrkey, deriveAlertCodeKey } from '@nidohq/email-recovery';
 import { Address, StrKey, nativeToScVal, xdr } from '@stellar/stellar-sdk';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { InProcessVault } from '../src/channel.js';
 import { type AttemptView, type ChainReads, accountSigners, chainReads } from '../src/rpc.js';
-import { AlertService, RECONCILE_EVERY_MS } from '../src/service.js';
+import { runWatcher } from '../src/driver.js';
+import { type GetTransactionsResult } from '../src/rpc.js';
+import { AlertService, RECONCILE_EVERY_MS, type ServiceConfig } from '../src/service.js';
 import { PASSKEY_DEVICE_LEAD, PREEMPT } from '../src/vault/content.js';
 import { ACK_MISSED_PROBES, PROBE_INTERVAL_MS, Vault, deviceId } from '../src/vault/vault.js';
 import { IMAGE, Wallet, type World, alertsTo, networkId, startWorld, loadFixture } from './harness.js';
@@ -72,7 +77,7 @@ let chain: FakeController;
 let clock: number;
 let alarms: string[];
 
-function newService() {
+function newService(o: Partial<ServiceConfig> = {}) {
   return new AlertService(
     {
       rpc: w.rpc,
@@ -85,6 +90,7 @@ function newService() {
       retryBaseMs: 0,
       now: () => clock,
       onAlarm: (r) => alarms.push(r),
+      ...o,
     },
     new InProcessVault(vault),
   );
@@ -161,10 +167,9 @@ describe('email votes, found per vote', () => {
     begin(100);
     for (let id = 101; id <= 140; id++) begin(id);
     await service.drain();
-    const many = alertsTo(w, ADDRESS).filter((m) => /many recovery attempts/.test(m.subject));
-    expect(many).toHaveLength(1);
-    expect(many[0]!.text).toContain(`More than ${MANY_OPEN_ATTEMPTS} recovery attempts are open`);
-    expect(pushes().map((p) => p.kind)).toEqual(['attempts_many']);
+    // The openings notify nobody, on any channel.
+    expect(alertsTo(w, ADDRESS)).toEqual([]);
+    expect(pushes()).toEqual([]);
 
     const readsBefore = chain.reads;
     vote(100, { guardians: [EMAIL_GUARDIAN] });
@@ -226,21 +231,23 @@ describe('email votes, found per vote', () => {
   });
 });
 
-describe('many open attempts', () => {
-  it(`more than ${MANY_OPEN_ATTEMPTS} open attempts alert every channel at most once a day; closed ones do not count`, async () => {
-    for (let id = 1; id <= MANY_OPEN_ATTEMPTS; id++) begin(id);
-    begin(MANY_OPEN_ATTEMPTS + 1, { evidenceDeadline: 1 });
+describe('openings', () => {
+  it('sustained griefing: one opening a day for 30 days, after 8 at once, notifies nobody on any channel', async () => {
+    for (let id = 1; id <= 8; id++) begin(id);
     await service.drain();
-    expect(subjects()).toEqual([]);
-    begin(MANY_OPEN_ATTEMPTS + 2);
-    begin(MANY_OPEN_ATTEMPTS + 3);
+    for (let day = 1; day <= 30; day++) {
+      clock += DAY;
+      begin(8 + day);
+      await service.drain();
+    }
+    expect(alertsTo(w, ADDRESS)).toEqual([]);
+    // The device's one push in those 30 days is the monthly probe.
+    expect(pushes().map((p) => p.kind)).toEqual(['probe']);
+    // The email vote on one of them still alerts at once.
+    vote(20, { guardians: [EMAIL_GUARDIAN] });
     await service.drain();
-    expect(subjects()).toEqual(['Nido security alert: many recovery attempts opened']);
-    expect(alertsTo(w, ADDRESS)[0]!.text).toContain(PREEMPT);
-    clock += DAY;
-    begin(MANY_OPEN_ATTEMPTS + 4);
-    await service.drain();
-    expect(subjects()).toHaveLength(2);
+    expect(subjects()).toEqual(['Nido security alert: your email approved a recovery']);
+    expect(pushes()).toMatchObject([{ kind: 'email_vote_recorded', code: await codeFor(20) }]);
   });
 });
 
@@ -278,7 +285,7 @@ describe('reconciliation from controller state', () => {
     expect(reports.find((r) => r.reconciled)!.reconciled).toEqual({ accounts: 1, found: 1 });
     const code = await codeFor(200);
     expect(alertsTo(w, ADDRESS).filter((m) => /your email approved a recovery/.test(m.subject) && m.text!.includes(`${code.slice(0, 3)} ${code.slice(3)}`))).toHaveLength(1);
-    expect(subjects()).toContain('Nido security alert: many recovery attempts opened');
+    expect(subjects()).toEqual(['Nido security alert: your email approved a recovery']);
   });
 
   it('stops paging at the first attempt past its evidence deadline', async () => {
@@ -322,6 +329,89 @@ describe('the lag alarm', () => {
     expect(health.alarm).toBeNull();
     expect(health.lastPollAt).toBe(clock);
   });
+
+  /** `n` votes by another guardian, one a ledger after the latest. */
+  const unrelated = (n: number) => {
+    const L = w.rpcMock.latestLedger;
+    w.rpcMock.addTransactions(
+      Array.from({ length: n }, (_, i) => voteTransaction({ controller, account, guardian: HELPER, ledger: L + 1 + i, before: { id: 600 }, after: { id: 600, guardians: [HELPER] } })),
+    );
+  };
+
+  it('a transaction scan more than an hour behind alarms while the events are caught up; the driver drains it and the vote is alerted', async () => {
+    await service.close();
+    service = newService({ txPagesPerPoll: 1 });
+    const healthUrl = await service.listen(0);
+    begin(600);
+    await service.drain();
+    unrelated(1_500);
+    begin(601);
+    vote(601, { guardians: [EMAIL_GUARDIAN] });
+
+    const r = await service.pollOnce();
+    expect(r.lag.events).toBe(0);
+    expect(r.lag.transactions).toBeGreaterThan(720);
+    expect(r.lagLedgers).toBe(r.lag.transactions);
+    expect(r.alarm).toMatch(/^the transaction scan \(email votes\) is \d+ ledgers behind the chain$/);
+    expect(alarms).toHaveLength(1);
+    const health = (await (await fetch(`${healthUrl}/v1/health`)).json()) as { txCursor: string; lag: { events: number; transactions: number }; alarm: { reason: string } };
+    expect(health.lag).toEqual(r.lag);
+    expect(Number(BigInt(health.txCursor) >> 32n)).toBe(w.rpcMock.latestLedger - r.lag.transactions);
+    expect(health.alarm.reason).toBe(r.alarm);
+    expect(subjects()).toEqual([]);
+
+    // The driver polls again at once while behind, and waits only once caught up.
+    const stop = new AbortController();
+    const waits: number[] = [];
+    await runWatcher(service, {
+      signal: stop.signal,
+      sleep: async (ms) => {
+        waits.push(ms);
+        stop.abort();
+      },
+    });
+    expect(waits).toEqual([5_000]);
+    expect(subjects()).toEqual(['Nido security alert: your email approved a recovery']);
+    expect(alarms).toHaveLength(1);
+    expect(((await (await fetch(`${healthUrl}/v1/health`)).json()) as { alarm: unknown }).alarm).toBeNull();
+  });
+
+  it('the transaction cursor never moves backwards: a caught-up answer of "0" or of the ledger start re-reads nothing', async () => {
+    begin(610);
+    await service.drain();
+    const held = service.state.txCursor!;
+    const get = w.rpc.getTransactions.bind(w.rpc);
+    let answer: (p: GetTransactionsResult) => string = (p) => p.cursor;
+    w.rpc.getTransactions = async (from, limit) => {
+      const p = await get(from, limit);
+      return p.transactions.length ? p : { ...p, cursor: answer(p) };
+    };
+    // Stellar RPC 29.0.1 and 30.0.0, caught up: "0" past that node's latest ledger, else the latest ledger's start.
+    answer = () => '0';
+    await service.pollOnce();
+    expect(service.state.txCursor).toBe(held);
+    answer = (p) => String((BigInt(p.latestLedger) << 32n) + 1n);
+    const r = await service.pollOnce();
+    expect(service.state.txCursor).toBe(held);
+    expect(r.caughtUp).toBe(true);
+    expect(alarms).toEqual([]);
+    vote(610, { guardians: [EMAIL_GUARDIAN] });
+    const reports = await service.drain();
+    expect(reports.reduce((n, x) => n + x.transactions, 0)).toBe(1);
+    expect(subjects()).toEqual(['Nido security alert: your email approved a recovery']);
+  });
+
+  it('a short page below the latest ledger is not caught up: a vote past an empty 25,000-ledger stretch is found', async () => {
+    begin(620);
+    await service.drain();
+    const L = w.rpcMock.latestLedger;
+    chain.set(account, 621, {});
+    w.rpcMock.addTransactions([voteTransaction({ controller, account, guardian: EMAIL_GUARDIAN, ledger: L + 25_000, before: { id: 621 }, after: { id: 621, guardians: [EMAIL_GUARDIAN] } })]);
+    const first = await service.pollOnce();
+    expect(first.txPages).toBeGreaterThan(2);
+    await service.drain();
+    expect(subjects()).toEqual(['Nido security alert: your email approved a recovery']);
+  });
 });
 
 /** The probe the device received last, and its id. */
@@ -359,6 +449,14 @@ describe('push liveness', () => {
     clock += PROBE_INTERVAL_MS;
     expect((await service.pollOnce()).probes).toEqual({ probed: 1, lapsed: 0, unacknowledged: 1 });
     expect(subjects()).toEqual(['Nido security alert: notifications not confirmed']);
+    // It says what still holds on chain, never that the email helper stopped counting.
+    const notice = alertsTo(w, ADDRESS)[0]!.text!;
+    expect(notice).toContain(
+      'No device is known to receive them now, so your second alert channel is not working. Nothing changed on chain: your email helper still counts, ' +
+        'and if it is the only approval your Nido needs, it can still approve a recovery alone, which finishes after the waiting period unless you cancel it. ' +
+        'Fix the channel now (tap the next check on that device, or open your wallet on the device you use now, with your passkey, go to Security, Recovery, and add that device), or add another helper.',
+    );
+    expect(notice).not.toMatch(/not allowed/);
     expect((await channels())[0]).toMatchObject({ push: 'unacknowledged', devices: [{ state: 'unacknowledged' }] });
     // Alerts still go to it; a later tap makes it live again.
     const again = lastProbe(owner.device)!;
@@ -371,6 +469,7 @@ describe('push liveness', () => {
     w.push.expire(owner.device.endpoint);
     expect((await service.pollOnce()).probes).toEqual({ probed: 1, lapsed: 1, unacknowledged: 0 });
     expect(subjects()).toEqual(['Nido security alert: notifications stopped']);
+    expect(alertsTo(w, ADDRESS)[0]!.text).toMatch(/its browser dropped them\. No device is known to receive them now, so your second alert channel is not working\. Nothing changed on chain: your email helper still counts/);
     const status = await owner.status();
     expect(status).toMatchObject({ ok: true, status: 'channels', channels: [{ state: 'active', push: 'lapsed', devices: [{ state: 'lapsed', lapsedAt: clock }] }] });
     expect(JSON.stringify(status)).not.toContain(ADDRESS);
@@ -418,6 +517,15 @@ describe('push liveness', () => {
     const phone = new PushUserAgentMock(w.push);
     expect(await owner.pushUpdate(id, phone)).toMatchObject({ ok: true, status: 'push-added' });
     expect((await channels())[0]).toMatchObject({ push: 'live', devices: [{ state: 'unacknowledged' }, { state: 'live' }] });
+    // The new phone's subscription is dropped later; the old phone's acknowledgement came back first: the notice says the other device still receives them.
+    const again = lastProbe(owner.device)!;
+    await (await service.listen(0).then((url) => fetch(`${url}/v1/ack`, { method: 'POST', body: JSON.stringify({ probe: bytes.toBase64Url(again), signature: bytes.toBase64Url(owner.device.acknowledge(again)) }) }))).text();
+    w.push.expire(phone.endpoint);
+    clock += PROBE_INTERVAL_MS;
+    await service.pollOnce();
+    const stopped = alertsTo(w, ADDRESS).find((m) => /notifications stopped/.test(m.subject))!.text!;
+    expect(stopped).toContain('Your other devices still receive them. If you no longer use this one, open your wallet on the device you use now');
+    expect(stopped).not.toMatch(/second alert channel is not working/);
   });
 });
 

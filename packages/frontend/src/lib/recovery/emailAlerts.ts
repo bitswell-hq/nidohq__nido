@@ -30,7 +30,7 @@ import {
 } from '@nidohq/email-recovery';
 import { loadCredential, nidoKey } from '@nidohq/passkey-sdk';
 import { requireEmailRecovery } from './emailConfig.js';
-import { CONSENT_VERSION, type DeviceChannel, type ThisDevice } from './emailModel.js';
+import { CONSENT_VERSION, type DeviceChannel, type PasskeyBackup, type ThisDevice, homeScreenNeeded, passkeyBackup } from './emailModel.js';
 
 const { fromBase64Url, fromHex, toHex, toBase64Url } = bytes;
 
@@ -92,6 +92,37 @@ interface DeviceRecord {
   contact: string;
 }
 const deviceKey = (account: string) => nidoKey(`alert-device:${account}`);
+const backupKey = (account: string) => nidoKey(`passkey-backup:${account}`);
+
+/** What this browser must do before it can receive notifications (an iPhone or iPad outside its Home Screen app), or `undefined`. */
+export function homeScreenStep(): string | undefined {
+  return homeScreenNeeded({
+    userAgent: navigator.userAgent,
+    standalone: window.matchMedia?.('(display-mode: standalone)').matches === true || (navigator as { standalone?: boolean }).standalone === true,
+    maxTouchPoints: navigator.maxTouchPoints ?? 0,
+    host: window.location.host,
+  });
+}
+
+/** Keep what this browser's passkey for `account` said of its backup in its last assertion (`passkeyBackup`). */
+function rememberPasskeyBackup(account: string, authenticatorData: Uint8Array): void {
+  const b = passkeyBackup(authenticatorData);
+  try {
+    if (b) localStorage.setItem(backupKey(account), JSON.stringify(b));
+  } catch {
+    /* storage unavailable: the note falls back to the user agent */
+  }
+}
+
+/** What this browser's passkey for `account` last said of its backup, if it signed anything here. */
+export function passkeyBackupFor(account: string): PasskeyBackup | undefined {
+  try {
+    const v = localStorage.getItem(backupKey(account));
+    return v ? (JSON.parse(v) as PasskeyBackup) : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export function rememberAlertDevice(account: string, r: DeviceRecord): void {
   try {
@@ -188,6 +219,7 @@ async function authorized(
   })) as PublicKeyCredential | null;
   if (!assertion) throw new Error('The passkey prompt was cancelled.');
   const r = assertion.response as AuthenticatorAssertionResponse;
+  rememberPasskeyBackup(account, new Uint8Array(r.authenticatorData));
   const req = finish({
     publicKey: fromHex(cred.publicKey),
     authenticatorData: new Uint8Array(r.authenticatorData),

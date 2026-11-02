@@ -89,7 +89,9 @@ claims:
       Under the wallet policy, the email guardian alone reaches the quorum only
       under the loss profile, with a delay lasting at least seven days at the
       network's target ledger close time when the configuration was built
-      (120,960 ledgers at 5-second ledgers), and a second alert channel.
+      (120,960 ledgers at 5-second ledgers), and a second alert channel
+      declared when it was built; the theorem is about that declaration, and
+      a channel that lapses later changes nothing on chain.
     status: proven
     evidence:
       lean: EmailRecovery.Perch.one_factor_under_wallet_policy
@@ -118,18 +120,27 @@ claims:
   - id: wallet-second-alert-channel
     statement: >-
       The wallet lists an email guardian in a recovery configuration only
-      when a second alert channel is registered for the account. The vault
-      probes each push device monthly with a notification that asks to be
-      tapped; a tap posts the probe id signed by a device key the service
-      worker made with the subscription. A device that acknowledged none of
-      two probes is unacknowledged, and one the push service no longer
-      accepts is lapsed; either way the address is told, and while no
-      device is live the wallet refuses configurations that keep the email
-      guardian. The wallet says notifications reach a device only on a
-      device the vault lists as live or that acknowledged recently; on any
-      other it says where they go and adds that device at once. A real
-      alert's title starts "Security alert:" with its own icon; the probe
-      asks to be tapped, never says there is nothing to do, and carries the
+      when a second alert channel is registered for the account; this holds
+      when a configuration is built, and on chain the applied configuration
+      keeps counting the email vote, alone under email plus delay, whatever
+      the channel's later state. The vault probes each push device monthly
+      with a notification that asks to be tapped; a tap posts the probe id
+      signed by a device key the service worker made with the subscription.
+      A device that acknowledged none of two probes is unacknowledged, and
+      one the push service no longer accepts is lapsed; either way the
+      address is told whether another device still receives the
+      notifications, and if none does, that the email helper still counts.
+      While no device is live the wallet says that the email helper can
+      still approve a recovery alone (under email plus delay) or still
+      counts as one approval, offers in one click to add this device or,
+      under email plus delay, another helper, refuses configurations in
+      which the email vote alone authorizes, and accepts one that needs
+      another approval as well. The wallet says notifications reach a device
+      only on a device the vault lists as live or that acknowledged
+      recently; on any other it says where they go and adds that device at
+      once. A real alert's title starts "Security alert:" with its own icon,
+      and each alert is its own notification that sounds; the probe asks to
+      be tapped, never says there is nothing to do, and carries the
       wallet's icon.
     status: tested
     evidence:
@@ -139,10 +150,20 @@ claims:
         file: packages/passkey-sdk/src/perch/recoverySpec.test.ts
       - test: unacknowledged and lapsed devices break rule 2, as a lost subscription on this device does
         file: packages/frontend/src/lib/recovery/emailModel.test.ts
+      - test: "a broken channel never reads as email recovery being off: the helper still approves, alone under email plus delay"
+        file: packages/frontend/src/lib/recovery/emailModel.test.ts
+      - test: the email vote alone authorizes only in guardian-only mode at a quorum of one
+        file: packages/frontend/src/lib/recovery/emailModel.test.ts
       - test: '"they reach this device" only on the device the vault lists as live, or that confirmed recently'
         file: packages/frontend/src/lib/recovery/emailModel.test.ts
-      - test: a lapsed channel is shown, and a save that keeps the email helper is refused
+      - test: "a lapsed channel under email plus delay: the helper still approves alone; the page offers this device or another helper, and refuses a save that keeps email alone"
         file: packages/frontend/src/lib/recovery/settingsEmail.test.ts
+      - test: '"Add another helper" sets up a save that needs a second approval, which goes through while the channel is broken'
+        file: packages/frontend/src/lib/recovery/settingsEmail.test.ts
+      - test: "a device that confirmed no probe for two intervals breaks rule 2 like a lapsed one; with another helper needed, the email helper still counts"
+        file: packages/frontend/src/lib/recovery/settingsEmail.test.ts
+      - test: alerts of one kind for different attempts are separate notifications, and each one sounds
+        file: packages/frontend/src/lib/recovery/serviceWorker.test.ts
       - test: on a device without the subscription it says where notifications go, and adds this device at once
         file: packages/frontend/src/lib/recovery/settingsEmail.test.ts
       - test: probes each device monthly; a tap acknowledges it; two probes without one mark it unacknowledged and tell the address
@@ -290,14 +311,14 @@ claims:
     statement: >-
       On a local Stellar network, with Perch's controller and account and
       Nido's guardian, verifier and key registry deployed from their
-      WebAssembly, the real circuit and real proofs, each of the 70 scenario
+      WebAssembly, the real circuit and real proofs, each of the 71 scenario
       rows of the evaluation has its expected outcome, and each refusal comes
       from a named layer: forged and replayed emails and proofs, a wrong
       account or new key in the statement, planted keys and expired pins, a
       compromised inbox, the alert path (an email vote below quorum, an email
       vote to cancel, a watcher outage, a lapsed push, a switched phone),
-      phishing, repeated attempts and a vote among them, provider header
-      variants, front-running, and the chain's view.
+      phishing, repeated and sustained attempts and a vote among them,
+      provider header variants, front-running, and the chain's view.
     status: tested
     evidence:
       - test: forged-emails-circuit
@@ -377,6 +398,41 @@ claims:
       - test: "griefing-then-vote: forty attempts opened after the target do not hide the vote on it"
         file: infra/email-alerts/test/liveness.test.ts
 
+  - id: alert-scan-lag
+    statement: >-
+      The alert host raises a lag alarm when its transaction scan, the one
+      that finds email votes, is more than an hour of ledgers behind while
+      its events are caught up, and reports both cursors and their lags; its
+      production poll driver polls again at once while behind, every five
+      seconds once caught up, and backs off on failures, raising the alarm
+      after five minutes of them; the transaction cursor never moves
+      backwards, whatever cursor a caught-up RPC answers.
+    status: tested
+    evidence:
+      - test: a transaction scan more than an hour behind alarms while the events are caught up; the driver drains it and the vote is alerted
+        file: infra/email-alerts/test/liveness.test.ts
+      - test: the transaction cursor never moves backwards
+        file: infra/email-alerts/test/liveness.test.ts
+      - test: polls again at once while behind and waits one ledger once caught up
+        file: infra/email-alerts/test/driver.test.ts
+      - test: backs off exponentially on failures, to at most a minute, and resets after a poll succeeds
+        file: infra/email-alerts/test/driver.test.ts
+      - test: raises one alarm once polls have failed for five minutes
+        file: infra/email-alerts/test/driver.test.ts
+
+  - id: scan-mainnet-cost
+    statement: >-
+      Read as the alert host reads them, the 720 mainnet ledgers from
+      65,270,019 held 189,094 transactions (263 a ledger on average, at most
+      1,011), 1.31 pages of 200 a ledger, 285,059 bytes a ledger on the wire
+      and 4,095,557 decoded, 1,443 ms of sequential requests a five-second
+      ledger, and about 17 ms of the host's own parsing and vote walk a
+      ledger.
+    status: measured
+    evidence:
+      - file: research/email-recovery/eval/results/mainnet-scan.json
+      - file: research/email-recovery/eval/mainnet/scan.mjs
+
   - id: front-running-one-vote
     statement: >-
       An email approval copied and submitted first by someone else records
@@ -406,11 +462,11 @@ claims:
     statement: >-
       On a local Stellar network at protocol 29 with mainnet's settings, the
       20 email votes with a real proof that leave their attempt collecting, each
-      proven against its guardian's key pin, are metered at 121,576,077 to
-      121,664,431 instructions (median 121,641,679) and declare 126,485,435 to
-      126,577,531, which their fee is charged on; each reads 12 ledger entries
+      proven against its guardian's key pin, are metered at 121,597,527 to
+      121,671,913 instructions (median 121,635,203) and declare 126,505,850 to
+      126,585,104, which their fee is charged on; each reads 12 ledger entries
       and writes 2 (1,208 bytes) in an 18,080-byte transaction, and is charged
-      83,125 to 83,153 stroops (0.0083 XLM),
+      83,131 to 83,155 stroops (0.0083 XLM),
       2,047 to 2,049 of them rent: the fee mainnet's settings give the same
       transaction. At mainnet's settings a ledger holds at
       most 12 such votes, 4 in each of its 3 clusters of 580,000,000
@@ -449,11 +505,11 @@ claims:
       A port of the host's fee computation reproduces, to the stroop, every
       fee charged in the evaluation's local-network and testnet runs from each
       transaction's declared resources and the network's archived settings.
-      At mainnet's settings the Gmail email vote costs 37,969 stroops of
+      At mainnet's settings the Gmail email vote costs 37,971 stroops of
       compute, 36,419 of history, 3,585 of transaction size, 2,500 for the
-      entries it writes, 516 for their bytes and 10 for events, 80,989
+      entries it writes, 516 for their bytes and 10 for events, 80,991
       non-refundable, plus 2,049 rent and the 100-stroop inclusion fee:
-      83,148 (0.0083 XLM), its charge on the local network; testnet charges
+      83,150 (0.0083 XLM), its charge on the local network; testnet charges
       the same components except rent, 1,333, because its minimum temporary
       lifetime is 720 ledgers against mainnet's 17,280.
     status: measured
@@ -466,8 +522,8 @@ claims:
       Re-executed on the test host, the Gmail vote's transaction meters
       130,031,418 instructions under mainnet's cost model and 130,065,594
       under testnet's, which differs in nine CPU cost types; between the
-      networks the medians of the same wasm differ by 23,436 instructions
-      (0.02%); and the release-profile build of the contracts meters 1,574,340
+      networks the medians of the same wasm differ by 29,913 instructions
+      (0.02%); and the release-profile build of the contracts meters 1,567,864
       fewer instructions per vote than the size-optimized wasm every network
       here runs.
     status: measured
@@ -1048,14 +1104,18 @@ claims:
       Every alert carries a six-digit verification code keyed by the account
       code, which the wallet computes for the attempt it shows; alerts on
       attempt_authorized go to every channel once, with generic text, as do
-      the rest of a recovery's required alerts; opening an attempt alerts
-      nothing by default, and at most one email a day per account when the
-      service is configured to send it; while more than eight attempts are
-      open, one alert a day goes to every channel.
+      the rest of a recovery's required alerts; opening attempts, however
+      many and however long a stranger keeps opening them, notifies nobody
+      by default, and sends at most one email a day per account when the
+      service is configured to.
     status: tested
     evidence:
       - test: griefing-repeated-attempts
         file: research/email-recovery/eval/network/attacks.mjs
+      - test: griefing-sustained
+        file: research/email-recovery/eval/network/attacks.mjs
+      - test: "sustained griefing: one opening a day for 30 days, after 8 at once, notifies nobody on any channel"
+        file: infra/email-alerts/test/liveness.test.ts
       - test: "attempt_begun sends nothing by default: anyone can open an attempt, and the wallet shows open ones"
         file: infra/email-alerts/test/alerts.test.ts
       - test: matches an independent computation for every subject kind
@@ -1264,7 +1324,8 @@ claims:
       one that is not live; it lists those the email helper voted on first,
       and warns above the list when more than eight are open; a device
       holding the passkey is told it needs no recovery and offered the
-      owner's cancellation, and an email vote is called out.
+      owner's cancellation, an email vote is called out, and an attempt
+      without approvals promises only the alerts the service sends.
     status: tested
     evidence:
       - test: finds collecting and authorized attempts that are live, newest first, stops at the first closed one, and reads the authorized one
@@ -1283,12 +1344,18 @@ claims:
       iPhone or iPad the kit is printed first, and the page says that a
       download goes to iCloud Drive; the kit names its account, its recovery
       page and Nido's apex, and advises keeping it outside the inbox
-      provider's account; the alert address starts empty, and the enrolled
-      inbox draws a warning; an inbox at the platform that likely syncs the
-      passkey draws a note recommending another inbox or helper; the page
-      says what the mail provider and a chain watcher can tell, and names the
-      services that deliver alerts; and recovery settings check a typed code
-      against the guardian's pin root, storing and sending nothing.
+      provider's account, and Copy says the clipboard syncs and is read by
+      keyboard apps; the alert address starts empty, and the enrolled inbox
+      draws a warning; an inbox at the platform that syncs the passkey draws
+      a note recommending another inbox or helper, read from the passkey's
+      own backup flag and AAGUID when it has signed on the device and from
+      the user agent otherwise; an iPhone or iPad outside its Home Screen
+      app is told to add the Nido's own address there before notifications
+      are asked for; the page says what the mail provider and a chain
+      watcher can tell, and names the services that deliver alerts; and
+      recovery settings check a typed code against the guardian's pin root,
+      storing and sending nothing, with a reminder in the wallet about
+      twice a year.
     status: tested
     evidence:
       - test: enrollment asks for two distinct groups of the kit back, and only they pass
@@ -1303,6 +1370,16 @@ claims:
         file: packages/frontend/src/lib/recovery/emailModel.test.ts
       - test: enrollment notes when the inbox is at the platform that likely syncs this passkey
         file: packages/frontend/src/lib/recovery/emailModel.test.ts
+      - test: the synced-passkey note follows the passkey flags and AAGUID, and the user agent only where they are silent
+        file: packages/frontend/src/lib/recovery/emailModel.test.ts
+      - test: says next to Copy that the clipboard syncs and is read by keyboard apps
+        file: packages/frontend/src/lib/recovery/emailBackup.test.ts
+      - test: an iPhone or iPad outside its Home Screen app is told, before any request, to add the address of this Nido
+        file: packages/frontend/src/lib/recovery/emailModel.test.ts
+      - test: asks about twice a year to check the recovery code, and never right after a check
+        file: packages/frontend/src/lib/recovery/emailModel.test.ts
+      - test: opens the recovery-code check with a reminder until the code was checked on this device within six months
+        file: packages/frontend/src/lib/recovery/settingsEmail.test.ts
       - test: the privacy copy around the claim says what the provider, a chain watcher and the sending services see
         file: packages/frontend/src/lib/recovery/emailModel.test.ts
       - test: matches only the code whose salted leaf, with a known key, rebuilds the pin root
@@ -1324,7 +1401,7 @@ claims:
   # Further evaluation figures.
   - id: privacy-no-address-on-chain
     statement: >-
-      None of the 263 transactions of the local attack run (envelope, result
+      None of the 293 transactions of the local attack run (envelope, result
       and metadata, decoded and as base64) contains any of its 27 inboxes'
       addresses (raw, in either case, hex, base64, or as packed limbs),
       account codes or pin salt leaves: a sanity check, not evidence of
@@ -1354,8 +1431,8 @@ claims:
     statement: >-
       On the local network, the email vote that authorizes an attempt with a
       seven-day delay also writes the authorized attempt: about 122 million
-      instructions metered (127,443,767 declared), 1,488 bytes written, and
-      3,632,052 stroops charged, of which 3,545,582 are rent.
+      instructions metered (127,426,825 declared), 1,488 bytes written, and
+      3,632,047 stroops charged, of which 3,545,582 are rent.
     status: measured
     evidence:
       file: research/email-recovery/eval/results/attacks-local.json
@@ -1392,8 +1469,8 @@ claims:
   - id: enrollment-cost
     statement: >-
       At mainnet's settings, on the local network that runs them, enrolling
-      an account costs 11,434,621 stroops (1.1 XLM): minting it 2,876,016,
-      deploying its email guardian 1,609,367, and the recovery document that
+      an account costs 11,434,535 stroops (1.1 XLM): minting it 2,876,016,
+      deploying its email guardian 1,609,281, and the recovery document that
       lists the guardian with one helper 6,949,238 (medians over the attack
       run's 11 launch-domain accounts), almost all of it rent for new
       entries' minimum lifetime of 2,073,600 ledgers.
@@ -1720,7 +1797,7 @@ claims:
     statement: >-
       A cognitive walkthrough of the current enrollment, recovery and
       settings pages, done by their designers rather than by participants or
-      an independent expert, leaves ten issues open, among them that a
+      an independent expert, leaves eight issues open, among them that a
       phished user sees no Nido warning before sending the email, that the
       monthly probe finds a device that stopped acknowledging only 60 to 90
       days later, that the inbox may sync the passkey it should back up, and

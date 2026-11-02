@@ -67,24 +67,10 @@ export interface PendingChange {
   authorizer: Uint8Array;
 }
 
-/** An open attempt, counted toward the many-attempts alert. */
-export interface OpenAttempt {
-  /** The attempt id, decimal. */
-  attemptId: string;
-  /** Its evidence deadline (a ledger): it no longer counts after it. */
-  until: number;
-}
-
 export interface AccountRecord {
   account: Uint8Array;
   contacts: Contact[];
   change?: PendingChange;
-  /**
-   * The open attempts with the latest evidence deadlines, at most
-   * `MANY_OPEN_ATTEMPTS + 1`: enough to tell when more than
-   * `MANY_OPEN_ATTEMPTS` are open (spec §10).
-   */
-  open?: OpenAttempt[];
 }
 
 function seal(key: Uint8Array, aad: Uint8Array, value: unknown): Uint8Array {

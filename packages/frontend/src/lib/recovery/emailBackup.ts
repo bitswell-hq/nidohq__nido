@@ -16,10 +16,32 @@
  */
 
 import { encryptBackup, generatePassphrase, recoveryKitCode } from '@nidohq/email-recovery';
+import { nidoKey } from '@nidohq/passkey-sdk';
 import { esc } from '../html.js';
 import { toast } from '../toast.js';
-import { KIT_STORAGE_ADVICE, type WalletApex, kitActions, kitCheckGroups, kitCheckMatches, recoveryKitText } from './emailModel.js';
+import { COPY_KIT_NOTE, KIT_STORAGE_ADVICE, type WalletApex, kitActions, kitCheckGroups, kitCheckMatches, recoveryKitText } from './emailModel.js';
 import { el } from './ui.js';
+
+const checkedKey = (account: string) => nidoKey(`code-checked:${account}`);
+
+/** Record that the owner just showed, on this device, that they hold `account`'s recovery code. */
+export function rememberCodeChecked(account: string, at = Date.now()): void {
+  try {
+    localStorage.setItem(checkedKey(account), String(at));
+  } catch {
+    /* storage unavailable: the reminder shows again */
+  }
+}
+
+/** When the owner last showed on this device that they hold the code, if ever. */
+export function codeCheckedAt(account: string): number | undefined {
+  try {
+    const v = Number(localStorage.getItem(checkedKey(account)));
+    return v > 0 ? v : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export interface BackupState {
   /** The user typed back part of the saved recovery code correctly. */
@@ -65,6 +87,7 @@ export function backupPanel(
          ${actions.primary === 'print' ? print + download : download + print}
          <button class="btn ghost sm" type="button" data-copy-kit>Copy</button>
        </div>
+       <div class="mut" style="font-size:12.5px;" data-kit-copy-note>${esc(COPY_KIT_NOTE)}</div>
        ${actions.note ? `<div class="mut" style="font-size:12.5px;" data-kit-device-note>${esc(actions.note)}</div>` : ''}
        <div class="mut" style="font-size:12.5px;" data-kit-advice>${esc(KIT_STORAGE_ADVICE)}</div>
        <label class="pol-check"><input type="checkbox" name="email-copy"> Also put an encrypted copy in the enrollment email, so it stays in my Sent folder</label>
@@ -96,6 +119,7 @@ export function backupPanel(
   const update = () => {
     const typed = [groupA.value, groupB.value];
     state.saved = kitCheckMatches(kit, groups, typed);
+    if (state.saved) rememberCodeChecked(account.address);
     const complete = groups.every((g, i) => typed[i]!.replace(/\s+/g, '').length >= kit.split(' ')[g]!.length);
     checkStatus.textContent = state.saved ? 'That matches.' : complete ? 'That does not match. Check the copy you saved, or show the code again.' : '';
     onChange({ ...state });

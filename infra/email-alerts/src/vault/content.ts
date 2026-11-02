@@ -12,7 +12,7 @@
  * not show that the attempt is the reader's own, because anyone holding the
  * recovery code computes the same one.
  */
-import { MANY_OPEN_ATTEMPTS, formatAlertCode } from '@nidohq/email-recovery';
+import { formatAlertCode } from '@nidohq/email-recovery';
 import type { AlertName } from '../events.js';
 
 export interface AlertText {
@@ -74,13 +74,6 @@ const LEADS: Record<AlertName, { title: string; email: string; push?: string }> 
       INBOX_AND_CODE +
       'open your wallet on a device with your passkey and check its recovery settings, then change your email password and set up email recovery again with a new recovery code.',
     push: 'Your recovery email just approved a change to your Nido’s recovery settings. If you did not send it, someone has your inbox and your recovery code. Open Nido, Security, Recovery.',
-  },
-  attempts_many: {
-    title: 'Many recovery attempts opened',
-    email:
-      `More than ${MANY_OPEN_ATTEMPTS} recovery attempts are open for one of your Nido accounts. Anyone can open one, and opening one grants nothing, ` +
-      'but many at once can hide the one that matters. Open your wallet on a device with your passkey: it lists every open attempt, those your email or your helpers approved first.',
-    push: 'Many recovery attempts are open for your Nido, which can hide one that matters. Open Nido, Security, Recovery: it lists every one, approved ones first.',
   },
   recovery_completed: {
     title: 'Account recovery completed',
@@ -144,12 +137,32 @@ export function contactChangeNotice(kind: 'replace' | 'remove', walletOrigin: st
   };
 }
 
+/** What the channel's state leaves exposed (spec §9.3 rule 2): nothing on chain changed when it broke. */
+export interface ChannelLeft {
+  /** Another device of the contact still receives and confirms the notifications. */
+  othersLive: boolean;
+  /** The account's recovery lists an email guardian. */
+  emailGuardian: boolean;
+}
+
+const ADD_DEVICE = 'open your wallet on the device you use now, with your passkey, go to Security, Recovery, and add that device';
+
+/** What a notice about one device says about the rest. */
+function exposure(left: ChannelLeft, fix: string): string {
+  if (left.othersLive) return `Your other devices still receive them. If you no longer use this one, ${fix}.`;
+  if (!left.emailGuardian) return `No device is known to receive them now: ${fix}.`;
+  return (
+    'No device is known to receive them now, so your second alert channel is not working. Nothing changed on chain: your email helper still counts, ' +
+    'and if it is the only approval your Nido needs, it can still approve a recovery alone, which finishes after the waiting period unless you cancel it. ' +
+    `Fix the channel now (${fix}), or add another helper.`
+  );
+}
+
 /** Told to the contact's address when the vault finds a push subscription gone (spec §10.6). */
-export function pushLapsedNotice(walletOrigin: string): AlertText {
+export function pushLapsedNotice(walletOrigin: string, left: ChannelLeft): AlertText {
   const body =
     'Notifications for the recovery alerts of one of your Nido accounts no longer reach a device they were set up on: its browser dropped them. ' +
-    'Email can help recover a Nido only while a second alert channel works: ' +
-    'open your wallet on the device you use now, with your passkey, go to Security, Recovery, and add that device.';
+    exposure(left, ADD_DEVICE);
   return {
     subject: 'Nido security alert: notifications stopped',
     title: 'Notifications stopped',
@@ -159,12 +172,11 @@ export function pushLapsedNotice(walletOrigin: string): AlertText {
 }
 
 /** Told to the contact's address when a device's subscription went unconfirmed for two probe intervals (spec §10.6). */
-export function pushUnconfirmedNotice(walletOrigin: string): AlertText {
+export function pushUnconfirmedNotice(walletOrigin: string, left: ChannelLeft): AlertText {
   const body =
     'Nido could not confirm that the recovery notifications of one of your Nido accounts reach you: a device they go to has not confirmed ' +
-    'the last two checks, which ask you to tap a notification. Email can help recover a Nido only while a second alert channel works, ' +
-    'so until a device confirms again, Nido treats your email helper as not allowed. Tap the next check on that device, or open your wallet ' +
-    'on the device you use now, with your passkey, go to Security, Recovery, and add that device.';
+    'the last two checks, which ask you to tap a notification. ' +
+    exposure(left, `tap the next check on that device, or ${ADD_DEVICE}`);
   return {
     subject: 'Nido security alert: notifications not confirmed',
     title: 'Notifications not confirmed',

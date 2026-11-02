@@ -277,6 +277,21 @@ describe('Stellar RPC getTransactions mock', () => {
     expect((rpc.getTransactions({ pagination: { cursor: p3.cursor } }) as Page).transactions.map((t) => t.ledger)).toEqual([151]);
   });
 
+  it('scans at most 10,000 ledgers a request: a sparse range answers short pages whose cursor is behind the latest ledger', () => {
+    const sparse = new StellarRpcMock([], 100_000);
+    sparse.addTransactions([tx(1_000, 1), tx(25_000, 1)]);
+    const ledgerOf = (p: Page) => Number(BigInt(p.cursor) >> 32n);
+    const p1 = sparse.getTransactions({ startLedger: 1_000, pagination: { limit: 200 } }) as Page;
+    expect(p1.transactions.map((t) => t.ledger)).toEqual([1_000]);
+    expect(ledgerOf(p1)).toBe(10_999);
+    const p2 = sparse.getTransactions({ pagination: { cursor: p1.cursor } }) as Page;
+    expect(p2.transactions).toEqual([]);
+    expect(ledgerOf(p2)).toBe(20_999);
+    const p3 = sparse.getTransactions({ pagination: { cursor: p2.cursor } }) as Page;
+    expect(p3.transactions.map((t) => t.ledger)).toEqual([25_000]);
+    expect(ledgerOf(p3)).toBe(p3.latestLedger);
+  });
+
   it('answers in base64 by default and in stellar-xdr JSON on request', () => {
     const b = (rpc.getTransactions({ startLedger: 100, pagination: { limit: 1 } }) as Page).transactions[0]!;
     expect(Object.keys(b)).toEqual(['status', 'txHash', 'applicationOrder', 'feeBump', 'envelopeXdr', 'resultXdr', 'resultMetaXdr', 'ledger', 'createdAt']);

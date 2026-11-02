@@ -1,12 +1,12 @@
 {
  "network": "local",
  "passphrase": "Standalone Network ; February 2017",
- "rpc": "http://127.0.0.1:62076/rpc",
- "fetched": "2026-11-02T13:50:17.658Z",
+ "rpc": "http://127.0.0.1:51648/rpc",
+ "fetched": "2026-11-02T17:44:36.424Z",
  "protocolVersion": 29,
  "ledger": {
   "sequence": 17,
-  "closeTime": 1793627417,
+  "closeTime": 1793641476,
   "readBetween": [
    17,
    17

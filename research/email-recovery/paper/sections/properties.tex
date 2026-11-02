@@ -174,8 +174,10 @@ reconfiguration\claims{completion-waits-for-delay,email-only-never-authorizes,em
 succeeds\claim{owner-can-cancel}. Under the wallet policy, a predicate on
 recovery members, the email guardian alone reaches the quorum only under
 \texttt{Loss}, with seven days at the target close time and a second alert
-channel\claim{wallet-policy-one-factor}; in wall-clock time that rests on
-A9, and as a defence on A12.
+channel, both as declared when the member is
+built\claim{wallet-policy-one-factor}; a channel that lapses later changes
+nothing on chain. In wall-clock time that rests on A9, and as a defence on
+A12.
 
 \subsection{The circuit's parsing}\label{sec:hardening}
 Public audits of zkEmail's Circom and Noir

@@ -143,7 +143,7 @@ export class Alerts {
       push: sub,
       deviceKey: device.deviceKey,
       purposes: PURPOSE_SECURITY_ALERTS,
-      consentVersion: 3,
+      consentVersion: 4,
       allowLoopbackPush: true,
     });
     const registered = await this.authorized(enrolled, vault, inner);

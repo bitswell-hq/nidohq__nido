@@ -102,7 +102,7 @@ describe('what each event sends', () => {
   });
 
   it('every required alert pre-empts a caller; informational ones do not', () => {
-    for (const name of ['attempt_authorized', 'email_vote_recorded', 'email_cancel_recorded', 'email_change_recorded', 'attempts_many', 'recovery_completed', 'epoch_advanced'] as const) {
+    for (const name of ['attempt_authorized', 'email_vote_recorded', 'email_cancel_recorded', 'email_change_recorded', 'recovery_completed', 'epoch_advanced'] as const) {
       const t = alertText(name, '123456', 'https://nido.test', 0, true);
       expect(t.body).toContain(PREEMPT);
       expect(t.push).toContain(PREEMPT);

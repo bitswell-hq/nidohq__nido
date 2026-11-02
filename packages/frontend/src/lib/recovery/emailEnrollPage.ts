@@ -43,7 +43,7 @@ import { toast } from '../toast.js';
 import { currentOrFirstDoc, latestCloseTime, readRecoveryState, targetCloseMs } from './chain.js';
 import { perchDeployment, requireDeployment } from './deployment.js';
 import { backupPanel } from './emailBackup.js';
-import { CONSENT_TEXT, confirmAlertContact, pushSubscription, registerAlertContact } from './emailAlerts.js';
+import { CONSENT_TEXT, confirmAlertContact, homeScreenStep, passkeyBackupFor, pushSubscription, registerAlertContact } from './emailAlerts.js';
 import { emailRecoveryDeployment, thisWalletApex } from './emailConfig.js';
 import { ALLOW_ALL, contractWasmHash, deployGuardianOperation, deployedAddress, readGuardianConfig, type GuardianConfig } from './emailGuardian.js';
 import {
@@ -214,7 +214,8 @@ export async function mountEmailEnroll(root: HTMLElement, accountOrNull: string 
       }
       case 'check':
       case 'alerts': {
-        const synced = syncedPasskeyNote(progress.checked!.domain, navigator.userAgent);
+        // The passkey's own flags once it has signed here (registering the alert contact), else the user agent.
+        const synced = syncedPasskeyNote(progress.checked!.domain, navigator.userAgent, passkeyBackupFor(account));
         const c = card(
           '3. Alerts',
           `<div style="font-size:13.5px;">Enrolled address, exactly as your provider writes it: <code class="mono" data-address>${esc(progress.checked!.address)}</code>. ${esc(ENROLLED_ADDRESS_NOTE)}</div>
@@ -236,9 +237,13 @@ export async function mountEmailEnroll(root: HTMLElement, accountOrNull: string 
         });
         if (!progress.contact) {
           const go = el('button', { class: 'btn primary', type: 'button' }, 'Turn on alerts on this device') as HTMLButtonElement;
+          // Before asking for notifications, not after the request fails.
+          const homeScreen = homeScreenStep();
+          if (homeScreen) body.append(el('div', { class: 'alert warn', role: 'note', 'data-home-screen': '' }, esc(homeScreen)));
           body.append(go, status);
           go.addEventListener('click', () =>
             busy(go, status, 'Setting up alerts…', async () => {
+              if (homeScreen) throw new Error(homeScreen);
               const vault = await vaultKey();
               const { push, deviceKey } = await pushSubscription(vault.vapid);
               status.textContent = 'Confirm with your passkey…';
