@@ -1,19 +1,23 @@
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { argon2id } from '@noble/hashes/argon2.js';
-import { generateEmail, testKey } from '@nidohq/email-mocks';
+import { PROVIDERS, type SignerProfile, generateEmail, testKey } from '@nidohq/email-mocks';
 import { beforeAll, describe, expect, test } from 'vitest';
 import {
   BACKUP_BEGIN,
   BackupError,
   DOM_ENROLL,
   DkimHeaderError,
+  type CompiledCircuit,
   EFF_LARGE_WORDLIST,
   ENROLL_PHRASE,
   FIELD_MODULUS,
+  HEADER_MAX,
   addressCommitment,
   checkEnrollmentEmail,
+  alignedSignedBlock,
   backupPayload,
+  circuitAcceptsHeader,
   decryptBackup,
   encryptBackup,
   openBackup,
@@ -35,6 +39,9 @@ const ACCOUNT = Uint8Array.from({ length: 32 }, (_, i) => 0xa0 + (i % 16));
 const OTHER_ACCOUNT = Uint8Array.from({ length: 32 }, (_, i) => 0xb0 + (i % 16));
 const RHO_E = 0x00112233445566778899aabbccddeeff00112233445566778899aabbccddeen;
 
+/** The committed recovery artifact, the one the wallet proves with. */
+const CIRCUIT = JSON.parse(readFileSync(new URL('../../../circuits/email-recovery/artifacts/recovery.json', import.meta.url), 'utf8')) as CompiledCircuit;
+
 const vectors = readFileSync(new URL('../../../circuits/email-recovery/tests/src/vectors.nr', import.meta.url), 'utf8');
 function vectorModulus(name: string): bigint {
   const m = new RegExp(`pub global ${name}: \\[u128; 18\\] = \\[([^\\]]+)\\]`).exec(vectors)!;
@@ -44,9 +51,15 @@ function vectorModulus(name: string): bigint {
     .reduce((acc, limb, i) => acc + (limb << (120n * BigInt(i))), 0n);
 }
 
-/** The enrollment email Gmail's mock signs for `from`, and its aligned key. */
-function enrollmentEmail(subject: string, from = 'first.last@gmail.com', provider: 'gmail' | 'outlook' = 'gmail') {
-  const email = generateEmail({ provider, from, displayName: 'First Last', subject, body: 'Enrollment.\r\n' });
+/** The enrollment email Gmail's mock signs for `from`, and its aligned key; `signers` re-signs it with other tags. */
+function enrollmentEmail(
+  subject: string,
+  from = 'first.last@gmail.com',
+  provider: 'gmail' | 'outlook' = 'gmail',
+  signers?: SignerProfile[],
+  displayName = 'First Last',
+) {
+  const email = generateEmail({ provider, from, displayName, subject, body: 'Enrollment.\r\n', signers });
   const domain = from.slice(from.indexOf('@') + 1);
   const aligned = email.signatures.find((s) => s.standard && s.domain === domain)!;
   return { eml: new Uint8Array(email.eml), modulus: testKey(aligned.keyName).modulus };
@@ -66,7 +79,7 @@ describe('enrollment email (spec §5.4)', () => {
 
   test('an honest enrollment email is accepted, and C is the commitment to its signed From address', async () => {
     const { eml, modulus } = enrollmentEmail(enrollmentSubject(ACCOUNT, RHO_E));
-    const checked = await checkEnrollmentEmail({ eml, accountId: ACCOUNT, rhoE: RHO_E, accountCode: ACCOUNT_CODE, modulus });
+    const checked = await checkEnrollmentEmail({ circuit: CIRCUIT, eml, accountId: ACCOUNT, rhoE: RHO_E, accountCode: ACCOUNT_CODE, modulus });
     expect(checked.address).toBe('first.last@gmail.com');
     expect(checked.domain).toBe('gmail.com');
     expect(checked.commitment).toBe(addressCommitment('first.last@gmail.com', ACCOUNT_CODE));
@@ -76,7 +89,7 @@ describe('enrollment email (spec §5.4)', () => {
   test('another account, another rho_e, or the recovery phrase is refused', async () => {
     const check = (subject: string) => {
       const { eml, modulus } = enrollmentEmail(subject);
-      return checkEnrollmentEmail({ eml, accountId: ACCOUNT, rhoE: RHO_E, accountCode: ACCOUNT_CODE, modulus });
+      return checkEnrollmentEmail({ circuit: CIRCUIT, eml, accountId: ACCOUNT, rhoE: RHO_E, accountCode: ACCOUNT_CODE, modulus });
     };
     await expect(check(enrollmentSubject(OTHER_ACCOUNT, RHO_E))).rejects.toThrow(/enrollment’s Subject/);
     await expect(check(enrollmentSubject(ACCOUNT, RHO_E + 1n))).rejects.toThrow(/enrollment’s Subject/);
@@ -86,15 +99,63 @@ describe('enrollment email (spec §5.4)', () => {
   test('a key that did not sign it is refused', async () => {
     const { eml } = enrollmentEmail(enrollmentSubject(ACCOUNT, RHO_E));
     await expect(
-      checkEnrollmentEmail({ eml, accountId: ACCOUNT, rhoE: RHO_E, accountCode: ACCOUNT_CODE, modulus: testKey('weak').modulus }),
+      checkEnrollmentEmail({ circuit: CIRCUIT, eml, accountId: ACCOUNT, rhoE: RHO_E, accountCode: ACCOUNT_CODE, modulus: testKey('weak').modulus }),
     ).rejects.toThrow(DkimHeaderError);
   });
 
   test('a provider domain outside the allowlist is refused', async () => {
     const { eml, modulus } = enrollmentEmail(enrollmentSubject(ACCOUNT, RHO_E));
     await expect(
-      checkEnrollmentEmail({ eml, accountId: ACCOUNT, rhoE: RHO_E, accountCode: ACCOUNT_CODE, modulus, allowedDomains: ['outlook.com'] }),
+      checkEnrollmentEmail({ circuit: CIRCUIT, eml, accountId: ACCOUNT, rhoE: RHO_E, accountCode: ACCOUNT_CODE, modulus, allowedDomains: ['outlook.com'] }),
     ).rejects.toThrow(/not one of the providers/);
+  });
+
+  /** Gmail's signers, with `edit` applied to each signer's tags. */
+  const gmailSigners = (edit: (tags: Array<[string, string]>) => Array<[string, string]>): SignerProfile[] =>
+    PROVIDERS.gmail.signers.map((signer) => ({ ...signer, tags: (ctx, dsh) => edit(signer.tags(ctx, dsh)) }));
+  const setTag = (name: string, value: string) => (tags: Array<[string, string]>) =>
+    tags.map(([n, v]): [string, string] => (n === name ? [n, value] : [n, v]));
+
+  test('the recovery circuit itself refuses signatures it cannot prove: c=relaxed, c=Relaxed/Relaxed, a=RSA-SHA256, a space in d=', async () => {
+    const subject = enrollmentSubject(ACCOUNT, RHO_E);
+    const check = (signers?: SignerProfile[]) => {
+      const { eml, modulus } = enrollmentEmail(subject, 'first.last@gmail.com', 'gmail', signers);
+      return checkEnrollmentEmail({ circuit: CIRCUIT, eml, accountId: ACCOUNT, rhoE: RHO_E, accountCode: ACCOUNT_CODE, modulus });
+    };
+    await expect(check()).resolves.toMatchObject({ address: 'first.last@gmail.com' });
+    for (const [edit, refusal] of [
+      [setTag('c', 'relaxed'), 'DKIM: header canonicalization must be relaxed'],
+      [setTag('c', 'Relaxed/Relaxed'), 'DKIM: header canonicalization must be relaxed'],
+      [setTag('a', 'RSA-SHA256'), 'DKIM: a= must be rsa-sha256'],
+      [setTag('d', ' gmail.com'), 'the recovery circuit refuses how this email is signed'],
+    ] as const) {
+      await expect(check(gmailSigners(edit))).rejects.toThrow(refusal);
+    }
+  }, 60_000);
+
+  test('circuitAcceptsHeader accepts a header only where the circuit stops at the recovery phrase', async () => {
+    const { eml, modulus } = enrollmentEmail(enrollmentSubject(ACCOUNT, RHO_E));
+    const { block, value } = await alignedSignedBlock(eml, modulus);
+    await expect(circuitAcceptsHeader(CIRCUIT, block, modulus, value)).resolves.toBeUndefined();
+    // A recovery Subject gets past the phrase, so the circuit refuses at a later assertion.
+    const recovery = enrollmentEmail(recoverySubject(new Uint8Array(32), RHO_E));
+    const signed = await alignedSignedBlock(recovery.eml, recovery.modulus);
+    await expect(circuitAcceptsHeader(CIRCUIT, signed.block, recovery.modulus, signed.value)).rejects.toThrow(DkimHeaderError);
+    // Another provider's key fails the circuit's RSA check; a 1024-bit key does not fit its limbs.
+    await expect(circuitAcceptsHeader(CIRCUIT, block, testKey('outlook').modulus, value)).rejects.toThrow(DkimHeaderError);
+    await expect(circuitAcceptsHeader(CIRCUIT, block, testKey('weak').modulus, value)).rejects.toThrow(DkimHeaderError);
+  }, 60_000);
+
+  test('an enrollment block with no room for the recovery Subject’s extra octet is refused', async () => {
+    const subject = enrollmentSubject(ACCOUNT, RHO_E);
+    const base = enrollmentEmail(subject);
+    const { block } = await alignedSignedBlock(base.eml, base.modulus);
+    const name = 'N'.repeat(10 + HEADER_MAX - block.length);
+    const { eml, modulus } = enrollmentEmail(subject, 'first.last@gmail.com', 'gmail', undefined, name);
+    expect((await alignedSignedBlock(eml, modulus)).block.length).toBe(HEADER_MAX);
+    await expect(
+      checkEnrollmentEmail({ circuit: CIRCUIT, eml, accountId: ACCOUNT, rhoE: RHO_E, accountCode: ACCOUNT_CODE, modulus }),
+    ).rejects.toThrow(/would exceed/);
   });
 
   test('the From grammar is the circuit’s (spec §4.5)', () => {
