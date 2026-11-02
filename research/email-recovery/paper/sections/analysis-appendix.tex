@@ -1,0 +1,134 @@
+\section{Obligations of each property}\label{app:obligations}
+
+Table~\ref{tab:obligations} lists, per property of \S\ref{sec:properties},
+what each component must do, what it rests on, and how it is established.
+
+\begin{table*}[h]
+  \caption{Obligations of each property and their status.}
+  \label{tab:obligations}
+  \small
+  \begin{tabularx}{\textwidth}{@{}l>{\raggedright\arraybackslash}p{0.12\textwidth}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}p{0.15\textwidth}>{\raggedright\arraybackslash}p{0.09\textwidth}>{\raggedright\arraybackslash}p{0.25\textwidth}@{}}
+    \toprule
+    Property & Circuit & Guardian and registry & Perch & Assumptions & Status \\
+    \midrule
+    1 Soundness & C1--C6 & checks 1--12; the constructor's circuit-id check; registry activation, grace, revocation and scope, with C6's hashing & statement built from controller state & A1a, A1b, A2, A3, A4, A5, A7 & proven over the model with named breaks and per-proof extraction; C1--C6 and the checks tested; parsing tested on real mail and fuzzing; registry hashing cross-checked \\
+    2 Privacy & public inputs exactly $(\Cm, \digest_{hi}, \digest_{lo}, \mathit{root})$ & stores $\Cm$ and a salted pin root; emits nothing & --- & A3, A4, A6 & proven in the ideal model; structural lemma proven; the ideal model's step to the real primitives assumed \\
+    3 Replay & C5 binds $\digest$ & checks 1, 2, 5, 6, 8, 12 & one vote per guardian per attempt and domain or per change digest; ids never reused; epochs grow & A2, A3, A4 & proven with the SHA-256 break named; the encoding facts tested \\
+    4 One factor & --- & the guardian is one address & quorum, delay, cancellation & A9; A12 for the owner's veto & proven over all traces; wallet policy proven as a predicate and tested in code \\
+    \bottomrule
+  \end{tabularx}
+\end{table*}
+
+\section{Sender authentication per provider}\label{app:providers}
+
+A1b is a property of each provider's submission path. Table~\ref{tab:providers}
+summarizes a review of public documentation and published measurements, read,
+not tested; the repository's review
+(\nolinkurl{research/email-recovery/eval/parser/sender-authentication.md})
+cites a source for each cell\claim{provider-authenticates-sender}. Where
+\texttt{h=} names \texttt{from} more often than it occurs (``oversigned''), a
+second \texttt{From} lands in the signed block and the circuit refuses it, and
+the circuit refuses a \texttt{From} naming several addresses whatever the
+provider does (\S\ref{sec:design-circuit}). The measurements are from 2020 and
+2021, and the providers responded to them; a controlled submission test from
+test accounts would settle column~1 today, and needs real mail sent through
+real providers.
+
+\begin{table*}[h]
+  \caption{The three conditions of A1b per launch provider: (1) two
+    \texttt{From} fields or several addresses at submission; (2) sending as
+    another address of the provider's domain; (3) reassignment of deleted or
+    inactive addresses, which $\code$ covers.}
+  \label{tab:providers}
+  \small
+  \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.13\textwidth}>{\raggedright\arraybackslash}p{0.09\textwidth}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}p{0.21\textwidth}>{\raggedright\arraybackslash}p{0.2\textwidth}@{}}
+    \toprule
+    Provider & \texttt{h=} & (1) & (2) & (3) \\
+    \midrule
+    Gmail & oversigned & 2020: checked the angle-address the circuit binds~\cite{chen-composition-kills}; today unknown & needs a confirmation link & not reassigned \\
+    Outlook, Hotmail & once & 2020: the one strict path of eight tested~\cite{chen-composition-kills}; variants bypassed checks~\cite{shen-weak-links}; today unknown & another user's mailbox: unknown & not reassigned \\
+    iCloud & once & 2020: checked only the first of several \texttt{From} fields~\cite{chen-composition-kills}; today unknown & another user's mailbox: unknown & unknown \\
+    Yahoo & oversigned & 2020: checked only the first address~\cite{chen-composition-kills} and accepted a second field~\cite{shen-weak-links}; the circuit refuses both forms & needs a verification message & inactive IDs released in 2013; today unknown \\
+    Proton & oversigned & not tested by either study; unknown & addresses are created on the account & not reassigned \\
+    Fastmail & oversigned & 2020: accepted arbitrary \texttt{From} addresses~\cite{chen-composition-kills}; today unknown & needs a code sent to the address & reassigned; covered by $\code$ \\
+    GMX, WEB.DE & oversigned & not tested by either study; unknown & another user's mailbox: unknown & reassigned after a year of inactivity; covered by $\code$ \\
+    \bottomrule
+  \end{tabularx}
+\end{table*}
+
+\section{Open questions}\label{app:open}
+
+Each open decision, with its current setting and the alternatives.
+\begin{enumerate}
+  \item \emph{Pin semantics.} Additive, fixed at construction, salted,
+    expiring. A restrictive pin, or requiring pin and registry, makes a
+    planted key useless but stops recovery at each provider rotation until a
+    new guardian is deployed; a pin the owner can change lets whoever holds
+    the owner key and $\code$ pin a key of their own.
+  \item \emph{Pin lifetime.} 30 days of close time, capped at 365: past the
+    7-day timelock with margin, and a short window in which a revoked key
+    stays usable through a pin. The cap keeps the enrolled key, and a revoked
+    one, usable longest; about 10 days narrows the window further.
+  \item \emph{Default allowed actions.} Every action. Initiation and
+    cancellation only, or initiation only, with wallet rule 4 preventing a
+    lock-out; under a guardian-only quorum of one an inbox thief with the
+    code can also approve cancellations of the owner's attempts, which are not
+    alerted.
+  \item \emph{Where $\code$ is kept.} The encrypted copy in the Sent folder
+    and the kit. Plain text in the enrollment email recovers best but lets
+    the provider compute $\Cm$; a kit alone keeps no copy at the provider but
+    is lost with the kit.
+  \item \emph{Registry parameters.} A 24-hour grace, capped at 7 days (7
+    days strands fewer proofs but keeps a blanked key acceptable for a week);
+    an emergency revocation threshold of 2 of 5 (under the full threshold two
+    members can neither block a live key nor stop a planted one); the
+    members, attesters and their resolvers are not named.
+  \item \emph{Provider details.} Each provider's signing domains, its signed
+    block for long addresses and display names, and whether its Sent copy
+    keeps the signature, against real outbound mail.
+  \item \emph{The recovery address.} The address, the production mail
+    exchanger in the enclave with TLS terminating there, and the domain's
+    MTA-STS policy.
+  \item \emph{Alert code derivation.} Keyed from $\code$, so any device
+    holding it, a phisher's included, shows it. A key from the passkey's PRF
+    output lets the owner's device authenticate alerts but not a recovering
+    one; a code from the public digest needs no key but lets the sending
+    service and the provider link an alert to its attempt.
+  \item \emph{On-chain enrollment proof.} Only the wallet checks the
+    enrollment email; a constructor that verifies a proof of it would make
+    $\Cm$ checkable by third parties, at the cost of a second circuit.
+  \item \emph{Guardian deployment.} Directly from the wallet's submitter,
+    checked by code hash and configuration; or through a factory that fixes
+    them on chain; and who pays on mainnet.
+  \item \emph{The push channel's state.} Checked on this device at once and
+    through the vault with the passkey, as fresh as the weekly probe; reading
+    it on every open costs a passkey prompt.
+  \item \emph{Custom domains.} Larger address and domain bounds change the
+    commitment's packing and the leaf format.
+  \item \emph{Custodians, the enclave and its image registry.} Who the
+    custodians are (one outside the operator), their production protocol,
+    the enclave's production binding, and the image registry's signers.
+  \item \emph{Outages longer than RPC retention.} Reconciliation and a lag
+    alarm are built; a monitor outside the watcher is not, nor a choice of
+    whether the email-plus-delay floor should exceed the longest tolerated
+    outage.
+  \item \emph{Accounts without an email guardian} have no $\code$ to key
+    their alert codes; a key in the recovery kit is one alternative.
+  \item \emph{What the alert host learns} (which accounts have contacts):
+    whether to blur it with cover traffic or batched reads.
+  \item \emph{Failover duplicates.} The second sending service has no
+    idempotency key, so an accepted request whose answer was lost can be
+    delivered twice.
+  \item \emph{Probe visibility.} Each weekly probe shows a quiet
+    notification, because WebKit revokes subscriptions whose pushes show
+    nothing; how long subscriptions survive on each platform is not measured.
+  \item \emph{A lowered target close time.} Existing email-plus-delay members
+    then last less than 7 days until rebuilt; the wallet does not yet notice
+    and ask owners to rebuild, or keep a margin above the floor.
+  \item \emph{Sender authentication} (Table~\ref{tab:providers}): every
+    provider's handling of two \texttt{From} fields today, sending as another
+    mailbox at three providers, and reassignment at two.
+  \item \emph{Keeping contracts live.} Who funds the keeper on mainnet,
+    whether the wallet extends an account's own entries, and the registry's
+    tree paths.
+\end{enumerate}

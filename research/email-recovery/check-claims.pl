@@ -23,8 +23,9 @@
 #       assumed   { assumption: <text> }
 #       unproven  no evidence
 #     Paths are relative to the repository root.
-#   - every \claim{id} and \claimstatement{id} in a .tex source names a
-#     ledger entry, and every ledger entry is used by at least one source.
+#   - every \claim{id}, \claims{id,id,...} and \claimstatement{id} in a .tex
+#     source names ledger entries, and every ledger entry is used by at least
+#     one source.
 use strict;
 use warnings;
 use File::Basename qw(dirname);
@@ -177,11 +178,15 @@ for my $dir (@sources) {
         while (my $line = <$fh>) {
             $n++;
             $line =~ s/(?<!\\)%.*//s;    # drop TeX comments
-            while ($line =~ /\\claim(?:statement)?\{([^}]*)\}/g) {
-                my $id = $1;
-                my $rel = File::Spec->abs2rel($file, $here);
-                fail "$rel:$n: \\claim{$id} is not in the ledger" unless $defined{$id};
-                $used{$id}++;
+            while ($line =~ /\\claim(s|statement)?\{([^}]*)\}/g) {
+                my ($form, $ids) = ($1 // '', $2);
+                my @ids = $form eq 's' ? split(/\s*,\s*/, $ids) : ($ids);
+                for my $id (@ids) {
+                    $id =~ s/^\s+|\s+$//g;
+                    my $rel = File::Spec->abs2rel($file, $here);
+                    fail "$rel:$n: \\claim$form\{$id\} is not in the ledger" unless $defined{$id};
+                    $used{$id}++;
+                }
             }
         }
         close $fh;

@@ -1,6 +1,7 @@
 % Claim status tags, read from the generated claims.tex (claims-to-tex.pl).
 %
 %   \claim{id}           the claim's status as a tag, e.g. [unproven]
+%   \claims{id,id,...}   the statuses of several claims, each distinct one once
 %   \claimstatement{id}  the claim's statement as the ledger words it
 %   \ClaimTable          the appendix table of every claim
 %   \ClaimList           the same claims as a list that breaks across pages
@@ -39,6 +40,29 @@
     \unskip\nobreak\hskip.3em\relax\expandafter\claimtag\expandafter{\claim@s}%
   \fi}
 
+% Several claims behind one sentence: each distinct status, once, in the order
+% it first occurs. \claims{a,b,c} with three tested claims prints one [tested].
+\DeclareRobustCommand\claims[1]{%
+  \begingroup
+  \def\claim@seen{}%
+  \edef\claim@ids{\zap@space#1 \@empty}%
+  \@for\claim@id:=\claim@ids\do{%
+    \expandafter\claim@need\expandafter{\claim@id}%
+    \ifcsname claim@status@\claim@id\endcsname
+      \edef\claim@s{\csname claim@status@\claim@id\endcsname}%
+      \edef\claim@probe{\noexpand\in@{,\claim@s,}{,\claim@seen,}}\claim@probe
+      \ifin@\else
+        \ifx\claim@seen\@empty\let\claim@seen\claim@s
+        \else\edef\claim@seen{\claim@seen,\claim@s}\fi
+      \fi
+    \fi}%
+  \unskip\nobreak\hskip.3em\relax
+  \let\claim@sep\@empty
+  \@for\claim@s:=\claim@seen\do{%
+    \claim@sep\let\claim@sep\enspace
+    \expandafter\claimtag\expandafter{\claim@s}}%
+  \endgroup}
+
 \DeclareRobustCommand\claimstatement[1]{%
   \claim@need{#1}%
   \ifcsname claim@text@#1\endcsname\csname claim@text@#1\endcsname\fi}
@@ -66,7 +90,8 @@
   \item \texttt{#2}\nobreak\hskip.3em\relax
   \edef\claim@s{\csname claim@status@#1\endcsname}\expandafter\claimtag\expandafter{\claim@s}\enskip
   \claimstatement{#1}\par
-  {\itshape Evidence:} \csname claim@evidence@#1\endcsname}
+  {\itshape Evidence:} \expandafter\ifx\csname claim@evidence@#1\endcsname\@empty
+    none\else\csname claim@evidence@#1\endcsname\fi}
 
 \newcommand\ClaimList{%
   \begingroup

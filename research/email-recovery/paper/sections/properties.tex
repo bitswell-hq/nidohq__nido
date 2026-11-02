@@ -2,121 +2,124 @@
 
 Each property of \S\ref{sec:threat} is a theorem of a Lean~4
 model~\cite{lean4}. The model contains the guardian's \texttt{\_\_check\_auth}
-as the function $\mathsf{check}$, its twelve checks in order with their error
-codes; the circuit's relation as $\mathsf{Relation}(x, w)$, one field per
-obligation C1 to C6 for public inputs $x = (\Cm, \digest_{hi}, \digest_{lo},
-\mathit{root})$ and witness $w$; and Perch's controller for one account as a
-state machine whose transitions cite Perch's transitions T1 to T9, with an
-event log that records the configuration each event happened under.
-$\mathsf{check}$ succeeds exactly when the facts of its twelve checks
-hold\claim{check-iff-accepted}. SHA-256 and Poseidon2 are abstract
-functions, and their breaks (a collision, or a Poseidon2 input that maps to
-the empty leaf $0$) are named propositions. The header-level functions of
-the circuit (which bytes are the \texttt{From} address, the Subject value,
-the \texttt{d=} value; lowercasing; hex; the PKCS\#1 encoding) are abstract
-too: computing them as \S\ref{sec:design-circuit} says is the circuit's
-obligation, tested in \S\ref{sec:hardening} but not proven. No assumption is
-an axiom: the build pins every theorem's axiom dependencies to Lean's
-built-in three\claim{lean-axioms}.
+as $\mathsf{check}$, its twelve checks in order, which succeeds exactly when
+their facts hold\claim{check-iff-accepted}; the circuit's relation as
+$\mathsf{Relation}(x, w)$, one field per obligation C1 to C6, for public
+inputs $x = (\Cm, \digest_{hi}, \digest_{lo}, \mathit{root})$ and witness $w$;
+Perch's controller for one account as a state machine whose transitions cite
+Perch's T1 to T9, with an event log; and, for privacy, the honest wallet and
+an adaptive adversary. SHA-256 and Poseidon2 are abstract functions. The
+header-level functions (which bytes are the \texttt{From} address, the
+Subject, \texttt{d=}; lowercasing; hex; the PKCS\#1 encoding) are parameters,
+so the theorems hold for any parser and computing them as
+\S\ref{sec:design-circuit} says is a tested obligation of the circuit
+(\S\ref{sec:hardening}), not a proven one. No assumption is an axiom: the
+build pins every theorem's axioms to Lean's built-in three\claim{lean-axioms}.
+Appendix~\ref{app:obligations} lists each property's obligations and their
+status.
+
+\paragraph{Reading the breaks.} A conclusion ``$P$, or Poseidon2 has a
+collision'' says nothing, since by pigeonhole every hash from unbounded
+inputs to a field has collisions. Each break here is instead a proposition
+about specific inputs the theorem computes from its own data, so each
+theorem is a reduction: whoever violates $P$ hands over a collision, the
+reading of collision resistance for a fixed, unkeyed
+hash~\cite{rogaway-human-ignorance}. Knowledge soundness is treated the same
+way. A deterministic extractor that succeeds on every accepted proof would be
+perfect soundness, which a succinct argument does not have; the theorem takes
+any extractor $X$, a function of the public inputs and the proof, and
+concludes the email facts of $X$'s witness or that $X$ fails on the one proof
+the guardian accepted. A4 is that an efficient $X$ exists for which an
+efficient prover gets such a proof accepted only with negligible probability.
 
 \subsection{Soundness}
 
 \begin{theorem}[Soundness of the email factor]\label{thm:soundness}
 Let guardian $G$ have configuration $c$, and suppose
 $\mathsf{check}(c, \mathit{env}, (S, R, \pi), \mathit{ctx})$ succeeds at
-ledger $L$. If the configured verifier has a knowledge extractor (A4), there
-are an entry point $f$, a digest $\digest$ and a witness $w$ such that:
-\begin{enumerate}
-  \item $\mathit{ctx} = [\,c.\mathit{controller}.f((\digest,))\,]$,
-    $\Sha(S) = \digest$, and $S$ names $c$'s account, controller and
-    network, an allowed action whose entry point is $f$, and a
-    \texttt{valid\_until\_ledger} $\ge L$;
-  \item $R$ is the pin's root with $L$ before its expiry, or a root the
-    registry accepts at $L$;
-  \item $w.H$ is well formed and carries a valid RSA-2048 PKCS\#1 v1.5
-    signature $w.s$ under $w.n$ (C1, C2);
-  \item $\leaff(w.\mathit{dom}, \kh(w.n))$ has a Merkle path to $R$ (C6);
-  \item the \texttt{From} address $a$ of $w.H$ has at most 124 bytes and
-    $\commitf(a, w.\code) = c.\Cm$ (C3);
-  \item $\mathrm{lower}(\mathrm{domain}(a)) = \mathrm{lower}(\texttt{d=}) =
-    w.\mathit{dom}$ (C4);
-  \item the Subject of $w.H$ is the recovery phrase followed by
-    $\mathrm{hex}(\blindf(\digest, w.\blind))$ (C5).
-\end{enumerate}
-If, moreover, every root the registry accepts is the root of a depth-16 tree
-whose non-empty leaves are trusted (A5), and $c.\Cm$ commits to the enrolled
-address $a^\ast$ while the pin holds only trusted leaves (A7), then
-$a = a^\ast$ and the key's leaf is trusted, or Poseidon2 has a collision, or
-Poseidon2 maps some input to $0$.
+ledger $L$ with close time $\tau$. Then $\mathit{ctx} =
+[\,c.\mathit{controller}.f((\digest,))\,]$, $\Sha(S) = \digest$, $S$ names
+$c$'s account, controller and network, an allowed action with entry point
+$f$ and a \texttt{valid\_until\_ledger} $\ge L$; and $R$ is the pin's root
+with $\tau$ before its expiry, or a root the registry accepts at $\tau$. For
+every extractor $X$, either $X$ fails on $((\Cm, \digest_{hi},
+\digest_{lo}, R), \pi)$, or its witness $w$ satisfies: $w.H$ carries a valid
+RSA-2048 PKCS\#1 v1.5 signature under $w.n$ (C1, C2);
+$\leaff(w.\mathit{dom}, \kh(w.n))$ has a Merkle path to $R$ (C6); the
+\texttt{From} address $a$ of $w.H$ has at most 124 bytes and $\commitf(a,
+w.\code) = c.\Cm$ (C3); $\mathrm{lower}(\mathrm{domain}(a)) =
+\mathrm{lower}(\texttt{d=}) = w.\mathit{dom}$ (C4); and the Subject of $w.H$
+is the recovery phrase followed by $\mathrm{hex}(\blindf(\digest,
+w.\blind))$ (C5). If moreover every accepted root's tree holds only trusted
+keys (A5), and $c.\Cm$ commits to the enrolled $(a^\ast, \code^\ast)$ while
+the pin holds only trusted keys (A7), then $(a, w.\code) = (a^\ast,
+\code^\ast)$ and $(w.\mathit{dom}, w.n)$ is a trusted key, or Poseidon2
+collides on a pair of inputs computed from $w$, the enrollment and $R$'s
+tree, or maps the key's leaf input to $0$.
 \end{theorem}
-The first part is \textsf{EmailRecovery.email\_of\_check} and the whole is
-\textsf{EmailRecovery.soundness}\claim{email-factor-soundness}. Through $S$,
-the email binds the four items of \S\ref{sec:design-statement}. The step to
-G1 is A1: a valid RSA-2048 signature under a trusted key of
-$\mathrm{domain}(a^\ast)$ over a header whose \texttt{From} is $a^\ast$ was
-produced by that domain's provider, which signed it for the holder of
-$a^\ast$. That step is computational and outside the model. The Poseidon2
-breaks matter because the key trees' empty leaf is $0$: a key leaf that
-hashed to $0$ would stand in for an empty slot of any tree, which collision
-resistance alone does not exclude, so A3 includes it. The proof uses two
-lemmas about the spec's formulas: the commitment binds the address and the
-code, and a Merkle path binds its leaf, each unless Poseidon2 collides.
+This is \textsf{EmailRecovery.\allowbreak email\_of\_check} and
+\textsf{EmailRecovery.\allowbreak soundness}\claim{email-factor-soundness}. The modulus
+limbs are injective, so the conclusion fixes the key $(\mathit{dom}, n)$
+itself, not only its leaf. The step to G1 is A1a (a valid signature under a
+trusted key of $\mathrm{domain}(a^\ast)$ was produced by its provider) and
+A1b (which signed it for the holder of $a^\ast$), both outside the model.
+The key trees' empty leaf is $0$, so a key leaf hashing to $0$ would stand
+in for any empty slot; collision resistance alone does not exclude that,
+hence the separate break.
 
 \subsection{Privacy}
 
-\begin{theorem}[Privacy as noninterference]\label{thm:privacy}
-Let a guardian be enrolled from a secret $(a, \code, K)$, an address, an
-account code and pinned keys. There is a function $f$ such that, for every
-initial controller state $s_0$ and every sequence of transactions, the
-chain's view of the run (the guardian's configuration, every verdict it
-gives, and the controller's state and event log) equals
-\[
-  f\bigl(\commitf(a, \code),\ \mathrm{pinRoot}(\code, K),\ s_0,\ \text{transactions}\bigr).
-\]
+\begin{theorem}[Privacy by simulation]\label{thm:privacy}
+In the ideal model, where the commitment and the pin root are handles $h_C,
+h_R$ drawn independently of the secret and every honest proof is
+$\mathsf{sim}$ of its public inputs: for every private state of the wallet
+(address, account code, pinned keys, and per request the email, $\blind$ and
+key path) and every adaptive adversary that chooses every transaction and
+asks the wallet for approvals of statements of its choice, the adversary's
+view (the configuration, every approval with its proof, every transaction,
+the guardian's verdicts, the controller's states and events) equals a
+simulator's view computed from the public deployment, $h_C$, $h_R$,
+$\mathsf{sim}$ and the adversary's own moves.
 \end{theorem}
-This is \textsf{EmailRecovery.privacy\_noninterference}, with the two-run form
-\textsf{privacy\_two\_runs} and \textsf{publicInputs\_enroll}, which shows
-the proof's public inputs are $\Cm$, the digest limbs and the
-root\claim{address-privacy}. The theorem reduces privacy to the secrecy of
-the preimages of $\Cm$ and the pin's root. G2, the computational statement
-that a guardian's state and accepted approvals are indistinguishable between
-two addresses at allowlisted providers when $\code$ is uniform and unknown,
-follows only with A3's random-function model, A4's zero knowledge and A6,
-and is not proven\claim{commitment-hiding}\claim{secret-generation}. What
-remains visible is that the account has an email guardian, its allowed
-actions, when each approval happened, and whether it used the pin or a
-registry root. Off chain the provider sees $T$, which hides $\digest$ under
-the same assumptions\claim{blinded-subject-hiding}.
+This is \textsf{EmailRecovery.\allowbreak privacy\_simulation}; so two wallets with
+different addresses and codes give every adversary the same view
+(\textsf{privacy\_two\_runs})\claim{address-privacy}. A prover that writes the
+address into its proof makes the views differ, so the view does contain the
+proofs. Without the ideal model, a structural lemma
+(\textsf{structural\_noninterference}) holds for the real formulas: for any
+fixed transactions, the contracts' state, verdicts and events depend on the
+address only through $\Cm$ and the salted pin root, and the proof's public
+inputs are $\Cm$, the digest limbs and the root. The step from the ideal
+model to Poseidon2 and UltraHonk, that $(\Cm, \text{pin root})$ for a uniform
+$\code$ is indistinguishable from two handles and an honest proof from
+$\mathsf{sim}$'s output, is assumed (A3, A4,
+A6)\claims{commitment-hiding,proof-system-security}. The view reveals that
+the account has an email guardian, its allowed actions, when each approval
+happened, and whether it used the pin or which registry root.
 
 \subsection{Replay and front-running resistance}
 
 \begin{theorem}[Replay resistance]\label{thm:replay}
 (a) If $\mathsf{check}$ accepts $(S, R, \pi)$ in contexts $\mathit{ctx}$, then
-$\mathit{ctx} = [\,c.\mathit{controller}.f((\Sha(S),))\,]$; it accepts it in
-exactly one context and for exactly one account, controller and network.
-(b) Two statements with equal digests have the same account, network,
-controller, action, attempt or request id and epoch, or SHA-256 collides.
-(c) If the composed controller and guardian record the same approval in two
-successful \texttt{submit\_guardian} calls, both are for one attempt, one
-evidence domain and one epoch, or SHA-256 collides; a vote already recorded
-is refused again. (d) The verdict ignores the authorization entry the
-approval is wrapped in, and the controller's transitions take no submitter
+$\mathit{ctx} = [\,c.\mathit{controller}.f((\Sha(S),))\,]$, for exactly one
+account, controller and network. (b) Two statements with equal digests have
+the same account, network, controller, action, attempt or request id and
+epoch, or their two encodings are a SHA-256 collision. (c) If the composed
+controller and guardian record one approval in two successful
+\texttt{submit\_guardian} calls, both are for one attempt, evidence domain
+and epoch, or the encodings of the two statements the controller built
+collide; a recorded vote is refused again. (d) The verdict ignores the
+authorization entry, and the controller's transitions take no submitter
 input.
 \end{theorem}
-In Lean, parts (a) to (d) are \textsf{accepted\_names\_digest},
-\textsf{accepted\_context\_unique} and
-\textsf{accepted\_account\_unique};
-\textsf{digest\_fixes}\claim{digest-fixes-statement};
-\textsf{Perch.email\_vote\_replay}\claim{replay-resistance} with
-\textsf{votes\_counted\_once} and \textsf{counted\_vote\_refused\_again}; and
-\textsf{check\_payload\_irrelevant}\claim{guardian-payload-irrelevant} with
-\textsf{emailAuth\_payload\_irrelevant}. A copy of an approval submitted by
-anyone therefore records the vote the original would have recorded, for the
-statement the original named. Part (b) uses two facts about Perch's encoding
-as hypotheses: the encoding is injective, and the guardian's parser reads
-back every field. They are tested, not proven: Perch's encoder reproduces
-independent vectors, and the guardian parses every statement shape it
-produces\claim{model-code-agreement}.
+Part (a) is \textsf{accepted\_context\_unique} with
+\textsf{accepted\_account\_unique}, part (b) \textsf{digest\_fixes},
+part (c) \textsf{Perch.\allowbreak email\_vote\_replay}, and part (d)
+\textsf{check\_payload\_irrelevant}\claims{digest-fixes-statement,replay-resistance,guardian-payload-irrelevant}. A copy
+of an approval submitted by anyone records the vote the original would
+have. Part (b) takes two facts about Perch's encoding as hypotheses, its
+injectivity and the guardian's parser reading back every field; they are
+tested\claim{model-code-agreement}.
 
 \subsection{One-factor safety}
 
@@ -128,94 +131,59 @@ the authorization of $i$ at a ledger $L_a$ under a configuration $c$ with
 mode \texttt{guardian-only}, quorum $1$ and $G$ among its guardians, and
 $0 < c.\mathit{delay}$ and $L_a + c.\mathit{delay} \le L_\mathit{complete}$.
 \end{theorem}
-This is \textsf{EmailRecovery.Perch.one\_factor\_safety}\claim{one-factor-safety}.
-It combines a statement about every trace, whatever its evidence (every
-completion waits out a positive delay after its
-authorization\claim{completion-waits-for-delay}), with one about traces whose
-only evidence is $G$'s (every authorization is at quorum one, guardian-only);
-so under a quorum of at least two, or in \texttt{combined} or
-\texttt{zk-only} mode, email approvals alone authorize
-nothing\claim{email-only-never-authorizes}. The same holds for the recovery
-condition of a \texttt{Protected} reconfiguration or
-upgrade\claim{email-alone-change-condition}, and during the delay a
+This is \textsf{EmailRecovery.\allowbreak Perch.\allowbreak one\_factor\_safety}\claim{one-factor-safety}.
+It combines a statement about every trace (each completion waits out a
+positive delay after its authorization) with one about traces whose only
+evidence is $G$'s: under a quorum of two or more, or in \texttt{combined} or
+\texttt{zk-only} mode, email approvals alone authorize nothing, and the same
+holds for the recovery condition of a \texttt{Protected}
+reconfiguration\claims{completion-waits-for-delay,email-only-never-authorizes,email-alone-change-condition}. During the delay a
 \texttt{Loss} owner's cancellation of a live attempt
-succeeds\claim{owner-can-cancel}. Under the wallet policy of
-\S\ref{sec:design-policy}, stated as a predicate on recovery members, the
-email guardian alone reaches the quorum only under \texttt{Loss}, with a
-delay of at least 120{,}960 ledgers and a second alert channel
-(\textsf{one\_factor\_under\_wallet\_policy})\claim{wallet-policy-one-factor}.
-The chain accepts any configuration its owner applies, so this last part
-binds Nido's wallet, not other wallets.
+succeeds\claim{owner-can-cancel}. Under the wallet policy, stated as a
+predicate on recovery members, the email guardian alone reaches the quorum
+only under \texttt{Loss}, with a delay of at least seven days at the target
+close time and a second alert channel\claim{wallet-policy-one-factor}; in
+wall-clock time that rests on A9, and its use as a defence on A12.
 
-\subsection{Obligations}
-
-Table~\ref{tab:obligations} lists, per property, what each component must
-do and how it is established. The circuit's obligations and the contracts'
-checks are tested; the composition is proven over the model; the
-cryptographic steps are assumed.
-
-\begin{table*}[t]
-  \caption{Obligations of each property and their status.}
-  \label{tab:obligations}
-  \small
-  \begin{tabularx}{\textwidth}{@{}l>{\raggedright\arraybackslash}p{0.12\textwidth}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}p{0.17\textwidth}l>{\raggedright\arraybackslash}p{0.25\textwidth}@{}}
-    \toprule
-    Property & Circuit & Guardian and registry & Perch & Assumptions & Status \\
-    \midrule
-    1 Soundness & C1--C6 & checks 1--12; construction's circuit-id check; registry activation, grace, revocation and scope, with C6's hashing & statement built from controller state & A1, A2, A3, A4, A5, A7 & composition proven; C1--C6 and checks tested; registry rules tested; hashing cross-checked \\
-    2 Privacy & public inputs exactly $(\Cm, \digest_{hi}, \digest_{lo}, \mathit{root})$ & stores $\Cm$ and a salted pin root; emits nothing & --- & A3, A4, A6 & noninterference proven; indistinguishability assumed \\
-    3 Replay & C5 binds $\digest$ & checks 1, 2, 5, 6, 8, 12 & one vote per guardian per attempt and domain or per change digest; ids never reused; epochs grow & A2, A3, A4 & proven, with the encoding facts tested \\
-    4 One factor & --- & the guardian is one address & quorum, delay, cancellation & --- & proven over all traces; wallet policy proven as a predicate and tested in code \\
-    \bottomrule
-  \end{tabularx}
-\end{table*}
-
-\subsection{Hardening against public issue classes}\label{sec:hardening}
+\subsection{The circuit's parsing}\label{sec:hardening}
 Public audits of zkEmail's Circom and Noir
 libraries~\cite{audit-zksecurity-2024,audit-yacademy,audit-zellic-2024,audit-matterlabs-2024,audit-veridise-2024,audit-consensys-2024}
-and public issues in its repositories report recurring classes of
-soundness bugs, mostly in header parsing rather than in DKIM itself; such
-under-constrained circuits are a common class of SNARK
-vulnerability~\cite{chaliasos-sok-snark}. The rules of
-\S\ref{sec:design-circuit} refuse each publicly documented class;
-Table~\ref{tab:hardening} in Appendix~\ref{app:hardening} lists the ten
-classes, their public sources and the refusals. Each class has a negative test that names its source;
-the test signs its header with the test key, so the RSA check passes and the
-refusal comes from the check under test, and pins the exact failing
-assertion\claim{circuit-issue-classes}; an attack on prover hints starts from
-the honest hints and changes them as an attacker would. Three classes from the same reports do not
-arise: partial-SHA state aliasing (no partial hashing is used), an unbound
-Barrett parameter (it enters no constraint and is not hashed), and an
-all-zero SHA output (a Circom template not used here).
-Beyond the per-class tests, every adversarial email of the provider mocks,
-given the witness most favourable to its claim, is refused at a named
-assertion whenever its claim must not be provable\claim{circuit-refuses-attacks}
-(Appendix~\ref{app:circuit}). Every unconstrained value is a hint that
-constrained code re-checks, so a wrong hint can make an honest proof fail
-but not make a false statement provable; the pinned compiler's public
-advisories were reviewed against the constructs the circuit uses, and its
-correctness beyond that review is assumed\claim{toolchain-correctness}.
+and public issues in its repositories report recurring classes of soundness
+bugs, mostly in header parsing; under-constrained circuits are a common class
+of SNARK vulnerability~\cite{chaliasos-sok-snark}. The rules of
+\S\ref{sec:design-circuit} refuse each of the ten publicly documented classes
+(Table~\ref{tab:hardening}, Appendix~\ref{app:hardening}), each pinned by a
+negative test that names its source and signs its header with a test key, so
+the refusal comes from the check under test, and every adversarial
+provider-mock email whose claim must not be provable is refused at a named
+assertion\claims{circuit-issue-classes,circuit-refuses-attacks}. Every
+unconstrained value is a hint that constrained code re-checks. The circuit
+vendors noir-bignum v0.7.5, the last release its pinned compiler builds,
+whose quadratic-expression check does not range-check its operands (fixed
+upstream~\cite{noir-bignum-pr270}); the circuit range-checks the modulus, the
+signature and every product itself, and relies on the library's carry
+argument as stated\claim{toolchain-correctness}.
+
+That parsing is tested two ways beyond the authored cases
+(\S\ref{sec:eval-parser}): differentially on real provider mail, and by
+grammar-based fuzzing against reference implementations. Neither is a
+proof; a Lean specification of the parser is not built.
 
 \subsection{From the model to the code}\label{sec:gap}
-The theorems are about the model; the model's agreement with the code is
-tested, not proven. The model's $\mathsf{check}$ mirrors the guardian's
-Rust \texttt{check} check for check, and each refusal is pinned by a unit
-test\claim{guardian-checks}. The controller model mirrors Perch's
-\texttt{contract.rs} transition by transition, and the guardian on Perch's
-deployed WebAssembly is pinned by integration tests: one approval is one
-vote, a resubmission is refused, approvals do not transfer to another attempt
-or account, and email approvals alone never complete a
-recovery\claim{guardian-on-perch}. The model's abstractions only add
-behaviours, so a safety property of the model holds of the contracts:
-ledger arithmetic is unbounded, storage never expires, and the target
-derivation, the ZK adapter's verdict and the host's acceptance of an
-authorization entry are inputs of a transaction. Two identifications remain:
-configurations are compared by value where Perch compares
-\texttt{config\_hash} (equal unless SHA-256 collides), and the two halves of
-a completion are one transition. Not modelled are the account's own state
-beyond its applied document, Perch's ZK membership pool, the circuit's
-header parsing, and the semantics of Noir and Rust. The wallet-policy
-predicate mirrors the wallet's builder rule for rule, and the builder is
-tested at each rule's boundary. The registry's tree shape is tested and its
-hashing cross-checked against an independent Noir
-implementation\claim{registry-hash-parity}.
+The model's agreement with the code is tested, not proven. $\mathsf{check}$
+mirrors the guardian's Rust \texttt{check}, each refusal pinned by a unit
+test, and the guardian on Perch's deployed WebAssembly is pinned by
+integration tests: one approval is one vote, a resubmission is refused,
+approvals do not transfer, and email approvals alone never complete a
+recovery\claims{guardian-checks,guardian-on-perch}. The model's abstractions only add
+behaviours, so its safety properties hold of the contracts: ledger arithmetic
+is unbounded; a dependency that traps is a refusal, which affects liveness,
+not safety; and storage never expires. Archived persistent entries are
+restored with the same bytes, and Perch keeps only collecting attempts in
+temporary storage, extended past their evidence deadline, so expiry turns
+one refusal (\texttt{AttemptNotLive}) into another and never removes a record
+a live attempt reads. Configurations are compared by value where Perch
+compares \texttt{config\_hash}. Not modelled: the account's own state beyond
+its document, Perch's ZK pool, the header parsing, and Noir and Rust
+semantics. The registry's tree hashing is cross-checked against an
+independent Noir implementation\claim{registry-hash-parity}.

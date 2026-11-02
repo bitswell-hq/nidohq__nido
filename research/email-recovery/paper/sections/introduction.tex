@@ -4,75 +4,87 @@ A smart account that authenticates with a passkey is lost when every device
 holding the passkey is lost. Account-abstraction wallets answer this with
 recovery: guardians who approve a key change, a delay during which the owner
 can object, and secondary credentials~\cite{buterin-social-recovery,argent-spec,erc4337}.
-An email inbox is the secondary credential most people already have, keep for
-years, and can regain through their provider, and large services have long
-used it to recover accounts~\cite{bonneau-recovery}. Using it naively,
-however, puts the address in someone's database and makes whoever runs the
-email check a party that can recover any account: a server that mails a
-one-time code, or a recovery server that holds signing keys for its
-users~\cite{sep30}, is trusted with every account it serves. Checking the
-DKIM signature~\cite{rfc6376} on chain instead removes the server but
-publishes the signed \texttt{From} header.
+An email inbox is the secondary credential most people already have and keep
+for years, and large services have long used it to recover
+accounts~\cite{bonneau-recovery}. Used naively, it puts the address in the
+operator's database and makes whoever runs the email check a party that can
+recover any account: a server that mails a one-time code, or a recovery
+server that holds signing keys for its users~\cite{sep30}, is trusted with
+every account it serves. Checking the DKIM signature~\cite{rfc6376} on chain
+instead removes the server but publishes the signed \texttt{From} header.
 
-This paper shows that a smart account can use control of an inbox as one
-recovery factor without anyone storing the address or a secret in plaintext.
-The account commits to a salted hash of the exact address,
-$\Commit$, where $\code$ is an account code that only the user holds. To
+This paper shows that control of an inbox can be one recovery factor while
+the chain holds only a salted hash of the address,
+$\Commit$, where $\code$ is an account code that only the user holds, and
+the operator's servers see the address only inside an attested enclave. To
 recover, the user sends one email from the inbox to a fixed address. Its
 Subject carries a blinded copy of the digest of the pending recovery
-statement, so the mail provider cannot tell which account or attempt it
-approves. The user's browser proves in zero knowledge that the provider
-DKIM-signed the email under a registered key, that its sender opens the
-commitment, and that its Subject opens to the statement's digest. A
-per-account email-guardian contract verifies the proof on Soroban and counts
-it as one guardian approval in Perch's recovery~\cite{perch-recovery-spec},
-which is used unchanged. Perch's quorum, its delay and the owner's ability to
-cancel still apply, alerts reach the owner on a second channel, and so the
-email factor never completes a recovery on its own.
+statement, so the email's content names no account or attempt. The user's
+browser proves in zero knowledge that the provider DKIM-signed the email
+under a registered key, that its sender opens the commitment, and that its
+Subject opens to the statement's digest. A per-account email-guardian
+contract verifies the proof on Soroban and counts it as one guardian
+approval in Perch's recovery~\cite{perch-recovery-spec}, used unchanged.
+Perch's quorum and delay still apply: email approvals never complete a
+recovery before the delay has passed, and they authorize one alone only
+under a lost-key profile with at least seven days of delay and a second
+alert channel, where the owner's cancellation is the defence.
 
-Four problems shape the design. \emph{Binding}: an email must approve exactly
-one recovery statement (one account, one new key, one attempt, one deadline),
-and a copy of the approval must be worth nothing more than the original.
-\emph{Parsing soundness}: a circuit that reads a header must read it the way
-the provider signed it; public audits of open-source email circuits have
-repeatedly found sender spoofing and header-confusion
+Five problems shape the design. \emph{Binding}: an email must approve exactly
+one recovery statement (one account, new key, attempt and deadline), and a
+copy must be worth no more than the original. \emph{Parsing soundness}: a
+circuit must read a header the way the provider signed it; public audits of
+open-source email circuits have repeatedly found sender spoofing and
+header-confusion
 flaws~\cite{audit-zksecurity-2024,audit-yacademy,audit-veridise-2024,audit-consensys-2024,audit-matterlabs-2024,audit-zellic-2024}.
-\emph{Key trust}: someone must say which RSA key signs for
-\texttt{gmail.com}, and that someone must not be able to plant a key and
-recover accounts with it. \emph{Privacy from the operator}: the wallet's
-operator must not learn the address, at enrollment, at recovery, or when it
-sends recovery alerts.
+\emph{Key trust}: whoever says which RSA key signs for \texttt{gmail.com}
+must not be able to plant a key and recover accounts with it. \emph{Privacy
+from the operator}: the operator's servers and staff must not read the
+address at enrollment, at recovery, or when sending alerts. \emph{The
+human}: a user can be talked into sending the email and reading out the
+code, and under email plus delay only an alert that reaches the owner in
+time stops a wrongful recovery.
 
 \paragraph{Contributions.}
 \begin{itemize}
-  \item A design for email as one recovery factor on Perch, unchanged: a
-    per-account guardian committing to the address, a Subject that binds a
-    blinded statement digest, a DKIM key registry with public timelocks and a
-    per-account pin, and alerts through a sealed vault
-    (\S\ref{sec:design})\claim{guardian-on-perch}.
-  \item Soundness, privacy, replay resistance and one-factor safety, each
-    proven in Lean over a model of the guardian, the circuit's relation and
-    Perch's controller, with every cryptographic step a named hypothesis and
-    every obligation listed
-    (\S\ref{sec:properties})\claim{email-factor-soundness}\claim{address-privacy}\claim{replay-resistance}\claim{one-factor-safety}.
+  \item A design for email as one guardian inside an existing recovery
+    protocol, unchanged (\S\ref{sec:design}). What is new against zkEmail's
+    recovery stack (\S\ref{sec:related}): the Subject binds the protocol's
+    own statement digest, blinded, rather than a readable command; the proof
+    is made in the user's browser, so no relayer receives the email or holds
+    the account code; the key registry is immutable, fed by DNS attestations,
+    with public timelocks, and the per-account pin is salted, expiring and
+    fixed with the guardian; and alerts come from the protocol's own events
+    through a sealed vault, with a liveness probe and a wallet that reads
+    open attempts itself\claim{guardian-on-perch}.
+  \item Four properties stated over a Lean model of the guardian, the
+    circuit's relation and Perch's controller (\S\ref{sec:properties}).
+    \emph{Proven} over the model: soundness and replay resistance, each the
+    property or a hash collision on inputs the theorem computes, with
+    knowledge extraction per accepted proof; one-factor safety over every
+    trace; privacy as a simulation theorem in an ideal model of the commitment
+    and the
+    proofs\claims{email-factor-soundness,replay-resistance,one-factor-safety,address-privacy}.
+    \emph{Assumed}: the cryptography behind the ideal model and the named
+    breaks, and that providers authenticate senders. \emph{Tested}: the
+    model's agreement with the contracts, and the circuit's parsing.
   \item A Noir circuit that refuses each publicly documented soundness issue
-    class of open-source email circuits at a named assertion
-    (\S\ref{sec:design-circuit},
-    \S\ref{sec:hardening})\claim{circuit-issue-classes}, and every
-    adversarial provider-mock email whose claim must not be
-    provable\claim{circuit-refuses-attacks}.
-  \item An implementation and an evaluation on the test host, a local
-    network and testnet: 56 attack scenarios, the cost of an email vote in
-    each environment, proving time natively, in Node and in a browser, and a
-    complete recovery on testnet (\S\ref{sec:impl}, \S\ref{sec:eval}).
-  \item A claim ledger giving every claim a status and evidence, checked by
-    the build (Appendix~\ref{app:claims}).
+    class of open-source email circuits at a named assertion, and whose
+    parsing agrees with reference implementations on real mail and fuzzed
+    headers\claims{circuit-issue-classes,parser-real-mail,parser-fuzzing}.
+  \item An evaluation on the test host, a local network running mainnet's
+    settings, and testnet (\S\ref{sec:eval}): a 68-row attack suite that
+    includes phishing, deleted alerts, a lapsed push, a watcher outage and
+    repeated attempts; each environment's fees attributed to its settings;
+    archival and its keeper; proving time on a desktop; phones not measured.
+  \item A claim ledger giving every claim a status and its evidence, checked
+    by the build (Appendix~\ref{app:claims}).
 \end{itemize}
 
-\paragraph{Claim tags.} Each statement about the system carries a tag:
-\claimtag{proven} for a Lean theorem, \claimtag{tested} for a named test,
-\claimtag{measured} for a recorded measurement, \claimtag{assumed} for a
-stated assumption, and \claimtag{unproven} for a statement made without
-evidence. Appendix~\ref{app:claims} lists each claim with its evidence, and
-the build fails if a tag names no ledger entry or an entry names a theorem,
-test or file that does not exist.
+\paragraph{Claim tags.} A tag ends each statement about the system:
+\claimtag{proven} for a Lean theorem about the model, \claimtag{tested} for
+named tests, \claimtag{measured} for a recorded measurement,
+\claimtag{assumed} for a stated assumption, \claimtag{unproven} for a
+statement without evidence. Appendix~\ref{app:claims} lists each claim with
+its evidence; the build fails if a tag names no ledger entry, if evidence is
+missing, or if a measured figure does not occur in its measurement files.

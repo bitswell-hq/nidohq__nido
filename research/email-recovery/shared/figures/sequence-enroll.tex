@@ -1,0 +1,32 @@
+% Enrollment as a message sequence, simplified for a slide: five parties, the
+% messages of the paper's Figure 1 (sequence.tex) that enrollment needs, at a
+% size that is read unscaled on a 16:9 slide.
+\begin{tikzpicture}[
+    x=1cm, y=0.62cm,
+    actor/.style={draw, rounded corners=2pt, fill=white, align=center,
+                  font=\sffamily\figfontlarge, minimum width=22mm, minimum height=8mm, inner sep=2pt},
+    life/.style={densely dashed, gray},
+    msg/.style={-{Stealth[length=2mm]}, semithick},
+    reply/.style={msg, densely dashed},
+    lbl/.style={font=\sffamily\figfontlarge, align=center, inner sep=1.5pt, fill=white},
+    act/.style={font=\sffamily\figfontlarge, align=center, fill=gray!12, draw=gray!60,
+                rounded corners=1pt, inner sep=2.5pt},
+  ]
+  \foreach \x/\n/\t in {
+      0/w/{Wallet\\(user's browser)},
+      2.9/p/{User's mail\\provider},
+      5.8/v/{Sealed vault\\(enclave)},
+      8.7/g/{Email guardian\\(new, per account)},
+      11.6/c/{Perch recovery\\controller}} {
+    \node[actor] (\n) at (\x, 0) {\t};
+    \draw[life] (\n.south) -- (\x, -10.6);
+  }
+  \node[act, anchor=west] at (-1.1, -1.5) {draw $\code$; the user saves the kit\\and types two groups back};
+  \draw[msg] (0, -2.9) -- node[lbl, above] {enrollment email} (2.9, -2.9);
+  \draw[msg] (2.9, -3.9) -- node[lbl, above] {DKIM-signed copy} (5.8, -3.9);
+  \draw[reply] (5.8, -4.9) -- node[lbl, above, pos=0.5] {sealed to this browser} (0, -4.9);
+  \node[act, anchor=west] at (-1.1, -6.2) {check it; $\Commit$; pin};
+  \draw[msg] (0, -7.3) -- node[lbl, above, pos=0.5] {alert contact, sealed; Web Push} (5.8, -7.3);
+  \draw[msg] (0, -8.4) -- node[lbl, above, pos=0.62] {deploy with $\Cm$, the pin, the registry, the controller} (8.7, -8.4);
+  \draw[msg] (0, -9.6) -- node[lbl, above, pos=0.72] {apply a document listing the guardian (Perch's own gate)} (11.6, -9.6);
+\end{tikzpicture}

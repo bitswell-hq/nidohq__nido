@@ -24,29 +24,34 @@
 
 \begin{abstract}
 A smart account can use control of an email inbox as one recovery factor
-without anyone storing the address or a secret in plaintext. The account
+while the chain holds only a salted commitment to the address and the
+operator's servers see it only inside an attested enclave. The account
 commits to a salted Poseidon2 hash of the address. To recover, the user sends
 one email from that inbox to a fixed address; the user's browser proves in
 zero knowledge that the provider DKIM-signed it and that its Subject carries a
 blinded copy of the recovery statement's digest; and a per-account guardian
 contract verifies the proof on Soroban and counts it as one approval in
-Perch's delayed, quorum-based recovery, used unchanged. Email is never
-sufficient alone. We state four properties of the email factor (soundness,
-privacy of the address, replay and front-running resistance, and one-factor
-safety) and prove each in Lean over a model of the guardian, the circuit's
-relation and Perch's controller, with the cryptographic steps as named
-assumptions. The Noir circuit has 251{,}561 UltraHonk
-gates\claim{circuit-size} and refuses every publicly documented soundness
-issue class of open-source email circuits\claim{circuit-issue-classes}. On a
-local Stellar network an email vote is metered at about 120 million
-instructions\claim{network-verification-cost}, within a transaction's limit
-of 400 million\claim{onchain-verification-cost}; one
-complete email-factor recovery ran on testnet\claim{testnet-email-recovery};
-Chrome on a desktop proves a recovery email in 1.5\,s on 18 threads and 8.4\,s
-on one\claim{browser-proving-cost}, and phones are not measured. All 56
-scenarios of an attack suite on a local network and the integration-test host
-have their expected outcome\claim{network-attack-suite}\claim{registry-timelock-attacks}. Each claim carries
-its status: proven, tested, measured, assumed or unproven.
+Perch's delayed, quorum-based recovery, used unchanged. Email approvals never
+complete a recovery before its delay has passed; email alone authorizes one only
+under a lost-key profile with at least seven days of delay and a second alert
+channel, where the owner's cancellation is the defence. Over a Lean model of
+the guardian, the circuit's relation and Perch's controller, we prove
+soundness and replay resistance as reductions to named hash collisions and
+per-proof extraction, one-factor safety over every controller trace, and
+privacy as a simulation theorem in an ideal model of the commitment and the
+proofs\claims{email-factor-soundness,replay-resistance,one-factor-safety,address-privacy}.
+The step from that ideal model to Poseidon2 and UltraHonk is assumed, and the
+circuit's header parsing is tested, not proven: it agrees with reference
+implementations on 5{,}327 real DKIM signatures and 50{,}000 fuzzed
+headers\claims{parser-real-mail,parser-fuzzing}. The Noir circuit has
+248{,}996 UltraHonk gates\claim{circuit-size}. On a local Stellar network
+running mainnet's settings, an email vote is metered at 121.6 million of a
+transaction's 400 million instructions and charged 83{,}125 to 83{,}155
+stroops, and desktop Chrome proves in 1.44\,s on 18 threads; phones are not
+measured\claims{network-verification-cost,onchain-verification-cost,browser-proving-cost}. All 68
+rows of an attack suite, phishing, deleted alerts and a lapsed push among
+them, have their expected outcome, three of them residual risks the design
+does not stop\claims{network-attack-suite,registry-timelock-attacks}.
 \end{abstract}
 
 \begin{CCSXML}
@@ -82,6 +87,7 @@ its status: proven, tested, measured, assumed or unproven.
 \bibliography{references}
 
 \appendix
+\input{sections/analysis-appendix}
 \input{sections/attack-appendix}
 \input{sections/reproducibility}
 \input{sections/claims-appendix}

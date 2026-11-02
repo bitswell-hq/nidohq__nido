@@ -3,39 +3,41 @@
 \paragraph{Parties.} The \emph{user} holds a passkey for the account and,
 once it is lost, a new device. The \emph{mail provider} signs the user's
 outgoing mail and publishes its keys in DNS. The \emph{DKIM key registry} is
-a contract governed by a $k$-of-$n$ multisig of members and fed by
-independent DNS attesters. Nido, the wallet's operator, serves the wallet
-front end, relays transactions, and runs the alert service: an untrusted
-host and a \emph{sealed vault}, an attested enclave that alone can read
-alert addresses. The account's other guardians are whatever its recovery
-policy lists.
+a contract governed by a $k$-of-$n$ multisig and fed by independent DNS
+attesters. The wallet's \emph{operator} serves the wallet, relays
+transactions, controls the recovery address's domain, and runs the alert
+service: an untrusted host and a \emph{sealed vault}, an attested enclave
+that alone reads alert addresses and inbound mail. Alerts leave through a
+third-party email-sending service. The account's other guardians are
+whatever its recovery policy lists.
 
-\paragraph{Adversaries.} We consider seven, alone or together. The
+\paragraph{Adversaries.} We consider eight, alone or together. The
 \emph{inbox thief} controls the victim's inbox, Sent folder included, and
-wants to recover the account. The \emph{registry operator} is a set of
-registry members below the multisig's threshold, or a threshold of them
-adding a key the provider never published. The \emph{relayer} may drop,
-delay, reorder or copy the user's transactions. The \emph{mail provider} sees
-the user's mail and holds the signing key; it wants to learn which account
-its user recovers, and is trusted not to sign mail its user did not send. The
-\emph{network observer} sees the chain and every pending transaction and
-wants the address behind an account. The \emph{front-runner} copies a pending
-approval and submits it first, or for another statement, attempt or account.
-The \emph{malicious frontend} is a misbehaving wallet build: at recovery an
-attacker like any other client, at enrollment trusted (A7). The adversary may
-also open recovery attempts against any account, send
-arbitrary email, run its own mail domain, and operate Nido's host. It does
-not break the cryptographic assumptions, read the enclave's memory, or hold
-two of the vault key's three shares.
+wants the account. The \emph{social engineer} can get the user to send an
+email with a chosen Subject to a chosen address and to read out or type the
+recovery code, for example posing as support. The \emph{registry operator}
+is registry members below the threshold, or a threshold of them adding a key
+the provider never published. The \emph{relayer} or \emph{front-runner}
+drops, delays, reorders or copies the user's transactions, or submits a copy
+first, for another statement, attempt or account. The \emph{mail provider}
+sees the user's mail and holds the signing key; it wants to learn which
+account its user recovers. The \emph{network observer} sees the chain and
+every pending transaction. The \emph{malicious frontend} is a misbehaving
+wallet build: at recovery an attacker like any other client, at enrollment
+trusted (A7). The \emph{operator's staff} run the host and the recovery
+domain's DNS and want users' addresses. Any adversary may open recovery
+attempts against any account, send arbitrary email and run its own mail
+domain. None breaks the cryptographic assumptions, reads the enclave's
+memory, or holds two of the vault key's three shares.
 
 \paragraph{Assumptions.} Table~\ref{tab:assumptions} lists what the
-properties rest on. A1 to A7 follow the specification's numbering; each is
-an entry of the claim ledger with status \claimtag{assumed}. In the Lean
-model, A4, A5 and A7 are hypotheses of the soundness theorem, and the breaks
-of A2 and A3 (a collision, or a Poseidon2 input that hashes to zero) appear
-as named alternatives in the conclusions; A1, A3's random-function part, A4's
-zero-knowledge part and A6 are computational, and the model does not state
-them (\S\ref{sec:properties}).
+properties rest on; each is a ledger entry with status \claimtag{assumed}.
+A1 is split: unforgeability (A1a) is cryptographic; sender authentication
+(A1b) is a property of each provider's submission path, which
+Appendix~\ref{app:providers} reviews from public sources, with every gap
+open. A9 separates two clocks: the windows this design adds are measured on
+ledger close time and keep their wall-clock length whatever the network's
+ledger rate; Perch's delay and the statement's expiry are ledger counts.
 
 \begin{table}[t]
   \caption{Assumptions. Each is \claimtag{assumed} in the claim ledger.}
@@ -45,40 +47,40 @@ them (\S\ref{sec:properties}).
     \toprule
     Id & Assumption \\
     \midrule
-    A1 & RSASSA-PKCS1-v1\_5 with SHA-256 is unforgeable for 2048-bit moduli
-         and providers keep their keys secret\claim{dkim-unforgeability};
-         a provider signs a \texttt{From} address of its own only for the
-         mailbox's holder\claim{provider-authenticates-sender}. \\
-    A2, A3 & SHA-256 and Poseidon2 are collision resistant, and no input is
-         known that Poseidon2 maps to zero\claim{hash-collision-resistance};
-         for hiding, Poseidon2 behaves as a random
-         function\claim{commitment-hiding}\claim{blinded-subject-hiding}. \\
+    A1a & RSASSA-PKCS1-v1\_5 with SHA-256 is unforgeable for 2048-bit moduli,
+          and providers keep their keys secret\claim{dkim-unforgeability}. \\
+    A1b & A provider signs a \texttt{From} naming one of its mailboxes only
+          for that mailbox's holder: it refuses two \texttt{From} fields or
+          authenticates the one it signs, sending as another in-domain
+          address needs proof of control, and a reassigned address is
+          useless without $\code$\claim{provider-authenticates-sender}. \\
+    A2, A3 & SHA-256 and Poseidon2 are collision resistant, and no known
+          input maps to zero under Poseidon2; for hiding, Poseidon2 is a
+          random function\claims{hash-collision-resistance,commitment-hiding,blinded-subject-hiding}. \\
     A4 & UltraHonk in Perch's zero-knowledge flavor is knowledge sound and
-         zero knowledge\claim{proof-system-security}, and the pinned
-         toolchain compiles and proves the circuit as
-         written\claim{toolchain-correctness}. \\
+          zero knowledge, and the pinned toolchain compiles and proves the
+          circuit as written\claims{proof-system-security,toolchain-correctness}. \\
     A5 & Every key the registry lists for a domain was published by that
-         domain's provider\claim{registry-correctness}. \\
+          domain's provider\claim{registry-correctness}. \\
     A6 & $\code$ and $\blind$ come from a secure generator and stay with the
-         user and the browser\claim{secret-generation}. \\
+          user and the browser\claim{secret-generation}. \\
     A7 & The enrolling wallet commits to the real enrollment email's address
-         and pins only keys it checked\claim{honest-enrollment}. \\
+          and pins only keys it checked\claim{honest-enrollment}. \\
     A8 & The enclave keeps its memory from its host, and at most one of the
-         three key custodians is malicious\claim{enclave-isolation}. \\
-    A9 & Ledger close time tracks wall-clock time, and ledgers close on
-         average no faster than the network's target close time, which
-         validators can lower by vote: the registry's timelocks, the key pin
-         and the contact-change delay are close time; Perch's delay is a
-         ledger count the wallet sizes from the target\claim{ledger-timing}. \\
+          three key custodians is malicious\claim{enclave-isolation}. \\
+    A9 & Close time tracks wall-clock time; ledgers close on average no
+          faster than the target close time, from which the wallet sizes
+          Perch's 7-day delay floor\claim{ledger-timing}. \\
+    A10 & Mail to the recovery address reaches only the enclave: the
+          operator does not change the recovery domain's MX, MTA-STS
+          policy~\cite{rfc8461} or the mail exchanger's TLS
+          keys\claim{recovery-domain-routing}. \\
+    A11 & Users run the published wallet build\claim{published-wallet-build}. \\
+    A12 & Under email plus delay, the owner learns of an authorized attempt
+          within the delay\claim{alert-liveness}. \\
     \bottomrule
   \end{tabularx}
 \end{table}
-
-A5 is reduced, but not discharged, by the registry's design: a key enters
-only with a threshold of member approvals and after a public timelock during
-which a smaller emergency threshold can stop it (\S\ref{sec:design-registry}).
-A8 concerns only the alert path; the four properties of the email factor do
-not depend on it.
 
 \paragraph{Goals.} The email factor should satisfy four properties, stated
 formally in \S\ref{sec:properties}.
@@ -87,8 +89,8 @@ formally in \S\ref{sec:properties}.
     registered key for the enrolled domain over an email whose sender is the
     committed address and whose content binds the exact recovery statement:
     its account, new key, nonce and expiry.
-  \item[G2 Privacy.] The chain's state and the proofs reveal nothing about
-    the address beyond the salted commitment.
+  \item[G2 Privacy.] The chain's state, the transactions and the proofs
+    reveal nothing about the address beyond the salted commitment.
   \item[G3 Replay and front-running resistance.] An approval is bound to one
     account, one statement and one nonce, and a copy submitted by anyone
     records the same single vote.
@@ -96,17 +98,39 @@ formally in \S\ref{sec:properties}.
     completes a recovery: completion still needs the delay and the policy's
     quorum.
 \end{description}
-Off chain, the privacy goal is scoped. The claim the design makes to users is
-exactly ``Nido's servers and staff can't read your address''; it is not a
-claim that the address can never be leaked. The provider that receives the
-user's mail, and the EU sending service that delivers alerts to it,
-necessarily see it.
+G4 is the precise sense of ``email is never sufficient alone'': it never
+skips the delay. Under the lost-key profile with the email guardian as the
+only one needed (\emph{email plus delay}: at least seven days and a second
+alert channel), email alone authorizes, and what stops a wrongful recovery is
+the owner's cancellation within the delay, which rests on A12.
+
+Off chain the goal is scoped. The wallet tells users exactly
+\PrivacyClaim, a claim against the operator's servers and staff that holds
+under A8, A10 and A11; it is not a claim that the address can never
+leak\claim{scoped-privacy-claim}. The user's mail provider and the
+alert-sending service necessarily see the address. The provider sees the
+blinded Subject, whose content names no attempt; the timing of the email
+and of the vote that follows it can (\S\ref{sec:limits}).
+
+\paragraph{Beyond the protocol.} G1 binds the email to the statement, not to
+the sender's informed consent. The social engineer needs no fake page: the
+real recovery page on its own device opens a lost-key attempt for its key
+(opening is permissionless) and shows a Subject the user cannot check, and
+since alert codes derive from $\code$, the attacker holding it sees the code
+the alerts carry. What remains is the delay with the owner's cancellation,
+the push to a device holding the passkey, the wallet's own read of open
+attempts, other guardians, and warnings where the email is prepared and the
+code typed (\S\ref{sec:design-alerts}); a \texttt{Re:} reply to a phishing
+message is unprovable, since nothing may precede the Subject's phrase. Two
+risks remain under email plus delay: a phished user who has lost every
+device cannot cancel, and with alerts going to a stolen inbox and the push
+lapsed, only opening the wallet shows the attempt (\S\ref{sec:eval-attacks}).
+Whether users act on what reaches them is not measured\claim{user-behaviour}.
 
 \paragraph{Non-goals.} The design does not hide that an account has an email
 guardian, that a recovery happened, or, from the mail provider, that its user
-sent a recovery approval and when. An adversary who controls the inbox,
-holds the account code, and either meets the quorum with other factors or
-outlasts the delay while the owner ignores two alert channels recovers the
-account: that is the policy's intended semantics. A compromised user device,
-custom mail domains and organisation tenants, and a provider that signs mail
-its user did not send are out of scope.
+sent a recovery approval and when. An adversary with the inbox and the
+account code who meets the quorum with other factors, or outlasts the delay
+unseen, recovers the account: that is the policy's semantics. A compromised
+user device, custom mail domains and a provider that signs mail its user did
+not send are out of scope.

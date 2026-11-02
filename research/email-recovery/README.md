@@ -82,13 +82,15 @@ resting on several artifacts (one theorem per vocabulary, say) gives a list of
 evidence mappings of its status's shape, and the checker verifies each one.
 
 In LaTeX, `\claim{id}` prints the claim's status as a coloured tag such as
-**[unproven]**, and `\claimstatement{id}` prints its statement, so both
+**[unproven]**, `\claims{id,id,...}` prints each distinct status of several
+claims once (so a sentence resting on three tested claims carries one
+**[tested]**), and `\claimstatement{id}` prints its statement, so both
 documents state a claim in the ledger's words. The paper's appendix prints
 every claim with its status and evidence (`\ClaimList`, a list that breaks
 across pages; `\ClaimTable` gives the same as a table).
 
-`check-claims.pl` also requires that every `\claim{id}` and
-`\claimstatement{id}` in a `.tex` file under `paper/`, `slides/` or `shared/`
+`check-claims.pl` also requires that every id in a `\claim{id}`,
+`\claims{id,id,...}` or `\claimstatement{id}` in a `.tex` file under `paper/`, `slides/` or `shared/`
 names a ledger entry, and that every ledger entry is used at least once
 (uses inside TeX comments do not count). It prints every violation and
 exits non-zero. Run it on its own with `perl check-claims.pl` (needs Perl

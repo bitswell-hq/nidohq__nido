@@ -1,61 +1,66 @@
 \section{Related work}\label{sec:related}
 
-\paragraph{Proofs about DKIM-signed email.} The zkEmail
+\paragraph{zkEmail's recovery stack.} The zkEmail
 project~\cite{zkemail-docs,zkemail-verify,zkemail-nr} proves statements about
-DKIM-signed email in zero knowledge, with Circom circuits and a Noir library,
-and its libraries have been audited
+DKIM-signed email in zero knowledge, and its libraries have been audited
 publicly~\cite{audit-zksecurity-2024,audit-yacademy,audit-zellic-2024,audit-matterlabs-2024,audit-veridise-2024,audit-consensys-2024}.
-An email wallet built on it lets users control a contract wallet by sending
-emails, verified by a proof of the provider's signature~\cite{suegami-email-wallet}.
-Its account-recovery modules~\cite{zkemail-recovery} make email guardians of
-ERC-4337~\cite{erc4337} and ERC-7579~\cite{erc7579} smart accounts: each
-guardian is a contract whose address derives from a hash of the email
-address and an account code, a guardian approves by replying to a request
-email whose command names the account, and a weighted threshold and a delay
-apply. In the underlying SDK~\cite{zkemail-tx-builder} a relayer receives
-the user's email, generates the proof, and stores users' account codes. The
-design here differs in where trust sits: the proof is made in the user's
-browser, no operator holds the account code or the email, the email binds a
-recovery statement blinded from the provider rather than a readable command,
-and the key registry has no immediate path for a new key. It is also one
-factor inside an existing recovery protocol, with properties proven over that
-protocol's controller.
+Its email wallet~\cite{suegami-email-wallet} and account-recovery
+modules~\cite{zkemail-recovery} make email guardians of ERC-4337~\cite{erc4337}
+and ERC-7579~\cite{erc7579} accounts with a weighted threshold and a delay;
+each guardian's address derives from a hash of the email address and an
+account code, as $\Cm$ here does, and a guardian approves by replying to a
+request email whose command names the account. In its SDK~\cite{zkemail-tx-builder}
+a relayer receives the email, generates the proof and stores users' account
+codes. Its \texttt{UserOverrideableDKIMRegistry}~\cite{zkemail-user-overrideable-registry}
+pairs a main authorizer, whose key additions take effect after a fixed
+delay, with per-user keys that take effect at once and per-user revocation and
+reactivation; the contract is upgradeable by its owner, who can also replace
+the authorizer. The ideas shared with this work are the account-code
+commitment, the email guardian under a delay, and a delayed registry with a
+per-user path. What is new here: the email binds the recovery protocol's own
+statement digest, blinded from the provider, not a readable command; the
+proof is made in the user's browser, so no relayer receives the email or the
+code; the registry is immutable, its additions need a multisig threshold and
+wait 72 hours of close time after DNS attestation or 7 days without, and an
+emergency threshold revokes; the per-account pin is salted, expiring, and
+fixed with the guardian, so changing it passes the recovery protocol's own
+reconfiguration gate; the composition with an unchanged recovery protocol is
+machine-checked; and the header parser is written against a stated grammar,
+hardened per public issue class, and checked against reference
+implementations on real mail.
 
-\paragraph{Proofs about OIDC credentials.} zkLogin~\cite{zklogin}
-authenticates blockchain transactions with OpenID Connect tokens from
-existing platforms and hides the link between the off-chain and on-chain
-identity; Aptos's keyless accounts~\cite{aptos-aip61} do the same and name a
-proof of a DKIM-signed email as a possible recovery path for accounts whose
-managing application disappears. In both, the credential is the account's key
-rather than one factor among several. An OIDC path here would be a second way
-to produce the email factor, never a factor independent of the same
-provider's DKIM, since one provider controls both.
+\paragraph{Credentials from existing infrastructure.} zkLogin~\cite{zklogin}
+and Aptos's keyless accounts~\cite{aptos-aip61} make an OpenID Connect token
+the account's key, hiding the off-chain identity; Aptos names a DKIM proof as
+a possible recovery path. An OIDC path here would be a second way to produce
+the email factor, never a factor independent of the same provider's DKIM.
+DECO~\cite{deco} and zk-creds~\cite{zkcreds} likewise turn an authority's
+existing signature into a credential and inherit that authority's trust.
+KeyForge~\cite{specter-keyforge} would publish expired DKIM keys so stolen
+mail cannot be proven authentic; that turns registry and pin entries for
+those keys into forgeable keys, and the registry's retirement and revocation
+and the pin's lifetime are the levers such a policy would act on.
 
-\paragraph{Guardian and server-based recovery.} Social recovery
-wallets~\cite{buterin-social-recovery} let a majority of guardians replace
-the signing key; in Argent's wallet~\cite{argent-spec} guardians, possibly a
-paid service, trigger a recovery the owner can cancel during a security
-period; Stellar's SEP-30~\cite{sep30} has recovery servers that hold signing
-keys and authenticate the user by email or phone. These place the email
-check, and the address, with a guardian or a server; the design here keeps
-their delay and veto and removes the operator from the check.
+\paragraph{Guardian and server recovery.} Social recovery
+wallets~\cite{buterin-social-recovery} let guardians replace the signing key;
+Argent's guardians trigger a recovery the owner can cancel during a security
+period~\cite{argent-spec}; Stellar's SEP-30 servers hold signing keys and
+authenticate users by email or phone~\cite{sep30}. This design keeps their
+delay and veto and removes the operator from the check.
 
-\paragraph{Credentials from existing infrastructure.} DECO~\cite{deco}
-proves statements about TLS sessions, and zk-creds~\cite{zkcreds} builds
-anonymous credentials from existing identity documents; like email proofs,
-both turn an authority's existing signature into a credential and inherit
-that authority's trust.
-
-\paragraph{DKIM attributability.} KeyForge~\cite{specter-keyforge} proposes
-that providers publish expired signing keys so stolen mail cannot be proven
-authentic. Email proofs rely on exactly the attributability KeyForge
-removes: a provider that publishes old private keys turns every registry or
-pin entry for them into a forgeable key. The registry's retirement, grace
-and revocation rules, and the pin's bounded lifetime, are the levers such a
-policy would act on.
-
-\paragraph{Account recovery and takeover.} Email is a common recovery
-channel at large services~\cite{bonneau-recovery}, and manual hijackers who
-take over an inbox use it to lock out the owner~\cite{bursztein-hijacking}:
-the inbox thief of \S\ref{sec:threat}, and the reason email here is never
-sufficient alone and alerts reach a second channel.
+\paragraph{Recovery and notifications in usable security.} Secret questions
+are guessable and forgotten~\cite{schechter-secret-questions,bonneau-recovery};
+trustees can vouch for a user but must resist impersonators of
+that user~\cite{schechter-social-recovery}; users of recovery codes lose them
+or hold codes that no longer work~\cite{holtervennhoff-recovery-codes}; and manual hijackers who take an
+inbox use it to lock the owner out~\cite{bursztein-hijacking}, the inbox
+thief of \S\ref{sec:threat}. Notification design changes behaviour at
+scale~\cite{golla-2fa-notifications}, yet few users act on a notice of a
+malicious sign-in~\cite{markert-login-notifications}, and repeated warnings
+habituate~\cite{anderson-habituation}. These results motivate the
+email-plus-delay floor, alerts that lead with cancelling on a passkey
+device, silence on attempts that grant nothing, and a check of the recovery
+code before it is needed; they also mark A12 and the user's behaviour as the
+weakest links. Providers' sender authentication, which A1b needs, has been
+measured to fail in several submission
+paths~\cite{chen-composition-kills,shen-weak-links}.
