@@ -8,16 +8,17 @@
 //   compiled bytecode is the artifact's) and `bb prove --scheme ultra_honk
 //   --oracle_hash keccak --zk` (Perch's pinned bb) on the artifact, every
 //   proof checked with `bb verify`; all cores, one thread
-//   (`HARDWARE_CONCURRENCY=1`), and the efficiency cores.
+//   (`HARDWARE_CONCURRENCY=1`), and the slower core tier.
 // - Node: packages/email-recovery/scripts/measure-bbjs.mjs (noir_js and
 //   bb.js 0.87.0, the browser's prover) in a fresh process per run; one
-//   thread and one per logical CPU, and the efficiency cores.
+//   thread and one per logical CPU, and the slower core tier.
 // - Browser: the runs research/email-recovery/eval/measure-browser.mjs
 //   recorded in browser-prover.json (the wallet's prover worker in Chrome).
 //
-// "Efficiency cores" runs the process under macOS's background QoS clamp
-// (`taskpolicy -c background`), which confines its threads to the
-// efficiency cores: a desktop's slower cores, not a phone.
+// The slower core tier runs the process under macOS's background QoS clamp
+// (`taskpolicy -c background`), which confines its threads to the lower of
+// the machine's two core tiers (`hw.perflevel1`, named as macOS names it):
+// a desktop's slower cores, not a phone's.
 //
 // Every configuration runs RUNS times (default 5); the table gives the
 // median and the range. Writes research/email-recovery/eval/results/proving.json.
@@ -50,8 +51,8 @@ const sysctl = (k) => {
 const machine = {
   cpu: sysctl('machdep.cpu.brand_string'),
   logical_cpus: N,
-  performance_cores: Number(sysctl('hw.perflevel0.physicalcpu')) || null,
-  efficiency_cores: Number(sysctl('hw.perflevel1.physicalcpu')) || null,
+  // The core tiers as macOS names them, fastest first.
+  core_tiers: [0, 1].map((i) => ({ name: sysctl(`hw.perflevel${i}.name`), logical: Number(sysctl(`hw.perflevel${i}.logicalcpu`)) || null })),
   memory_gib: Math.round(Number(sysctl('hw.memsize')) / 2 ** 30),
   os: (() => {
     try {
@@ -63,6 +64,8 @@ const machine = {
   node: process.version,
   load_average_at_start: loadavg().map((x) => x.toFixed(2)).join(' '),
 };
+/** The slower tier, under background QoS, as the table names it. */
+const SLOW = `${machine.core_tiers[1].name || 'slower'}-tier cores (background QoS)`;
 
 // One circuit build.
 const compiled = JSON.parse(readFileSync(join(repo, 'circuits/email-recovery/target/recovery.json'), 'utf8'));
@@ -109,7 +112,7 @@ function native(label, { threads, background = false }) {
     execFileSync(BB, ['verify', ...SCHEME, '--zk', '-k', VK, '-p', join(out, 'proof'), '-i', join(out, 'public_inputs')], { stdio: 'ignore' });
     runs.push({ witness_ms: Math.round(w.seconds * 1000), prove_ms: Math.round(p.seconds * 1000), peak_rss_mib: Math.round(p.rss / 2 ** 20) });
   }
-  rows.push({ prover: 'native', label, threads: threads ?? N, efficiency_cores: background, runs });
+  rows.push({ prover: 'native', label, threads: threads ?? N, background_qos: background, runs });
   console.error(`${label}: ${JSON.stringify(stats(runs.map((r) => r.prove_ms)))}`);
 }
 
@@ -120,27 +123,27 @@ function node(label, { threads, background = false }) {
     const j = JSON.parse(r.stdout.trim().split('\n').at(-1));
     runs.push({ witness_ms: j.encode_ms + j.execute_ms, prove_ms: j.prove_ms, peak_rss_mib: j.peak_rss_mib });
   }
-  rows.push({ prover: 'node', label, threads, efficiency_cores: background, runs });
+  rows.push({ prover: 'node', label, threads, background_qos: background, runs });
   console.error(`${label}: ${JSON.stringify(stats(runs.map((r) => r.prove_ms)))}`);
 }
 
 native('Native bb, every core', {});
 native('Native bb, one thread', { threads: 1 });
-native('Native bb, efficiency cores, one thread', { threads: 1, background: true });
-native('Native bb, efficiency cores, four threads', { threads: 4, background: true });
+native(`Native bb, ${SLOW}, one thread`, { threads: 1, background: true });
+native(`Native bb, ${SLOW}, four threads`, { threads: 4, background: true });
 node('bb.js in Node, one thread', { threads: 1 });
 node(`bb.js in Node, ${N} threads`, { threads: N });
-node('bb.js in Node, efficiency cores, one thread', { threads: 1, background: true });
-node('bb.js in Node, efficiency cores, four threads', { threads: 4, background: true });
+node(`bb.js in Node, ${SLOW}, one thread`, { threads: 1, background: true });
+node(`bb.js in Node, ${SLOW}, four threads`, { threads: 4, background: true });
 
 // The browser's runs, as measure-browser.mjs recorded them.
 const browser = JSON.parse(readFileSync(join(repo, 'research/email-recovery/eval/browser-prover.json'), 'utf8'));
 for (const r of browser.results.filter((x) => x.cpu_throttling === 1)) {
   rows.push({
     prover: 'browser',
-    label: `${browser.browser} (headless), ${r.label === 'desktop' ? '' : 'efficiency cores, '}${r.threads === 1 ? 'one thread' : `${r.threads} threads`}`,
+    label: `${browser.browser} (headless), ${r.label === 'desktop' ? '' : `${SLOW}, `}${r.threads === 1 ? 'one thread' : `${r.threads} threads`}`,
     threads: r.threads,
-    efficiency_cores: r.label !== 'desktop',
+    background_qos: r.label !== 'desktop',
     runs: r.warm_runs.map((w) => ({ witness_ms: w.stage_ms.witness, prove_ms: w.stage_ms.proving, total_ms: w.wall_ms, bb_wasm_mib: w.bb_wasm_memory_mib })),
     peak_renderer_rss_mib: r.peak_renderer_rss_mib,
     recorded: browser.generated,
@@ -155,7 +158,7 @@ const fmt = (xs) => {
 };
 const lines = [];
 lines.push(`Generated by \`research/email-recovery/eval/proving/measure.mjs\` on ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC (browser rows: \`measure-browser.mjs\`, ${browser.generated}).`);
-lines.push(`Machine: ${machine.cpu}, ${machine.logical_cpus} logical CPUs (${machine.performance_cores} performance and ${machine.efficiency_cores} efficiency cores), ${machine.memory_gib} GiB, ${machine.os}, Node ${machine.node}; load average ${machine.load_average_at_start} at the start and ${machine.load_average_at_end} at the end; browser rows on the same machine, load average ${browser.host.load_average_at_start} at their start.`);
+lines.push(`Machine: ${machine.cpu}, ${machine.logical_cpus} logical CPUs (${machine.core_tiers.map((t) => `${t.logical} ${t.name}`).join(' and ')}, as macOS names its core tiers), ${machine.memory_gib} GiB, ${machine.os}, Node ${machine.node}; load average ${machine.load_average_at_start} at the start and ${machine.load_average_at_end} at the end; browser rows on the same machine, load average ${browser.host.load_average_at_start} at their start.`);
 lines.push(`Circuit build: \`${circuit.artifact}\` (sha256 \`${circuit.artifact_sha256.slice(0, 16)}…\`), verification key sha256 \`${circuit.vk_sha256.slice(0, 16)}…\` (the verifier's circuit id); ${circuit.nargo}, bb ${circuit.bb}; the Gmail fixture's recovery email. Times in seconds: median (minimum to maximum) of ${RUNS} runs (browser: ${browser.warm_runs_per_configuration} warm runs).`);
 lines.push('');
 lines.push('| Prover | Threads | Witness (s) | Proving (s) | Total (s) | Peak memory | Runs |');
