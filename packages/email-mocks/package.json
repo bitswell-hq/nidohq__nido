@@ -30,6 +30,7 @@
   },
   "dependencies": {
     "@hpke/core": "^1.9.0",
+    "@stellar/stellar-xdr-json": "^23.0.0",
     "cborg": "^6.2.1"
   },
   "devDependencies": {

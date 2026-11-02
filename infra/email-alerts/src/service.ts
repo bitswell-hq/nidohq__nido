@@ -13,23 +13,36 @@
  * with backoff without holding back later events.
  *
  * **Email votes.** Perch emits no event when a guardian's vote is recorded
- * below quorum. The vault keeps, sealed, the open attempts of accounts with
- * an email-guardian contact (from `attempt_begun`); each poll the host
- * reads those attempts with the controller's `attempt` view and, when the
- * account's email guardian (the contract running the email guardian's
- * wasm) is among the votes of a still-collecting attempt, has the vault
- * alert every channel. The alert follows the vote by at most one polling
- * interval plus the reads.
+ * below quorum, nor for an approval of a cancellation or a change. Each
+ * poll the host also reads the next page of every transaction on the
+ * network (`getTransactions`, stellar-xdr JSON, with its own cursor; no
+ * filter exists, so the query singles out nothing) and finds the votes a
+ * transaction authorizes for a contract guardian at the controller
+ * (`votes.ts`). A vote by an email guardian (a contract running the email
+ * guardian's wasm, whose configuration names its account) of an account the
+ * vault holds contacts for is alerted on every channel: on a collecting
+ * attempt (`email_vote_recorded`), on a cancellation
+ * (`email_cancel_recorded`), on a change (`email_change_recorded`). A vote
+ * that authorizes its attempt is alerted as `attempt_authorized`. Votes are
+ * found per vote: how many attempts are open does not matter. The alert
+ * follows the vote by at most one polling interval plus the reads.
+ *
+ * **Many attempts.** For `attempt_begun` on an account with contacts the
+ * host reads the attempt's evidence deadline and has the vault count it;
+ * while more than `MANY_OPEN_ATTEMPTS` are open the vault sends
+ * `attempts_many` (spec §10).
  *
  * **Reconciliation.** On its first poll, every [`RECONCILE_EVERY_MS`], and
- * after the RPC refuses its cursor (the events aged out of retention), the
- * host reads, for each account the vault holds contacts for, the
- * controller's persistent state: the authorized attempt (`activity_gate`)
- * and the latest [`RECONCILE_SCAN`] attempts. An authorized attempt, and an
- * email vote on a collecting one, are alerted under the same delivery id
- * the event stream uses, so nothing is sent twice; collecting attempts are
- * watched. A completed recovery is not re-alerted: reconciliation restores
- * the alerts that can still change the outcome.
+ * after the RPC refuses a cursor (events or transactions aged out of
+ * retention), the host reads, for each account the vault holds contacts
+ * for, the controller's persistent state: the authorized attempt
+ * (`activity_gate`) and every attempt still open, paging down from the
+ * newest until one is gone, of another epoch, or past its evidence deadline
+ * (Perch's evidence windows close in id order within an epoch). An
+ * authorized attempt, and email votes on open ones, are alerted under the
+ * same delivery ids the stream uses, so nothing is sent twice; open
+ * attempts are counted. A completed recovery is not re-alerted:
+ * reconciliation restores the alerts that can still change the outcome.
  *
  * **Lag alarm.** A watcher whose cursor is more than `lagAlarmLedgers`
  * behind the chain, or whose cursor the RPC refused, raises an alarm
@@ -37,16 +50,18 @@
  * raise one; `GET /v1/health` reports the last poll for an outside monitor.
  *
  * **Liveness.** Each poll asks the vault to probe the push subscriptions
- * that are due (at most one probe a week each).
+ * that are due (one probe a month each, by default), and `POST /v1/ack`
+ * relays a device's signed acknowledgement of one (spec §10.6).
  */
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { type AlertSubject, bytes, contractIdFromStrkey, decodeContactRequest } from '@nidohq/email-recovery';
 import type { VaultApi } from './channel.js';
 import { ALERTS, type AlertName, type PerchEvent, alertEventId, alertSubject, decodePerchEvent } from './events.js';
-import { type ChainReads, RpcError, type StellarRpc } from './rpc.js';
+import { type AttemptView, type ChainReads, RpcError, type StellarRpc } from './rpc.js';
 import { type HostState, type SerializedDispatch, loadState, saveState } from './store.js';
 import type { ChainTime, ChainView, DispatchRequest, Writes } from './vault/vault.js';
+import { type JsonTransaction, guardianVotes, writtenAttempts } from './votes.js';
 
 const { toHex, fromHex, toBase64Url, fromBase64Url } = bytes;
 
@@ -68,7 +83,7 @@ export interface ServiceConfig {
   emailOnAttemptBegun?: boolean;
   /** `attempt_begun` alerts per account: at most one per this window (ledger close time). */
   begunWindowMs?: number;
-  /** Controller reads (`chainReads`); without them, no email-vote alerts and no reconciliation. */
+  /** Controller reads (`chainReads`); without them, no email-vote alerts, no attempt count, and no reconciliation. */
   reads?: ChainReads;
   /** How often to reconcile from controller state (default [`RECONCILE_EVERY_MS`]). */
   reconcileEveryMs?: number;
@@ -80,6 +95,8 @@ export interface ServiceConfig {
   inboundLimit?: { perClient: number; windowMs: number };
   /** The client a request counts against (default: its address, IPv6 by /64). */
   clientKey?: (req: IncomingMessage) => string;
+  /** `POST /v1/ack` acknowledgements per client and window (default [`ACK_LIMIT`]). */
+  ackLimit?: { perClient: number; windowMs: number };
   pageLimit?: number;
   retryBaseMs?: number;
   now?: () => number;
@@ -92,8 +109,9 @@ export const INBOUND_KEEP_MS = 24 * 3600_000;
 
 /** How often the host reconciles from controller state. */
 export const RECONCILE_EVERY_MS = 6 * 3600_000;
-/** How many of an account's latest attempts reconciliation reads. */
-export const RECONCILE_SCAN = 32;
+
+/** Probe acknowledgements one client may post per hour: a device posts one a month. */
+export const ACK_LIMIT = { perClient: 30, windowMs: 3600_000 } as const;
 
 /**
  * Sealed-inbound registrations one client may make per hour. A recovery or
@@ -149,7 +167,9 @@ export interface PollReport {
   retriesQueued: number;
   retriesDone: number;
   matured: { applied: string[]; dropped: string[]; postponed: string[] };
-  /** Email-vote alerts dispatched. */
+  /** Transactions read for votes. */
+  transactions: number;
+  /** Email-vote alerts dispatched (on attempts, cancellations and changes). */
   votes: number;
   /** Accounts reconciled from controller state, and the alerts that found (`undefined` when not run). */
   reconciled?: { accounts: number; found: number };
@@ -157,9 +177,9 @@ export interface PollReport {
   lagLedgers: number;
   /** Why the watcher raised an alarm this poll. */
   alarm?: string;
-  /** Push subscriptions probed, and how many of them were gone. */
-  probes: { probed: number; lapsed: number };
-  /** Event id → ms between reading its page (or, for an email vote, its attempt) and the vault's answer. */
+  /** Push subscriptions probed, how many of them were gone, and how many became unacknowledged. */
+  probes: { probed: number; lapsed: number; unacknowledged: number };
+  /** Delivery id → ms between reading its page (events or transactions) and the vault's answer. */
   latencyMs: Record<string, number>;
 }
 
@@ -217,8 +237,13 @@ export class AlertService {
   private readonly log: (line: string) => void;
   private readonly now: () => number;
   private readonly inboundLimiter: WindowLimiter;
+  private readonly ackLimiter: WindowLimiter;
   /** Guardian address → whether it is an email guardian (its wasm cannot change). */
   private readonly guardianKinds = new Map<string, boolean>();
+  /** Email guardian → the account its configuration names, or `null` when it names another controller (immutable). */
+  private readonly guardianAccounts = new Map<string, string | null>();
+  /** Accounts to reconcile on the next poll whatever their attempt count: a vote was seen that the meta did not place. */
+  private readonly unplaced = new Set<string>();
   /** When reconciliation last ran (ms), and each account's `next_attempt_id` then. */
   private reconciledAt = 0;
   private readonly reconciledNext = new Map<string, bigint>();
@@ -235,6 +260,8 @@ export class AlertService {
     this.now = cfg.now ?? Date.now;
     const limit = cfg.inboundLimit ?? INBOUND_LIMIT;
     this.inboundLimiter = new WindowLimiter(limit.perClient, limit.windowMs, this.now);
+    const acks = cfg.ackLimit ?? ACK_LIMIT;
+    this.ackLimiter = new WindowLimiter(acks.perClient, acks.windowMs, this.now);
   }
 
   private persist(writes?: Writes): void {
@@ -273,11 +300,24 @@ export class AlertService {
     }
   }
 
-  /** The dispatch for `ev`, or why there is none. */
-  private plan(ev: PerchEvent): DispatchRequest | 'none' | 'suppressed' {
+  /**
+   * The dispatch for `ev`, or why there is none. `attempt_begun` is
+   * counted only for an account with contacts (`contacts`), with the
+   * attempt's evidence deadline read from the controller.
+   */
+  private async plan(ev: PerchEvent, contacts: Set<string>): Promise<DispatchRequest | 'none' | 'suppressed'> {
     let cls = ALERTS[ev.name];
-    if (cls === 'watch' && this.cfg.emailOnAttemptBegun) cls = 'rate-limited';
     if (cls === 'none' || ev.name === 'attempt_invalidated') return 'none';
+    let open: DispatchRequest['open'];
+    if (ev.name === 'attempt_begun') {
+      const reads = this.cfg.reads;
+      if (reads && contacts.has(ev.accountStrkey)) {
+        const view = await reads.attempt(ev.accountStrkey, BigInt(ev.data.attempt_id as bigint)).catch(() => undefined);
+        if (view) open = { until: view.evidenceDeadline, ledger: this.state.latestLedger };
+      }
+      if (this.cfg.emailOnAttemptBegun) cls = 'rate-limited';
+      else if (!open) return 'none';
+    }
     let suppressed: number | undefined;
     if (cls === 'rate-limited') {
       const window = this.cfg.begunWindowMs ?? 24 * 3600_000;
@@ -298,6 +338,7 @@ export class AlertService {
       account: ev.account,
       subject,
       ...(suppressed !== undefined ? { suppressed } : {}),
+      ...(open ? { open } : {}),
     };
   }
 
@@ -321,9 +362,10 @@ export class AlertService {
         retriesQueued: 0,
         retriesDone: 0,
         matured: { applied: [], dropped: [], postponed: [] },
+        transactions: 0,
         votes: 0,
         lagLedgers: 0,
-        probes: { probed: 0, lapsed: 0 },
+        probes: { probed: 0, lapsed: 0, unacknowledged: 0 },
         latencyMs: {},
       };
       const from = this.state.cursor ? { cursor: this.state.cursor } : { startLedger: this.state.startLedger };
@@ -339,14 +381,17 @@ export class AlertService {
         report.alarm = this.raise(`events aged out of RPC retention (${e.message}); resuming at ledger ${health.oldestLedger} and reconciling from controller state`);
         this.state.cursor = undefined;
         this.state.startLedger = health.oldestLedger;
+        // The transactions of the same gap aged out with the events: one alarm, one restart.
+        this.state.txCursor = undefined;
+        this.state.txStartLedger = health.oldestLedger;
         this.state.handled = [];
         this.state.latestLedger = Math.max(this.state.latestLedger, health.latestLedger);
         this.persist();
-        this.reconciledAt = 0;
-        this.reconciledNext.clear();
+        this.forceReconcile();
         await this.afterEvents(report);
         return report;
       }
+      const contacts = new Set(this.cfg.reads ? await this.vault.accounts() : []);
       const readAt = performance.now();
       this.state.latestLedger = Math.max(this.state.latestLedger, page.latestLedger);
       this.state.latestCloseTime = Math.max(this.state.latestCloseTime ?? 0, Number(page.latestLedgerCloseTime ?? 0));
@@ -357,7 +402,7 @@ export class AlertService {
         const ev = decodePerchEvent(raw);
         if (ev) {
           this.track(ev);
-          const plan = this.plan(ev);
+          const plan = await this.plan(ev, contacts);
           if (plan === 'suppressed') report.suppressed++;
           if (typeof plan === 'object') {
             const r = await this.vault.dispatch(plan);
@@ -384,7 +429,8 @@ export class AlertService {
       // A page can be short without reaching the chain's head: one request
       // scans a bounded ledger range.
       const cursorLedger = Number(BigInt(page.cursor.slice(0, 19)) >> 32n);
-      report.caughtUp = page.events.length < (this.cfg.pageLimit ?? 200) && cursorLedger >= page.latestLedger;
+      const votesCaughtUp = await this.scanVotes(report, contacts);
+      report.caughtUp = page.events.length < (this.cfg.pageLimit ?? 200) && cursorLedger >= page.latestLedger && votesCaughtUp;
       report.lagLedgers = Math.max(0, page.latestLedger - cursorLedger);
       if (report.lagLedgers > (this.cfg.lagAlarmLedgers ?? 720)) {
         // One alarm per episode: a watcher catching up stays behind for several polls.
@@ -398,6 +444,97 @@ export class AlertService {
     });
   }
 
+  /** Reconcile every account on the next poll, from scratch. */
+  private forceReconcile(): void {
+    this.reconciledAt = 0;
+    this.reconciledNext.clear();
+  }
+
+  /**
+   * One page of every transaction since the transaction cursor: alert each
+   * email guardian's vote at the controller for an account with contacts.
+   * `true` when the page reached the chain's latest ledger.
+   */
+  private async scanVotes(report: PollReport, contacts: Set<string>): Promise<boolean> {
+    const reads = this.cfg.reads;
+    if (!reads) return true;
+    const limit = Math.min(this.cfg.pageLimit ?? 200, 200);
+    const from = this.state.txCursor ? { cursor: this.state.txCursor } : { startLedger: this.state.txStartLedger ?? this.state.startLedger };
+    let page;
+    try {
+      page = await this.cfg.rpc.getTransactions(from, limit);
+    } catch (e) {
+      if (!(e instanceof RpcError && e.code === -32600)) throw e;
+      const health = await this.cfg.rpc.call<{ oldestLedger: number }>('getHealth', {});
+      report.alarm = this.raise(`transactions aged out of RPC retention (${e.message}); resuming at ledger ${health.oldestLedger} and reconciling from controller state`);
+      this.state.txCursor = undefined;
+      this.state.txStartLedger = health.oldestLedger;
+      this.persist();
+      this.forceReconcile();
+      return false;
+    }
+    const readAt = performance.now();
+    for (const tx of page.transactions) {
+      report.transactions++;
+      await this.votesIn(report, tx, contacts, readAt);
+    }
+    this.state.txCursor = page.cursor;
+    this.persist();
+    return page.transactions.length < limit;
+  }
+
+  /** The account an email guardian belongs to at this controller, or `undefined` for any other guardian. */
+  private async emailGuardianAccount(reads: ChainReads, guardian: string): Promise<string | undefined> {
+    if (!(await this.emailGuardian(reads, guardian))) return undefined;
+    let account = this.guardianAccounts.get(guardian);
+    if (account === undefined) {
+      const c = await reads.guardianAccount(guardian);
+      account = c.controller === this.cfg.controller ? c.account : null;
+      this.guardianAccounts.set(guardian, account);
+    }
+    return account ?? undefined;
+  }
+
+  /** Alert the email-guardian votes one transaction carries. */
+  private async votesIn(report: PollReport, tx: JsonTransaction, contacts: Set<string>, readAt: number): Promise<void> {
+    const reads = this.cfg.reads!;
+    for (const vote of guardianVotes(tx, this.cfg.controller)) {
+      let account;
+      try {
+        account = await this.emailGuardianAccount(reads, vote.guardian);
+      } catch (e) {
+        this.log(`vote in ${tx.txHash}: guardian ${vote.guardian} could not be read (${(e as Error).message}); reconciling`);
+        this.forceReconcile();
+        continue;
+      }
+      if (!account || !contacts.has(account)) continue;
+      if (vote.fn === 'approve_change') {
+        const subject: AlertSubject = { kind: 'change', digest: fromHex(vote.digest) };
+        await this.dispatchFound(report, this.request('email_change_recorded', account, subject), readAt);
+        report.votes++;
+        continue;
+      }
+      const attempts = writtenAttempts(tx.resultMetaJson, this.cfg.controller).filter(
+        (a) => a.guardians.includes(vote.guardian) || a.cancelGuardians.includes(vote.guardian),
+      );
+      if (!attempts.length) {
+        this.log(`vote in ${tx.txHash} by the email guardian of ${account}: no attempt in its meta; reconciling the account`);
+        this.unplaced.add(account);
+        continue;
+      }
+      for (const a of attempts) {
+        if (a.cancelGuardians.includes(vote.guardian)) {
+          await this.dispatchFound(report, this.found('email_cancel_recorded', 'required', account, a.id), readAt);
+          report.votes++;
+        }
+        if (a.guardians.includes(vote.guardian) && a.state === 'Collecting') {
+          await this.dispatchFound(report, this.found('email_vote_recorded', 'required', account, a.id), readAt);
+          report.votes++;
+        }
+      }
+    }
+  }
+
   /** Raise an alarm: the log, `onAlarm`, and `GET /v1/health`. */
   private raise(reason: string): string {
     this.alarm = { at: this.now(), reason };
@@ -406,7 +543,7 @@ export class AlertService {
     return reason;
   }
 
-  /** Retries, email votes, reconciliation, probes, and contact changes: every poll, after its events. */
+  /** Retries, reconciliation, probes, and contact changes: every poll, after its events and transactions. */
   private async afterEvents(report: PollReport): Promise<void> {
     for (const [id, r] of Object.entries(this.state.retries)) {
       if (r.nextAt > this.now()) continue;
@@ -424,11 +561,14 @@ export class AlertService {
     if (this.cfg.reads && this.now() - this.reconciledAt >= (this.cfg.reconcileEveryMs ?? RECONCILE_EVERY_MS)) {
       report.reconciled = await this.reconcile(this.cfg.reads);
       this.reconciledAt = this.now();
+    } else if (this.cfg.reads && this.unplaced.size) {
+      for (const a of this.unplaced) this.reconciledNext.delete(a);
+      report.reconciled = await this.reconcile(this.cfg.reads, [...this.unplaced]);
     }
-    await this.watchVotes(report);
+    this.unplaced.clear();
     const probes = await this.vault.probe();
-    report.probes = { probed: probes.probed, lapsed: probes.lapsed };
-    if (probes.probed) this.log(`push probes: ${probes.probed} sent, ${probes.lapsed} gone`);
+    report.probes = { probed: probes.probed, lapsed: probes.lapsed, unacknowledged: probes.unacknowledged };
+    if (probes.probed) this.log(`push probes: ${probes.probed} sent, ${probes.lapsed} gone, ${probes.unacknowledged} newly unacknowledged`);
     this.persist(probes.writes);
 
     const due = await this.vault.due(this.chainTime());
@@ -465,8 +605,7 @@ export class AlertService {
     this.persist(r.writes);
   }
 
-  private found(name: AlertName, cls: DispatchRequest['class'], account: string, attemptId: bigint): DispatchRequest {
-    const subject: AlertSubject = { kind: 'attempt', attemptId };
+  private request(name: AlertName, account: string, subject: AlertSubject, cls: DispatchRequest['class'] = 'required'): DispatchRequest {
     return {
       eventId: alertEventId(name, account, subject),
       name,
@@ -477,48 +616,26 @@ export class AlertService {
     };
   }
 
-  /** Whether the email guardian is among an attempt's votes. */
-  private async hasEmailVote(reads: ChainReads, guardians: string[]): Promise<boolean> {
+  private found(name: AlertName, cls: DispatchRequest['class'], account: string, attemptId: bigint): DispatchRequest {
+    return this.request(name, account, { kind: 'attempt', attemptId }, cls);
+  }
+
+  /** The account's email guardian among `guardians`, if one voted. */
+  private async emailVoter(reads: ChainReads, guardians: string[]): Promise<boolean> {
     for (const g of guardians) if (await this.emailGuardian(reads, g)) return true;
     return false;
   }
 
   /**
-   * Read each watched attempt: stop watching one that left `Collecting` or
-   * whose evidence deadline passed; alert one whose votes include the email
-   * guardian.
+   * Alert from controller state what the stream may have missed, for every
+   * account with contacts (or the `only` ones): its authorized attempt and
+   * an email vote to cancel it, and, on every open attempt, an email vote
+   * and an email vote to cancel; open attempts are counted.
    */
-  private async watchVotes(report: PollReport): Promise<void> {
-    const reads = this.cfg.reads;
-    if (!reads) return;
-    for (const { account, attemptId } of await this.vault.watched()) {
-      const readAt = performance.now();
-      let view;
-      try {
-        view = await reads.attempt(account, BigInt(attemptId));
-      } catch (e) {
-        this.log(`watch ${account} attempt ${attemptId}: read failed (${(e as Error).message}); next poll`);
-        continue;
-      }
-      if (!view || view.state !== 'Collecting' || this.state.latestLedger > view.evidenceDeadline) {
-        this.persist((await this.vault.unwatch(account, attemptId)).writes);
-        continue;
-      }
-      if (!(await this.hasEmailVote(reads, view.guardians))) continue;
-      await this.dispatchFound(report, this.found('email_vote_recorded', 'required', account, BigInt(attemptId)), readAt);
-      report.votes++;
-    }
-  }
-
-  /**
-   * Alert from controller state what the event stream may have missed, for
-   * every account with contacts: its authorized attempt, and email votes on
-   * its collecting attempts, which are watched from then on.
-   */
-  private async reconcile(reads: ChainReads): Promise<{ accounts: number; found: number }> {
+  private async reconcile(reads: ChainReads, only?: string[]): Promise<{ accounts: number; found: number }> {
     const report = { accounts: 0, found: 0 };
     const sink = { latencyMs: {} as Record<string, number>, retriesQueued: 0 } as PollReport;
-    for (const account of await this.vault.accounts()) {
+    for (const account of only ?? (await this.vault.accounts())) {
       const readAt = performance.now();
       try {
         report.accounts++;
@@ -526,18 +643,19 @@ export class AlertService {
         if (authorized !== undefined) {
           await this.dispatchFound(sink, this.found('attempt_authorized', 'required', account, authorized), readAt);
           report.found++;
+          const view = await reads.attempt(account, authorized);
+          if (view && (await this.emailVoter(reads, view.cancelGuardians))) {
+            await this.dispatchFound(sink, this.found('email_cancel_recorded', 'required', account, authorized), readAt);
+            report.found++;
+          }
         }
         const next = await reads.nextAttemptId(account);
         if (this.reconciledNext.get(account) === next) continue;
-        const oldest = next > BigInt(RECONCILE_SCAN) ? next - BigInt(RECONCILE_SCAN) : 0n;
-        for (let id = next - 1n; id >= oldest; id--) {
+        const epoch = await reads.epoch(account);
+        for (let id = next - 1n; id >= 0n; id--) {
           const view = await reads.attempt(account, id);
-          if (!view || view.state !== 'Collecting' || this.state.latestLedger > view.evidenceDeadline) continue;
-          await this.dispatchFound(sink, this.found('attempt_begun', 'watch', account, id), readAt);
-          if (await this.hasEmailVote(reads, view.guardians)) {
-            await this.dispatchFound(sink, this.found('email_vote_recorded', 'required', account, id), readAt);
-            report.found++;
-          }
+          if (!view || view.epoch !== epoch || (view.state === 'Collecting' && this.state.latestLedger > view.evidenceDeadline)) break;
+          report.found += await this.reconcileAttempt(reads, sink, account, id, view, readAt);
         }
         this.reconciledNext.set(account, next);
       } catch (e) {
@@ -546,6 +664,23 @@ export class AlertService {
     }
     this.log(`reconciled ${report.accounts} accounts from controller state: ${report.found} alerts found (each sent at most once)`);
     return report;
+  }
+
+  /** One open attempt reconciliation read: count it, and alert its email votes. */
+  private async reconcileAttempt(reads: ChainReads, sink: PollReport, account: string, id: bigint, view: AttemptView, readAt: number): Promise<number> {
+    if (view.state !== 'Collecting') return 0;
+    let found = 0;
+    const counted = this.found('attempt_begun', 'count', account, id);
+    await this.dispatchFound(sink, { ...counted, open: { until: view.evidenceDeadline, ledger: this.state.latestLedger } }, readAt);
+    if (await this.emailVoter(reads, view.guardians)) {
+      await this.dispatchFound(sink, this.found('email_vote_recorded', 'required', account, id), readAt);
+      found++;
+    }
+    if (await this.emailVoter(reads, view.cancelGuardians)) {
+      await this.dispatchFound(sink, this.found('email_cancel_recorded', 'required', account, id), readAt);
+      found++;
+    }
+    return found;
   }
 
   /** Poll until caught up with the chain's latest ledger. */
@@ -614,11 +749,22 @@ export class AlertService {
     saveState(this.cfg.statePath, this.state);
   }
 
+  /** Relay a device's acknowledgement of a probe to the vault (spec §10.6). */
+  ack(probeId: Uint8Array, signature: Uint8Array): Promise<{ ok: boolean }> {
+    return this.lock.run(async () => {
+      const { ok, writes } = await this.vault.ack(probeId, signature);
+      this.persist(writes);
+      return { ok };
+    });
+  }
+
   /**
    * `GET /v1/attestation?nonce=`, `POST /v1/nonce`, `POST /v1/contact`,
    * `POST /v1/inbound` (rate-limited per client, [`INBOUND_LIMIT`]),
-   * `GET /v1/inbound/<id>`, `GET /v1/health`. Browsers on an allowed origin
-   * may call it (CORS).
+   * `GET /v1/inbound/<id>`, `POST /v1/ack` (`{probe, signature}`, base64url;
+   * rate-limited per client, [`ACK_LIMIT`]), `GET /v1/health`. Browsers on an
+   * allowed origin may call it (CORS); the wallet's service worker posts
+   * acknowledgements from the wallet's origin.
    */
   async listen(port = 0): Promise<string> {
     this.server = createServer(async (req, res) => {
@@ -658,6 +804,16 @@ export class AlertService {
           const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { envelope?: string };
           const result = await this.inbound(fromBase64Url(String(body.envelope ?? '')));
           return reply(result.ok ? 200 : 409, result);
+        }
+        if (req.method === 'POST' && url.pathname === '/v1/ack') {
+          const client = this.cfg.clientKey?.(req) ?? clientPrefix(req.socket.remoteAddress ?? '');
+          if (this.ackLimiter.take(client) > 0) return reply(429, { ok: false, error: 'too many acknowledgements from this network' });
+          const chunks: Buffer[] = [];
+          for await (const c of req) chunks.push(c as Buffer);
+          if (Buffer.concat(chunks).length > 1024) return reply(413, { error: 'request too large' });
+          const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { probe?: string; signature?: string };
+          const result = await this.ack(fromBase64Url(String(body.probe ?? '')), fromBase64Url(String(body.signature ?? '')));
+          return reply(result.ok ? 200 : 404, result);
         }
         const inboxPath = /^\/v1\/inbound\/([0-9a-f]{32})$/.exec(url.pathname);
         if (req.method === 'GET' && inboxPath) {

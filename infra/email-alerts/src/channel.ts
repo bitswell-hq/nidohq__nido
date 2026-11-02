@@ -41,11 +41,10 @@ export interface VaultApi {
   inbound(envelope: Uint8Array): Promise<InboundResult>;
   /** Accounts with an active contact, to reconcile from controller state (spec §10.2). */
   accounts(): Promise<string[]>;
-  /** The attempts to read for an email vote (spec §10.2). */
-  watched(): Promise<{ account: string; attemptId: string }[]>;
-  unwatch(account: string, attemptId: string): Promise<{ writes: Writes }>;
   /** Probe the push subscriptions that are due (spec §10.6). */
-  probe(): Promise<{ probed: number; lapsed: number; writes: Writes }>;
+  probe(): Promise<{ probed: number; lapsed: number; unacknowledged: number; writes: Writes }>;
+  /** A device's signed acknowledgement of a probe (spec §10.6). */
+  ack(probeId: Uint8Array, signature: Uint8Array): Promise<{ ok: boolean; writes: Writes }>;
   close(): Promise<void>;
 }
 
@@ -75,14 +74,11 @@ export class InProcessVault implements VaultApi {
   async accounts() {
     return this.vault.accounts();
   }
-  async watched() {
-    return this.vault.watched();
-  }
-  unwatch(account: string, attemptId: string) {
-    return this.vault.unwatch(account, attemptId);
-  }
   probe() {
     return this.vault.probe();
+  }
+  ack(probeId: Uint8Array, signature: Uint8Array) {
+    return this.vault.ack(probeId, signature);
   }
   async close() {}
 }
@@ -165,14 +161,11 @@ export class ProcessVault implements VaultApi {
   accounts() {
     return this.request('accounts', {}) as Promise<string[]>;
   }
-  watched() {
-    return this.request('watched', {}) as Promise<{ account: string; attemptId: string }[]>;
-  }
-  unwatch(account: string, attemptId: string) {
-    return this.request('unwatch', { account, attemptId }) as Promise<{ writes: Writes }>;
-  }
   probe() {
-    return this.request('probe', {}) as Promise<{ probed: number; lapsed: number; writes: Writes }>;
+    return this.request('probe', {}) as Promise<{ probed: number; lapsed: number; unacknowledged: number; writes: Writes }>;
+  }
+  ack(probeId: Uint8Array, signature: Uint8Array) {
+    return this.request('ack', { probeId, signature }) as Promise<{ ok: boolean; writes: Writes }>;
   }
   /**
    * Mail for `RECOVERY_INBOX`, handed to the vault's MX. In a deployment the

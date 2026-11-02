@@ -198,11 +198,11 @@
 \begin{frame}{Alerts, and the privacy claim's conditions}
   \small
   \begin{itemize}
-    \item From Perch's events and state: an authorized attempt, and an email
-      vote below quorum, on every channel; opening an attempt alerts
-      nothing\claims{alert-code,compromised-inbox-alerted}.
-    \item Web Push to a passkey device required, probed weekly; a lapse is
-      shown and blocks keeping the email helper\claim{wallet-second-alert-channel}.
+    \item From Perch's events, the votes' transactions and state: an
+      authorized attempt, and an email vote below quorum, on every channel;
+      opening an attempt alerts nothing\claims{alert-code,compromised-inbox-alerted}.
+    \item Web Push to a passkey device required, probed monthly for a signed
+      tap; with no device live, keeping the email helper is blocked\claim{wallet-second-alert-channel}.
     \item Vault key 2-of-3; enclave images after a 14-day public
       timelock\claim{vault-custody}.
     \item Mocked alert path: no server-side record holds the
@@ -317,13 +317,13 @@
     \end{column}
     \begin{column}{0.48\textwidth}
       \footnotesize
-      68 rows, each with its expected outcome: 65 on a local network, 3 on
+      73 rows, each with its expected outcome: 70 on a local network, 3 on
       the test host\claims{network-attack-suite,registry-timelock-attacks}.\\[4pt]
       Thief with the code, email plus delay: deletes the alert emails; the
       push reaches the owner, who cancels; a missed event is found by
       reconciliation\claim{compromised-inbox-alerted}.\\[4pt]
       Residual: a phished user with no device; a lapsed push.\\[4pt]
-      No address or code in 213 transactions\claim{privacy-no-address-on-chain}.
+      No address or code in 263 transactions\claim{privacy-no-address-on-chain}.
     \end{column}
   \end{columns}
 \end{frame}
@@ -337,13 +337,13 @@
     Settings & SDK snapshot & mainnet's & testnet's \\
     Instructions, metered (M) & 131.2 & 121.6 & 121.6 \\
     Transaction (bytes) & 18{,}148 & 18{,}080 & 18{,}080 \\
-    Fee (stroops) & 178{,}196 & 83{,}125--83{,}155 & 82{,}424--82{,}442 \\
+    Fee (stroops) & 178{,}196 & 83{,}125--83{,}153 & 82{,}424--82{,}442 \\
     \bottomrule
   \end{tabular}
   \par\smallskip{\footnotesize\claims{onchain-verification-cost,network-verification-cost,testnet-email-recovery}}
   \par\medskip
   \begin{itemize}\footnotesize
-    \item Mainnet projection: 83{,}150 for the Gmail vote: 37{,}971 compute,
+    \item Mainnet projection: 83{,}148 for the Gmail vote: 37{,}969 compute,
       36{,}419 history (an 18\,KB envelope), 2{,}049 rent\claim{fee-attribution}.
     \item The test host's SDK prices with an old fee snapshot; at mainnet's
       settings the same transaction is 82{,}530\claim{onchain-verification-cost}.

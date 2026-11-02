@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120" aria-label="Nido security alert">
+  <rect width="120" height="120" rx="26" fill="#B3261E" />
+  <path d="M60 22 L102 96 H18 Z" fill="none" stroke="#FFFFFF" stroke-width="8" stroke-linejoin="round" />
+  <rect x="55" y="48" width="10" height="26" rx="4" fill="#FFFFFF" />
+  <circle cx="60" cy="84" r="5.5" fill="#FFFFFF" />
+</svg>

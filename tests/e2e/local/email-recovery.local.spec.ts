@@ -173,8 +173,10 @@ test.describe('@local email recovery', () => {
     await owner.page.goto(`http://${host}/security/recovery/email/`, { waitUntil: 'networkidle' });
     const kit = (await owner.page.locator('[data-kit-code]').textContent({ timeout: 60_000 }))!.trim();
     expect(kit.replace(/ /g, '')).toMatch(/^[A-Z2-7]{26}$/);
-    // Saving is shown by typing two groups of the code back.
+    // Saving is shown by typing two groups of the code back, once the code is off the screen.
     await expect(owner.page.getByRole('button', { name: 'Continue' })).toBeDisabled();
+    await owner.page.getByRole('button', { name: 'I saved it: check it' }).click();
+    await expect(owner.page.locator('[data-kit-code]')).toHaveText('');
     for (const name of ['kit-group-a', 'kit-group-b']) {
       const input = owner.page.locator(`[name="${name}"]`);
       await input.fill(kit.split(' ')[Number(await input.getAttribute('data-kit-group'))]!);

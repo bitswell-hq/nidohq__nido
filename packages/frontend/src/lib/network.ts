@@ -25,6 +25,9 @@ const localNetwork = (() => {
   return JSON.parse(raw) as { passphrase: string; rpc: string; friendbot: string };
 })();
 
+/** Whether this build runs against a local network (`PUBLIC_STELLAR_LOCAL_NETWORK`). */
+export const IS_LOCAL_NETWORK = localNetwork !== undefined;
+
 export const NETWORK_PASSPHRASE =
   NETWORK_NAME === "mainnet" ? Networks.PUBLIC : (localNetwork?.passphrase ?? Networks.TESTNET);
 export const RPC_URL =

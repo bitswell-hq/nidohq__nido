@@ -205,7 +205,7 @@ export class Wallet {
         address,
         accountCode: this.accountCode,
         emailGuardian: opts.emailGuardian ?? true,
-        ...(sub ? { push: sub } : {}),
+        ...(sub ? { push: sub, deviceKey: this.device.deviceKey } : {}),
         purposes: PURPOSE_SECURITY_ALERTS,
         consentVersion: 1,
         allowLoopbackPush: true,
@@ -225,11 +225,11 @@ export class Wallet {
     return this.api.contact(encodeContactRequest(prepared.finish({ publicKey: this.passkey.publicKey, ...this.passkey.assert(prepared.challenge) })));
   }
 
-  /** Give contact `id` a new subscription from `device` (a passkey-authorized `push`). */
+  /** Add `device`'s subscription to contact `id` (a passkey-authorized `push`). */
   async pushUpdate(id: Uint8Array, device: PushUserAgentMock): Promise<ContactResult> {
     const vault = this.vault ?? (await this.attest());
     const sub = device.subscribe(vault.vapid);
-    const req = pushUpdateRequest(this.w.fixture.account, id, sub, { allowLoopbackPush: true });
+    const req = pushUpdateRequest(this.w.fixture.account, id, sub, device.deviceKey, { allowLoopbackPush: true });
     const prepared = await prepareContactChange(vault, req as never, await this.api.nonce());
     return this.api.contact(encodeContactRequest(prepared.finish({ publicKey: this.passkey.publicKey, ...this.passkey.assert(prepared.challenge) })));
   }

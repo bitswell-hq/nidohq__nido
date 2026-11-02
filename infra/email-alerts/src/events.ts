@@ -18,14 +18,15 @@ export type PerchEventName =
 
 /**
  * `required` goes to every channel, `informational` and `rate-limited` to
- * email only; `watch` sends nothing and has the vault watch the attempt for
- * an email vote (the wallet shows open attempts itself).
+ * email only; `count` sends nothing itself and has the vault count the
+ * attempt among the account's open ones, which alerts when there are many
+ * (the wallet shows open attempts itself).
  */
-export type AlertClass = 'required' | 'informational' | 'rate-limited' | 'watch' | 'none';
+export type AlertClass = 'required' | 'informational' | 'rate-limited' | 'count' | 'none';
 
 /**
- * The §10 table. `attempt_begun` is `watch` by default; a service
- * configured with `emailOnAttemptBegun` sends it as `rate-limited`.
+ * The §10 table. `attempt_begun` is `count` by default; a service
+ * configured with `emailOnAttemptBegun` also emails it, `rate-limited`.
  */
 export const ALERTS: Record<PerchEventName, AlertClass> = {
   attempt_authorized: 'required',
@@ -33,16 +34,26 @@ export const ALERTS: Record<PerchEventName, AlertClass> = {
   epoch_advanced: 'required',
   attempt_cancelled: 'informational',
   change_evidence_recorded: 'informational',
-  attempt_begun: 'watch',
+  attempt_begun: 'count',
   attempt_invalidated: 'none',
 };
 
 /**
- * What an alert is about: a controller event, or `email_vote_recorded`, which
- * no event carries: the host finds the email guardian's vote by reading a
- * watched attempt (spec §10.2).
+ * What an alert is about: a controller event, or one no event carries. The
+ * host finds the email guardian's votes in the network's transactions
+ * (spec §10.2): on an attempt that is still collecting
+ * (`email_vote_recorded`), on an attempt's cancellation
+ * (`email_cancel_recorded`), and on a change to the recovery settings or
+ * an upgrade (`email_change_recorded`). The vault itself raises
+ * `attempts_many` when an account has more open attempts than
+ * `MANY_OPEN_ATTEMPTS`.
  */
-export type AlertName = Exclude<PerchEventName, 'attempt_invalidated'> | 'email_vote_recorded';
+export type AlertName =
+  | Exclude<PerchEventName, 'attempt_invalidated'>
+  | 'email_vote_recorded'
+  | 'email_cancel_recorded'
+  | 'email_change_recorded'
+  | 'attempts_many';
 
 /** One event as Stellar RPC's `getEvents` returns it. */
 export interface RpcEvent {
@@ -115,7 +126,8 @@ export function alertSubject(ev: PerchEvent): AlertSubject {
  * reconciling controller state and the same alert from the event stream
  * are one delivery. Attempt ids and epochs never repeat per account.
  * `change_evidence_recorded`, emitted once per recorded approval of the
- * same change, keeps its RPC event id.
+ * same change, keeps its RPC event id. `email_change_recorded` is about the
+ * change's digest, which the email guardian approves at most once.
  */
 export function alertEventId(name: AlertName, account: string, subject: AlertSubject, rpcEventId?: string): string {
   if (name === 'change_evidence_recorded' && rpcEventId) return rpcEventId;

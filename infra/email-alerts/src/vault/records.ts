@@ -11,16 +11,33 @@ import { decode, encode } from 'cborg';
 export const RECORD_AAD = 'nido/email-recovery/v1/record';
 export const DELIVERIES_AAD = 'nido/email-recovery/v1/deliveries';
 
+/** One device's Web Push subscription for a contact, and its probes (spec §10.3, §10.6). */
+export interface PushDevice {
+  /** The subscription and the device key that acknowledges probes. */
+  channel: PushChannel;
+  /** When it was added (ms). */
+  addedAt: number;
+  /** The push service answered 404/410: the subscription is gone (lapsed). */
+  gone?: boolean;
+  /** When it was found gone (ms). */
+  lapsedAt?: number;
+  /** When the device last acknowledged a probe, or was added (ms). */
+  ackedAt: number;
+  /** When the next probe is due (ms). */
+  nextProbeAt: number;
+  /** The probe awaiting acknowledgement. */
+  probe?: { id: Uint8Array; sentAt: number };
+  /** Probes the push service accepted since the device last acknowledged one. */
+  unanswered: number;
+  /** Two probe intervals went unacknowledged: rule 2 treats it like lapsed until the device acknowledges again. */
+  unacknowledged?: boolean;
+}
+
 export interface Contact {
   id: Uint8Array;
   address: string;
-  push?: PushChannel;
-  /** The push service answered 404/410: the subscription is gone (lapsed). */
-  pushGone?: boolean;
-  /** When the subscription was found gone (ms). */
-  lapsedAt?: number;
-  /** When the push service last accepted a push or probe for it (ms); probes are due a week later. */
-  pushCheckedAt?: number;
+  /** The devices that receive this contact's push alerts; empty without Web Push. */
+  pushes: PushDevice[];
   kCode: Uint8Array;
   emailGuardian: boolean;
   purposes: number;
@@ -50,20 +67,24 @@ export interface PendingChange {
   authorizer: Uint8Array;
 }
 
-/** An open attempt on an account with an email-guardian contact, watched for the email guardian's vote. */
-export interface WatchedAttempt {
+/** An open attempt, counted toward the many-attempts alert. */
+export interface OpenAttempt {
   /** The attempt id, decimal. */
   attemptId: string;
-  /** When `attempt_begun` was handled (ms). */
-  since: number;
+  /** Its evidence deadline (a ledger): it no longer counts after it. */
+  until: number;
 }
 
 export interface AccountRecord {
   account: Uint8Array;
   contacts: Contact[];
   change?: PendingChange;
-  /** Attempts whose evidence the host reads for an email vote (spec §10.2). */
-  watch?: WatchedAttempt[];
+  /**
+   * The open attempts with the latest evidence deadlines, at most
+   * `MANY_OPEN_ATTEMPTS + 1`: enough to tell when more than
+   * `MANY_OPEN_ATTEMPTS` are open (spec §10).
+   */
+  open?: OpenAttempt[];
 }
 
 function seal(key: Uint8Array, aad: Uint8Array, value: unknown): Uint8Array {

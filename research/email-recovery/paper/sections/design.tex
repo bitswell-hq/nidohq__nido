@@ -254,10 +254,12 @@ each event to the vault, which finds the account's record under
 $\mathrm{HMAC}(k_\mathit{alert}, \mathit{account})$. An authorized attempt, a
 completion and a configuration change alert every channel; so does an email
 vote that leaves an attempt below quorum, which Perch emits no event for, so
-the vault watches each open attempt and the host reads it. Opening an
-attempt, which anyone can do, alerts nothing by default, so that repeated
+the host finds it in the vote's own transaction, as it finds an email vote
+to cancel or to approve a change; opening many attempts hides none. Opening
+an attempt, which anyone can do, alerts nothing by default, so that repeated
 openings cannot train users to ignore alerts~\cite{anderson-habituation};
-the wallet shows open attempts itself. An alert has generic text and no link
+more than eight open at once send one alert a day, and the wallet shows
+every open attempt itself. An alert has generic text and no link
 and carries a six-digit code keyed from $\code$, which the wallet shows for
 the attempt it knows\claim{alert-code}. The code is not an authenticator:
 whoever holds $\code$ computes it, a social engineer included, so no alert
@@ -265,10 +267,12 @@ says a matching code means nothing needs doing, and the push leads with
 cancelling\claim{phishing-defences}.
 
 When email is a recovery factor, a second channel is required: Web Push to a
-passkey device~\cite{rfc8030,rfc8291,rfc8292}. The vault probes it weekly and
-marks it lapsed when the push service no longer accepts it; the wallet then
-shows the lapse and refuses configurations that keep the email guardian
-until notifications move to a device again\claim{wallet-second-alert-channel}.
+passkey device~\cite{rfc8030,rfc8291,rfc8292}. The vault probes each device
+monthly with a notification that asks for a tap, which the device signs; a
+device that answers none of two probes is unacknowledged and one the push
+service no longer accepts is lapsed, and while no device is live the wallet
+shows it and refuses configurations that keep the email guardian; another
+device is added at once\claim{wallet-second-alert-channel}.
 A contact is registered, replaced or removed only with an assertion by an
 administrative passkey~\cite{webauthn3}; a replacement or removal takes
 effect after 14 days of close time, longer than the 7-day minimum delay,

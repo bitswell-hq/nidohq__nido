@@ -47,16 +47,17 @@ import {
 import { NETWORK_PASSPHRASE } from '../network.js';
 import { busy, card, collectCondition, el, errorText, guardianLinks, kitInput, short } from './ui.js';
 import { bytesToBigInt, initHashes, parseRecoveryKitCode, pinTree } from '@nidohq/email-recovery';
-import { alertChannels, deviceChannel, moveNotificationsHere } from './emailAlerts.js';
+import { addThisDevice, alertChannels, deviceChannel } from './emailAlerts.js';
 import { emailRecoveryDeployment } from './emailConfig.js';
 import type { GuardianConfig } from './emailGuardian.js';
 import {
   PRIVACY_CLAIM,
-  SECOND_CHANNEL_LAPSED,
+  channelView,
   checkCodeAgainstPin,
   codeCheckText,
-  secondChannel,
-  type SecondChannel,
+  type ChannelView,
+  type DeviceChannel,
+  type ThisDevice,
 } from './emailModel.js';
 import { findEmailGuardian, keyList, vaultKey } from './emailRecovery.js';
 import { liveAttemptsSection } from './liveAttempts.js';
@@ -113,7 +114,7 @@ export async function mountRecoverySettings(root: HTMLElement, account: string |
 }
 
 /** What this page knows of the email helper's second alert channel (spec §9.3 rule 2 at runtime). */
-let channel: SecondChannel = 'unknown';
+let channel: ChannelView | undefined;
 
 /** Email as one recovery helper: set it up, or, once it is one, its alert channels and a check of the recovery code. */
 function emailCard(account: string, listed: { address: string; config: GuardianConfig } | undefined): HTMLElement {
@@ -133,56 +134,67 @@ function emailCard(account: string, listed: { address: string; config: GuardianC
   return c;
 }
 
-/** The second alert channel: this device's subscription at once, the vault's view on request, and moving it here. */
+/**
+ * The second alert channel: this device's own registration at once, the
+ * vault's devices on request (with the passkey), and adding this device,
+ * which applies at once. "They reach this device" only on a device the
+ * vault lists as live, or that confirmed a probe recently (`channelView`).
+ */
 function channelSection(account: string): HTMLElement {
   const wrap = el('div', { style: 'display:grid;gap:6px;', 'data-channel': '' });
   const line = el('div', { style: 'font-size:13px;', role: 'status', 'data-channel-state': '' }, 'Alert notifications: not checked yet.');
-  const lapsed = el('div', { class: 'alert danger', role: 'alert', hidden: '', 'data-channel-lapsed': '' }, esc(SECOND_CHANNEL_LAPSED));
+  const broken = el('div', { class: 'alert danger', role: 'alert', hidden: '', 'data-channel-lapsed': '' });
   const status = el('div', { class: 'mut', style: 'font-size:12.5px;' });
   const buttons = el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;' });
   const check = el('button', { class: 'btn soft sm', type: 'button', 'data-check-channels': '' }, 'Check my alert channels') as HTMLButtonElement;
-  const move = el('button', { class: 'btn primary sm', type: 'button', hidden: '', 'data-move-notifications': '' }, 'Turn on notifications on this device') as HTMLButtonElement;
-  let device: 'live' | 'gone' | undefined;
+  const add = el('button', { class: 'btn primary sm', type: 'button', hidden: '', 'data-add-device': '' }, 'Add this device') as HTMLButtonElement;
+  let device: ThisDevice | undefined;
+  let devices: DeviceChannel[] | undefined;
   let contact: string | undefined;
-  const show = (vault?: 'live' | 'lapsed' | 'none') => {
-    channel = secondChannel({ vault, device });
-    lapsed.hidden = channel !== 'lapsed';
-    move.hidden = channel !== 'lapsed';
+  const show = () => {
+    const v = channelView({ vault: devices, device, now: Date.now() });
+    channel = v;
+    broken.hidden = v.rule2 !== 'broken';
+    broken.textContent = v.rule2 === 'broken' ? v.text : '';
     line.textContent =
-      channel === 'live'
-        ? 'Alert notifications: they reach your device.'
-        : channel === 'lapsed'
-          ? 'Alert notifications: they no longer reach your device.'
-          : 'Alert notifications: checking them needs your passkey.';
+      v.rule2 !== 'broken'
+        ? v.text
+        : v.state === 'unacknowledged'
+          ? 'Alert notifications: no device confirmed them lately.'
+          : 'Alert notifications: they no longer reach any device.';
+    add.hidden = !v.offerAdd;
   };
   void deviceChannel(account).then((d) => {
     device = d;
     show();
   });
+  const readChannels = async () => {
+    const active = (await alertChannels(account, await vaultKey())).filter((x) => x.state === 'active');
+    contact = active[0]?.contact;
+    devices = active.flatMap((x) => x.devices);
+  };
   check.addEventListener('click', () =>
     busy(check, status, 'Asking the alert service…', async () => {
-      const channels = await alertChannels(account, await vaultKey());
-      const active = channels.filter((x) => x.state === 'active');
-      const push = active.some((x) => x.push === 'live') ? 'live' : active.some((x) => x.push === 'lapsed') ? 'lapsed' : 'none';
-      contact = (active.find((x) => x.push !== 'live') ?? active[0])?.contact;
-      show(push);
+      await readChannels();
+      show();
       status.textContent = '';
     }),
   );
-  move.addEventListener('click', () =>
-    busy(move, status, 'Turning notifications on…', async () => {
-      const vault = await vaultKey();
-      if (!contact) contact = (await alertChannels(account, vault)).find((x) => x.state === 'active')?.contact;
+  add.addEventListener('click', () =>
+    busy(add, status, 'Adding this device…', async () => {
+      if (!contact) await readChannels();
       if (!contact) throw new Error('This Nido has no alert contact. Set up email recovery again.');
-      await moveNotificationsHere(account, contact, vault);
-      device = 'live';
-      show('live');
+      await addThisDevice(account, contact, await vaultKey());
+      device = await deviceChannel(account);
+      // The vault lists it as live and confirmed from now; no second passkey prompt to show it.
+      if (device) devices = [...(devices ?? []).filter((d) => d.id !== device!.id), { id: device.id, state: 'live', addedAt: Date.now(), ackedAt: Date.now() }];
+      show();
       status.textContent = '';
-      toast({ msg: 'Notifications are on', icon: 'check' });
+      toast({ msg: 'This device now gets your recovery alerts', icon: 'check' });
     }),
   );
-  buttons.append(check, move);
-  wrap.append(line, lapsed, buttons, status);
+  buttons.append(check, add);
+  wrap.append(line, broken, buttons, status);
   return wrap;
 }
 
@@ -493,15 +505,15 @@ function configureCard(account: string, state: RecoveryState, email?: { address:
         email && g === email.address ? { kind: 'email' as const, address: g, allowedActions: email.config.allowedActions } : g,
       );
       const keepsEmail = listed.some((g) => typeof g !== 'string');
-      if (keepsEmail && channel === 'lapsed') {
-        throw new Error('Your email helper’s alert notifications no longer reach your device (rule 2). Turn them on again below, or remove the email helper.');
+      if (keepsEmail && channel?.rule2 === 'broken') {
+        throw new Error('No device is known to receive and confirm your email helper’s alert notifications (rule 2). Add this device below, or remove the email helper.');
       }
       const spec = perch.recoverySpec(deployment, {
         profile,
         mode,
         guardians: mode === 'zk-only' ? undefined : listed,
         quorum: mode === 'zk-only' ? undefined : quorum,
-        secondAlertChannel: keepsEmail && channel !== 'lapsed' ? 'web-push' : undefined,
+        secondAlertChannel: keepsEmail && channel?.rule2 !== 'broken' ? 'web-push' : undefined,
         zk,
         replaceable: adminSignerIds(base),
         baselineDocHash: field('baseline').checked ? docHash(withoutRecovery) : undefined,

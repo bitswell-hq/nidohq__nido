@@ -9,9 +9,10 @@
  * in memory while the page is open and never stored.
  *
  * Where the code is typed the page says nobody asks for it and how to check
- * that the page is the user's own Nido's, against the address in the
- * recovery kit; the email it prepares opens with a line telling anyone who
- * was asked to send it to stop. The sealed inbound registration lasts 24
+ * that the page is the user's own Nido's: its whole address against the
+ * recovery kit's, and Nido's apex, a constant of this build; the email it
+ * prepares opens with a line telling anyone who was asked to send it to
+ * stop. Both help an honest user; a phisher's victim sees neither. The sealed inbound registration lasts 24
  * hours; the page shows when it ends and offers a new email afterwards.
  */
 
@@ -32,7 +33,7 @@ import { nidoKey, perch } from '@nidohq/passkey-sdk';
 import { esc } from '../html.js';
 import { toast } from '../toast.js';
 import { recoveryClient } from './chain.js';
-import { requireEmailRecovery } from './emailConfig.js';
+import { requireEmailRecovery, thisWalletApex } from './emailConfig.js';
 import type { GuardianConfig } from './emailGuardian.js';
 import {
   PRIVACY_CLAIM,
@@ -114,7 +115,7 @@ export function emailApprovalStep(o: EmailStepOptions): HTMLElement {
   const codeBox = el(
     'div',
     { style: 'display:grid;gap:8px;' },
-    `<div class="alert warn" role="note" style="font-size:12.5px;" data-code-warning>${esc(codeEntryWarning(window.location.host, o.account))}</div>
+    `<div class="alert warn" role="note" style="font-size:12.5px;" data-code-warning>${esc(codeEntryWarning(o.account, thisWalletApex()))}</div>
      <label class="pol-input-label">Your recovery code (26 letters and digits, from your recovery kit)
        <input name="kit-code" class="input mono" autocomplete="off" spellcheck="false" placeholder="ABCD EFGH IJKL MNOP QRST UVWX YZ">
      </label>

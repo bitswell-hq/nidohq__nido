@@ -14,6 +14,10 @@ export interface HostState {
   cursor?: string;
   /** Where to start when there is no cursor yet. */
   startLedger: number;
+  /** Stellar RPC `getTransactions` cursor: every transaction up to it was read for votes. */
+  txCursor?: string;
+  /** Where the transaction scan starts when there is no `txCursor` (default `startLedger`). */
+  txStartLedger?: number;
   /** Events after the cursor already handled (cleared when the cursor moves). */
   handled: string[];
   /** Events whose alert is waiting for a retry. */

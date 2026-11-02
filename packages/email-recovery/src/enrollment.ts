@@ -29,9 +29,8 @@ export const PURPOSE_SECURITY_ALERTS = 1;
 export const PURPOSE_PRODUCT_UPDATES = 2;
 
 /**
- * `push` gives an existing contact a new Web Push subscription (the vault
- * applies it at once only when the current one is gone); `status` reads the
- * account's channels (spec §10.3).
+ * `push` adds this device's Web Push subscription to an existing contact, at
+ * once; `status` reads the account's channels (spec §10.3).
  */
 export type ContactOp = 'register' | 'replace' | 'remove' | 'push' | 'status';
 
@@ -68,6 +67,25 @@ export interface PushChannel {
   endpoint: string;
   p256dh: Uint8Array;
   auth: Uint8Array;
+  /**
+   * The device key (uncompressed P-256) the wallet's service worker created
+   * with the subscription: it signs each probe acknowledgement
+   * ([`probeAckMessage`]).
+   */
+  deviceKey: Uint8Array;
+}
+
+/** What a device signs to acknowledge a liveness probe: `label || probe id` (spec §10.6). */
+export const PROBE_ACK_LABEL = 'nido/email-recovery/v1/probe-ack';
+
+/** The message a device key signs (ECDSA P-256, SHA-256) to acknowledge the probe `probeId` (16 octets). */
+export function probeAckMessage(probeId: Uint8Array): Uint8Array {
+  if (probeId.length !== 16) throw new Error('a probe id is 16 octets');
+  const label = utf8(PROBE_ACK_LABEL);
+  const m = new Uint8Array(label.length + 16);
+  m.set(label);
+  m.set(probeId, label.length);
+  return m;
 }
 
 /** What the vault decrypts. */
@@ -132,6 +150,8 @@ export interface ContactInput {
   emailGuardian: boolean;
   /** Required when `emailGuardian` (spec §9.3 rule 2). */
   push?: PushSubscriptionJSON;
+  /** The device key created with `push` (uncompressed P-256); required with it. */
+  deviceKey?: Uint8Array;
   /** [`PURPOSE_SECURITY_ALERTS`], optionally with [`PURPOSE_PRODUCT_UPDATES`]. */
   purposes: number;
   /** Version of the consent text the user was shown. */
@@ -159,33 +179,40 @@ export async function contactRequest(input: ContactInput, replaces?: Uint8Array)
     purposes: input.purposes,
     consentVersion: input.consentVersion,
   };
-  if (input.push) req.push = pushChannel(input.push, input.allowLoopbackPush);
+  if (input.push) req.push = pushChannel(input.push, input.deviceKey, input.allowLoopbackPush);
   return req;
 }
 
-/** A subscription as the vault keeps it, checked: P-256 keys, a 16-octet secret, an https endpoint. */
-function pushChannel(sub: PushSubscriptionJSON, allowLoopbackPush?: boolean): PushChannel {
+const isP256Point = (k: Uint8Array | undefined): k is Uint8Array => k?.length === 65 && k[0] === 4;
+
+/**
+ * A subscription as the vault keeps it, checked: P-256 keys, a 16-octet
+ * secret, an https endpoint, and the device key that acknowledges probes.
+ */
+function pushChannel(sub: PushSubscriptionJSON, deviceKey: Uint8Array | undefined, allowLoopbackPush?: boolean): PushChannel {
   const p256dh = fromBase64Url(sub.keys.p256dh);
   const auth = fromBase64Url(sub.keys.auth);
-  if (p256dh.length !== 65 || p256dh[0] !== 4 || auth.length !== 16) throw new Error('bad push subscription keys');
+  if (!isP256Point(p256dh) || auth.length !== 16) throw new Error('bad push subscription keys');
+  if (!isP256Point(deviceKey)) throw new Error('a push subscription needs its device key (uncompressed P-256)');
   const loopback = allowLoopbackPush && sub.endpoint.startsWith('http://127.0.0.1:');
   if (!sub.endpoint.startsWith('https://') && !loopback) throw new Error('push endpoint must be https');
-  return { endpoint: sub.endpoint, p256dh, auth };
+  return { endpoint: sub.endpoint, p256dh, auth, deviceKey };
 }
 
 export function removalRequest(account: string, contact: Uint8Array): SealedRequest {
   return { op: 'remove', account: contractIdFromStrkey(account), contact };
 }
 
-/** A new Web Push subscription for the existing contact `contact`. */
+/** This device's Web Push subscription, and its device key, added to the existing contact `contact`. */
 export function pushUpdateRequest(
   account: string,
   contact: Uint8Array,
   push: PushSubscriptionJSON,
+  deviceKey: Uint8Array,
   opts: { allowLoopbackPush?: boolean } = {},
 ): SealedRequest {
   if (contact.length !== 16) throw new Error('a contact id is 16 octets');
-  return { op: 'push', account: contractIdFromStrkey(account), contact, push: pushChannel(push, opts.allowLoopbackPush) };
+  return { op: 'push', account: contractIdFromStrkey(account), contact, push: pushChannel(push, deviceKey, opts.allowLoopbackPush) };
 }
 
 /** A read of the account's alert channels. */
@@ -203,6 +230,7 @@ const encodePush = (p: PushChannel) =>
     ['endpoint', p.endpoint],
     ['p256dh', p.p256dh],
     ['auth', p.auth],
+    ['device_key', p.deviceKey],
   ]);
 
 export function encodeSealedRequest(r: SealedRequest): Uint8Array {
@@ -280,6 +308,7 @@ const decodePush = (p: Map<unknown, unknown>): PushChannel => ({
   endpoint: field(p, 'endpoint', isString),
   p256dh: field(p, 'p256dh', isBytes(65)),
   auth: field(p, 'auth', isBytes(16)),
+  deviceKey: field(p, 'device_key', isBytes(65)),
 });
 
 /** The envelope: CBOR `{v, enc, ct}` around the HPKE-sealed request. */

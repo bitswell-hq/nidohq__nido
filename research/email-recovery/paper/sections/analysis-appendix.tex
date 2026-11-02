@@ -101,7 +101,7 @@ Each open decision, with its current setting and the alternatives.
     checked by code hash and configuration; or through a factory that fixes
     them on chain; and who pays on mainnet.
   \item \emph{The push channel's state.} Checked on this device at once and
-    through the vault with the passkey, as fresh as the weekly probe; reading
+    through the vault with the passkey, as fresh as the monthly probe; reading
     it on every open costs a passkey prompt.
   \item \emph{Custom domains.} Larger address and domain bounds change the
     commitment's packing and the leaf format.
@@ -119,9 +119,11 @@ Each open decision, with its current setting and the alternatives.
   \item \emph{Failover duplicates.} The second sending service has no
     idempotency key, so an accepted request whose answer was lost can be
     delivered twice.
-  \item \emph{Probe visibility.} Each weekly probe shows a quiet
-    notification, because WebKit revokes subscriptions whose pushes show
-    nothing; how long subscriptions survive on each platform is not measured.
+  \item \emph{Probe visibility.} Each monthly probe shows a notification
+    that asks for a tap, because WebKit revokes subscriptions whose pushes
+    show nothing and a tap shows that the device still reaches its owner;
+    how long subscriptions survive on each platform, and whether users tap
+    without reading, are not measured.
   \item \emph{A lowered target close time.} Existing email-plus-delay members
     then last less than 7 days until rebuilt; the wallet does not yet notice
     and ask owners to rebuild, or keep a margin above the floor.
