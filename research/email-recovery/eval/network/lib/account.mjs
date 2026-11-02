@@ -8,7 +8,7 @@
 import { createHash } from 'node:crypto';
 import { AuthenticatorMock } from '@nidohq/email-mocks';
 import { buildAuthPayloadScVal, computeAuthDigest, derToCompact } from '@nidohq/passkey-sdk';
-import { Operation, StrKey, hash, xdr } from '@stellar/stellar-sdk';
+import { Keypair, Operation, StrKey, hash, xdr } from '@stellar/stellar-sdk';
 import { sc } from './chain.mjs';
 
 const sha256 = (b) => createHash('sha256').update(b).digest();
@@ -43,10 +43,17 @@ export class NidoAccount {
     this.rp = accountOrigin(address, apex);
   }
 
-  /** Mint through `factory.create_account(salt, owner key)`, paid by `payer`. */
+  /**
+   * Mint through `factory.create_account(setup, owner key, binding)`, paid by
+   * `payer`: a one-time setup key fixes the address and binds the owner's
+   * passkey to it with its signature over
+   * `sha256("nido/bind/v1" || network_id || factory_id || key)`.
+   */
   static async mint({ chain, factory, payer, owner, verifier, apex, label }) {
-    const salt = sha256(`nido-eval/email-attacks/salt/${label}/${Date.now()}`);
-    const r = await chain.invoke(payer, factory, 'create_account', [sc.bytes(salt), sc.bytes(owner.publicKey)], { label: `mint ${label}` });
+    const setup = Keypair.random();
+    const key = Buffer.from(owner.publicKey);
+    const binding = hash(Buffer.concat([Buffer.from('nido/bind/v1'), hash(Buffer.from(chain.passphrase)), StrKey.decodeContract(factory), key]));
+    const r = await chain.invoke(payer, factory, 'create_account', [sc.bytes(setup.rawPublicKey()), sc.bytes(key), sc.bytes(setup.sign(binding))], { label: `mint ${label}` });
     return new NidoAccount({ chain, address: r.value, owner, verifier, apex });
   }
 
