@@ -18,7 +18,7 @@ export interface PerchDeployment {
   /** Nido's account factory. Not Perch's: Perch's factory derives an
    *  address from the admin signers, but a Nido passkey's RP ID is the
    *  account's own subdomain, so the address must exist before the passkey
-   *  does. Nido's derives it from a salt alone. */
+   *  does. Nido's derives it from a one-time setup key alone. */
   factory: string;
   /** Perch's WebAuthn verifier, which passkey signers name and the factory
    *  pins. Constructorless, with no admin. */
@@ -41,22 +41,44 @@ export interface PerchDeployment {
 }
 
 /** Perch's testnet release (`vendor/perch/deployments/testnet.json`, at the
- *  submodule's pin) and Nido's factory built around its account
- *  (`scripts/deploy-factory.sh`). */
+ *  submodule's pin) and Nido's factory, as its record (`factory.testnet.json`,
+ *  written by `scripts/deploy-factory.sh`) names it. */
 export const TESTNET: PerchDeployment = {
   network: 'Test SDF Network ; September 2015',
-  factory: 'CBJRCUECFC2FSJBSVOVYHWC73A2SN7LIKSLWJBQUNEOWPE4PXG33M54H',
-  webauthnVerifier: 'CDRYDB7O2JFLF7FAIIQUQK4BKQT3N6ACFFGZQ7AHKMX52RIWTHBHJY6K',
-  statelessRegistry: 'CDX2DMYMMEYU6FGN3HPJ2GQSSL5EZHIAMEJD4SPF55FZE5LEUBPPPDA7',
-  docCompiler: 'CAV47HI46VZ4JMAN5OA7IFECNFNJHINYZMYUGN27EZI6STEHQFLW23RB',
-  interpreter: 'CCYIMM4NCHFIN5JTMT4AAUCZ44SFT3AEIXDOQZV3GZE2E4ZCFGEGZPYF',
-  spendingLimit: 'CCOAFX6AJITJXF3A6PCY564DQO33TFXQSMLNB77ZQD2FLP5CSWAYM5JU',
-  recoveryController: 'CBUCGUBLHRPPW7DCS2RCRGNY2JAGCLH7NIJTWPYVTEZNNOOJ73YXYQI6',
-  zkPool: 'CAAUAAK4VM4GM5JHNMDQT5TDXADXWNMLEXGP5PBD5Y7DPDTFB6MIXLVJ',
-  zkAdapter: 'CCSBNPHCA4ER3TNFXMGJCJNMTGNECFBMJUFAX5ZHM3PORP6RDCPR5TAA',
+  factory: 'CDDIW3F63PB6ZKMJN7CCGJSCYXTAVAVEEYNS36K2YFEJH7GQ3ADVZSVS',
+  webauthnVerifier: 'CDEV5YPS5IITPLQPYTKJGWBNZ2YZ7FQZIJNSHUMJRBE4QWYK2IVK4EJT',
+  statelessRegistry: 'CDZGU4AIND6QRCGAN72I7DCS2EKRZ76JSKYY7KKJR4CG5IR2AMFIBZTM',
+  docCompiler: 'CAYCPM5O6SGGAZOCCAUJ27CZZ7SMHU4VYSA25ZHDMGKILP4Z5RGF467E',
+  interpreter: 'CBOGVUQWY5G7BP7OWEJX3Z5PSZLYJXHM54A7OEMXQQ7ZO4GHHM4WCEAP',
+  spendingLimit: 'CAG3IDO3FXE2HQVQHRGRBKWGL2IPAA2V6B3UMHES4ZUNS7OEV646HYV5',
+  recoveryController: 'CBOFO5KWQKCZ7LBS4LDIYXA6LGZSUSA6JKOHHBBL64KQNZLPGDJ252FT',
+  zkPool: 'CASXCXSBIG6ECB3LO4LCEW6SZIFHZDTJ3PFOZJK5JI56VKXLSZY6J67P',
+  zkAdapter: 'CDWVAUSTU2DHBBWANQKGSHCXFK5C46WMUEMWRBOV2LBVXQGK4PGIFBQS',
   circuitId: '9e39c41f4f35aad43e64b255dfe3ba13f10e8c9d36d6f56fce23c2d97c0a0b4a',
   treeDepth: 32,
-  accountWasmHash: 'd99d56fc2d07a14c2259f0994d97316d23ae90db26835f4c977939c2b3b593aa',
+  accountWasmHash: '2c976bfd98678f3b6fcf5514420a81ef5e5b9fc1c5b6c60ec6f2dd64448479d5',
+};
+
+/** Perch's mainnet release (`vendor/perch/deployments/mainnet.json`, at the
+ *  submodule's pin) and Nido's factory, as its record (`factory.mainnet.json`,
+ *  written by `scripts/deploy-factory.sh`) names it. Built from the same
+ *  source commit as `TESTNET` (`c135aca2`), so every pinned address differs
+ *  only where mainnet's deploy is necessarily distinct (the factory and the
+ *  stateless registry). */
+export const MAINNET: PerchDeployment = {
+  network: 'Public Global Stellar Network ; September 2015',
+  factory: 'CBHERM3IKL2QLLJWNPBTATIHVFNT3FLFZKPFG4L2X7CHUPRLJHGC3FAC',
+  webauthnVerifier: 'CCTFLCCC5DK4BM5DVUK3RYF2YVPB4QTGRKFGGOGN2WKG5IJMWEH3LTGJ',
+  statelessRegistry: 'CC236AK2RX7MUO7BV7JYDDW5KHZ3X7YYJOJKCVDC543BQBNNSUCZB7NN',
+  docCompiler: 'CB65ACZRA777XHGEKVX46LEU2ZSUAL2UQY2PKMVDL7KJTDHRTX5MTBQD',
+  interpreter: 'CCLU4UY5D7JLAQJCHBHEFN7ACFZXDPHCQXA7L6MT5ALIHRPQ7BGIVMTC',
+  spendingLimit: 'CAD75KDQREQCGN3HIKMAVYKZWRGOFQYDZSXB4ILFSR6OHKTJ5UDNSOKU',
+  recoveryController: 'CD67NUU74YA5UTPD2DDBDGKTMWHBYZVLO2K3PUEC362A6WN2OKJ5I7ZN',
+  zkPool: 'CB762AC3OEH7AYDMU3YH6SCUKKWUXNXI6WLVKK4MC2NGJBX2DJSWEFHJ',
+  zkAdapter: 'CB3KP2O7E6IDNNO23F7GVCAPZGFA6XGERYY633PIGQMASYPY2XRRLXS3',
+  circuitId: '9e39c41f4f35aad43e64b255dfe3ba13f10e8c9d36d6f56fce23c2d97c0a0b4a',
+  treeDepth: 32,
+  accountWasmHash: '2c976bfd98678f3b6fcf5514420a81ef5e5b9fc1c5b6c60ec6f2dd64448479d5',
 };
 
 /** A Perch deployment manifest (`deployments/<network>.json`), the fields

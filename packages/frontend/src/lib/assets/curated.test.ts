@@ -39,6 +39,23 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
+describe("CURATED_LIST_URL", () => {
+  afterEach(() => {
+    delete (import.meta.env as Record<string, string | undefined>).PUBLIC_STELLAR_NETWORK;
+  });
+
+  it("uses Stellar Expert's testnet segment by default", () => {
+    expect(CURATED_LIST_URL).toBe("https://api.stellar.expert/explorer/testnet/asset-list/top50");
+  });
+
+  it("uses Stellar Expert's `public` segment on a mainnet build", async () => {
+    import.meta.env.PUBLIC_STELLAR_NETWORK = "mainnet";
+    vi.resetModules();
+    const mod = await import("./curated.js");
+    expect(mod.CURATED_LIST_URL).toBe("https://api.stellar.expert/explorer/public/asset-list/top50");
+  });
+});
+
 describe("parseAssetList", () => {
   it("keeps valid entries (including native, for icon backfill) and flags SAC by issuer presence", () => {
     const parsed = parseAssetList({
@@ -104,13 +121,13 @@ describe("fetchCuratedAssets", () => {
     expect(assets).toHaveLength(4);
     expect(assets[0].code).toBe("USDC");
     expect(assets.find((a) => a.contractId === NATIVE_SAC_ID)?.icon).toBe("https://x.test/xlm.png");
-    expect(localStorage.getItem("nido:assets:curated")).toBe(JSON.stringify(TOP50_DOC));
-    expect(localStorage.getItem("nido:assets:curated:soroswap")).toBe(JSON.stringify(SOROSWAP_DOC));
+    expect(localStorage.getItem("nido:testnet:assets:curated")).toBe(JSON.stringify(TOP50_DOC));
+    expect(localStorage.getItem("nido:testnet:assets:curated:soroswap")).toBe(JSON.stringify(SOROSWAP_DOC));
   });
 
   it("falls back per-list to the cached copy when the network fails", async () => {
-    localStorage.setItem("nido:assets:curated", JSON.stringify(TOP50_DOC));
-    localStorage.setItem("nido:assets:curated:soroswap", JSON.stringify(SOROSWAP_DOC));
+    localStorage.setItem("nido:testnet:assets:curated", JSON.stringify(TOP50_DOC));
+    localStorage.setItem("nido:testnet:assets:curated:soroswap", JSON.stringify(SOROSWAP_DOC));
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
     expect(await fetchCuratedAssets()).toHaveLength(4);
   });

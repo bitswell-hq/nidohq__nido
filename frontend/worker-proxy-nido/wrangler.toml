@@ -2,6 +2,51 @@ name = "nido-proxy"
 main = "index.js"
 compatibility_date = "2024-01-01"
 
+# Production: today the testnet build on nido.fyi.
 routes = [
   { pattern = "*.nido.fyi/*", zone_name = "nido.fyi" }
 ]
+
+[vars]
+# The Pages production origin for nido (Cloudflare appended "-1am" because the
+# bare `nido` project subdomain was taken).
+PAGES = "nido-1am.pages.dev"
+# The bare Pages PROJECT root PR previews anchor to (pr-<N>.<this>) —
+# identical across every environment. See index.js's own doc comment: this
+# must stay the project root, never an aliased branch subdomain like
+# [env.testnet]'s own PAGES, or preview rewriting builds a hostname that
+# doesn't exist.
+PAGES_PROJECT_ROOT = "nido-1am.pages.dev"
+CSP_SITE_HOSTS = "https://*.nido.fyi"
+CSP_NETWORK_HOSTS = "https://nido.fly.dev https://soroban-testnet.stellar.org https://horizon-testnet.stellar.org https://friendbot.stellar.org"
+
+# Testnet on test.nido.fyi (`wrangler deploy --env testnet`, deployed
+# automatically by deploy-testnet.yml on every push to main), its own `test`
+# branch Pages build — not the production origin above. The Advanced
+# Certificate for *.test.nido.fyi is active, so both the bare apex and every account's own subdomain
+# (<cAddress>.test.nido.fyi) have valid TLS. The wildcard
+# route MUST deploy together with nido-resolver's matching
+# `*.test.nido.fyi/.well-known/nido.json` route:
+# without it, this route's hostname specificity (*.test.nido.fyi) outranks
+# the production resolver's *.nido.fyi/.well-known/nido.json for any
+# <cAddress>.test.nido.fyi lookup, routing it here instead and breaking name
+# resolution for every test.nido.fyi account.
+[env.testnet]
+name = "nido-proxy-testnet"
+workers_dev = false
+routes = [
+  { pattern = "test.nido.fyi/*", zone_name = "nido.fyi" },
+  { pattern = "*.test.nido.fyi/*", zone_name = "nido.fyi" }
+]
+
+[env.testnet.vars]
+# The `test` branch Pages deployment (deploy-testnet.yml's
+# `wrangler pages deploy ... --branch test`), NOT the production origin above
+# — this is what actually makes test.nido.fyi serve a different build than
+# nido.fyi, rather than the same one.
+PAGES = "test.nido-1am.pages.dev"
+# Same bare project root as [vars] above — PR previews must anchor here, not
+# to PAGES (which is itself an aliased branch subdomain in this environment).
+PAGES_PROJECT_ROOT = "nido-1am.pages.dev"
+CSP_SITE_HOSTS = "https://*.nido.fyi"
+CSP_NETWORK_HOSTS = "https://nido.fly.dev https://soroban-testnet.stellar.org https://horizon-testnet.stellar.org https://friendbot.stellar.org"

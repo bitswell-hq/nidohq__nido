@@ -1,0 +1,92 @@
+{
+  "relayers": [
+    {
+      "id": "fund",
+      "name": "Fund",
+      "network": "mainnet",
+      "paused": false,
+      "network_type": "stellar",
+      "signer_id": "fund-signer",
+      "policies": { "concurrent_transactions": true, "fee_payment_strategy": "relayer" }
+    },
+    {
+      "id": "channels-fee-payer",
+      "name": "Channels Fee Payer",
+      "network": "mainnet",
+      "paused": false,
+      "network_type": "stellar",
+      "signer_id": "fee-payer-signer",
+      "policies": {"fee_payment_strategy": "relayer"}
+    },
+    {
+      "id": "channel-001",
+      "name": "Channel 001",
+      "network": "mainnet",
+      "paused": false,
+      "network_type": "stellar",
+      "signer_id": "channel-001-signer",
+      "policies": { "fee_payment_strategy": "relayer" }
+    },
+    {
+      "id": "channel-002",
+      "name": "Channel 002",
+      "network": "mainnet",
+      "paused": false,
+      "network_type": "stellar",
+      "signer_id": "channel-002-signer",
+      "policies": { "fee_payment_strategy": "relayer" }
+    }
+  ],
+  "notifications": [],
+  "signers": [
+    {
+      "id": "fund-signer",
+      "type": "turnkey",
+      "config": {
+        "api_public_key": "03246a668245f301e0c28049b92779e2a35bae03f1b0b5b531173d101a62ccdea4",
+        "api_private_key": { "type": "env", "value": "TURNKEY_API_PRIVATE_KEY" },
+        "organization_id": "ab5ca46a-17b2-47a1-95fa-4aff7d413d12",
+        "private_key_id": "GB62GN4DMXIPFGZMGITUP2XIGIVDV3IBK263LMEVQ7AEBHF6KWXLIM6V",
+        "public_key": "7da3378365d0f29b2c322747eae8322a3aed0156bdb5b09587c0409cbe55aeb4"
+      }
+    },
+    {
+      "id": "fee-payer-signer",
+      "type": "turnkey",
+      "config": {
+        "api_public_key": "03246a668245f301e0c28049b92779e2a35bae03f1b0b5b531173d101a62ccdea4",
+        "api_private_key": { "type": "env", "value": "TURNKEY_API_PRIVATE_KEY" },
+        "organization_id": "ab5ca46a-17b2-47a1-95fa-4aff7d413d12",
+        "private_key_id": "GDWKRZNU3IQD6DVYYVJA7UDT3X6RQAF3BTJR7HLHMQ7SXXSZMR54YMZC",
+        "public_key": "eca8e5b4da203f0eb8c5520fd073ddfd1800bb0cd31f9d67643f2bde59647bcc"
+      }
+    },
+    {
+      "id": "channel-001-signer",
+      "type": "turnkey",
+      "config": {
+        "api_public_key": "03246a668245f301e0c28049b92779e2a35bae03f1b0b5b531173d101a62ccdea4",
+        "api_private_key": { "type": "env", "value": "TURNKEY_API_PRIVATE_KEY" },
+        "organization_id": "ab5ca46a-17b2-47a1-95fa-4aff7d413d12",
+        "private_key_id": "GCEM6H2R6W4SIKTFBAZ6NY7HDPJBHCLAULFFL3ZCRXZRLHLA6VD2CS4Z",
+        "public_key": "88cf1f51f5b9242a650833e6e3e71bd2138960a2ca55ef228df3159d60f547a1"
+      }
+    },
+    {
+      "id": "channel-002-signer",
+      "type": "turnkey",
+      "config": {
+        "api_public_key": "03246a668245f301e0c28049b92779e2a35bae03f1b0b5b531173d101a62ccdea4",
+        "api_private_key": { "type": "env", "value": "TURNKEY_API_PRIVATE_KEY" },
+        "organization_id": "ab5ca46a-17b2-47a1-95fa-4aff7d413d12",
+        "private_key_id": "GBBWHY5F4WNIPWKDWAVKCSZLOUBLKKUVOUK6A7USESVUDCJ5BINZF2E2",
+        "public_key": "4363e3a5e59a87d943b02aa14b2b7502b52a957515e07e9224ab41893d0a1b92"
+      }
+    }
+  ],
+  "networks": "./config/networks",
+  "plugins": [
+    { "id": "channels", "path": "channels/index.ts", "timeout": 120, "emit_logs": true },
+    { "id": "funder", "path": "funder/index.ts", "timeout": 30, "emit_logs": true }
+  ]
+}

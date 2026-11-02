@@ -2,8 +2,8 @@
 # The email recovery end-to-end test on a local Stellar network
 # (tests/e2e/local/email-recovery.local.spec.ts):
 #
-#   1. builds the Perch account for the local network's stateless deployer
-#      (evaluation/scripts/local-stack.sh), the email contracts, and the
+#   1. builds the Perch account and factory for the local network's registry
+#      path (evaluation/scripts/local-stack.sh), the email contracts, and the
 #      TEST-ONLY fixtures;
 #   2. starts `stellar/quickstart --local` (pinned by digest) and deploys
 #      everything onto it (tests/support/emailLocalStack.mjs);
@@ -32,16 +32,15 @@ export E2E_PORT="${E2E_PORT:-4399}" E2E_RPC_PORT=8443 E2E_ALERT_PORT=8471 E2E_CO
 [ -s target/wasm32v1-none/contract/perch_account.wasm ] || { echo "run 'just perch-infra' first" >&2; exit 1; }
 
 # 1. Contracts.
-deployer=$(node --input-type=module -e '
-import { Keypair, hash, xdr, Address, StrKey } from "@stellar/stellar-sdk";
-import { createHash } from "node:crypto";
-const kp = Keypair.fromRawEd25519Seed(createHash("sha256").update("nido-eval/deployer").digest());
-const pre = xdr.HashIdPreimage.envelopeTypeContractId(new xdr.HashIdPreimageContractId({
-  networkId: hash(Buffer.from("Standalone Network ; February 2017")),
-  contractIdPreimage: xdr.ContractIdPreimage.contractIdPreimageFromAddress(new xdr.ContractIdPreimageFromAddress({ address: Address.fromString(kp.publicKey()).toScAddress(), salt: Buffer.alloc(32, 0x5e) })),
-}));
-console.log(StrKey.encodeContract(hash(pre.toXDR())));')
-[ -s target/eval-local/build.json ] && grep -q "$deployer" target/eval-local/build.json || evaluation/scripts/local-stack.sh "$deployer"
+# The local account and factory, rebuilt unless target/eval-local was built
+# for this registry path and this Perch commit.
+registry=$(node --input-type=module -e 'import { registryChain } from "./tests/support/emailLocalStack.mjs"; console.log(registryChain().at(-1));')
+perch_commit=$(git -C vendor/perch rev-parse HEAD)
+if ! { [ -s target/eval-local/build.json ] \
+  && [ "$(jq -r .registry target/eval-local/build.json)" = "$registry" ] \
+  && [ "$(jq -r .perch_commit target/eval-local/build.json)" = "$perch_commit" ]; }; then
+  evaluation/scripts/local-stack.sh "$registry"
+fi
 for p in nido-email-verifier nido-email-guardian nido-dkim-registry; do
   CARGO_TARGET_DIR="$out/cargo" stellar contract build --package "$p" --out-dir "$out/wasm"
 done

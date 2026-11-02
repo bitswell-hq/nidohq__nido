@@ -82,21 +82,18 @@ export type AuthDigestScheme = "addr_oz_v1" | "oz_rule_ids";
  * - `addr_oz_v1` (the redeployed accounts): the account folds its own address
  *   into the host payload before OZ layers the context rule ids on top, so a
  *   signature cannot be replayed on another account that shares an External key
- *   and rule ids:
+ *   and rule ids (perch-js `signingDigest`):
  *
  *       bound       = sha256(AUTH_ADDR_DOMAIN || account_id || signature_payload)
  *       auth_digest = sha256(bound || context_rule_ids.to_xdr())
  *
  * - `oz_rule_ids` (accounts minted before the redeploy): no address binding —
  *   `auth_digest = sha256(signature_payload || context_rule_ids.to_xdr())`.
+ *   perch-js no longer produces it, so it is computed here.
  *
  * Signing in the wrong dialect makes `__check_auth` reject the signature, so a
  * caller must read the account's scheme (`authDigestScheme`) and pass it. The
  * WebAuthn challenge MUST be this digest, not the bare `signature_payload`.
- *
- * `addr_oz_v1` is perch-js's `signingDigest(account, payload, ruleIds)`
- * (`authVectors.test.ts` pins it against Perch's `auth-vectors.json`);
- * perch-js no longer signs `oz_rule_ids`, so that branch is computed here.
  *
  * `account` is the smart account's C-address (whose `__check_auth` runs).
  * `signaturePayload` is the 32-byte result from `buildAuthHash`.
@@ -116,11 +113,13 @@ export function computeAuthDigest(
   if (!StrKey.isValidContract(account)) {
     throw new Error(`computeAuthDigest: account must be a contract address, got "${account}"`);
   }
-  if (scheme === "oz_rule_ids") {
-    if (signaturePayload.length !== 32) throw new Error("signature payload must be 32 bytes");
-    return hash(Buffer.concat([Buffer.from(signaturePayload), Buffer.from(ruleIdsXdr(contextRuleIds))]));
+  if (scheme === "addr_oz_v1") {
+    return Buffer.from(signingDigest(account, signaturePayload, contextRuleIds));
   }
-  return Buffer.from(signingDigest(account, signaturePayload, contextRuleIds));
+  if (signaturePayload.length !== 32) {
+    throw new Error("computeAuthDigest: signature payload must be 32 bytes");
+  }
+  return hash(Buffer.concat([signaturePayload, ruleIdsXdr(contextRuleIds)]));
 }
 
 /**

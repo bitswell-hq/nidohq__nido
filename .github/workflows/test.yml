@@ -55,10 +55,15 @@ jobs:
       # Perch's testnet deployment, by the hashes in its manifest
       # (vendor/perch/deployments/testnet.json): every deployed contract's
       # wasm, each refused unless its sha256 and content address match.
+      # The RPC comes from scripts/stellar-rpc.sh: the manifest's rpc_url, a
+      # guarded fallback while it is down, or the repository variable RPC_URL
+      # when set (docs/RUNBOOKS.md "RPC endpoints").
       - name: Fetch Perch's deployed stack
+        env:
+          RPC_URL: ${{ vars.RPC_URL }}
         run: just perch-infra
 
-      # Nido's own contracts; the factory embeds the fetched Perch account.
+      # Nido's own contracts; the factory pins the manifest's Perch account hash.
       - name: Build contract wasms
         run: just build-contracts
 
@@ -70,10 +75,19 @@ jobs:
 
       # The vendored Perch stack can't silently diverge from what Nido
       # consumes: submodule pin and branch, Cargo's Perch rev, the fetched
-      # wasm, build-time pins, and factory embed against the manifest
+      # wasm, build-time pins, and factory pin against the manifest
       # (scripts/check-perch-drift.sh).
       - name: Check vendor/perch for drift
         run: just check-vendor-drift
+
+      # The factory record (packages/passkey-sdk/src/perch/factory.testnet.json)
+      # against the deployed factory, read over RPC, and the account hash it
+      # deploys against the manifest. The SDK's deployment.test.ts checks the
+      # record against the manifest.
+      - name: Check the factory record against testnet
+        env:
+          RPC_URL: ${{ vars.RPC_URL }}
+        run: just check-factory
 
       # The whole Rust workspace: the factory, the policy contracts, and the
       # integration suites that drive the deployed Perch account, verifier,
@@ -163,6 +177,19 @@ jobs:
         run: |
           cargo fmt --manifest-path evaluation/agent-host/Cargo.toml --all -- --check
           cargo clippy --manifest-path evaluation/agent-host/Cargo.toml --target-dir crates/agent-host/target --all --tests -- -Dclippy::pedantic
+  rpc-scripts:
+    name: RPC endpoint choice (scripts)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Stub RPC/Horizon servers; no network.
+      - name: Fallback, staleness, network, and override tests
+        run: python3 scripts/test_rpc_fallback.py -v
+      # A fake `stellar` stands in for the chain.
+      - name: Factory check against the record and the manifest
+        run: python3 scripts/test_check_factory.py -v
+      - name: shellcheck
+        run: shellcheck -s bash -x -S warning scripts/stellar-rpc.sh scripts/perch-infra.sh scripts/deploy-factory.sh scripts/check-factory.sh
 
   unit:
     name: Unit (TestAuthenticator)
@@ -204,6 +231,15 @@ jobs:
           npx vitest run --root packages/email-recovery
           npx tsc -p infra/email-alerts/tsconfig.test.json
           npx vitest run --root infra/email-alerts
+      # The recovery pages' rules and what each page shows before it asks
+      # for a signature.
+      - name: Frontend recovery pages
+        run: npx vitest run --root packages/frontend src/lib/recovery
+      # The document an app grant with a passkey key applies, kept identical to
+      # the fixture the Contracts job compiles with Perch's doc compiler
+      # (crates/integration-tests/tests/it/app_grant_doc.rs).
+      - name: Frontend app-grant document fixture
+        run: npx vitest run --root packages/frontend src/lib/policy/appGrantDoc.test.ts
 
   e2e:
     name: E2E (fast UI + CDP)
@@ -224,12 +260,22 @@ jobs:
       # so the static webServer serves a real dist for the e2e tiers.
       - name: Build passkey-sdk
         run: npx tsc -p ./packages/passkey-sdk/tsconfig.json
+      # Onboarding and the account page label the network each build targets
+      # (the test builds the frontend for mainnet and for testnet itself).
+      - name: Frontend network label (mainnet and testnet builds)
+        run: npx vitest run --root packages/frontend src/lib/networkLabelBuild.test.ts
       # The fast tiers never reach a chain, so the build has no Perch
       # deployment and the recovery pages say so (recovery-pages.spec.ts).
       - name: Build frontend
         env:
           PUBLIC_PERCH_DEPLOYMENT: none
         run: npx astro build --root ./packages/frontend
+      # The same pages against a fixture deployment, for the specs that
+      # drive a recovery page over a mocked chain (tests/support/perchRpcMock.mts).
+      - name: Build frontend (fixture Perch deployment)
+        run: |
+          PUBLIC_PERCH_DEPLOYMENT="$(cat tests/support/perch-fixture-deployment.json)" \
+            npx astro build --root ./packages/frontend --outDir ./dist-perch
       - name: Fast UI e2e tier (shim — chromium/firefox/webkit)
         run: npx playwright test --grep @fast
       - name: Chromium CDP virtual-authenticator fidelity lane

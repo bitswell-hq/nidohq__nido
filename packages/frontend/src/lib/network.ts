@@ -1,18 +1,38 @@
 import { Asset, Networks, rpc } from "@stellar/stellar-sdk";
+import { setStorageNetwork } from "@nidohq/passkey-sdk";
 
-/** A network other than testnet, from `PUBLIC_STELLAR_NETWORK` at build time:
- *  `{"passphrase": "...", "rpc": "https://...", "friendbot": "https://..."}`
- *  (a local `stellar/quickstart` network for end-to-end tests). */
-const override = (() => {
-  const raw = import.meta.env.PUBLIC_STELLAR_NETWORK as string | undefined;
-  return raw ? (JSON.parse(raw) as { passphrase: string; rpc: string; friendbot: string }) : undefined;
+/** Single source of truth for the network this build targets. Set
+ *  PUBLIC_STELLAR_NETWORK=mainnet at build time to target mainnet; any other
+ *  value (including unset, e.g. local dev) defaults to testnet. */
+const rawNetwork = (import.meta.env.PUBLIC_STELLAR_NETWORK ?? "testnet").toLowerCase();
+export const NETWORK_NAME: "testnet" | "mainnet" = rawNetwork === "mainnet" ? "mainnet" : "testnet";
+
+/** The network as the wallet shows it (the header chips). Pages render this,
+ *  never a literal, so a mainnet build never labels itself testnet. */
+export const NETWORK_LABEL = NETWORK_NAME === "mainnet" ? "Mainnet" : "Testnet";
+
+// Wallet state in localStorage lives under `nido:<network>:*` (passkey-sdk
+// `nidoKey`), so a build for one network never reads another's.
+setStorageNetwork(NETWORK_NAME);
+
+/** A local network in place of testnet, from `PUBLIC_STELLAR_LOCAL_NETWORK`
+ *  at build time: `{"passphrase": "...", "rpc": "https://...", "friendbot":
+ *  "https://..."}` (a local `stellar/quickstart` network for end-to-end
+ *  tests). Ignored by a mainnet build. */
+const localNetwork = (() => {
+  const raw = import.meta.env.PUBLIC_STELLAR_LOCAL_NETWORK as string | undefined;
+  if (!raw || NETWORK_NAME === "mainnet") return undefined;
+  return JSON.parse(raw) as { passphrase: string; rpc: string; friendbot: string };
 })();
 
-/** Single source of truth for the network this build targets (testnet unless overridden). */
-export const NETWORK_NAME = "testnet" as const;
-export const NETWORK_PASSPHRASE = override?.passphrase ?? Networks.TESTNET;
-export const RPC_URL = override?.rpc ?? "https://soroban-testnet.stellar.org";
-export const FRIENDBOT_URL = override?.friendbot ?? "https://friendbot.stellar.org";
+export const NETWORK_PASSPHRASE =
+  NETWORK_NAME === "mainnet" ? Networks.PUBLIC : (localNetwork?.passphrase ?? Networks.TESTNET);
+export const RPC_URL =
+  NETWORK_NAME === "mainnet"
+    ? "https://mainnet.sorobanrpc.com"
+    : (localNetwork?.rpc ?? "https://soroban-testnet.stellar.org");
+/** Friendbot for testnet or the local network (mainnet has none). */
+export const FRIENDBOT_URL = localNetwork?.friendbot ?? "https://friendbot.stellar.org";
 
 /** The chain tip's ledger sequence, from the RPC's raw `getLatestLedger`
  *  answer. stellar-sdk's `getLatestLedger()` also decodes the tip's whole
@@ -24,8 +44,12 @@ export async function latestLedgerSequence(server = new rpc.Server(RPC_URL)): Pr
   return (await server._getLatestLedger()).sequence;
 }
 
+/** Stellar Expert's path segment for this network: it names mainnet
+ *  `public`, not `mainnet`. Every Stellar Expert URL builds from this. */
+export const EXPLORER_NETWORK: "public" | "testnet" = NETWORK_NAME === "mainnet" ? "public" : "testnet";
+
 /** Stellar Expert human-explorer base (used to link each row to its tx). */
-export const EXPLORER_BASE = `https://stellar.expert/explorer/${NETWORK_NAME}`;
+export const EXPLORER_BASE = `https://stellar.expert/explorer/${EXPLORER_NETWORK}`;
 
 /** Native-XLM Stellar Asset Contract id for this network. */
 export const NATIVE_SAC_ID = Asset.native().contractId(NETWORK_PASSPHRASE);

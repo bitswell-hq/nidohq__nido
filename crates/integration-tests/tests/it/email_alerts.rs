@@ -177,6 +177,8 @@ fn alert_fixture_matches_the_chain() {
     let recovery = Recovery {
         profile: Profile::Loss,
         mode: Mode::Guardian,
+        controller: w.controller.clone(),
+        pool: w.pool.clone(),
         guardians: std::vec![email.address.clone(), friend.address.clone()],
         quorum: 2,
         enrollment: None,

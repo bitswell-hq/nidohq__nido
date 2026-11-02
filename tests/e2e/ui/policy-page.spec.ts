@@ -131,6 +131,17 @@ test.describe('delegate-doc page — UI only (no chain) @fast', () => {
     await expect(page.locator('#approve')).toBeDisabled();
   });
 
+  test('rejects a request with a malformed limit instead of dropping the cap @fast', async ({ page }) => {
+    await page.goto(
+      `http://${FAKE_CONTRACT_ID.toLowerCase()}.localhost:${PORT}/security/delegate-doc/` +
+        `?origin=https%3A%2F%2Fdapp.example&target=${TARGET}&signer=${SIGNER_G}` +
+        `&duration=24h&limit=lots&limit_period=day&return=https%3A%2F%2Fdapp.example%2Fpage`,
+      { waitUntil: 'networkidle' },
+    );
+    await expect(page.locator('#status')).toContainText('Invalid limit amount');
+    await expect(page.locator('#approve')).toBeDisabled();
+  });
+
   test('renders a well-formed request but fails closed without the doc baseline @fast', async ({ page }) => {
     await page.goto(
       `http://${FAKE_CONTRACT_ID.toLowerCase()}.localhost:${PORT}/security/delegate-doc/` +
@@ -141,7 +152,10 @@ test.describe('delegate-doc page — UI only (no chain) @fast', () => {
     );
     await expect(page.locator('#origin-text')).toHaveText('https://dapp.example');
     await expect(page.locator('#signer-text')).toHaveText(SIGNER_G);
-    await expect(page.locator('#functions-text')).toContainText('udpate_message');
+    // The original one-grant params still read as one grant.
+    await expect(page.locator('[data-grant]')).toHaveCount(1);
+    await expect(page.locator('[data-grant="0"] .dd-rule')).toHaveText('status-note-session');
+    await expect(page.locator('[data-grant="0"] [data-field="functions"]')).toContainText('udpate_message');
     // Doc-only writes need the applied-document baseline; with no reachable
     // doc surface the page must refuse rather than build a blind update.
     await expect(page.locator('#status')).toContainText('cannot accept this request');

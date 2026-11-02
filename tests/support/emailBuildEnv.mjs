@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 const s = JSON.parse(readFileSync('target/email-e2e/stack.json', 'utf8'));
 const v = JSON.parse(readFileSync('target/email-e2e/services.json', 'utf8'));
 const env = {
-  PUBLIC_STELLAR_NETWORK: { passphrase: s.deployment.network, rpc: v.rpc, friendbot: v.friendbot },
+  PUBLIC_STELLAR_LOCAL_NETWORK: { passphrase: s.deployment.network, rpc: v.rpc, friendbot: v.friendbot },
   PUBLIC_PERCH_DEPLOYMENT: s.deployment,
   PUBLIC_EMAIL_RECOVERY: {
     ...s.email,

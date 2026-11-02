@@ -12,6 +12,18 @@ RUN xcaddy build --with github.com/mholt/caddy-ratelimit@v0.1.0
 
 FROM docker.io/openzeppelin/openzeppelin-relayer:v1.5.0
 
+# Which config/*.json gets baked in as /app/config/config.json — config.json
+# (testnet, the default) or config.mainnet.json. fly.toml doesn't set this
+# (relying on the default keeps testnet's build untouched);
+# fly.mainnet.toml's [build.args] sets it to config.mainnet.json. Needed
+# because config.json only seeds Redis on a relayer's very first boot
+# (README.md's "Changing Relayers/Signers After Initial Bootstrap") — if
+# both fly.toml and fly.mainnet.toml baked in the SAME file, whichever
+# environment booted for the first time more recently would decide what the
+# OTHER one's disaster-recovery reference says, with no way to tell from the
+# file alone which network's values it actually holds.
+ARG CONFIG_FILE=config.json
+
 USER root
 COPY --from=caddybuild /usr/bin/caddy /usr/bin/caddy
 
@@ -19,7 +31,11 @@ COPY plugins/channels /app/plugins/channels
 RUN cd /app/plugins/channels && pnpm install --prod --frozen-lockfile \
     && chown -R nonroot /app/plugins/channels
 
-COPY --chown=nonroot config/config.json /app/config/config.json
+COPY plugins/funder /app/plugins/funder
+RUN cd /app/plugins/funder && pnpm install --prod --frozen-lockfile \
+    && chown -R nonroot /app/plugins/funder
+
+COPY --chown=nonroot config/${CONFIG_FILE} /app/config/config.json
 COPY --chown=nonroot config/networks /app/config/networks
 COPY --chown=nonroot Caddyfile /app/Caddyfile
 RUN API_KEY=placeholder caddy validate --config /app/Caddyfile --adapter caddyfile

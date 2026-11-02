@@ -1,6 +1,10 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  // The email prover imports the circuit artifact from the repository root
+  // (circuits/email-recovery/artifacts/), outside this package.
+  server: { fs: { allow: [fileURLToPath(new URL('../..', import.meta.url))] } },
   test: {
     // jsdom so the @creit.tech/stellar-wallets-kit module imports (which touch
     // DOM/window at module scope) don't blow up on import. The unit tests

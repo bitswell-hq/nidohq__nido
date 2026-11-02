@@ -223,12 +223,14 @@ Timing (`agent_host::bench`, the method `agent-host bench` also runs):
 
 `harness/src/network/` starts the pinned `stellar/quickstart` image in local
 mode (`grant_relay::local`, the module the relay's own end-to-end test uses)
-and deploys from wasm: the evaluation's stateless deployer
-(`fixtures/stateless-deployer`) at the address `nido-eval local-registry`
-derives; Perch's doc compiler, interpreter and spending limit through it (the
+and deploys from wasm: the registry chain of `fixtures/local-registry.path`
+(each link an instance of `fixtures/stateless-deployer`: a root from a fixed
+TEST-ONLY deployer key and salt, then the named deploys `perch` and
+`constructorless`), whose last registry is what `nido-eval local-registry`
+prints; Perch's doc compiler, interpreter and spending limit through it (the
 bytes deployed on testnet); Perch's `WebAuthn` verifier; the Perch account
-`scripts/local-stack.sh` builds for this network and Nido's factory around it,
-pinned to that verifier; the grant signer; the dApp; and the attack suite's
+`scripts/local-stack.sh` builds with that registry path, and Nido's factory
+pinning that account's hash and that verifier; the grant signer; the dApp; and the attack suite's
 deployer (`fixtures/deployer`). Eight channel accounts are funded and handed
 to a custody key (master weight 0, the custody key their only signer) that
 the local Dfns mock holds; the relay signs through the Dfns client.
@@ -849,7 +851,7 @@ Compiling and instantiating the component: 22.0 (21.9–22.2) ms over 21 runs.
 - **On chain the same calls cost more CPU instructions than in the
   simulation** (the ratio is in [Summary](#summary)). The network runs
   stellar-core v29.0.0 at protocol 28 and the Perch account built for it
-  (another `stateless.id`, so other wasm); the simulation runs
+  (built for the local registry, so other wasm); the simulation runs
   `soroban-env-host` 27.0.1 and the testnet account's wasm. Which of these
   accounts for the difference is not measured.
 - **The local network's RPC server answers some requests from a ledger it

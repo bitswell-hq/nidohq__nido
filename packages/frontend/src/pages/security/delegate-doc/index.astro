@@ -1,11 +1,13 @@
 ---
 // The DOC-based sibling of /security/delegate/: a dApp requests a SCOPED
-// SESSION KEY as a perch policy-document update. The dApp holds a delegated
-// key (C… or G…) and asks for it to be allowed on one contract's named
-// functions, time-boxed, optionally spend-capped.
+// SESSION KEY as a perch policy-document update. The dApp holds a key — a
+// delegated C…/G… address or a passkey — and asks for it to be allowed on
+// one or more contracts' named functions, time-boxed, optionally
+// spend-capped. Several grants are one request: one review, one document
+// update, one passkey confirmation.
 //
 // Policy writes are DOC-ONLY: the wallet reads the account's currently
-// applied document, upserts the requested session rule into it (apply_doc
+// applied document, upserts the requested session rules into it (apply_doc
 // replaces the whole document, so the update carries existing rules
 // forward), previews the merged document's canonical JSON + doc_hash AND
 // the exact diff against the applied one — rules added / removed / modified
@@ -13,7 +15,9 @@
 //
 // The origin / return-URL validation (anti-redirect-abuse) mirrors
 // /security/delegate/ verbatim; the query-param contract is parsed by the
-// pure lib lib/policy/docRequest.
+// pure lib lib/policy/docRequest, whose header documents it. Opened as a
+// popup, the page and /sign/ after it post the result to the opener and
+// close; opened as a page, they redirect to the return URL.
 import NidoLayout from '../../../layouts/NidoLayout.astro';
 import Toast from '../../../components/Toast.astro';
 import PasskeySheet from '../../../components/PasskeySheet.astro';
@@ -29,46 +33,33 @@ import Icon from '../../../components/Icon.astro';
       <span style="width:40px;"></span>
     </div>
 
-    <div class="pad" style="padding-top:8px;">
-      <div class="card" style="padding:18px;">
-        <div style="display:flex;align-items:center;gap:11px;margin-bottom:14px;">
-          <div style="width:42px;height:42px;border-radius:13px;background:var(--acc-soft);display:grid;place-items:center;">
-            <Icon name="link" size={20} color="var(--acc)" />
-          </div>
-          <div style="min-width:0;">
-            <div style="font-weight:700;font-size:14.5px;">App requests a scoped session key</div>
-            <div class="mut mono" id="origin-text" style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
-          </div>
+    <div class="pad dd-body" style="padding-top:4px;">
+      <div class="card dd-head">
+        <div class="dd-head-icon">
+          <Icon name="link" size={20} color="var(--acc)" />
         </div>
-        <p class="mut" style="font-size:13px;line-height:1.55;margin:0;">
-          The app holds its own key and asks to use it with the contract below —
-          only the listed functions, only for a while. What you approve becomes
-          part of your account's policy <em>document</em>, so your policy page can
-          always show exactly this, verified against a hash stored on chain.
-        </p>
+        <div style="min-width:0;">
+          <div style="font-weight:700;font-size:14.5px;" id="request-title">App requests a scoped session key</div>
+          <div class="mut mono dd-origin" id="origin-text"></div>
+        </div>
       </div>
+      <p class="mut dd-intro">
+        The app holds its own key and asks to use it with the contracts below —
+        only the listed functions, only for a while.
+      </p>
 
-      <span class="section-label" style="display:block;margin:22px 0 10px;">What you're allowing</span>
-      <div class="card" style="overflow:hidden;padding:0;">
-        <div class="navrow" style="cursor:default;">
-          <div style="flex:1;">
-            <div style="font-weight:700;font-size:13.5px;">Allowed to use</div>
-            <div class="mut mono" style="font-size:12px;"><code id="target-text" style="word-break:break-all;display:block;"></code></div>
-          </div>
-        </div>
+      <span class="section-label dd-label">What you're allowing</span>
+      <div id="grants" class="dd-grants"></div>
+
+      <div class="card" style="overflow:hidden;padding:0;margin-top:12px;">
         <div class="navrow" style="cursor:default;">
           <div style="flex:1;min-width:0;">
             <div style="font-weight:700;font-size:13.5px;">App's key</div>
+            <div class="mut" id="signer-kind" style="font-size:12px;margin-top:2px;"></div>
             <div class="mut mono" style="font-size:11.5px;word-break:break-all;"><code id="signer-text" class="wrap"></code></div>
           </div>
         </div>
-        <div class="navrow" style="cursor:default;">
-          <div style="flex:1;min-width:0;">
-            <div style="font-weight:700;font-size:13.5px;">Functions</div>
-            <div class="mut" id="functions-text" style="font-size:12.5px;margin-top:6px;line-height:1.5;"></div>
-          </div>
-        </div>
-        <div class="navrow" style="cursor:default;">
+        <div class="navrow" style="cursor:default;border-bottom:none;">
           <div style="flex:1;min-width:0;">
             <div style="font-weight:700;font-size:13.5px;">Expires</div>
             <select id="duration-sel" class="input"
@@ -81,31 +72,20 @@ import Icon from '../../../components/Icon.astro';
             <div class="mut" id="expiry-text" style="font-size:12.5px;margin-top:8px;line-height:1.5;"></div>
           </div>
         </div>
-        <div class="navrow" style="cursor:default;border-bottom:none;">
-          <div style="flex:1;min-width:0;">
-            <div style="font-weight:700;font-size:13.5px;">Spending cap</div>
-            <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:8px;">
-              <input type="checkbox" id="cap-on" /> Cap what this key can spend
-            </label>
-            <div id="cap-fields" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;" hidden>
-              <input id="cap-xlm" class="input" inputmode="decimal" placeholder="Amount (XLM)" style="flex:1 1 120px;" />
-              <select id="cap-period" class="input" style="width:auto;">
-                <option value="day">per day</option>
-                <option value="week">per week</option>
-                <option value="30d">per 30 days</option>
-              </select>
-            </div>
-            <div class="mut" id="cap-note" style="font-size:12.5px;margin-top:8px;line-height:1.5;"></div>
-          </div>
-        </div>
       </div>
 
-      <span class="section-label" style="display:block;margin:22px 0 10px;">What changes</span>
+      <span class="section-label dd-label">You're approving</span>
+      <div class="card" style="padding:16px;display:grid;gap:6px;font-size:12.5px;line-height:1.5;">
+        <div id="scope-grants" style="display:grid;gap:6px;">—</div>
+        <div><strong>Expires:</strong> <span id="scope-expiry">—</span></div>
+      </div>
+
+      <span class="section-label dd-label">What changes</span>
       <div class="card" style="padding:16px;">
         <div id="doc-diff" class="mut" style="font-size:12.5px;">Reading the applied document…</div>
       </div>
 
-      <span class="section-label" style="display:block;margin:22px 0 10px;">The document (after this update)</span>
+      <span class="section-label dd-label">The document (after this update)</span>
       <div class="card" style="padding:16px;display:grid;gap:8px;">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <span class="mut" style="font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;">doc_hash</span>
@@ -113,16 +93,23 @@ import Icon from '../../../components/Icon.astro';
         </div>
         <div id="doc-preview" class="mut" style="font-size:12.5px;">—</div>
         <p class="mut" style="font-size:12px;margin:4px 0 0;line-height:1.5;">
-          After applying, this document is always visible on
-          <a class="link" href="/account/policy/">your Policy page</a>.
+          What you approve becomes part of your account's policy
+          <em>document</em>, so <a class="link" href="/account/policy/">your Policy page</a>
+          can always show exactly this, verified against a hash stored on chain.
         </p>
       </div>
+    </div>
+  </div>
 
-      <div class="actions" style="display:flex;gap:10px;margin-top:18px;">
+  <!-- Outside the scroll area, so the decision never scrolls out of view:
+       pinned to the card's foot on desktop, to the screen's on a phone. -->
+  <div class="dd-actions">
+    <div class="dd-actions-in">
+      <p id="status" role="status" aria-live="polite" class="mut" style="font-size:12.5px;margin:0 0 10px;"></p>
+      <div style="display:flex;gap:10px;">
         <button id="approve" class="btn acc" type="button" style="flex:1;">Review &amp; continue</button>
         <button id="deny" class="btn ghost" type="button" style="flex:0 0 auto;width:auto;">Cancel</button>
       </div>
-      <p id="status" role="status" aria-live="polite" class="mut" style="font-size:12.5px;margin-top:12px;"></p>
     </div>
   </div>
 
@@ -131,18 +118,25 @@ import Icon from '../../../components/Icon.astro';
 </NidoLayout>
 
 <script>
-  import { contractIdFromHostname, canonicalJson, docHash, parsePolicyDocJson } from '@nidohq/passkey-sdk';
+  import { contractIdFromHostname, canonicalJson, docCapProblem, docHash, parsePolicyDocJson } from '@nidohq/passkey-sdk';
   import type { PolicyDoc } from '@nidohq/passkey-sdk';
+  import { postResultToOpener } from '@nidohq/stellar-wallets-kit-module';
   import { NETWORK_PASSPHRASE, latestLedgerSequence } from '../../../lib/network.js';
   import {
     DOC_DURATIONS,
     DOC_DURATION_LABEL,
     buildSessionGrantOperation,
+    describeSessionScope,
+    limitNoneHonoured,
     parseDocDelegateParams,
+    sessionSignerDraft,
+    type DocDelegateGrant,
   } from '../../../lib/policy/docRequest.js';
+  import { NO_CAP_NO_TOKEN_FUNCTIONS } from '../../../lib/policy/tokenFunctions.js';
+  import { canTransfer } from '../../../lib/policy/reviewText.js';
   import {
     adminBaseline,
-    upsertSessionRule,
+    upsertSessionRules,
     validateSessionDocDraft,
     type DocLimits,
     type SessionDocDraft,
@@ -151,7 +145,7 @@ import Icon from '../../../components/Icon.astro';
   import { summarizeDoc } from '../../../lib/policy/docView.js';
   import { renderDocDiffHtml, renderDocPreviewHtml } from '../../../components/PolicyInspector.js';
   import { fetchAppliedDocument, fetchDocLimits, fetchDocSurface } from '../../../lib/policy/docPolicyFetch.js';
-  import { fetchDefaultRuleAuthInfo } from '../../../lib/policyChainFetch.js';
+  import { fetchDefaultRuleAuthInfo, fetchVerifierAddress } from '../../../lib/policyChainFetch.js';
   import { bytesToHex } from '../../../lib/policy/policyView.js';
   import { PERIOD_LEDGERS, stroopsFromXlm, type LimitPeriod } from '../../../lib/spendingLimitParams.js';
   import { stroopsToXlm } from '../../../lib/money.js';
@@ -173,36 +167,173 @@ import Icon from '../../../components/Icon.astro';
 
   const req = parsed.ok ? parsed.req : null;
 
-  // Surface the request.
+  // Surface the request. Every dApp-supplied string reaches the DOM as
+  // textContent, never markup.
   document.getElementById('origin-text')!.textContent = req?.origin ?? '(missing)';
-  document.getElementById('target-text')!.textContent = req?.target ?? '(missing)';
-  document.getElementById('signer-text')!.textContent = req?.signer ?? '(missing)';
-  document.getElementById('functions-text')!.textContent = req
-    ? req.functions
-      ? `Only: ${req.functions.join(', ')}`
-      : 'Any function on the contract.'
-    : '(missing)';
+  const requestTitle = document.getElementById('request-title')!;
+  if (req && req.grants.length > 1) {
+    requestTitle.textContent = `App requests a scoped session key for ${req.grants.length} rules`;
+  }
+  const signerText = document.getElementById('signer-text')!;
+  const signerKind = document.getElementById('signer-kind')!;
+  if (req?.signer.kind === 'passkey') {
+    signerKind.textContent = 'A passkey the app holds (P-256 public key)';
+    signerText.textContent = req.signer.publicKeyHex;
+  } else {
+    signerKind.textContent = req ? 'An address the app controls' : '';
+    signerText.textContent = req?.signer.address ?? '(missing)';
+  }
 
   const durationSel = document.getElementById('duration-sel') as HTMLSelectElement;
-  const expiryText = document.getElementById('expiry-text')!;
-  const capOn = document.getElementById('cap-on') as HTMLInputElement;
-  const capFields = document.getElementById('cap-fields')!;
-  const capXlm = document.getElementById('cap-xlm') as HTMLInputElement;
-  const capPeriod = document.getElementById('cap-period') as HTMLSelectElement;
-  const capNote = document.getElementById('cap-note')!;
+  const expiryEl = document.getElementById('expiry-text')!;
+  const scopeGrants = document.getElementById('scope-grants')!;
+  const scopeExpiry = document.getElementById('scope-expiry')!;
   const docHashEl = document.getElementById('doc-hash')!;
   const docPreviewEl = document.getElementById('doc-preview')!;
   const docDiffEl = document.getElementById('doc-diff')!;
 
-  if (req) {
-    durationSel.value = req.duration;
-    if (req.limitStroops !== null) {
-      capOn.checked = true;
-      capFields.hidden = false;
-      capXlm.value = stroopsToXlm(req.limitStroops);
-      capPeriod.value = req.limitPeriod;
-    }
+  /** One grant's card and its cap controls. A call-only grant the app
+   *  declared uncapped (limitNoneHonoured) has no cap controls at all: a cap
+   *  allows token transfers only, so it would block a rule that makes calls. */
+  interface GrantView {
+    grant: DocDelegateGrant;
+    /** "Rule k of K", or "Already in place" (see labelGrants). */
+    count: HTMLElement;
+    cap: {
+      on: HTMLInputElement;
+      fields: HTMLElement;
+      xlm: HTMLInputElement;
+      period: HTMLSelectElement;
+      note: HTMLElement;
+      uncappedRow: HTMLElement;
+      uncappedAck: HTMLInputElement;
+    } | null;
   }
+
+  function el<K extends keyof HTMLElementTagNameMap>(
+    tag: K,
+    cls: string,
+    text?: string,
+  ): HTMLElementTagNameMap[K] {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  /** The functions a grant allows, each shown as a method (`guess()`), as
+   *  `.fn-call` renders them in the document preview and on /sign/. */
+  function functionNodes(functions: string[] | undefined): Node[] {
+    if (functions === undefined) return [document.createTextNode('Any function')];
+    return functions.flatMap((fn, i) => [
+      document.createTextNode(i === 0 ? 'Only ' : ', '),
+      el('code', 'fn-call', `${fn}()`),
+    ]);
+  }
+
+  /** Whom a grant's `transfer` may pay: its `to` (and, when that is the
+   *  contract another grant of the request calls, which one), or anyone. */
+  function payeeNode(grant: DocDelegateGrant): HTMLElement {
+    const node = el('span', 'dd-v');
+    node.dataset.field = 'pays-to';
+    if (grant.to === undefined) {
+      // The cap row below bounds it; the summary says both together.
+      node.textContent = 'Any address';
+      return node;
+    }
+    const sibling = req?.grants.find((g) => g !== grant && g.target === grant.to);
+    node.append(
+      document.createTextNode('Only '),
+      el('code', 'mono dd-addr', grant.to),
+      ...(sibling ? [document.createTextNode(` — the contract “${sibling.label}” calls`)] : []),
+    );
+    return node;
+  }
+
+  function grantRow(key: string, value: HTMLElement): HTMLElement {
+    const row = el('div', 'dd-row');
+    row.append(el('span', 'dd-k', key), value);
+    return row;
+  }
+
+  function renderGrant(grant: DocDelegateGrant, i: number, n: number): GrantView {
+    const card = el('div', 'card dd-grant');
+    card.dataset.grant = String(i);
+    const head = el('div', 'dd-grant-head');
+    const count = el('span', 'mut dd-count', n > 1 ? `Rule ${i + 1} of ${n}` : '');
+    head.append(el('span', 'dd-rule mono', grant.label), count);
+    card.append(head);
+
+    const target = el('code', 'dd-v mono dd-addr', grant.target);
+    target.dataset.field = 'target';
+    card.append(grantRow('Contract', target));
+    const functions = el('span', 'dd-v');
+    functions.append(...functionNodes(grant.functions));
+    functions.dataset.field = 'functions';
+    card.append(grantRow('Functions', functions));
+    if (canTransfer(grant.functions)) card.append(grantRow('Pays to', payeeNode(grant)));
+
+    if (limitNoneHonoured(grant)) {
+      // A call-only rule: say what no cap means here, not "no cap".
+      const none = el('span', 'dd-v', NO_CAP_NO_TOKEN_FUNCTIONS);
+      none.dataset.field = 'cap';
+      card.append(grantRow('Cap', none));
+      grants.append(card);
+      return { grant, count, cap: null };
+    }
+
+    const box = el('div', 'dd-v dd-cap');
+    box.dataset.field = 'cap';
+    const toggle = el('label', 'dd-check');
+    const on = el('input', '');
+    on.type = 'checkbox';
+    on.dataset.capOn = '';
+    toggle.append(on, document.createTextNode(' Cap what this key can spend'));
+    const fields = el('div', 'dd-cap-fields');
+    const xlm = el('input', 'input');
+    xlm.inputMode = 'decimal';
+    xlm.placeholder = 'Amount (XLM)';
+    xlm.setAttribute('aria-label', `Cap for ${grant.label}, in XLM`);
+    xlm.dataset.capXlm = '';
+    const period = el('select', 'input');
+    period.setAttribute('aria-label', `Cap window for ${grant.label}`);
+    for (const [value, label] of [['day', 'per day'], ['week', 'per week'], ['30d', 'per 30 days']]) {
+      const o = el('option', '', label);
+      o.value = value!;
+      period.append(o);
+    }
+    fields.append(xlm, period);
+    const note = el('div', 'mut dd-note');
+    const uncappedRow = el('label', 'dd-check');
+    const uncappedAck = el('input', '');
+    uncappedAck.type = 'checkbox';
+    uncappedAck.dataset.uncappedAck = '';
+    uncappedRow.append(uncappedAck, document.createTextNode(' Let this key spend without any cap'));
+    box.append(toggle, fields, note, uncappedRow);
+    card.append(grantRow('Cap', box));
+
+    if (grant.cap !== null && grant.cap !== 'none') {
+      on.checked = true;
+      xlm.value = stroopsToXlm(grant.cap.stroops);
+      period.value = grant.cap.period;
+    }
+    fields.hidden = !on.checked;
+    on.addEventListener('change', () => {
+      fields.hidden = !on.checked;
+      syncPreview();
+    });
+    // Typing an amount refreshes the preview once the typing pauses; Approve
+    // reads the controls afresh, so it never acts on a stale preview.
+    xlm.addEventListener('input', syncPreviewSoon);
+    period.addEventListener('change', syncPreview);
+    uncappedAck.addEventListener('change', syncPreview);
+    grants.append(card);
+    return { grant, count, cap: { on, fields, xlm, period, note, uncappedRow, uncappedAck } };
+  }
+
+  const grants = document.getElementById('grants')!;
+  const views: GrantView[] = req ? req.grants.map((g, i, all) => renderGrant(g, i, all.length)) : [];
+  if (req) durationSel.value = req.duration;
 
   // The expiry ledger is anchored ONCE at page load, so the previewed
   // doc_hash is byte-identical to what approve signs (a minutes-old anchor
@@ -215,6 +346,18 @@ import Icon from '../../../components/Icon.astro';
       latestLedger = null;
     }
   })();
+
+  // A passkey session key is declared against the verifier THIS account
+  // trusts for its passkeys (as /security/delegate/ does).
+  let verifierAddress: string | null = null;
+  let verifierFailed = false;
+  const verifierReady: Promise<void> =
+    account && req?.signer.kind === 'passkey'
+      ? fetchVerifierAddress(account).then(
+          (v) => void (verifierAddress = v),
+          () => void (verifierFailed = true),
+        )
+      : Promise.resolve();
 
   // The merge baseline and the diff's "before" side: the applied document,
   // or — on a first apply — the synthesized owner-admin baseline (apply_doc
@@ -290,55 +433,117 @@ import Icon from '../../../components/Icon.astro';
     return latestLedger == null ? null : latestLedger + off;
   }
 
-  function draftFromControls(): SessionDocDraft | null {
-    if (!req) return null;
-    let cap: SessionDocDraft['cap'] = null;
-    if (capOn.checked) {
-      // Parse the visible XLM amount; invalid input yields stroops "0",
-      // which validateSessionDocDraft rejects with a real message.
-      let stroops = '0';
-      try {
-        stroops = stroopsFromXlm(capXlm.value).toString();
-      } catch {
-        stroops = '0';
-      }
-      const period = (capPeriod.value in PERIOD_LEDGERS ? capPeriod.value : 'day') as LimitPeriod;
-      cap = { stroops, periodLedgers: PERIOD_LEDGERS[period] };
+  /** The cap a grant's controls describe: null when there is none (declared
+   *  uncapped, or switched off), `invalid` when it is on but the amount does
+   *  not parse. */
+  function capFromControls(v: GrantView): { stroops: string; period: LimitPeriod } | 'invalid' | null {
+    if (v.cap === null || !v.cap.on.checked) return null;
+    const period = (Object.hasOwn(PERIOD_LEDGERS, v.cap.period.value) ? v.cap.period.value : 'day') as LimitPeriod;
+    try {
+      return { stroops: stroopsFromXlm(v.cap.xlm.value).toString(), period };
+    } catch {
+      return 'invalid';
     }
-    return {
-      name: req.label,
-      signer: { kind: 'delegated', address: req.signer },
-      targetContract: req.target,
-      functionsInput: req.functions?.join(', ') ?? '',
-      notAfterLedger: notAfterFromControls(),
-      cap,
-    };
+  }
+
+  /** One draft per grant, or null until the signer is known (a passkey
+   *  waits on the account's verifier). */
+  function draftsFromControls(): SessionDocDraft[] | null {
+    if (!req) return null;
+    const signer = sessionSignerDraft(req.signer, verifierAddress);
+    if (signer === null) return null;
+    const notAfterLedger = notAfterFromControls();
+    return views.map((v) => {
+      const controls = capFromControls(v);
+      // An unparseable amount yields stroops "0", which
+      // validateSessionDocDraft rejects with a real message.
+      const cap: SessionDocDraft['cap'] =
+        controls === null
+          ? null
+          : controls === 'invalid'
+            ? { stroops: '0', periodLedgers: PERIOD_LEDGERS.day }
+            : { stroops: controls.stroops, periodLedgers: PERIOD_LEDGERS[controls.period] };
+      return {
+        name: v.grant.label,
+        signer,
+        targetContract: v.grant.target,
+        functionsInput: v.grant.functions?.join(', ') ?? '',
+        ...(v.grant.to !== undefined ? { recipient: v.grant.to } : {}),
+        notAfterLedger,
+        cap,
+      };
+    });
+  }
+
+  /** The draft problems, each naming its rule when there are several. */
+  function draftProblems(drafts: SessionDocDraft[], limits: DocLimits | null): string[] {
+    return drafts.flatMap((d) => {
+      const { errors } = validateSessionDocDraft(d, limits, account ?? undefined);
+      return drafts.length > 1 ? errors.map((e) => `${d.name}: ${e}`) : errors;
+    });
   }
 
   function syncPreview(): void {
     const off = req ? DOC_DURATIONS[durationSel.value] : null;
-    expiryText.textContent =
+    expiryEl.textContent =
       off == null
         ? 'Never — stays valid until you revoke it.'
         : latestLedger == null
           ? `≈ ${off.toLocaleString()} ledgers from now.`
           : `At ledger ${(latestLedger + off).toLocaleString()} (≈ ${off.toLocaleString()} ledgers from now).`;
-    capNote.textContent = capOn.checked
-      ? 'With a cap, only token transfers are allowed under this key — other calls in the scoped contract are blocked.'
-      : 'No cap — the key can do whatever the allowed functions permit until it expires.';
+    for (const v of views) {
+      if (v.cap === null) continue;
+      v.cap.note.textContent = v.cap.on.checked
+        ? 'With a cap, this rule allows token transfers only — other calls on the contract are blocked.'
+        : v.grant.cap === null
+          ? 'The app did not ask for a cap. Without one, the key can do whatever the allowed functions permit until it expires.'
+          : v.grant.cap === 'none'
+            ? 'The app asked for no cap, but this rule allows a token function, so the choice is yours: set a cap, or confirm the key may spend without one.'
+            : 'No cap — the key can do whatever the allowed functions permit until it expires.';
+      v.cap.uncappedRow.hidden = v.cap.on.checked;
+    }
 
-    const draft = draftFromControls();
-    if (!draft) return;
-    if (docLimits === null) {
+    if (!req) return;
+    const notAfterLedger = notAfterFromControls();
+    const scopes = views.map((v) => {
+      const capControls = capFromControls(v);
+      const scope = describeSessionScope({
+        cap: capControls === 'invalid' ? null : capControls,
+        functions: v.grant.functions,
+        ...(v.grant.to !== undefined ? { to: v.grant.to } : {}),
+        duration: durationSel.value,
+        notAfterLedger,
+      });
+      const line = el('div', '');
+      line.dataset.scope = v.grant.label;
+      line.append(
+        el('strong', '', `${v.grant.label}: `),
+        ...functionNodes(v.grant.functions),
+        el('span', 'dd-addr', ` on ${v.grant.target}. `),
+        capControls === 'invalid'
+          ? el('span', '', 'Enter a valid cap amount.')
+          : el('span', scope.warn ? 'tone-warn' : '', scope.amount),
+        el('span', 'dd-addr', scope.recipient === null ? '.' : `, ${scope.recipient}.`),
+      );
+      return { line, expiry: scope.expiry };
+    });
+    scopeGrants.replaceChildren(...scopes.map((s) => s.line));
+    // One duration for every grant.
+    scopeExpiry.textContent = scopes[0]?.expiry ?? '—';
+
+    const drafts = draftsFromControls();
+    if (docLimits === null || drafts === null) {
       docDiffEl.textContent = docBaselineBlocked
         ? (status.textContent ?? 'Unavailable.')
-        : 'Reading the applied document…';
+        : verifierFailed
+          ? "Could not resolve the account's passkey verifier — approve to try again."
+          : 'Reading the applied document…';
       return;
     }
-    const check = validateSessionDocDraft(draft, docLimits, account ?? undefined);
-    if (!check.ok) {
+    const problems = draftProblems(drafts, docLimits);
+    if (problems.length > 0) {
       docHashEl.textContent = '—';
-      docPreviewEl.textContent = check.errors.join(' ');
+      docPreviewEl.textContent = problems.join(' ');
       return;
     }
     if (!baselineLoaded || baselineDoc === null) {
@@ -348,27 +553,57 @@ import Icon from '../../../components/Icon.astro';
       return;
     }
     try {
-      const { doc } = upsertSessionRule(baselineDoc, draft, NETWORK_PASSPHRASE);
+      const doc = upsertSessionRules(baselineDoc, drafts, NETWORK_PASSPHRASE);
       const hash = docHash(doc);
-      docHashEl.textContent = hash;
-      docPreviewEl.innerHTML = renderDocPreviewHtml(summarizeDoc(doc, hash), canonicalJson(doc));
+      const tooLarge = docCapProblem(doc, docLimits);
+      docHashEl.textContent = tooLarge === undefined ? hash : '—';
+      if (tooLarge === undefined) {
+        docPreviewEl.innerHTML = renderDocPreviewHtml(summarizeDoc(doc, hash), canonicalJson(doc));
+      } else {
+        docPreviewEl.textContent = tooLarge;
+      }
       // First apply: nothing was applied before, so everything — the
       // anti-brick admin rule included — renders as newly granted.
-      docDiffEl.innerHTML = renderDocDiffHtml(diffPolicyDocs(isFirstApply ? null : baselineDoc, doc));
+      const diff = diffPolicyDocs(isFirstApply ? null : baselineDoc, doc);
+      docDiffEl.innerHTML = renderDocDiffHtml(diff);
+      const changed = new Set([...diff.rulesAdded.map((r) => r.name), ...diff.rulesModified.map((m) => m.name)]);
+      labelGrants(doc.rules.filter((r) => r.scope.type === 'contract' && changed.has(r.name)).map((r) => r.name));
     } catch (e) {
       docHashEl.textContent = '—';
       docPreviewEl.textContent = `Cannot build the update: ${e instanceof Error ? e.message : String(e)}`;
     }
   }
 
+  /**
+   * Number the grants as /sign/ will: by the rules this approval adds or
+   * changes, in the order the built document holds them. A grant whose rule
+   * is already applied exactly as asked reads "Already in place", and the
+   * title says how many are.
+   */
+  function labelGrants(changing: string[]): void {
+    if (!req) return;
+    for (const v of views) {
+      const k = changing.indexOf(v.grant.label);
+      v.count.textContent = k < 0 ? 'Already in place' : changing.length > 1 ? `Rule ${k + 1} of ${changing.length}` : '';
+    }
+    const inPlace = views.filter((v) => !changing.includes(v.grant.label)).length;
+    if (views.length > 1) {
+      requestTitle.textContent =
+        `App requests a scoped session key for ${views.length} rules` +
+        (inPlace > 0 ? ` (${inPlace} already in place)` : '');
+    }
+  }
+
+  let syncTimer: ReturnType<typeof setTimeout> | undefined;
+  /** syncPreview, 150 ms after the last call: for keystrokes. */
+  function syncPreviewSoon(): void {
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(syncPreview, 150);
+  }
+
   durationSel.addEventListener('change', syncPreview);
-  capOn.addEventListener('change', () => {
-    capFields.hidden = !capOn.checked;
-    syncPreview();
-  });
-  capXlm.addEventListener('input', syncPreview);
-  capPeriod.addEventListener('change', syncPreview);
   void latestLedgerReady.then(syncPreview);
+  void verifierReady.then(syncPreview);
   void baselineReady.then(syncPreview);
   syncPreview();
 
@@ -395,7 +630,10 @@ import Icon from '../../../components/Icon.astro';
 
   denyBtn.addEventListener('click', () => {
     const back = backToDapp('?delegation=cancelled');
-    if (back) window.location.href = back;
+    if (!back || !req) return;
+    // A popup hands the result to the app that opened it and closes, as
+    // /sign/ does; a page opened by redirect goes back the same way.
+    postResultToOpener('?delegation=cancelled', req.origin, back);
   });
 
   approveBtn.addEventListener('click', async () => {
@@ -409,8 +647,21 @@ import Icon from '../../../components/Icon.astro';
         return;
       }
 
-      // Both anchors must exist before the update can be built: the expiry
-      // ledger (non-"none" durations) and the applied-document baseline.
+      // An uncapped grant is never a default: the user must choose it,
+      // unless the app declared a call-only rule uncapped (limitNoneHonoured).
+      const unchosen = views.find((v) => v.cap !== null && !v.cap.on.checked && !v.cap.uncappedAck.checked);
+      if (unchosen) {
+        status.textContent =
+          views.length > 1
+            ? `Set a spending cap on "${unchosen.grant.label}", or confirm that its key may spend without one.`
+            : 'Set a spending cap, or confirm that this key may spend without one.';
+        approveBtn.disabled = false;
+        return;
+      }
+
+      // Every anchor must exist before the update can be built: the expiry
+      // ledger (non-"none" durations), a passkey's verifier, and the
+      // applied-document baseline.
       status.textContent = 'Anchoring expiry…';
       await latestLedgerReady;
       if (DOC_DURATIONS[durationSel.value] != null && latestLedger == null) {
@@ -418,14 +669,42 @@ import Icon from '../../../components/Icon.astro';
         approveBtn.disabled = false;
         return;
       }
+      await verifierReady;
+      if (req.signer.kind === 'passkey' && verifierAddress === null) {
+        try {
+          verifierAddress = await fetchVerifierAddress(account);
+          verifierFailed = false;
+          syncPreview();
+        } catch {
+          status.textContent = "Could not resolve the account's passkey verifier — try again.";
+          approveBtn.disabled = false;
+          return;
+        }
+      }
       status.textContent = 'Reading the applied document…';
       await baselineReady;
       if (docBaselineBlocked || baselineDoc === null || docLimits === null) return; // refusal above already set status + disabled
 
-      const draft = draftFromControls()!;
-      const check = validateSessionDocDraft(draft, docLimits, account ?? undefined);
-      if (!check.ok) {
-        status.textContent = check.errors.join(' ');
+      const drafts = draftsFromControls()!;
+      const problems = draftProblems(drafts, docLimits);
+      if (problems.length > 0) {
+        status.textContent = problems.join(' ');
+        approveBtn.disabled = false;
+        return;
+      }
+      const operation = buildSessionGrantOperation({
+        baseline: baselineDoc,
+        baselineRevision,
+        isFirstApply,
+        drafts,
+        networkPassphrase: NETWORK_PASSPHRASE,
+        expiryLabel: DOC_DURATION_LABEL[durationSel.value] ?? 'Until revoked',
+      });
+      // Every grant adds a rule: refuse here, in words, a document the
+      // account's compiler would refuse at /sign/.
+      const tooLarge = docCapProblem(parsePolicyDocJson(operation.docJson), docLimits);
+      if (tooLarge !== undefined) {
+        status.textContent = tooLarge;
         approveBtn.disabled = false;
         return;
       }
@@ -433,16 +712,11 @@ import Icon from '../../../components/Icon.astro';
         v: 1,
         kind: 'session-grant',
         account,
-        operation: buildSessionGrantOperation({
-          baseline: baselineDoc,
-          baselineRevision,
-          isFirstApply,
-          draft,
-          networkPassphrase: NETWORK_PASSPHRASE,
-          expiryLabel: DOC_DURATION_LABEL[durationSel.value] ?? 'Until revoked',
-        }),
+        operation,
         title: 'Grant a session key',
-        subtitle: `${req.origin} wants a scoped session key.`,
+        // /sign/ reads "<origin> wants this account to sign a <subtitle>.":
+        // a noun phrase, never a sentence of its own.
+        subtitle: req.grants.length > 1 ? `session key grant for ${req.grants.length} rules` : 'session key grant',
         submitMode: 'relayer',
         returnTarget: {
           type: 'dapp',
@@ -452,6 +726,8 @@ import Icon from '../../../components/Icon.astro';
         },
       };
 
+      // /sign/ runs in this same window, so a popup stays a popup: it posts
+      // the result to the opener and closes when the grant lands.
       const id = stashSignRequest(signReq);
       window.location.href = `/sign/?req=${id}`;
     } catch (e) {
@@ -465,6 +741,57 @@ import Icon from '../../../components/Icon.astro';
 <style is:global>
   .pad code { font-family: var(--mono); }
   code.wrap { word-break: break-all; }
+  /* The request at a glance: the grants (and their caps) come first, and
+     the decision sits outside the scroll area, so neither needs scrolling
+     at 1280×720 or on a phone. Grant cards are built at runtime, hence
+     global styles. */
+  .dd-head { display: flex; align-items: center; gap: 11px; padding: 14px 16px; }
+  .dd-head-icon {
+    width: 38px; height: 38px; flex: 0 0 auto; border-radius: 12px;
+    background: var(--acc-soft); display: grid; place-items: center;
+  }
+  .dd-origin { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dd-intro { font-size: 12.5px; line-height: 1.5; margin: 8px 2px 0; }
+  .dd-label { display: block; margin: 16px 0 8px; }
+  .dd-grants { display: grid; gap: 10px; }
+  .dd-grant { padding: 12px 14px; display: grid; gap: 6px; }
+  .dd-grant-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .dd-rule { font-weight: 700; font-size: 13.5px; color: var(--ink); word-break: break-all; }
+  .dd-count { font-size: 11.5px; white-space: nowrap; }
+  .dd-row { display: grid; grid-template-columns: 68px minmax(0, 1fr); gap: 8px; align-items: baseline; }
+  .dd-k { font-size: 12px; font-weight: 700; color: var(--mut); }
+  .dd-v { font-size: 12.5px; line-height: 1.45; min-width: 0; }
+  .dd-addr { word-break: break-all; }
+  code.dd-addr { font-size: 11.5px; }
+  .dd-cap { display: grid; gap: 6px; }
+  .dd-check { display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; line-height: 1.45; }
+  .dd-check input { margin-top: 2px; }
+  .dd-cap-fields { display: flex; gap: 8px; }
+  .dd-cap-fields .input { height: 38px; font-size: 13.5px; padding: 0 10px; }
+  .dd-cap-fields input.input { flex: 1 1 0; min-width: 0; }
+  .dd-cap-fields select.input { flex: 0 0 auto; width: auto; }
+  .dd-note { font-size: 12px; line-height: 1.45; }
+  /* A display rule must never beat the hidden attribute (the cap fields
+     once stayed on screen, empty, while "hidden"). */
+  .dd-body [hidden] { display: none !important; }
+  /* The inner box lines up with the content column (the scroll area's
+     600px cap, less its 24px + 22px padding on the desktop rail). */
+  .dd-actions { flex: 0 0 auto; background: var(--paper-2); padding: 0 22px; }
+  .dd-actions-in {
+    max-width: 508px; margin-inline: auto; border-top: 1px solid var(--line);
+    padding: 12px 0 calc(14px + env(safe-area-inset-bottom));
+  }
+  .dd-actions #status:empty { display: none; }
+  /* A phone scrolls the page, not a card: pin the decision to the screen
+     and leave room for it below everything else. */
+  @media (max-width: 799px) {
+    .dd-actions {
+      position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+      width: 100%; max-width: 448px; z-index: 30; box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.06);
+    }
+    .dd-actions-in { border-top: none; }
+    .stage { padding-bottom: 150px; }
+  }
   /* Diff-panel styles (shared markup with the policy page's builder). */
   .pol-diff { display: grid; gap: 8px; }
   .pol-diff-row { display: flex; gap: 10px; align-items: flex-start; }
