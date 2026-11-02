@@ -411,7 +411,7 @@ describe('stale or malicious registry keys', () => {
 
   scenario('registry-pin-expiry', async () => {
     // Within the pin's window an approval counts; after it, the pin root is refused and the registry has not admitted the key.
-    P = await enroll({ chain, stack, apex: APEX, label: 'P', inbox: new Inbox('p.pinned@gmail.com'), key: gmail, helpers: 1, quorum: 2, delayLedgers: 20, expiryLedgers: 2_000, pinLedgers: 45 });
+    P = await enroll({ chain, stack, apex: APEX, label: 'P', inbox: new Inbox('p.pinned@gmail.com'), key: gmail, helpers: 1, quorum: 2, delayLedgers: 20, expiryLedgers: 2_000, pinLedgers: 90 });
     roles.set(P.guardian, 'guardian');
     roles.set(P.account.address, 'account');
     const p1 = await P.beginLostKey(P.payer, newOwner('P1'));

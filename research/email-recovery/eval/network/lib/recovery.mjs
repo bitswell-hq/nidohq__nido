@@ -8,7 +8,6 @@
 import { buildPolicyDoc, canonicalJson, perch } from '@nidohq/passkey-sdk';
 import { Keypair } from '@stellar/stellar-sdk';
 import { NidoAccount, Passkey } from './account.mjs';
-import { sc } from './chain.mjs';
 import { ALLOW_ALL, approvalEntry, approve, deployGuardian, freshRho, pinFor, subjectFor, submitGuardianOp } from './email.mjs';
 
 export const { EvidenceDomain } = perch;
@@ -169,4 +168,3 @@ export async function enroll({
   });
 }
 
-export { sc };

@@ -18,13 +18,12 @@ import {
   bytesToBigInt,
   encodeRecoveryEmail,
   initHashes,
-  keyHash,
   noirInputs,
   pinTree,
   publicInputBytes,
   recoverySubject,
 } from '@nidohq/email-recovery';
-import { Address, Operation, StrKey, hash, xdr } from '@stellar/stellar-sdk';
+import { Address, Operation, xdr } from '@stellar/stellar-sdk';
 import { sc } from './chain.mjs';
 
 const repo = new URL('../../../../../', import.meta.url);
@@ -240,4 +239,4 @@ export function submitGuardianOp({ controller, account, attemptId, domain, guard
   });
 }
 
-export { StrKey, hash, sha256 };
+export { sha256 };

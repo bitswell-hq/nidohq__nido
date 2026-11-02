@@ -5,10 +5,11 @@ This directory evaluates email recovery as built in this repository
 the email-recovery contracts on Stellar testnet with one complete
 email-factor recovery, the on-chain cost of an email vote on the test host,
 on the local network and on testnet, and the time and memory of proving a
-recovery email natively, in Node and in a browser. Every number below is
-generated from a file in `results/` (or, for the older tables,
-`browser-prover.json` and `onchain.md`), and every file there is written by
-one of the commands under [Running it](#running-it).
+recovery email natively, in Node and in a browser. Every table below is
+generated from a file in `results/` (or from `browser-prover.json` and
+`onchain.md`), and every file there is written by one of the commands under
+[Running it](#running-it); figures quoted in the prose come from those
+tables or from spec §12.
 
 The four properties the scenarios exercise are those of spec §11.2:
 **1** soundness of the email factor, **2** privacy, **3** replay and
@@ -21,7 +22,7 @@ front-running resistance, **4** one-factor safety.
 | Attack suite (local network and test host) | `just email-recovery-attacks` (`network/run-attacks.sh`) | `results/attacks-local.json`, `results/attacks-test-host.jsonl`, the tables below |
 | Proving on this machine | `just email-recovery-proving` (`proving/measure.sh`) | `results/proving.json`, the proving table |
 | Browser rows of the proving table | `node research/email-recovery/eval/measure-browser.mjs --runs 5` after `npx astro build --root packages/frontend` | `browser-prover.json`, `browser-prover.md` |
-| Benchmark page for a phone | `just email-recovery-bench-phone` (`phone/serve.mjs`) | `target/email-bench-phone/`, served on the local network |
+| Benchmark page for a phone | `just email-recovery-bench-phone` (`phone/build.mjs`, `phone/serve.mjs`); `node research/email-recovery/eval/phone/check.mjs` runs the build in headless Chrome | `target/email-bench-phone/`, served on the local network |
 | Testnet deployment and recovery | `research/email-recovery/eval/testnet/run.sh` | `results/testnet.json`, `DEPLOYED.md` |
 | Tables | `node research/email-recovery/eval/report.mjs` | this file |
 
@@ -91,10 +92,17 @@ advanced, a real proof in every approval
 (`crates/integration-tests/tests/it/email_guardian.rs`, `registry_*`; their
 rows say "test host").
 
+**In CI.** The local-network suite runs in its own workflow
+(`.github/workflows/email-recovery-attacks.yml`) on pull requests and pushes
+that touch what it exercises; on a GitHub-hosted Ubuntu runner it takes
+about 26 minutes, beside the other workflows rather than after them. The
+test-host scenarios run in the Tests workflow's `cargo test --workspace`,
+and that workflow re-proves their fixtures.
+
 ### Results
 
 <!-- BEGIN GENERATED attacks by report.mjs; do not edit -->
-Local network: `stellar/quickstart --local` (stellar/quickstart@sha256:487fe637ba48c972d5be0ed8965f8df1dcbc3e8e1ee53d24d915b25b6f2b6d99), protocol 28, Stellar RPC 29.0.1 with captive core v29.0.0; run of 2026-11-02 00:24 UTC, 6 minutes, 165 transactions.
+Local network: `stellar/quickstart --local` (stellar/quickstart@sha256:487fe637ba48c972d5be0ed8965f8df1dcbc3e8e1ee53d24d915b25b6f2b6d99), protocol 28, Stellar RPC 29.0.1 with captive core v29.0.0; run of 2026-11-02 01:36 UTC, 7 minutes, 165 transactions.
 Test host: 3 rows from `crates/integration-tests/tests/it/email_guardian.rs` (`registry_*`).
 
 | Class | Scenario | Expected | Observed | Refusing layer | Test | Property | Where |
@@ -120,17 +128,17 @@ Test host: 3 rows from `crates/integration-tests/tests/it/email_guardian.rs` (`r
 | Replayed emails and proofs | replay-another-network: an approval of the statement with the testnet network id | refused: DigestMismatch | refused: DigestMismatch | guardian check 2 | `attacks.mjs` replay-another-network | 3 | local |
 | Replayed emails and proofs | replay-another-network-spliced: this network's statement with that proof | refused: ProofRejected | refused: ProofRejected | guardian check 12 | `attacks.mjs` replay-another-network | 3 | local |
 | Replayed emails and proofs | replay-another-controller: A's approval, asked for by a contract that is not A's controller | refused: UnexpectedContext | refused: UnexpectedContext | guardian check 1 | `attacks.mjs` replay-another-controller | 3 | local |
-| Replayed emails and proofs | replay-expired-statement: proved before, submitted after the evidence deadline (ledger 210, the statement's valid_until_ledger) | refused: AttemptNotLive | refused: AttemptNotLive | Perch controller | `attacks.mjs` replay-expired-statement | 3 | local |
+| Replayed emails and proofs | replay-expired-statement: proved before, submitted after the evidence deadline (ledger 197, the statement's valid_until_ledger) | refused: AttemptNotLive | refused: AttemptNotLive | Perch controller | `attacks.mjs` replay-expired-statement | 3 | local |
 | Replayed emails and proofs | replay-email-circuit: an honest email presented for another statement of A, and for B | refused: 2 of 2 | refused: 2 of 2 | circuit | `attacks.mjs` forged-emails-circuit | 1 | local |
 | Wrong account or new key in the statement | statement-other-new-key: the owner's approval (owner's new key) presented for the attacker's attempt (attacker's key) | refused: DigestMismatch | refused: DigestMismatch | guardian check 2 | `attacks.mjs` statement-other-new-key | 1 | local |
 | Wrong account or new key in the statement | statement-other-new-key-spliced: the attacker's statement with the owner's proof | refused: ProofRejected | refused: ProofRejected | guardian check 12 | `attacks.mjs` statement-other-new-key | 1 | local |
 | Wrong account or new key in the statement | statement-other-account: B's approval presented to A's guardian for A's attempt | refused: DigestMismatch | refused: DigestMismatch | guardian check 2 | `attacks.mjs` statement-other-account | 1 | local |
 | Wrong account or new key in the statement | statement-other-account-spliced: A's statement with B's proof and key root: B's salted pin root, which A's guardian does not accept | refused: UnknownRoot | refused: UnknownRoot | guardian check 11 | `attacks.mjs` statement-other-account | 1 | local |
 | Wrong account or new key in the statement | statement-other-account-rooted: A's statement and A's pin root with B's proof (another commitment) | refused: ProofRejected | refused: ProofRejected | guardian check 12 | `attacks.mjs` statement-other-account | 1 | local |
-| Stale or malicious registry keys | registry-planted-key-timelock: not seen in DNS: the 72-hour path is closed, eligible at ledger 121213 (approved at 253, +120,960) | refused: TimelockActive | refused: TimelockActive | registry | `attacks.mjs` registry-planted-key-in-timelock | 1 | local |
+| Stale or malicious registry keys | registry-planted-key-timelock: not seen in DNS: the 72-hour path is closed, eligible at ledger 121201 (approved at 241, +120,960) | refused: TimelockActive | refused: TimelockActive | registry | `attacks.mjs` registry-planted-key-in-timelock | 1 | local |
 | Stale or malicious registry keys | registry-planted-key-proof: a real proof against the root the planted addition would produce, during its timelock | refused: UnknownRoot | refused: UnknownRoot | guardian check 11 | `attacks.mjs` registry-planted-key-in-timelock | 1 | local |
 | Stale or malicious registry keys | registry-planted-key-revoked: revoke_threshold (2) members stop the pending addition | refused: KeyRevoked | refused: KeyRevoked | registry | `attacks.mjs` registry-planted-key-in-timelock | 1 | local |
-| Stale or malicious registry keys | registry-pin-live: pin valid until ledger 309 | accepted | accepted | — | `attacks.mjs` registry-pin-expiry | 1 | local |
+| Stale or malicious registry keys | registry-pin-live: pin valid until ledger 342 | accepted | accepted | — | `attacks.mjs` registry-pin-expiry | 1 | local |
 | Stale or malicious registry keys | registry-pin-expiry: proved inside the pin window, submitted after it; the registry still holds the key only as a pending addition | refused: UnknownRoot | refused: UnknownRoot | guardian check 11 | `attacks.mjs` registry-pin-expiry | 1 | local |
 | Stale or malicious registry keys | registry-grace-expiry: accepted on the last ledger of the 17,280-ledger grace; refused on the next | refused: UnknownRoot | refused: UnknownRoot | guardian check 11 (registry: grace) | `email_guardian.rs` registry_grace_expiry | 1 | test host |
 | Stale or malicious registry keys | registry-planted-key-after-activation: a planted key active after its 7-day timelock; the attacker's proof opens another commitment | refused: ProofRejected | refused: ProofRejected | guardian check 12 | `email_guardian.rs` registry_planted_key_after_activation_without_account_code | 1 | test host |
@@ -139,9 +147,9 @@ Test host: 3 rows from `crates/integration-tests/tests/it/email_guardian.rs` (`r
 | Compromised inbox | inbox-without-account-code-proof: the attacker's real proof for its own guess; without the code it cannot build the salted pin's path, and the registry has no accepted root yet | refused: UnknownRoot | refused: UnknownRoot | guardian check 11 | `attacks.mjs` inbox-without-account-code | 4 | local |
 | Compromised inbox | inbox-backup-without-passphrase: the backup block in the Sent folder, opened with another passphrase | refused: BackupError | refused: BackupError | account code backup (Argon2id, AES-256-GCM) | `attacks.mjs` inbox-without-account-code | 4 | local |
 | Compromised inbox | inbox-with-code-quorum: the email vote counted (attempt still Collecting, 1 of 2 votes); completion refused: no authorized attempt | refused: AttemptNotLive | refused: AttemptNotLive | Perch controller | `attacks.mjs` inbox-with-account-code-quorum | 4 | local |
-| Compromised inbox | inbox-email-plus-delay-authorizes: quorum 1, delay 120,960 ledgers: the attempt is Authorized, executable after ledger 121289 | accepted | accepted | — | `attacks.mjs` inbox-email-plus-delay | 4 | local |
+| Compromised inbox | inbox-email-plus-delay-authorizes: quorum 1, delay 120,960 ledgers: the attempt is Authorized, executable after ledger 121323 | accepted | accepted | — | `attacks.mjs` inbox-email-plus-delay | 4 | local |
 | Compromised inbox | inbox-email-plus-delay-completion: completion inside the delay | refused: NotExecutableYet | refused: NotExecutableYet | Perch controller | `attacks.mjs` inbox-email-plus-delay | 4 | local |
-| Compromised inbox | inbox-email-plus-delay-alerts: attempt_authorized: the email and the Web Push carry the attempt's code 364 588 | alerted: email and push | alerted: email and push | alert path | `attacks.mjs` inbox-email-plus-delay | 4 | local |
+| Compromised inbox | inbox-email-plus-delay-alerts: attempt_authorized: the email and the Web Push carry the attempt's code 653 542 | alerted: email and push | alerted: email and push | alert path | `attacks.mjs` inbox-email-plus-delay | 4 | local |
 | Compromised inbox | inbox-email-plus-delay-owner-cancels: the owner's passkey cancels within the delay | accepted | accepted | — | `attacks.mjs` inbox-email-plus-delay | 4 | local |
 | Compromised inbox | inbox-email-plus-delay-cancelled: completion of the cancelled attempt | refused: AttemptNotLive | refused: AttemptNotLive | Perch controller | `attacks.mjs` inbox-email-plus-delay | 4 | local |
 | Compromised inbox | inbox-email-plus-delay-new-attempt: a new attempt needs a new email | refused: DigestMismatch | refused: DigestMismatch | guardian check 2 | `attacks.mjs` inbox-email-plus-delay | 4 | local |
@@ -154,8 +162,9 @@ Test host: 3 rows from `crates/integration-tests/tests/it/email_guardian.rs` (`r
 | Front-running | front-running-redirect-cancel: the copy as a cancellation of the same attempt | refused: DigestMismatch | refused: DigestMismatch | guardian check 2 | `attacks.mjs` front-running-redirect | 3 | local |
 | Front-running | front-running-redirect-attempt: the copy for an attacker's new attempt on the same account | refused: DigestMismatch | refused: DigestMismatch | guardian check 2 | `attacks.mjs` front-running-redirect | 3 | local |
 | Front-running | front-running-redirect-account: the copy for a new attempt on another account with the same address | refused: DigestMismatch | refused: DigestMismatch | guardian check 2 | `attacks.mjs` front-running-redirect | 3 | local |
+| Privacy on chain | privacy-no-address-on-chain: envelopes and results of every transaction of the run, searched for each of 17 inboxes' address and account code | none of 165 | none of 165 | — | `attacks.mjs` privacy-no-address-on-chain | 2 | local |
 
-Every row's observed outcome is its expected one (55 rows).
+Every row's observed outcome is its expected one (56 rows).
 
 <details><summary>The circuit's verdict on each adversarial email of the mocks, built for a live attempt (forged-emails-circuit)</summary>
 
@@ -244,6 +253,31 @@ Every row's observed outcome is its expected one (55 rows).
   and counts one vote: the provider's signature covers the header block,
   which is all the proof binds (spec §4.4).
 
+## Testnet
+
+`testnet/run.sh` deploys the email-recovery contracts to Stellar testnet
+from the wasm `just build-contracts` writes, with friendbot-funded
+throwaway keys (`DEPLOYED.md`, "Email recovery (evaluation, TEST-ONLY)"):
+the email verifier (its reported circuit id read back), the DKIM key
+registry with spec §7.6's proposed governance and the DNS attester mock's
+TEST-ONLY keys, the enclave-image registry with one signer, and the email
+guardian's wasm. The registry admits the Gmail mock's TEST-ONLY key through
+a proposal, three approvals and two attestations; the addition then waits
+in its 72-hour timelock. On Perch's testnet deployment and Nido's testnet
+factory (the wallet's `perch.TESTNET`) the run then makes one complete
+email-factor recovery: mint an account with a TEST-ONLY owner passkey,
+deploy its guardian with a pin over the Gmail mock's key, enroll recovery
+with the guardian and one helper (quorum 2, a 12-ledger delay), open a
+lost-key attempt, sign the recovery email with the Gmail mock for the
+controller's statement, prove it with bb.js in Node, submit the email vote
+and the helper's vote, wait out the delay, and complete; the account's
+document then holds the new passkey and not the lost one. Every
+transaction is read back from the network (`results/testnet.json`): its
+hash, the declared resources, the envelope's size, the fee charged with its
+rent, the wall clock of each step, and the host's metered figures when the
+RPC returns its `core_metrics` events. The mail provider and DNS stay
+mocked; the alert path is not run on testnet.
+
 ## On-chain cost of an email vote
 
 Three readings of the same call, one `submit_guardian` carrying an email
@@ -257,44 +291,46 @@ approval with a real proof:
   read back from the network. The instruction and byte counts are the
   host's own metering (`core_metrics` diagnostic events, which quickstart
   emits); the fee is what the network charged at its fee settings.
-- **Testnet** (below, when run): the same readings for the steps of one
-  complete recovery.
+- **Testnet** (below): the same readings for the steps of one complete
+  recovery.
 
 <!-- BEGIN GENERATED cost by report.mjs; do not edit -->
-Local network: every accepted email vote of the attack run, each `submit_guardian` with a real proof, simulated with its authorization entry enforced and sent; figures read from each transaction's result and the host's `core_metrics` events. 19 votes leave their attempt collecting (a 2-of-n quorum); 0 authorizes its attempt (the email-plus-delay account, quorum 1, delay 120,960 ledgers), which also writes the authorized attempt.
+Local network: every accepted email vote of the attack run, each `submit_guardian` with a real proof, simulated with its authorization entry enforced and sent; figures read from each transaction's result and the host's `core_metrics` events. 18 votes leave their attempt collecting (a 2-of-n quorum); 1 authorizes its attempt (the email-plus-delay account, quorum 1, delay 120,960 ledgers), which also writes the authorized attempt.
 
-| Figure | Vote, attempt still collecting: median (range), 19 | Vote that authorizes the attempt |
+| Figure | Vote, attempt still collecting: median (range), 18 | Vote that authorizes the attempt |
 | --- | --- | --- |
-| Instructions (metered) | 120,030,490 (119,992,533 to 120,886,079) | — |
-| Instructions (declared in the transaction) | 124,905,867 (124,867,200 to 125,843,732) | — |
-| Memory bytes (metered) | 5,509,780 (5,508,562 to 5,590,762) | — |
-| Ledger entries read (metered) | 12 (12 to 16) | — |
-| Ledger entries written (metered) | 2 (2 to 4) | — |
-| Ledger bytes read from disk (metered) | 0 (0 to 0) | — |
-| Ledger bytes written (metered) | 1,208 (1,208 to 1,488) | — |
-| Footprint entries (read-only + read-write) | 12 (12 to 16) | — |
-| Signed envelope bytes | 18,080 (18,080 to 18,396) | — |
-| Authorization entry bytes | 16,784 (16,784 to 16,784) | — |
-| Fee charged (stroops) | 176,216 (176,190 to 3,734,674) | — |
-| of which rent (stroops) | 2,604 (2,602 to 3,550,194) | — |
-| Resource fee declared (stroops) | 192,564 (192,538 to 4,283,465) | — |
-| Wall clock, simulation to confirmation (ms) | 822 (553 to 1,574) | — |
+| Instructions (metered) | 120,039,487 (119,999,139 to 120,065,893) | 120,908,087 |
+| Instructions (declared in the transaction) | 124,913,880 (124,871,918 to 124,943,495) | 125,866,620 |
+| Memory bytes (metered) | 5,509,882 (5,508,765 to 5,510,592) | 5,591,371 |
+| Ledger entries read (metered) | 12 (12 to 12) | 16 |
+| Ledger entries written (metered) | 2 (2 to 2) | 4 |
+| Ledger bytes read from disk (metered) | 0 (0 to 0) | 0 |
+| Ledger bytes written (metered) | 1,208 (1,208 to 1,208) | 1,488 |
+| Footprint entries (read-only + read-write) | 12 (12 to 12) | 16 |
+| Signed envelope bytes | 18,080 (18,080 to 18,080) | 18,396 |
+| Authorization entry bytes | 16,784 (16,784 to 16,784) | 16,784 |
+| Fee charged (stroops) | 176,222 (176,193 to 176,243) | 3,734,690 |
+| of which rent (stroops) | 2,604 (2,601 to 2,604) | 3,550,194 |
+| Resource fee declared (stroops) | 192,570 (192,541 to 192,591) | 4,283,481 |
+| Wall clock, simulation to confirmation (ms) | 819 (558 to 1,843) | 833 |
 
 The same call, the email vote with a real proof, in each environment (instructions; footprint as read-only + read-write entries). Test host from `onchain.md`; local network from this run; testnet from `results/testnet.json` (Gmail only).
 
 | Domain | Test host invocation | Test host transaction | Test host footprint | Local network, metered | Local network, declared | Local footprint | Testnet, metered |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| fastmail.com | 121,816,871 | 131,043,945 | 12 + 2 | 120,058,607 | 124,936,385 | 10 + 2 |  |
-| gmail.com | 121,794,097 | 131,021,071 | 12 + 2 | 120,072,499 | 124,948,212 | 10 + 2 |  |
-| gmx.de | 121,855,015 | 131,074,305 | 12 + 2 | 120,013,811 | 124,887,176 | 10 + 2 |  |
-| gmx.net | 121,809,977 | 131,036,251 | 12 + 2 | 120,006,475 | 124,879,547 | 10 + 2 |  |
-| hotmail.com | 121,832,741 | 131,051,431 | 12 + 2 | 119,992,533 | 124,867,200 | 10 + 2 |  |
-| icloud.com | 121,833,855 | 131,059,229 | 12 + 2 | 120,036,549 | 124,912,977 | 10 + 2 |  |
-| outlook.com | 121,789,699 | 131,009,914 | 12 + 2 | 120,036,599 | 124,913,497 | 10 + 2 |  |
-| proton.me | 121,851,135 | 131,073,909 | 12 + 2 | 120,043,155 | 124,917,694 | 10 + 2 |  |
-| protonmail.com | 121,861,611 | 131,089,485 | 12 + 2 | 120,050,491 | 124,925,324 | 10 + 2 |  |
-| web.de | 121,833,347 | 131,059,021 | 12 + 2 | 120,035,819 | 124,910,065 | 10 + 2 |  |
-| yahoo.com | 121,818,375 | 131,044,049 | 12 + 2 | 119,999,139 | 124,871,918 | 10 + 2 |  |
+| fastmail.com | 121,816,871 | 131,043,945 | 12 + 2 | 119,999,139 | 124,871,918 | 10 + 2 |  |
+| gmail.com | 121,794,097 | 131,021,071 | 12 + 2 | 120,028,483 | 124,902,435 | 10 + 2 |  |
+| gmx.de | 121,855,015 | 131,074,305 | 12 + 2 | 120,021,147 | 124,894,806 | 10 + 2 |  |
+| gmx.net | 121,809,977 | 131,036,251 | 12 + 2 | 120,013,811 | 124,887,176 | 10 + 2 |  |
+| hotmail.com | 121,832,741 | 131,051,431 | 12 + 2 | 120,050,491 | 124,925,324 | 10 + 2 |  |
+| icloud.com | 121,833,855 | 131,059,229 | 12 + 2 | 119,999,139 | 124,871,918 | 10 + 2 |  |
+| outlook.com | 121,789,699 | 131,009,914 | 12 + 2 | 120,021,927 | 124,898,238 | 10 + 2 |  |
+| proton.me | 121,851,135 | 131,073,909 | 12 + 2 | 120,065,163 | 124,940,583 | 10 + 2 |  |
+| protonmail.com | 121,861,611 | 131,089,485 | 12 + 2 | 120,051,221 | 124,928,236 | 10 + 2 |  |
+| web.de | 121,833,347 | 131,059,021 | 12 + 2 | 120,029,263 | 124,905,867 | 10 + 2 |  |
+| yahoo.com | 121,818,375 | 131,044,049 | 12 + 2 | 120,035,819 | 124,910,065 | 10 + 2 |  |
+
+The registry is in the footprint of 0 of the 19 local votes: each local approval is proven against its guardian's key pin (no registry key activates during a local run), so the guardian accepts the root without calling the registry. The test host's approvals use a registry root, and its footprints include the registry's instance and code.
 
 Testnet: not yet run.
 <!-- END GENERATED cost -->

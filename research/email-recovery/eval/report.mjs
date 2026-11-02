@@ -17,7 +17,7 @@ const results = `${here}results/`;
 const readme = `${here}README.md`;
 const json = (f) => (existsSync(results + f) ? JSON.parse(readFileSync(results + f, 'utf8')) : undefined);
 const jsonl = (f) => (existsSync(results + f) ? readFileSync(results + f, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
-const n = (x) => (x === undefined || x === null ? '—' : Number(x).toLocaleString('en-US'));
+const n = (x) => (x === undefined || x === null || Number.isNaN(Number(x)) ? '—' : Number(x).toLocaleString('en-US'));
 const median = (xs) => {
   const s = [...xs].sort((a, b) => a - b);
   return s.length ? (s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2) : undefined;
@@ -94,7 +94,7 @@ function cost() {
     const row = (label, f) => {
       const xs = plain.map(f).filter((x) => x !== undefined);
       const ys = auth.map(f).filter((x) => x !== undefined);
-      out.push(`| ${label} | ${n(median(xs))} (${range(xs)}) | ${ys.map(n).join(', ') || '—'} |`);
+      out.push(`| ${label} | ${n(Math.round(median(xs) ?? NaN))} (${range(xs)}) | ${ys.map(n).join(', ') || '—'} |`);
     };
     row('Instructions (metered)', (t) => t.metered.cpu_insn);
     row('Instructions (declared in the transaction)', (t) => t.declared?.instructions);

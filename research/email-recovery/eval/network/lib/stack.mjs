@@ -9,10 +9,9 @@
 // additions stay in their 72-hour timelock for the whole run.
 import { createHash, createPrivateKey, createPublicKey } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { Address, Keypair, Operation, xdr } from '@stellar/stellar-sdk';
+import { existsSync, readFileSync } from 'node:fs';
+import { Address, Keypair, Operation } from '@stellar/stellar-sdk';
 import { imageMeasurement, testImage, testKey } from '@nidohq/email-mocks';
-import { keyHash } from '@nidohq/email-recovery';
 import { deployStack } from '../../../../../tests/support/emailLocalStack.mjs';
 import { sc } from './chain.mjs';
 import { launchKeys } from './email.mjs';
@@ -150,13 +149,11 @@ export async function deployLocal(chain, base) {
 }
 
 export async function uploadWasm(chain, source, file) {
-  const { readFileSync } = await import('node:fs');
   const wasm = readFileSync(file);
   await chain.send(source, Operation.uploadContractWasm({ wasm }), { label: `upload ${file.split('/').pop()}` });
   return sha256(wasm);
 }
 
-export { keyHash, xdr };
 
 /** The deployed stack as JSON (TEST-ONLY local keys included), to reuse a running network. */
 export function stackJson(s) {
