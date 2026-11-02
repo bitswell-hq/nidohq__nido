@@ -95,7 +95,9 @@ export class Enrolled {
 /**
  * Mint an account, deploy its email guardian for `inbox` (pinning `key`
  * for `pinLedgers`), and enroll recovery: `helpers` more guardians (funded
- * `G…` accounts), `quorum`, `profile`, timing.
+ * `G…` accounts), `quorum`, `profile`, timing. `walletPolicy: false` lists
+ * the guardian as a plain address, so the wallet's email rules (spec §9.3)
+ * do not apply: a configuration the chain accepts and Nido's wallet refuses.
  */
 export async function enroll({
   chain,
@@ -113,6 +115,7 @@ export async function enroll({
   registry = stack.registry.address,
   apex = { scheme: 'http:', host: 'localhost', port: 4399 },
   payer,
+  walletPolicy = true,
 }) {
   const d = stack.deployment;
   payer ??= await chain.funded(Keypair.random());
@@ -140,9 +143,9 @@ export async function enroll({
   const recovery = perch.recoverySpec(d, {
     profile,
     mode: 'guardian-only',
-    guardians: [{ kind: 'email', address: guardian, allowedActions }, ...helperKeys.map((h) => h.publicKey())],
+    guardians: [walletPolicy ? { kind: 'email', address: guardian, allowedActions } : guardian, ...helperKeys.map((h) => h.publicKey())],
     quorum,
-    secondAlertChannel: 'web-push',
+    secondAlertChannel: walletPolicy ? 'web-push' : undefined,
     replaceable: ['admin'],
     delayLedgers,
     expiryLedgers,

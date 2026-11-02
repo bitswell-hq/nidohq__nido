@@ -7,13 +7,14 @@
 // starts them (`tests/support/emailServices.mjs`). `register` enrolls an
 // account's alert contact as the wallet does: the vault's attestation
 // verified, the contact sealed to it with a Web Push subscription, the
-// owner's passkey authorizing it, the emailed code confirming it.
+// owner's passkey authorizing it, the emailed code confirming it. The host
+// reads the controller (`chainReads`) for email votes and reconciliation.
 import { createHash } from 'node:crypto';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CustodianMock, LettermintMock, PushServiceMock, PushUserAgentMock, ScalewayTemMock, nitroTestRoot } from '@nidohq/email-mocks';
-import { AlertService, ProcessVault, StellarRpc, accountSigners } from '@nidohq/email-alerts';
+import { AlertService, ProcessVault, StellarRpc, accountSigners, chainReads } from '@nidohq/email-alerts';
 import {
   PURPOSE_SECURITY_ALERTS,
   alertCode,
@@ -32,7 +33,7 @@ import {
 import { xdr } from '@stellar/stellar-sdk';
 
 export class Alerts {
-  static async start({ rpcUrl, passphrase, controller, imageRegistry, measurement, apex }) {
+  static async start({ rpcUrl, passphrase, controller, imageRegistry, measurement, apex, guardianWasmHash }) {
     const rpc = new StellarRpc(rpcUrl);
     const dir = mkdtempSync(join(tmpdir(), 'nido-email-attacks-alerts-'));
     const isActive = async (m) => (await rpc.view(imageRegistry, 'is_active', [xdr.ScVal.scvBytes(Buffer.from(m, 'hex'))], passphrase)) === true;
@@ -58,21 +59,37 @@ export class Alerts {
         custodians: custodians.map((c, i) => ({ url: custodianUrls[i], publicKey: c.publicKey })),
       },
     });
-    const svc = new AlertService(
-      {
-        rpc,
-        controller,
-        statePath: join(dir, 'host.json'),
-        startLedger: (await rpc.call('getLatestLedger', {})).sequence,
-        signers: (account) => accountSigners(rpc, account, passphrase),
-        log: () => {},
-        pageLimit: 100,
-        retryBaseMs: 0,
-      },
-      vault,
-    );
+    const host = (startLedger, statePath) =>
+      new AlertService(
+        {
+          rpc,
+          controller,
+          statePath,
+          startLedger,
+          signers: (account) => accountSigners(rpc, account, passphrase),
+          reads: chainReads(rpc, controller, passphrase, guardianWasmHash),
+          log: () => {},
+          pageLimit: 100,
+          retryBaseMs: 0,
+        },
+        vault,
+      );
+    const svc = host((await rpc.call('getLatestLedger', {})).sequence, join(dir, 'host.json'));
     const url = await svc.listen(0);
-    return new Alerts({ svc, vault, boot, url, custodians, lettermint, scaleway, push, measurement, passphrase });
+    return new Alerts({ svc, vault, boot, url, custodians, lettermint, scaleway, push, measurement, passphrase, rpc, host, dir });
+  }
+
+  /**
+   * A host restarted after an outage whose events left the RPC's
+   * retention: it starts reading at `ledger` with a fresh state file (the
+   * vault keeps its sealed records), so the missed events are never read
+   * and only reconciliation from controller state can find them.
+   */
+  async restartAfterOutage(ledger) {
+    await this.svc.close();
+    this.svc = this.host(ledger, join(this.dir, `host-${ledger}.json`));
+    this.url = await this.svc.listen(0);
+    return this.svc.drain();
   }
 
   constructor(o) {
@@ -121,6 +138,17 @@ export class Alerts {
   /** Every email the sending mocks accepted for `address`. */
   sentTo(address) {
     return [...this.lettermint.sent, ...this.scaleway.sent].filter((m) => m.to.includes(address));
+  }
+
+  /** The alerts (not confirmations) that reach the owner at `address`: none when an inbox thief controls it and deletes them. */
+  reaching(address, { thiefControls = [] } = {}) {
+    if (thiefControls.includes(address)) return [];
+    return this.sentTo(address).filter((m) => !/confirmation code/.test(m.text ?? ''));
+  }
+
+  /** The decrypted pushes a device received since the last call. */
+  static pushes(device) {
+    return device.receive().map((x) => JSON.parse(Buffer.from(x.payload).toString('utf8')));
   }
 
   /** The code every alert about `attemptId` carries (spec §10.1). */

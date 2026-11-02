@@ -19,6 +19,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { after, before, describe, test } from 'node:test';
 import { buildAttacks, gmailSigner, testKey } from '@nidohq/email-mocks';
+import { NEVER_ASKS, PASSKEY_DEVICE_LEAD } from '@nidohq/email-alerts';
 import { blindedDigest, decryptBackup, encryptBackup, fieldHex, generatePassphrase, keyHash, merkleRoot, registryLeaf } from '@nidohq/email-recovery';
 import { perch } from '@nidohq/passkey-sdk';
 import { Address, Keypair, Operation, xdr } from '@stellar/stellar-sdk';
@@ -81,6 +82,14 @@ async function honest(e, attemptId, opts = {}) {
 const targetOf = (e, st, rho, accountCode = e.inbox.accountCode) => ({ accountCode, digest: st.digest, rho, pinLeaves: e.pin.leaves });
 
 let A, B, L, E, P, Q;
+/** V: an email vote below quorum; S1-S3: phishing; G: repeated attempts; O: a watcher outage; L2: a lapsed push. */
+/**
+ * The label of the votes that authorize an attempt in those scenarios: not
+ * `submit_guardian (email…`, so the cost tables keep to the collecting votes
+ * and the email-plus-delay account L's authorizing vote.
+ */
+const ALERT_VOTE = 'email vote that authorizes (alert-path scenario)';
+let V, S1, S2, S3, G, O, L2;
 const providers = {};
 const newOwner = (label) => new Passkey(`${label}/new-device/${Date.now()}`);
 
@@ -111,13 +120,30 @@ before(async () => {
   // L: the lost-key profile with email plus delay: the email guardian is the only guardian,
   // quorum 1, so the wallet requires the loss profile and at least 120,960 ledgers.
   L = await enroll({ chain, stack, apex: APEX, label: 'L', inbox: new Inbox('ada.lovelace@proton.me'), key: keys.find((k) => k.domain === 'proton.me'), helpers: 0, quorum: 1, delayLedgers: 120_960 });
+  const proton = keys.find((k) => k.domain === 'proton.me');
+  const lossDelay = { key: proton, helpers: 0, quorum: 1, delayLedgers: 120_960 };
+  [V, S1, S2, S3] = await enrollAll([
+    // V: email plus one helper, a 2-of-2 quorum: the email vote alone leaves the attempt collecting.
+    { label: 'V', inbox: new Inbox('v.vote@gmail.com'), key: gmail, helpers: 1, quorum: 2, delayLedgers: 20, expiryLedgers: 2_000 },
+    // S1: email plus delay, as the wallet builds it.
+    { label: 'S1', inbox: new Inbox('s1.phished@proton.me'), ...lossDelay },
+    // S2: email plus a delay of 20 ledgers, outside the wallet's policy (it requires 120,960), so the delay elapses in the run.
+    { label: 'S2', inbox: new Inbox('s2.phished@proton.me'), key: proton, helpers: 0, quorum: 1, delayLedgers: 20, expiryLedgers: 2_000, walletPolicy: false },
+    // S3: email plus a second helper.
+    { label: 'S3', inbox: new Inbox('s3.phished@gmail.com'), key: gmail, helpers: 1, quorum: 2, delayLedgers: 20, expiryLedgers: 2_000 },
+  ]);
+  [G, O, L2] = await enrollAll([
+    { label: 'G', inbox: new Inbox('g.grief@gmail.com'), key: gmail, helpers: 1, quorum: 2, delayLedgers: 20, expiryLedgers: 2_000 },
+    { label: 'O', inbox: new Inbox('o.outage@proton.me'), ...lossDelay },
+    { label: 'L2', inbox: new Inbox('l2.lapsed@proton.me'), ...lossDelay },
+  ]);
   for (let i = 0; i < LAUNCH_DOMAINS.length; i += 4) {
     const batch = LAUNCH_DOMAINS.slice(i, i + 4);
     const enrolled = await enrollAll(batch.map((d) => ({ label: `provider-${d}`, inbox: new Inbox(`first.last@${d}`), key: keys.find((k) => k.domain === d), helpers: 1, quorum: 2, delayLedgers: 20, expiryLedgers: 2_000 })));
     batch.forEach((d, j) => (providers[d] = enrolled[j]));
   }
   roles = new Map([[stack.deployment.recoveryController, 'controller'], [stack.registry.address, 'registry'], [stack.email.verifier, 'verifier']]);
-  for (const e of [A, B, E, Q, L, ...Object.values(providers)]) {
+  for (const e of [A, B, E, Q, L, V, S1, S2, S3, G, O, L2, ...Object.values(providers)]) {
     roles.set(e.guardian, 'guardian');
     roles.set(e.account.address, 'account');
   }
@@ -128,6 +154,7 @@ before(async () => {
     imageRegistry: stack.email.enclaveImageRegistry,
     measurement: stack.measurement,
     apex: APEX,
+    guardianWasmHash: stack.email.guardianWasmHash,
   });
 });
 
@@ -467,12 +494,14 @@ describe('compromised inbox', () => {
   });
 
   scenario('inbox-email-plus-delay', async () => {
-    // The lost-key profile with email plus delay: the attacker holding inbox and code authorizes an attempt,
-    // the owner is alerted on both channels with the attempt's code, cancels within the delay, and the attempt cannot complete.
-    const contact = 'ada.lovelace@proton.me';
-    const reg = await alerts.register(L, contact);
+    // The lost-key profile with email plus delay, with the weakest alert setup the wallet allows: alerts to the
+    // enrolled inbox itself (enrollment warns, it does not block). The thief holds the inbox and the account code and
+    // deletes everything sent to that inbox, so only the push to the owner's passkey device reaches the owner.
+    const inbox = L.inbox.address;
+    const reg = await alerts.register(L, inbox);
     assert.equal(reg.confirmed.status ?? reg.confirmed.result?.status, 'confirmed');
     await alerts.drain();
+    Alerts.pushes(reg.device);
     const l1 = await L.beginLostKey(L.payer, newOwner('L-attacker'));
     const h = await honest(L, l1.attemptId);
     const vote = outcome(await L.submitEmail(L.payer, { attemptId: l1.attemptId, approval: h.approval, digest: h.st.digest, label: 'submit_guardian (email, authorizes)' }));
@@ -483,12 +512,14 @@ describe('compromised inbox', () => {
     record('inbox', 'inbox-email-plus-delay-completion', 4, 'refused: NotExecutableYet', early.observed, early.layer, { note: 'completion inside the delay' });
     await alerts.drain();
     const code = await alerts.attemptCode(L, reg.accountCode, l1.attemptId);
-    const spaced = `${code.slice(0, 3)} ${code.slice(3)}`;
-    const mails = alerts.sentTo(contact).filter((m) => m.text?.includes(spaced));
-    const pushes = reg.device.receive().map((x) => JSON.parse(Buffer.from(x.payload).toString('utf8')));
-    const pushed = pushes.filter((x) => x.kind === 'attempt_authorized' && x.code === code);
-    const both = mails.length > 0 && pushed.length > 0 ? 'alerted: email and push' : `alerted: ${mails.length} email, ${pushed.length} push`;
-    record('inbox', 'inbox-email-plus-delay-alerts', 4, 'alerted: email and push', both, 'alert path', { note: `attempt_authorized: the email and the Web Push carry the attempt's code ${spaced}` });
+    const sent = alerts.sentTo(inbox).filter((m) => m.text?.includes(`${code.slice(0, 3)} ${code.slice(3)}`)).length;
+    const emails = alerts.reaching(inbox, { thiefControls: [inbox] }).length;
+    const pushed = Alerts.pushes(reg.device).filter((x) => x.kind === 'attempt_authorized' && x.code === code && x.body.startsWith(PASSKEY_DEVICE_LEAD));
+    const reached = emails && pushed.length ? 'email and push' : pushed.length ? 'push only' : emails ? 'email only' : 'nothing';
+    record('inbox', 'inbox-email-plus-delay-alerts', 4, 'owner alerted: push only', `owner alerted: ${reached}`, 'alert path', {
+      note: `attempt_authorized: ${sent} email to the enrolled inbox, deleted by the thief; the push carries the code ${code.slice(0, 3)} ${code.slice(3)} and leads with cancelling`,
+    });
+    // The mechanism: a cancellation by the owner's passkey within the delay succeeds (here on the push alone).
     const cancel = await L.ownerCancel(L.payer, l1.attemptId);
     record('inbox', 'inbox-email-plus-delay-owner-cancels', 4, 'accepted', cancel.ok ? 'accepted' : `refused: ${layerOf(cancel.refused, roles).error}`, cancel.ok ? '—' : layerOf(cancel.refused, roles).layer, { note: "the owner's passkey cancels within the delay" });
     const late = outcome(await L.complete(L.payer, l1.replacements));
@@ -497,6 +528,149 @@ describe('compromised inbox', () => {
     const st2 = await L.statement(l2.attemptId);
     const again = outcome(await L.submitEmail(L.payer, { attemptId: l2.attemptId, approval: h.approval, digest: st2.digest }));
     record('inbox', 'inbox-email-plus-delay-new-attempt', 4, 'refused: DigestMismatch', again.observed, again.layer, { note: 'a new attempt needs a new email' });
+  });
+
+  scenario('inbox-email-vote-alerted', async () => {
+    // Email plus a helper, 2 of 2: the thief's email vote alone leaves the attempt collecting. Perch emits no
+    // event for it; the alert service reads the watched attempt and alerts every channel.
+    const contact = 'v.alerts@posteo.de';
+    const reg = await alerts.register(V, contact);
+    await alerts.drain();
+    Alerts.pushes(reg.device);
+    const v1 = await V.beginLostKey(V.payer, newOwner('V-thief'));
+    await alerts.drain();
+    const h = await honest(V, v1.attemptId);
+    const vote = outcome(await V.submitEmail(V.payer, { attemptId: v1.attemptId, approval: h.approval, digest: h.st.digest }));
+    assert.equal(vote.observed, 'accepted');
+    assert.equal((await V.attempt(v1.attemptId)).state.tag, 'Collecting');
+    const reports = await alerts.drain();
+    const code = await alerts.attemptCode(V, reg.accountCode, v1.attemptId);
+    const emails = alerts.reaching(contact).filter((m) => /your email approved a recovery/.test(m.subject) && m.text?.includes(`${code.slice(0, 3)} ${code.slice(3)}`)).length;
+    const pushed = Alerts.pushes(reg.device).filter((x) => x.kind === 'email_vote_recorded' && x.code === code).length;
+    const latency = reports.map((r) => r.latencyMs[`email_vote_recorded:${V.account.address}:${v1.attemptId}`]).find((x) => x !== undefined);
+    record('inbox', 'inbox-email-vote-alerted', 4, 'alerted: email and push', emails && pushed ? 'alerted: email and push' : `alerted: ${emails} email, ${pushed} push`, 'alert path', {
+      note: `the email vote recorded below quorum (attempt Collecting, 1 of 2): read from the watched attempt, alerted in ${latency?.toFixed(0)} ms after the read`,
+      latencyMs: latency,
+    });
+    const cancel = await V.ownerCancel(V.payer, v1.attemptId);
+    record('inbox', 'inbox-email-vote-owner-cancels', 4, 'accepted', cancel.ok ? 'accepted' : `refused: ${layerOf(cancel.refused, roles).error}`, '—', { note: "the owner's passkey cancels the collecting attempt" });
+  });
+});
+
+describe('alert path', () => {
+  scenario('alerts-watcher-outage', async () => {
+    // The watcher is down while the thief authorizes an attempt, and restarts after those events left the RPC's
+    // retention (modelled by a host that starts reading after them; the vault keeps its sealed records).
+    const contact = 'o.alerts@posteo.de';
+    const reg = await alerts.register(O, contact);
+    await alerts.drain();
+    Alerts.pushes(reg.device);
+    const o1 = await O.beginLostKey(O.payer, newOwner('O-thief'));
+    const h = await honest(O, o1.attemptId);
+    assert.equal(outcome(await O.submitEmail(O.payer, { attemptId: o1.attemptId, approval: h.approval, digest: h.st.digest, label: ALERT_VOTE })).observed, 'accepted');
+    assert.equal((await O.attempt(o1.attemptId)).state.tag, 'Authorized');
+    const reports = await alerts.restartAfterOutage(await chain.ledger());
+    const code = await alerts.attemptCode(O, reg.accountCode, o1.attemptId);
+    const emails = alerts.reaching(contact).filter((m) => /approved/.test(m.subject) && m.text?.includes(`${code.slice(0, 3)} ${code.slice(3)}`)).length;
+    const pushed = Alerts.pushes(reg.device).filter((x) => x.kind === 'attempt_authorized' && x.code === code).length;
+    const reconciled = reports.find((r) => r.reconciled);
+    record('alerts', 'alerts-watcher-outage', 4, 'alerted after the restart: email and push', emails && pushed ? 'alerted after the restart: email and push' : `alerted after the restart: ${emails} email, ${pushed} push`, 'alert path (reconciliation)', {
+      note: `attempt_authorized never read from the event stream; reconciliation from the controller's state found it (${reconciled?.reconciled.accounts} accounts read, ${reconciled?.reconciled.found} ${reconciled?.reconciled.found === 1 ? 'alert' : 'alerts'} found)`,
+    });
+    await O.ownerCancel(O.payer, o1.attemptId);
+  });
+
+  scenario('alerts-lapsed-push', async () => {
+    // The residual risk: alerts to the enrolled inbox (the thief deletes them) and a push subscription that
+    // expired. The vault finds it gone and emails the same inbox. Nothing reaches the owner.
+    const inbox = L2.inbox.address;
+    const reg = await alerts.register(L2, inbox);
+    await alerts.drain();
+    alerts.push.expire(reg.device.endpoint);
+    const x = await L2.beginLostKey(L2.payer, newOwner('L2-thief'));
+    const h = await honest(L2, x.attemptId);
+    assert.equal(outcome(await L2.submitEmail(L2.payer, { attemptId: x.attemptId, approval: h.approval, digest: h.st.digest, label: ALERT_VOTE })).observed, 'accepted');
+    await alerts.drain();
+    const emails = alerts.reaching(inbox, { thiefControls: [inbox] }).length;
+    const pushed = Alerts.pushes(reg.device).filter((p) => p.kind === 'attempt_authorized').length;
+    const notice = alerts.sentTo(inbox).some((m) => /notifications stopped/.test(m.subject));
+    record('alerts', 'alerts-lapsed-push', 4, 'owner alerted: nothing', emails || pushed ? `owner alerted: ${emails} email, ${pushed} push` : 'owner alerted: nothing', 'alert path', {
+      note: `residual risk: the push service answers 404 for the expired subscription, the vault marks it lapsed${notice ? ' and emails the enrolled inbox' : ''}, which the thief deletes; unless the owner opens the wallet, the attempt completes after the delay`,
+    });
+    const gate = await L2.client.activityGate(L2.account.address);
+    const shown = gate.authorized_attempt != null && BigInt(gate.authorized_attempt) === x.attemptId;
+    record('alerts', 'alerts-lapsed-push-wallet-reads', 4, 'the controller names the attempt', shown ? 'the controller names the attempt' : 'not found', '—', {
+      note: "what a wallet opened during the delay reads, independent of alerts (its activity gate's authorized attempt), and offers to cancel",
+    });
+    await L2.ownerCancel(L2.payer, x.attemptId);
+  });
+});
+
+describe('phishing and social engineering', () => {
+  scenario('social-phished-holds-passkey', async () => {
+    // A phisher opens a lost-key attempt for its own new key, as the real recovery page would on its own device,
+    // collects the victim's recovery code, and talks the victim into sending the Subject it shows from the victim's
+    // own inbox. The victim still holds the passkey.
+    const contact = 's1.alerts@posteo.de';
+    const reg = await alerts.register(S1, contact);
+    await alerts.drain();
+    Alerts.pushes(reg.device);
+    const s = await S1.beginLostKey(S1.payer, newOwner('S1-phisher'));
+    const h = await honest(S1, s.attemptId);
+    const vote = outcome(await S1.submitEmail(S1.payer, { attemptId: s.attemptId, approval: h.approval, digest: h.st.digest, label: ALERT_VOTE }));
+    record('social', 'social-phished-email-counts', 1, 'accepted', vote.observed, '—', { note: "the victim's own email for the phisher's statement is a valid approval: the proof binds the statement, not the sender's intent" });
+    await alerts.drain();
+    const code = await alerts.attemptCode(S1, reg.accountCode, s.attemptId);
+    const push = Alerts.pushes(reg.device).find((x) => x.kind === 'attempt_authorized' && x.code === code);
+    const mail = alerts.reaching(contact).find((m) => /approved/.test(m.subject));
+    const leads = push?.body.startsWith(PASSKEY_DEVICE_LEAD) && mail?.text?.includes(NEVER_ASKS);
+    record('social', 'social-phished-alerts-say-cancel', 4, 'push leads with cancelling; email says Nido never asks', leads ? 'push leads with cancelling; email says Nido never asks' : 'copy missing', 'alert path', {
+      note: `push: "${PASSKEY_DEVICE_LEAD}"`,
+    });
+    const cancel = await S1.ownerCancel(S1.payer, s.attemptId);
+    record('social', 'social-phished-owner-cancels', 4, 'accepted', cancel.ok ? 'accepted' : `refused: ${layerOf(cancel.refused, roles).error}`, '—', { note: "the victim's passkey cancels within the delay" });
+    const late = outcome(await S1.complete(S1.payer, s.replacements));
+    record('social', 'social-phished-cancelled', 4, 'refused: AttemptNotLive', late.observed, late.layer, { note: "the phisher's completion of the cancelled attempt" });
+  });
+
+  scenario('social-phished-lost-devices', async () => {
+    // The same phishing of a victim who has lost every device: nobody cancels.
+    const s = await S2.beginLostKey(S2.payer, newOwner('S2-phisher'));
+    const h = await honest(S2, s.attemptId);
+    assert.equal(outcome(await S2.submitEmail(S2.payer, { attemptId: s.attemptId, approval: h.approval, digest: h.st.digest, label: ALERT_VOTE })).observed, 'accepted');
+    const att = await S2.attempt(s.attemptId);
+    await chain.untilLedger(Number(att.executable_after));
+    const done = outcome(await S2.complete(S2.payer, s.replacements));
+    record('social', 'social-lost-devices-email-plus-delay', 4, 'accepted', done.observed, '—', {
+      note: "residual risk: email plus delay with nobody to cancel completes after the delay, installing the phisher's key (the delay is 20 ledgers here, outside the wallet's policy, so it elapses within the run; the wallet requires 120,960)",
+    });
+    const t = await S3.beginLostKey(S3.payer, newOwner('S3-phisher'));
+    const h3 = await honest(S3, t.attemptId);
+    assert.equal(outcome(await S3.submitEmail(S3.payer, { attemptId: t.attemptId, approval: h3.approval, digest: h3.st.digest })).observed, 'accepted');
+    const blocked = outcome(await S3.complete(S3.payer, t.replacements));
+    record('social', 'social-lost-devices-second-helper', 4, 'refused: AttemptNotLive', blocked.observed, blocked.layer, { note: 'with a second helper required, the phished email vote leaves the attempt collecting and it cannot complete' });
+  });
+});
+
+describe('repeated attempts', () => {
+  scenario('griefing-repeated-attempts', async () => {
+    // Anyone may open attempts, at a transaction fee each. What the owner receives for ten of them.
+    const contact = 'g.alerts@posteo.de';
+    const reg = await alerts.register(G, contact);
+    await alerts.drain();
+    Alerts.pushes(reg.device);
+    const before = alerts.reaching(contact).length;
+    const griefer = await chain.funded(Keypair.random());
+    for (let i = 0; i < 10; i++) await G.beginLostKey(griefer, newOwner(`G-grief-${i}`), `begin_lost_key (griefing ${i + 1})`);
+    await alerts.drain();
+    const emails = alerts.reaching(contact).length - before;
+    const pushes = Alerts.pushes(reg.device).length;
+    const next = await G.client.nextAttemptId(G.account.address);
+    let open = 0;
+    for (let id = 0n; id < next; id++) if ((await G.attempt(id))?.state.tag === 'Collecting') open++;
+    record('griefing', 'griefing-repeated-attempts', 4, 'owner receives: 0 emails, 0 pushes; the wallet lists 10 open attempts', `owner receives: ${emails} emails, ${pushes} pushes; the wallet lists ${open} open attempts`, 'alert path', {
+      note: 'attempt_begun alerts nothing by default (the vault only watches each attempt for an email vote); the wallet shows open attempts from the controller, each granting nothing',
+    });
   });
 });
 
@@ -560,16 +734,36 @@ describe('front-running', () => {
 
 describe('privacy on chain', () => {
   scenario('privacy-no-address-on-chain', async () => {
-    // Every transaction the run sent, read back from the network: no inbox address and no account code in any.
-    const inboxes = [A, B, E, P, Q, L, ...Object.values(providers)].map((e) => e.inbox);
-    const needles = inboxes.flatMap((i) => [Buffer.from(i.address), Buffer.from(i.address.toLowerCase()), Buffer.from(i.accountCode.toString(16).padStart(32, '0'), 'hex')]);
+    // A sanity check behind the privacy property, not evidence of hiding: every transaction the run sent, read
+    // back from the network, searched for each inbox's address and account code in the renderings a leak could take.
+    const inboxes = [A, B, E, P, Q, L, V, S1, S2, S3, G, O, L2, ...Object.values(providers)].map((e) => ({ inbox: e.inbox, pin: e.pin }));
+    const renderings = (b) => [b, Buffer.from(b.toString('hex')), Buffer.from(b.toString('hex').toUpperCase()), Buffer.from(b.toString('base64')), Buffer.from(b.toString('base64url'))];
+    const needles = inboxes.flatMap(({ inbox, pin }) => {
+      const addr = Buffer.from(inbox.address);
+      // pack(addr, 124): 31-byte chunks, each a field element in its own 32-byte word.
+      const padded = Buffer.concat([addr, Buffer.alloc(124 - addr.length)]);
+      const limbs = [0, 1, 2, 3].map((i) => padded.subarray(i * 31, i * 31 + 31)).filter((l) => l.some((x) => x !== 0)).map((l) => Buffer.concat([Buffer.alloc(1), l]));
+      const code = Buffer.from(inbox.accountCode.toString(16).padStart(32, '0'), 'hex');
+      const salt = Buffer.from(pin.leaves[0].toString(16).padStart(64, '0'), 'hex');
+      return [
+        ...renderings(addr),
+        Buffer.from(inbox.address.toLowerCase()),
+        Buffer.from(inbox.address.toUpperCase()),
+        ...limbs.flatMap(renderings),
+        ...renderings(code),
+        ...renderings(salt),
+      ];
+    });
     let carrying = 0;
     for (const t of chain.log) {
       const got = await chain.call('getTransaction', { hash: t.hash });
-      const bytes = Buffer.concat([got.envelopeXdr, got.resultXdr, got.resultMetaXdr].filter(Boolean).map((x) => Buffer.from(x, 'base64')));
+      const xdrs = [got.envelopeXdr, got.resultXdr, got.resultMetaXdr].filter(Boolean);
+      const bytes = Buffer.concat([...xdrs.map((x) => Buffer.from(x, 'base64')), ...xdrs.map((x) => Buffer.from(x))]);
       if (needles.some((n) => bytes.includes(n))) carrying++;
     }
-    record('privacy', 'privacy-no-address-on-chain', 2, `none of ${chain.log.length}`, `${carrying ? carrying : 'none'} of ${chain.log.length}`, '—', { note: `envelopes and results of every transaction of the run, searched for each of ${inboxes.length} inboxes' address and account code` });
+    record('privacy', 'privacy-no-address-on-chain', 2, `none of ${chain.log.length}`, `${carrying ? carrying : 'none'} of ${chain.log.length}`, '—', {
+      note: `a sanity check, not evidence of hiding: envelopes, results and metadata of every transaction of the run, decoded and as base64, searched for each of ${inboxes.length} inboxes' address (raw, lower and upper case, hex, base64), its packed 31-byte limbs as field words, its account code and its pin's salt leaf`,
+    });
   });
 });
 

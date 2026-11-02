@@ -13,7 +13,10 @@
 #   4. regenerates the tables of research/email-recovery/eval/README.md.
 #
 # Needs Docker, the Stellar CLI, `npm ci`, and `just perch-infra` done
-# once; the test-host step also needs `just build-contracts`.
+# once; the test-host step also needs `just build-contracts`. It checks
+# first that node_modules matches package-lock.json. Each run gets its own
+# container name and a free port (NIDO_EVAL_QUICKSTART_PORT overrides the
+# port), so concurrent runs on one machine do not stop each other's network.
 #
 #   research/email-recovery/eval/network/run-attacks.sh [--keep] [--local-only]
 set -euo pipefail
@@ -29,13 +32,14 @@ for a in "$@"; do
   esac
 done
 QUICKSTART="stellar/quickstart@sha256:487fe637ba48c972d5be0ed8965f8df1dcbc3e8e1ee53d24d915b25b6f2b6d99"
-NAME=nido-email-attacks
-PORT="${NIDO_EVAL_QUICKSTART_PORT:-8000}"
+NAME="nido-email-attacks-$$-$(date +%s)"
+PORT="${NIDO_EVAL_QUICKSTART_PORT:-$(node -e 'const s=require("net").createServer().listen(0,"127.0.0.1",()=>{console.log(s.address().port);s.close()})')}"
 out=target/email-attacks
 results=research/email-recovery/eval/results
 mkdir -p "$out/wasm" "$results"
 
 [ -s target/wasm32v1-none/contract/perch_account.wasm ] || { echo "run 'just perch-infra' first" >&2; exit 1; }
+node research/email-recovery/eval/network/lib/preflight.mjs
 
 echo "== build" >&2
 # The local account and factory, rebuilt unless target/eval-local was built
@@ -63,7 +67,6 @@ node --input-type=module -e "import('./research/email-recovery/eval/network/lib/
 
 echo "== the local network" >&2
 if [ -z "${NIDO_EVAL_QUICKSTART_URL:-}" ]; then
-  docker rm -f "$NAME" >/dev/null 2>&1 || true
   docker run -d --rm --name "$NAME" -p "127.0.0.1:$PORT:8000" "$QUICKSTART" --local --enable rpc >/dev/null
   cleanup() { [ "$keep" = 1 ] || docker rm -f "$NAME" >/dev/null 2>&1 || true; }
   trap cleanup EXIT
