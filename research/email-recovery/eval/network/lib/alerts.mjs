@@ -8,7 +8,11 @@
 // account's alert contact as the wallet does: the vault's attestation
 // verified, the contact sealed to it with a Web Push subscription, the
 // owner's passkey authorizing it, the emailed code confirming it. The host
-// reads the controller (`chainReads`) for email votes and reconciliation.
+// reads the network's transactions for email votes and the controller
+// (`chainReads`) for attempt deadlines and reconciliation. `addDevice` adds
+// a second device to a contact, `status` reads its devices, and `ack` posts
+// a device's signed acknowledgement of a probe, as the wallet's service
+// worker does when the probe is tapped.
 import { createHash } from 'node:crypto';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -29,11 +33,13 @@ import {
   encodeContactRequest,
   prepareConfirmation,
   prepareContactChange,
+  pushUpdateRequest,
+  statusRequest,
 } from '@nidohq/email-recovery';
 import { xdr } from '@stellar/stellar-sdk';
 
 export class Alerts {
-  static async start({ rpcUrl, passphrase, controller, imageRegistry, measurement, apex, guardianWasmHash }) {
+  static async start({ rpcUrl, passphrase, controller, imageRegistry, measurement, apex, guardianWasmHash, probeIntervalMs }) {
     const rpc = new StellarRpc(rpcUrl);
     const dir = mkdtempSync(join(tmpdir(), 'nido-email-attacks-alerts-'));
     const isActive = async (m) => (await rpc.view(imageRegistry, 'is_active', [xdr.ScVal.scvBytes(Buffer.from(m, 'hex'))], passphrase)) === true;
@@ -57,6 +63,7 @@ export class Alerts {
         pushSubject: 'mailto:alerts@nido.test',
         allowLoopbackPush: true,
         custodians: custodians.map((c, i) => ({ url: custodianUrls[i], publicKey: c.publicKey })),
+        ...(probeIntervalMs ? { probeIntervalMs } : {}),
       },
     });
     const host = (startLedger, statePath) =>
@@ -106,11 +113,25 @@ export class Alerts {
     return r.json();
   }
 
-  /** Register and confirm `address` as `enrolled`'s alert contact, with a Web Push device. */
-  async register(enrolled, address) {
+  /** The vault's attested key, verified as the wallet verifies it. */
+  async vaultKey() {
     const nonce = attestationNonce();
     const { attestation } = await this.api(`/v1/attestation?nonce=${bytes.toBase64Url(nonce)}`);
-    const vault = await attestedVaultKey(bytes.fromBase64Url(attestation), { roots: [nitroTestRoot()], allowedMeasurements: [this.measurement], nonce });
+    return attestedVaultKey(bytes.fromBase64Url(attestation), { roots: [nitroTestRoot()], allowedMeasurements: [this.measurement], nonce });
+  }
+
+  /** Seal `inner`, have `enrolled`'s owner passkey authorize it, and post it. */
+  async authorized(enrolled, vault, inner) {
+    const { nonce: vaultNonce } = await this.api('/v1/nonce', { method: 'POST' });
+    const prepared = await prepareContactChange(vault, inner, bytes.fromBase64Url(vaultNonce));
+    const a = enrolled.owner.assert(prepared.challenge, enrolled.account.rp);
+    const body = encodeContactRequest(prepared.finish({ publicKey: enrolled.owner.publicKey, ...a }));
+    return this.api('/v1/contact', { method: 'POST', body, headers: { 'content-type': 'application/json' } });
+  }
+
+  /** Register and confirm `address` as `enrolled`'s alert contact, with a Web Push device and its device key. */
+  async register(enrolled, address) {
+    const vault = await this.vaultKey();
     const device = new PushUserAgentMock(this.push);
     const sub = device.subscribe(vault.vapid);
     const accountCode = bigIntToBytes(enrolled.inbox.accountCode, 16);
@@ -120,19 +141,36 @@ export class Alerts {
       accountCode,
       emailGuardian: true,
       push: sub,
+      deviceKey: device.deviceKey,
       purposes: PURPOSE_SECURITY_ALERTS,
-      consentVersion: 1,
+      consentVersion: 3,
       allowLoopbackPush: true,
     });
-    const { nonce: vaultNonce } = await this.api('/v1/nonce', { method: 'POST' });
-    const prepared = await prepareContactChange(vault, inner, bytes.fromBase64Url(vaultNonce));
-    const a = enrolled.owner.assert(prepared.challenge, enrolled.account.rp);
-    const body = encodeContactRequest(prepared.finish({ publicKey: enrolled.owner.publicKey, ...a }));
-    const registered = await this.api('/v1/contact', { method: 'POST', body, headers: { 'content-type': 'application/json' } });
+    const registered = await this.authorized(enrolled, vault, inner);
     const code = this.sentTo(address).map((m) => m.text?.match(/confirmation code for Nido recovery alerts is (\d{6})/)?.[1]).filter(Boolean).at(-1);
     const conf = await prepareConfirmation(vault, confirmationRequest(enrolled.account.address, inner.contact, code));
     const confirmed = await this.api('/v1/contact', { method: 'POST', body: encodeContactRequest(conf), headers: { 'content-type': 'application/json' } });
-    return { registered, confirmed, device, accountCode };
+    return { registered, confirmed, device, accountCode, contact: inner.contact };
+  }
+
+  /** Add a new device to contact `contact` of `enrolled`, with the owner's passkey (the `push` request). */
+  async addDevice(enrolled, contact) {
+    const vault = await this.vaultKey();
+    const device = new PushUserAgentMock(this.push);
+    const inner = pushUpdateRequest(enrolled.account.address, contact, device.subscribe(vault.vapid), device.deviceKey, { allowLoopbackPush: true });
+    return { device, result: await this.authorized(enrolled, vault, inner) };
+  }
+
+  /** `enrolled`'s alert channels, read with the owner's passkey (the `status` request). */
+  async status(enrolled) {
+    return this.authorized(enrolled, await this.vaultKey(), statusRequest(enrolled.account.address));
+  }
+
+  /** What the wallet's service worker posts when `device`'s notification for probe `probe` (base64url) is tapped. */
+  async ack(device, probe) {
+    const signature = device.acknowledge(bytes.fromBase64Url(probe));
+    const r = await fetch(`${this.url}/v1/ack`, { method: 'POST', body: JSON.stringify({ probe, signature: bytes.toBase64Url(signature) }) });
+    return r.status;
   }
 
   /** Every email the sending mocks accepted for `address`. */

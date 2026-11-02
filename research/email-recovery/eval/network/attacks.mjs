@@ -18,9 +18,10 @@
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { after, before, describe, test } from 'node:test';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { buildAttacks, gmailSigner, testKey } from '@nidohq/email-mocks';
-import { NEVER_ASKS, PASSKEY_DEVICE_LEAD } from '@nidohq/email-alerts';
-import { blindedDigest, decryptBackup, encryptBackup, fieldHex, generatePassphrase, keyHash, merkleRoot, registryLeaf } from '@nidohq/email-recovery';
+import { NEVER_ASKS, PASSKEY_DEVICE_LEAD, PREEMPT } from '@nidohq/email-alerts';
+import { MANY_OPEN_ATTEMPTS, blindedDigest, decryptBackup, encryptBackup, fieldHex, generatePassphrase, keyHash, merkleRoot, registryLeaf } from '@nidohq/email-recovery';
 import { perch } from '@nidohq/passkey-sdk';
 import { Address, Keypair, Operation, xdr } from '@stellar/stellar-sdk';
 import { Passkey } from './lib/account.mjs';
@@ -82,14 +83,23 @@ async function honest(e, attemptId, opts = {}) {
 const targetOf = (e, st, rho, accountCode = e.inbox.accountCode) => ({ accountCode, digest: st.digest, rho, pinLeaves: e.pin.leaves });
 
 let A, B, L, E, P, Q;
-/** V: an email vote below quorum; S1-S3: phishing; G: repeated attempts; O: a watcher outage; L2: a lapsed push. */
+/**
+ * V: an email vote below quorum; S1-S3: phishing; G: repeated attempts; O: a
+ * watcher outage; L2: a lapsed push; GV: a vote hidden among many attempts;
+ * CV: an email vote to cancel; PS: a switched phone.
+ */
 /**
  * The label of the votes that authorize an attempt in those scenarios: not
  * `submit_guardian (email…`, so the cost tables keep to the collecting votes
  * and the email-plus-delay account L's authorizing vote.
  */
 const ALERT_VOTE = 'email vote that authorizes (alert-path scenario)';
-let V, S1, S2, S3, G, O, L2;
+let V, S1, S2, S3, G, O, L2, GV, CV, PS;
+/** How the alert services of the run are started (a second one runs with a short probe interval). */
+let alertsAt;
+/** The probe interval of the switched-phone scenario's alert service (30 days by default). */
+const PROBE_MS = 2_000;
+const spaced = (code) => `${code.slice(0, 3)} ${code.slice(3)}`;
 const providers = {};
 const newOwner = (label) => new Passkey(`${label}/new-device/${Date.now()}`);
 
@@ -133,10 +143,13 @@ before(async () => {
     // S3: email plus a second helper.
     { label: 'S3', inbox: new Inbox('s3.phished@gmail.com'), key: gmail, helpers: 1, quorum: 2, delayLedgers: 20, expiryLedgers: 2_000 },
   ]);
-  [G, O, L2] = await enrollAll([
+  [G, O, L2, GV, CV, PS] = await enrollAll([
     { label: 'G', inbox: new Inbox('g.grief@gmail.com'), key: gmail, helpers: 1, quorum: 2, delayLedgers: 20, expiryLedgers: 2_000 },
     { label: 'O', inbox: new Inbox('o.outage@proton.me'), ...lossDelay },
     { label: 'L2', inbox: new Inbox('l2.lapsed@proton.me'), ...lossDelay },
+    { label: 'GV', inbox: new Inbox('gv.flooded@gmail.com'), key: gmail, helpers: 1, quorum: 2, delayLedgers: 20, expiryLedgers: 2_000 },
+    { label: 'CV', inbox: new Inbox('cv.cancel@gmail.com'), key: gmail, helpers: 1, quorum: 2, delayLedgers: 20, expiryLedgers: 2_000 },
+    { label: 'PS', inbox: new Inbox('ps.phones@proton.me'), ...lossDelay },
   ]);
   for (let i = 0; i < LAUNCH_DOMAINS.length; i += 4) {
     const batch = LAUNCH_DOMAINS.slice(i, i + 4);
@@ -144,11 +157,11 @@ before(async () => {
     batch.forEach((d, j) => (providers[d] = enrolled[j]));
   }
   roles = new Map([[stack.deployment.recoveryController, 'controller'], [stack.registry.address, 'registry'], [stack.email.verifier, 'verifier']]);
-  for (const e of [A, B, E, Q, L, V, S1, S2, S3, G, O, L2, ...Object.values(providers)]) {
+  for (const e of [A, B, E, Q, L, V, S1, S2, S3, G, O, L2, GV, CV, PS, ...Object.values(providers)]) {
     roles.set(e.guardian, 'guardian');
     roles.set(e.account.address, 'account');
   }
-  alerts = await Alerts.start({
+  alertsAt = {
     rpcUrl: `${BASE}/rpc`,
     passphrase: PASSPHRASE,
     controller: stack.deployment.recoveryController,
@@ -156,7 +169,8 @@ before(async () => {
     measurement: stack.measurement,
     apex: APEX,
     guardianWasmHash: stack.email.guardianWasmHash,
-  });
+  };
+  alerts = await Alerts.start(alertsAt);
 });
 
 after(async () => {
@@ -550,11 +564,34 @@ describe('compromised inbox', () => {
     const pushed = Alerts.pushes(reg.device).filter((x) => x.kind === 'email_vote_recorded' && x.code === code).length;
     const latency = reports.map((r) => r.latencyMs[`email_vote_recorded:${V.account.address}:${v1.attemptId}`]).find((x) => x !== undefined);
     record('inbox', 'inbox-email-vote-alerted', 4, 'alerted: email and push', emails && pushed ? 'alerted: email and push' : `alerted: ${emails} email, ${pushed} push`, 'alert path', {
-      note: `the email vote recorded below quorum (attempt Collecting, 1 of 2): read from the watched attempt, alerted in ${latency?.toFixed(0)} ms after the read`,
+      note: `the email vote recorded below quorum (attempt Collecting, 1 of 2): found in the transaction that carried it, alerted in ${latency?.toFixed(0)} ms after the read`,
       latencyMs: latency,
     });
     const cancel = await V.ownerCancel(V.payer, v1.attemptId);
     record('inbox', 'inbox-email-vote-owner-cancels', 4, 'accepted', cancel.ok ? 'accepted' : `refused: ${layerOf(cancel.refused, roles).error}`, '—', { note: "the owner's passkey cancels the collecting attempt" });
+  });
+
+  scenario('inbox-email-cancel-alerted', async () => {
+    // The thief with the inbox and the account code uses the email guardian to approve cancelling the owner's own
+    // attempt. No event carries that vote either; the alert service finds it in its transaction.
+    const contact = 'cv.alerts@posteo.de';
+    const reg = await alerts.register(CV, contact);
+    await alerts.drain();
+    Alerts.pushes(reg.device);
+    const own = await CV.beginLostKey(CV.payer, newOwner('CV-owner'));
+    await alerts.drain();
+    const h = await honest(CV, own.attemptId, { domain: EvidenceDomain.Cancel });
+    const vote = outcome(await CV.submitEmail(CV.payer, { attemptId: own.attemptId, domain: EvidenceDomain.Cancel, approval: h.approval, digest: h.st.digest, label: 'email cancel vote (alert-path scenario)' }));
+    assert.equal(vote.observed, 'accepted');
+    const att = await CV.attempt(own.attemptId);
+    await alerts.drain();
+    const code = await alerts.attemptCode(CV, reg.accountCode, own.attemptId);
+    const emails = alerts.reaching(contact).filter((m) => /your email approved cancelling a recovery/.test(m.subject) && m.text?.includes(spaced(code))).length;
+    const pushed = Alerts.pushes(reg.device).filter((x) => x.kind === 'email_cancel_recorded' && x.code === code).length;
+    record('inbox', 'inbox-email-cancel-alerted', 4, 'alerted: email and push', emails && pushed ? 'alerted: email and push' : `alerted: ${emails} email, ${pushed} push`, 'alert path', {
+      note: `the email guardian's vote to cancel attempt ${own.attemptId} (${att.cancel_guardians.length} cancel vote, attempt ${att.state.tag}): found in the transaction that carried it`,
+    });
+    await CV.ownerCancel(CV.payer, own.attemptId);
   });
 });
 
@@ -607,6 +644,54 @@ describe('alert path', () => {
   });
 });
 
+describe('a switched phone', () => {
+  scenario('alerts-phone-switched', async () => {
+    // The owner switched phones and kept the old one, off or in a drawer but still subscribed: the push service
+    // accepts every probe for it, and nobody taps them. Alerts go to the enrolled inbox, which the thief deletes
+    // (the weakest setup the wallet allows). This alert service probes every PROBE_MS instead of every 30 days.
+    const fast = await Alerts.start({ ...alertsAt, probeIntervalMs: PROBE_MS });
+    try {
+      const inbox = PS.inbox.address;
+      const reg = await fast.register(PS, inbox);
+      await fast.drain();
+      // Two probes go unacknowledged; when the third is due, the device is unacknowledged.
+      for (let i = 0; i < 3; i++) {
+        await sleep(PROBE_MS + 200);
+        await fast.drain();
+      }
+      // Accepted by the push service; the device holds only the newest, since each probe's Topic replaces an undelivered one.
+      const probes = fast.push.accepted.filter((m) => m.topic === 'probe' && reg.device.endpoint.endsWith(`/${m.subscription}`)).length;
+      const old = (await fast.status(PS)).channels?.[0];
+      const notice = fast.sentTo(inbox).some((m) => /notifications not confirmed/.test(m.subject));
+      const want = 'the old phone is unacknowledged and the address is told';
+      record('alerts', 'alerts-phone-switched-unacknowledged', 4, want, old?.push === 'unacknowledged' && notice ? want : `push: ${old?.push}; notice: ${notice}`, 'alert path (acknowledged probes)', {
+        note: `${probes} ${probes === 1 ? 'probe' : 'probes'} accepted by the push service for the old phone, none acknowledged (the interval is ${PROBE_MS} ms for the run, 30 days by default); until a device confirms, the wallet treats the email helper as not allowed (rule 2)`,
+      });
+      // The new phone: the owner's passkey adds it at once.
+      const added = await fast.addDevice(PS, reg.contact);
+      const now = (await fast.status(PS)).channels?.[0];
+      const wantAdded = 'the new phone is added at once and live';
+      record('alerts', 'alerts-phone-switched-new-phone', 4, wantAdded, added.result.ok && now?.push === 'live' ? wantAdded : `added: ${JSON.stringify(added.result)}; push: ${now?.push}`, 'alert path', {
+        note: `a push request authorized by the owner's passkey adds the device (${now?.devices?.length} devices, ${now?.devices?.map((d) => d.state).join(' and ')}); the address is told; only replacing or removing the contact waits 14 days`,
+      });
+      // An attempt the thief authorizes now reaches the new phone.
+      const x = await PS.beginLostKey(PS.payer, newOwner('PS-thief'));
+      const h = await honest(PS, x.attemptId);
+      assert.equal(outcome(await PS.submitEmail(PS.payer, { attemptId: x.attemptId, approval: h.approval, digest: h.st.digest, label: ALERT_VOTE })).observed, 'accepted');
+      await fast.drain();
+      const code = await fast.attemptCode(PS, reg.accountCode, x.attemptId);
+      const pushed = Alerts.pushes(added.device).filter((p) => p.kind === 'attempt_authorized' && p.code === code && p.body.startsWith(PASSKEY_DEVICE_LEAD)).length;
+      const wantAlerted = 'owner alerted: push to the new phone';
+      record('alerts', 'alerts-phone-switched-alerted', 4, wantAlerted, pushed ? wantAlerted : 'owner alerted: nothing', 'alert path', {
+        note: 'the email to the enrolled inbox is deleted by the thief; the push to the new phone carries the code and leads with cancelling',
+      });
+      await PS.ownerCancel(PS.payer, x.attemptId);
+    } finally {
+      await fast.close();
+    }
+  });
+});
+
 describe('phishing and social engineering', () => {
   scenario('social-phished-holds-passkey', async () => {
     // A phisher opens a lost-key attempt for its own new key, as the real recovery page would on its own device,
@@ -625,8 +710,10 @@ describe('phishing and social engineering', () => {
     const push = Alerts.pushes(reg.device).find((x) => x.kind === 'attempt_authorized' && x.code === code);
     const mail = alerts.reaching(contact).find((m) => /approved/.test(m.subject));
     const leads = push?.body.startsWith(PASSKEY_DEVICE_LEAD) && mail?.text?.includes(NEVER_ASKS);
-    record('social', 'social-phished-alerts-say-cancel', 4, 'push leads with cancelling; email says Nido never asks', leads ? 'push leads with cancelling; email says Nido never asks' : 'copy missing', 'alert path', {
-      note: `push: "${PASSKEY_DEVICE_LEAD}"`,
+    const preempts = push?.body.includes(PREEMPT) && mail?.text?.includes(PREEMPT);
+    const want = 'push leads with cancelling; both pre-empt the caller; email says Nido never asks';
+    record('social', 'social-phished-alerts-say-cancel', 4, want, leads && preempts ? want : 'copy missing', 'alert path', {
+      note: `push: "${PASSKEY_DEVICE_LEAD}" … "${PREEMPT}"`,
     });
     const cancel = await S1.ownerCancel(S1.payer, s.attemptId);
     record('social', 'social-phished-owner-cancels', 4, 'accepted', cancel.ok ? 'accepted' : `refused: ${layerOf(cancel.refused, roles).error}`, '—', { note: "the victim's passkey cancels within the delay" });
@@ -655,7 +742,8 @@ describe('phishing and social engineering', () => {
 
 describe('repeated attempts', () => {
   scenario('griefing-repeated-attempts', async () => {
-    // Anyone may open attempts, at a transaction fee each. What the owner receives for ten of them.
+    // Anyone may open attempts, at a transaction fee each. What the owner receives for ten of them, and what the
+    // wallet's own read of live attempts (`readLiveAttempts`) lists.
     const contact = 'g.alerts@posteo.de';
     const reg = await alerts.register(G, contact);
     await alerts.drain();
@@ -664,14 +752,44 @@ describe('repeated attempts', () => {
     const griefer = await chain.funded(Keypair.random());
     for (let i = 0; i < 10; i++) await G.beginLostKey(griefer, newOwner(`G-grief-${i}`), `begin_lost_key (griefing ${i + 1})`);
     await alerts.drain();
-    const emails = alerts.reaching(contact).length - before;
-    const pushes = Alerts.pushes(reg.device).length;
-    const next = await G.client.nextAttemptId(G.account.address);
-    let open = 0;
-    for (let id = 0n; id < next; id++) if ((await G.attempt(id))?.state.tag === 'Collecting') open++;
-    record('griefing', 'griefing-repeated-attempts', 4, 'owner receives: 0 emails, 0 pushes; the wallet lists 10 open attempts', `owner receives: ${emails} emails, ${pushes} pushes; the wallet lists ${open} open attempts`, 'alert path', {
-      note: 'attempt_begun alerts nothing by default (the vault only watches each attempt for an email vote); the wallet shows open attempts from the controller, each granting nothing',
+    const mail = alerts.reaching(contact).slice(before);
+    const pushed = Alerts.pushes(reg.device).filter((p) => p.kind !== 'probe');
+    const many = mail.every((m) => /many recovery attempts opened/.test(m.subject)) && pushed.every((p) => p.kind === 'attempts_many');
+    const live = await perch.readLiveAttempts(G.client, G.account.address);
+    const want = 'owner receives: 1 email and 1 push, both the many-attempts alert; the wallet lists 10 open attempts';
+    record('griefing', 'griefing-repeated-attempts', 4, want, `owner receives: ${mail.length} email and ${pushed.length} push, ${many ? 'both the many-attempts alert' : 'other alerts'}; the wallet lists ${live.length} open attempts`, 'alert path', {
+      note: `attempt_begun alerts nothing itself; the vault counts open attempts and alerts once a day while more than ${MANY_OPEN_ATTEMPTS} are open; the wallet reads every live attempt from the controller, each granting nothing`,
     });
+  });
+
+  scenario('griefing-then-vote', async () => {
+    // The target attempt, 32 decoys opened after it (permissionless, a fee each), then the email guardian's vote on
+    // the target: the vote is found in its own transaction, however many attempts are open, and the wallet pages
+    // through every live attempt.
+    const contact = 'gv.alerts@posteo.de';
+    const reg = await alerts.register(GV, contact);
+    await alerts.drain();
+    Alerts.pushes(reg.device);
+    const target = await GV.beginLostKey(GV.payer, newOwner('GV-thief'));
+    const griefer = await chain.funded(Keypair.random());
+    for (let i = 0; i < 32; i++) await GV.beginLostKey(griefer, newOwner(`GV-decoy-${i}`), `begin_lost_key (decoy ${i + 1})`);
+    await alerts.drain();
+    const h = await honest(GV, target.attemptId);
+    assert.equal(outcome(await GV.submitEmail(GV.payer, { attemptId: target.attemptId, approval: h.approval, digest: h.st.digest, label: 'email vote among decoys (alert-path scenario)' })).observed, 'accepted');
+    const reports = await alerts.drain();
+    const code = await alerts.attemptCode(GV, reg.accountCode, target.attemptId);
+    const emails = alerts.reaching(contact).filter((m) => /your email approved a recovery/.test(m.subject) && m.text?.includes(spaced(code))).length;
+    const pushed = Alerts.pushes(reg.device).filter((p) => p.kind === 'email_vote_recorded' && p.code === code).length;
+    const many = alerts.reaching(contact).filter((m) => /many recovery attempts opened/.test(m.subject)).length;
+    const live = await perch.readLiveAttempts(GV.client, GV.account.address);
+    const shown = live.find((a) => a.attemptId === target.attemptId)?.approvals.includes(GV.guardian);
+    const latency = reports.map((r) => r.latencyMs[`email_vote_recorded:${GV.account.address}:${target.attemptId}`]).find((x) => x !== undefined);
+    const want = 'alerted: email and push; the wallet lists the voted attempt among 33 open';
+    record('griefing', 'griefing-then-vote', 4, want, `${emails && pushed ? 'alerted: email and push' : `alerted: ${emails} email, ${pushed} push`}; ${shown ? 'the wallet lists the voted attempt' : 'the wallet does not list the voted attempt'} among ${live.length} open`, 'alert path', {
+      note: `32 attempts opened after the target, then the email vote on it: the host found the vote in its transaction (${latency?.toFixed(0)} ms after the read); the many-attempts alert went out ${many === 1 ? 'once' : `${many} times`}; the wallet's readLiveAttempts paged through every live attempt`,
+      latencyMs: latency,
+    });
+    await GV.ownerCancel(GV.payer, target.attemptId);
   });
 });
 
@@ -737,7 +855,7 @@ describe('privacy on chain', () => {
   scenario('privacy-no-address-on-chain', async () => {
     // A sanity check behind the privacy property, not evidence of hiding: every transaction the run sent, read
     // back from the network, searched for each inbox's address and account code in the renderings a leak could take.
-    const inboxes = [A, B, E, P, Q, L, V, S1, S2, S3, G, O, L2, ...Object.values(providers)].map((e) => ({ inbox: e.inbox, pin: e.pin }));
+    const inboxes = [A, B, E, P, Q, L, V, S1, S2, S3, G, O, L2, GV, CV, PS, ...Object.values(providers)].map((e) => ({ inbox: e.inbox, pin: e.pin }));
     const renderings = (b) => [b, Buffer.from(b.toString('hex')), Buffer.from(b.toString('hex').toUpperCase()), Buffer.from(b.toString('base64')), Buffer.from(b.toString('base64url'))];
     const needles = inboxes.flatMap(({ inbox, pin }) => {
       const addr = Buffer.from(inbox.address);

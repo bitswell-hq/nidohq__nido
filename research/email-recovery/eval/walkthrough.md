@@ -1,10 +1,13 @@
 # Enrollment and recovery: an expert cognitive walkthrough
 
-**This is an expert heuristic walkthrough, not a user study.** No
-participants took part. It finds problems an expert can predict from the
-pages; it measures neither completion rates nor error rates, and it cannot
-show how often real users fall for a phishing script or keep their recovery
-code. Those need a study with participants, which is open.
+**This is an expert walkthrough by the people who designed the pages, not a
+user study and not an independent review.** No participants took part. It
+lists the problems an expert can predict from the current pages; it measures
+neither completion rates nor error rates, and it cannot show how often real
+users fall for a phishing script, tap the monthly check, or keep their
+recovery code. Those need a study with participants, which is open. Its
+ledger entry is `expert-walkthrough` in `research/email-recovery/claims.yaml`,
+with status `unproven`.
 
 ## Method
 
@@ -22,10 +25,12 @@ fails or stalls), **minor** (friction or confusion that the user gets past).
 
 The steps are those the wallet's pages render
 (`packages/frontend/src/lib/recovery/emailEnrollPage.ts`, `emailBackup.ts`,
-`recoverPage.ts`, `emailStep.ts`, `settingsPage.ts`, `liveAttempts.ts`) and
-those the local end-to-end test drives in Chromium
+`recoverPage.ts`, `emailStep.ts`, `settingsPage.ts`, `liveAttempts.ts`), the
+service worker's notifications (`packages/frontend/public/sw.js`), the alert
+texts (`infra/email-alerts/src/vault/content.ts`), and those the local
+end-to-end test drives in Chromium
 (`tests/e2e/local/email-recovery.local.spec.ts`). The walkthrough was done by
-reading the pages' code and that test's script, against the specification
+reading that code and that test's script against the specification
 (`docs/email-recovery/spec.md` §5, §9.3, §10, §11.4).
 
 ## Users and tasks
@@ -34,68 +39,64 @@ reading the pages' code and that test's script, against the specification
 | --- | --- |
 | **Owner, enrolling.** Has the passkey on a laptop and a phone with the wallet installed; uses webmail; not technical. | Turn on email recovery (§5.4). |
 | **Owner, recovering.** Lost every device; has a new phone, the recovery kit (printed or in a password manager), and can sign in to the inbox from the new phone. | Get back in with the email step and a second helper (§4, §6). |
-| **Owner, phished.** Still has the passkey. A caller posing as Nido support has the owner read out the recovery code and send an email with a Subject the caller dictates. | Notice and stop the attack. |
-| **Owner, idle.** Recovery is set up and untouched for months. | Keep it working: the code still at hand, alerts still arriving. |
+| **Owner, phished.** Still has the passkey. A caller posing as Nido support has the owner read out the recovery code and send an email with a Subject the caller dictates, using the real recovery page on the caller's own device. | Notice and stop the attack. |
+| **Owner, idle.** Recovery is set up and untouched for months; the owner may replace the phone in that time. | Keep it working: the code still at hand, alerts still arriving. |
 
 ## Enrollment
 
-| Step | What the page asks | Walkthrough finding |
+| Step | What the page asks | Finding |
 | --- | --- | --- |
-| 1. Recovery code | Save a 26-character code; optionally an encrypted copy in the enrollment email, with a five-word passphrase | Q4 failed: saving was a ticked box, so nothing showed the code was really saved (E1). Q1 failed for where to keep it: the obvious place for a Gmail or iCloud user is the same provider's password manager or drive, which an inbox thief then also holds (E2). The kit did not say which Nido it recovers (E3). |
+| 1. Recovery code | Save a 26-character code (Download, Print, Copy); optionally an encrypted copy in the enrollment email, with a five-word passphrase; then, with the code off the screen, type two of its groups back from where it was saved | Passes. The page says to keep the kit outside the inbox provider's account, naming Google Password Manager, Drive, iCloud Keychain and Files; on an iPhone, printing comes first and the page says a download goes to iCloud Drive. That is advice: nothing stops a Gmail user from saving the code in Google Password Manager (W5). |
 | 2. Enrollment email | Send an email with an opaque Subject to the recovery address, from the inbox to enroll | Passes for a webmail user with a working `mailto:` handler; the page also shows To and Subject to copy. An opaque Subject is acceptable here: the owner is enrolling their own account with the passkey in hand. |
-| 3. Alerts | An address for alerts, then notifications on this device, then the emailed confirmation code | Q1 failed: the address field was filled with the enrolled inbox, so most users would keep it, and an inbox thief can delete the alerts sent there (E4). On an iPhone, notifications need the wallet added to the Home Screen; the page says so only after the attempt fails (E5). |
+| 3. Alerts | An address for alerts (empty at first), notifications on this device, then the emailed confirmation code | Passes for most users. The enrolled inbox as alert address draws a warning, not a block (W6). For a Gmail inbox in Chrome or on Android, or an iCloud inbox on an Apple device, the page notes that the passkey probably syncs through that same account and recommends another inbox or helper (W4). The consent text names the email services that deliver alerts and says this device will ask for a tap about once a month. On an iPhone, notifications need the wallet added to the Home Screen, and the page says so only after the attempt fails (W8). |
 | 4. Email helper | Create the guardian contract | Passes; progress is shown and the page checks what was deployed. |
 | 5. Recovery helpers | Choose how many helpers must approve | Passes; the page states the 7-day floor for email alone. |
 
 ## Recovery after losing every device
 
-| Step | What the page asks | Walkthrough finding |
+| Step | What the page asks | Finding |
 | --- | --- | --- |
-| 0. Find the page | The recovery page runs on the account's own subdomain, a 56-character address | Q2 failed: a user without any device has no way to know that address; the apex page only said to open "your Nido's address" (R1). |
+| 0. Find the page | The apex recovery page takes the Nido address from the kit, the recovery page's address, or the Nido's name | Passes. |
 | 1. New passkey | Create a passkey on the new phone, open the attempt | Passes. |
-| 2. Recovery code | Type the kit's code (or the block and its passphrase) | Q3 failed for safety: the page gave no reason to check that it is the user's own Nido's page, and nothing said that nobody should ever ask for this code, which is exactly what a phishing script asks for (R2). |
-| 3. The email | Send one email with an opaque Subject, picked up within 24 hours | Q4 failed after a day: the registration ends after 24 hours without telling the user, and the page then waits for an email it will never receive (R3). The prepared email's body said nothing to a user who was being talked into sending it (R4). A new phone may have no mail app for the `mailto:` link, and getting back into the inbox on a new device may need the lost one (provider prompts) (R5). |
-| 4. Proving | Wait while the browser proves the email | Passes on desktop with the progress bar; phones are not measured (R6). |
+| 2. Recovery code | Type the kit's code (or the block and its passphrase), under a warning that nobody from Nido asks for it and that the address bar must show exactly the kit's recovery page, on Nido's apex | Passes for an honest user: the address to compare comes from the build and the kit, not from the page's own host. |
+| 3. The email | Send one email with an opaque Subject, picked up within 24 hours; the page shows when the window ends and offers a new email after it | Passes, with W7: a new phone may have no mail app for the `mailto:` link, and getting back into the inbox on a new device may need the lost one (provider prompts). |
+| 4. Proving | Wait while the browser proves the email | Passes on desktop with the progress bar; phones are not measured (W9). |
 | 5. Other helpers, the delay, completion | Share links; wait; finish | Passes. |
 
 ## The phished owner
 
-| Step | What the user sees | Walkthrough finding |
+| Step | What the user sees | Finding |
 | --- | --- | --- |
-| The caller dictates the Subject and asks for the code | Nothing in the email or on any page contradicts the caller | Q1 failed: no copy tells the user that Nido never asks for an email or a code (R2, R4). |
-| The attempt is approved; an alert arrives | The alert said that if the code matches the one the wallet shows, nothing needs doing; the caller sees the same code, since anyone with the recovery code computes it | Q1 failed, severe: the alert reassured exactly the user being attacked (A1). |
-| The owner opens the wallet on a passkey device | Only the security settings page showed an approved attempt, with "I didn't ask for this: cancel it", and nothing for an attempt still collecting approvals | Q2 and Q3 failed: the home page showed nothing, and a phished user did ask, so the button's wording points away from cancelling (A2). |
+| The caller dictates the Subject and asks for the code | The victim's own mail client and the caller's voice. The prepared email's warning line and the code-entry warning render on the caller's screen, not the victim's | Q1 fails, severe (W1): the only Nido text the victim has seen before acting is the kit's "Nobody from Nido will ask for this code", months earlier. |
+| The vote is recorded; an alert arrives | Within one polling interval: an email and a push on every device set up for alerts, both saying "If someone told you to expect this message, or to ignore it, they are trying to take your account.", the push leading with "If you can still sign in to your Nido, you do not need a recovery: cancel it…" | Passes for a user who reads it. It arrives after the vote, so under a single required approval only the delay and the owner's cancellation are left; whether people act on it is not measured. |
+| The owner opens the wallet on a passkey device | Every live attempt, those the email voted on first, with "Cancel this recovery" and, when many are open, a warning above them | Passes. |
 
 ## The idle owner
 
-| Situation | Walkthrough finding |
+| Situation | Finding |
 | --- | --- |
-| Months later, is the code still the right one? | Q2 failed: nothing let the user check a code before needing it (I1). |
-| The phone's notifications for the wallet stopped (app removed, permission revoked, subscription expired) | Q4 failed, severe under email plus delay: nothing noticed or told the user, and the only remaining alert could go to the inbox a thief holds (I2). |
-| Someone opens recovery attempts every day | Each opening sent an email saying it grants nothing, which teaches the user to ignore recovery alerts (I3). |
+| Months later, is the code still the right one? | Passes: "Check my recovery code" compares a typed code with the guardian's pin, storing nothing. |
+| The owner replaced the phone and kept the old one, off or in a drawer, still subscribed | Passes in the end, with W2. The old phone stops confirming the monthly check; after two unconfirmed checks the device is unacknowledged, the alert address is told, and the wallet treats the email helper as not allowed until a device confirms. On the new phone the settings page says where notifications go and offers "Add this device", which applies at once. Until then, and for 60 to 90 days after the old phone stopped, nothing tells the owner. |
+| The monthly check itself | Q1 is at risk, minor to major (W3): the check is a Nido notification that asks for a tap every month, and tapping it may become a habit that carries over to real alerts. Real alerts look different (title "Security alert:", a red icon, they stay until dismissed); whether that is enough is not measured. |
+| Someone opens recovery attempts every day | Passes: an opening alerts nothing; more than eight open at once send one alert a day; the wallet lists every open attempt, approved ones first. A sustained flood is one alert a day, itself a habituation risk (W10). |
 
-## Issues and what was done
+## Open issues
 
-| Id | Severity | Issue | Status | Where |
-| --- | --- | --- | --- | --- |
-| E1 | major | Saving the recovery code was a ticked box | **Fixed:** two groups of the code, picked at random, are typed back before enrollment continues | `emailBackup.ts`, `kitCheckMatches` |
-| E2 | severe | The kit's natural home is the inbox provider's own password manager or drive | **Fixed:** the page and the kit advise keeping it outside the account behind the inbox, naming Google Password Manager, Drive, iCloud Keychain and Files | `KIT_STORAGE_ADVICE` |
-| E3 | major | The kit did not name the Nido it recovers | **Fixed:** the kit names the Nido's address and its recovery page; the encrypted backup block carries the address inside its ciphertext | `recoveryKitText`, backup v2 (spec §5.6) |
-| E4 | severe | Alerts defaulted to the enrolled inbox | **Fixed:** the field starts empty; the enrolled inbox draws a warning (not a block) with the reason | `alertAddressWarning` |
-| E5 | minor | iPhone notifications need the Home Screen install, said only on failure | Open | `emailAlerts.ts` |
-| R1 | severe | No way to find the account's recovery page after losing every device | **Fixed:** the apex recovery page takes the Nido address from the kit, the recovery page's address, or the Nido's name | `accountFromKitInput`, `recoverPage.ts` (spec §5.7) |
-| R2 | severe | The code is typed with no warning and no origin check | **Fixed:** "Nobody from Nido will ask for this code", and the address bar to compare with the kit's address | `codeEntryWarning` |
-| R3 | major | The 24-hour pickup window ended silently | **Fixed:** the page shows when it ends and offers a new email afterwards | `inboundDeadline`, `emailStep.ts` |
-| R4 | severe | The prepared email said nothing to a user being talked into sending it | **Fixed:** its body opens with "If anyone asked you to send this email, stop. Nido never asks for this." | `NOBODY_ASKS_LINE` |
-| R5 | major | No mail app for `mailto:` on a new phone; regaining the inbox may need the lost device | Open: To and Subject can be copied; the inbox's own recovery is the provider's | spec §13 |
-| R6 | major | Phone proving is not measured | Open | spec §12 |
-| A1 | severe | The alert reassured on a matching code, which a phisher also sees | **Fixed:** no alert reassures on a code; the push to the passkey device leads with "This device has your passkey, so you do not need a recovery. Cancel it unless you are deliberately replacing this passkey."; every email says what Nido never asks for | `content.ts` (spec §10.6) |
-| A2 | severe | Only an approved attempt showed, on the settings page, with "I didn't ask for this" | **Fixed:** the wallet reads live attempts from the controller whenever it opens, collecting ones too, and offers "Cancel this recovery" with the passkey-device lead | `liveAttempts.ts` |
-| I1 | major | No way to check the recovery code before needing it | **Fixed:** "Check my recovery code" compares the typed code with the guardian's pin, storing nothing | `checkCodeAgainstPin` (spec §5.6) |
-| I2 | severe | A lapsed notification channel went unnoticed | **Fixed:** a weekly probe finds it, the alert address is told, the wallet shows it, refuses settings that keep the email helper (rule 2), and moves notifications to this device | spec §9.3, §10.3, §10.6 |
-| I3 | minor | Daily "attempt opened" emails | **Fixed:** opening an attempt alerts nothing by default; the wallet shows open attempts | spec §10 |
+| Id | Severity | Issue | Where |
+| --- | --- | --- | --- |
+| W1 | severe | A phished owner sees no Nido warning before sending the email: the page's warnings render on the attacker's screen; the alerts that pre-empt the script arrive after the vote | spec §11.4; a reply to each approval email from the recovery address is not built |
+| W2 | major (severe under email plus delay with alerts to the enrolled inbox) | A device that stops confirming is found only at the third check after its last confirmation, 60 to 90 days later at the monthly default | spec §10.6 |
+| W3 | minor to major | The monthly tap-to-confirm notification may train users to tap Nido notifications without reading them | spec §10.6, §13 question 20 |
+| W4 | major | Where the passkey syncs through the inbox's own provider account, losing that account loses both; enrollment notes it but allows it, and the factor then adds little recovery | `syncedPasskeyNote`, spec §5.4 |
+| W5 | severe if it happens | The kit can still be saved in the inbox provider's own password manager or drive; the page advises against it | `KIT_STORAGE_ADVICE` |
+| W6 | severe if the push also fails | Alerts may go to the enrolled inbox, with a warning; a thief of that inbox deletes them | `alertAddressWarning` |
+| W7 | major | No mail app for `mailto:` on a new phone; regaining the inbox may need the lost device | spec §13 |
+| W8 | minor | iPhone notifications need the Home Screen install, said only on failure | `emailAlerts.ts` |
+| W9 | major | Phone proving is not measured | spec §12 |
+| W10 | minor | A sustained flood of attempts sends one many-attempts alert a day | spec §10 |
 
 The attack suite (`README.md` in this directory) runs the mechanisms behind
-A1, A2, I2 and I3 on a local network: the phished owner cancelling from the
+the passing steps on a local network: the phished owner cancelling from the
 push, the residual risk for a phished owner with no device left, a lapsed
-push, and ten repeated attempts.
+push, a switched phone, an email vote among 32 newer attempts, and repeated
+attempts.
