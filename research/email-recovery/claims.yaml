@@ -280,6 +280,18 @@ claims:
     evidence:
       file: research/email-recovery/eval/results/attacks-local.json
 
+  - id: testnet-email-recovery
+    statement: >-
+      On Stellar testnet, through Perch's deployment and Nido's factory and
+      with the email-recovery contracts deployed from this repository, one
+      complete email-factor recovery ran from enrollment to completion; its
+      email vote, with a real proof, was metered at about 122 million
+      instructions in an 18,080-byte transaction charged about 82,000
+      stroops, rent included.
+    status: measured
+    evidence:
+      file: research/email-recovery/eval/results/testnet.json
+
   # The assumptions the properties rest on.
   - id: dkim-unforgeability
     statement: >-

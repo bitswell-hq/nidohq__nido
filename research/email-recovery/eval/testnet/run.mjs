@@ -33,7 +33,7 @@ import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { perch } from '@nidohq/passkey-sdk';
-import { Address, Keypair, Networks, Operation } from '@stellar/stellar-sdk';
+import { Address, Keypair, Networks, Operation, xdr } from '@stellar/stellar-sdk';
 import { Passkey } from '../network/lib/account.mjs';
 import { Chain, sc } from '../network/lib/chain.mjs';
 import { CIRCUIT_ID, Inbox, closeProver, launchKeys } from '../network/lib/email.mjs';
@@ -47,7 +47,7 @@ const WASM = `${repo}target/wasm32v1-none/contract/`;
 const sha256 = (b) => createHash('sha256').update(b).digest();
 const t0 = Date.now();
 
-const chain = new Chain({ rpcUrl: RPC, passphrase: Networks.TESTNET, friendbot: FRIENDBOT });
+const chain = new Chain({ rpcUrl: RPC, passphrase: Networks.TESTNET, friendbot: FRIENDBOT, settleMs: 3_000 });
 const d = perch.TESTNET;
 const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8' }).trim();
 const cli = execFileSync('stellar', ['--version'], { encoding: 'utf8' }).split('\n')[0];
@@ -105,6 +105,26 @@ const proposal = await step('registry: propose, approve and attest the Gmail moc
 const eligibleAt = Number(await registry.eligibleAt(proposal));
 
 // --- 2. an account with email recovery --------------------------------------
+// Perch's contracts an enrollment's apply_doc reaches (the doc compiler and
+// the recovery controller, instance and code) can be archived on testnet;
+// restoring them inside the apply_doc would exceed the per-transaction write
+// limit, so each archived entry is restored first, in its own transaction.
+const codeKey = (file) => xdr.LedgerKey.contractCode(new xdr.LedgerKeyContractCode({ hash: sha256(readFileSync(`${WASM}${file}`)) }));
+const instanceKey = (c) => xdr.LedgerKey.contractData(new xdr.LedgerKeyContractData({ contract: Address.fromString(c).toScAddress(), key: xdr.ScVal.scvLedgerKeyContractInstance(), durability: xdr.ContractDataDurability.persistent() }));
+const perchKeys = [
+  ['doc compiler instance', instanceKey(d.docCompiler)],
+  ['doc compiler code', codeKey('perch_doc_compiler.wasm')],
+  ['recovery controller instance', instanceKey(d.recoveryController)],
+  ['recovery controller code', codeKey('perch_recovery.wasm')],
+];
+const archived = await chain.archived(perchKeys.map((k) => k[1]));
+const restored = perchKeys.filter(([, k]) => archived.some((a) => a.toXDR('base64') === k.toXDR('base64'))).map(([name]) => name);
+if (restored.length) {
+  await step(`restore Perch's archived entries (${restored.join(', ')})`, async () => {
+    for (const [name, k] of perchKeys) if (restored.includes(name)) await chain.restore(deployer, [k], { label: `restore ${name}` });
+  });
+}
+
 const stack = { deployment: d, email: { guardianWasmHash: deployed.guardianWasmHash, verifier: deployed.verifier }, registry };
 const inbox = new Inbox('first.last@gmail.com');
 const e = await step('enroll: mint, deploy the guardian, apply the recovery document', () =>
@@ -162,6 +182,7 @@ const out = {
   registryConfig: { members: members.map((m) => m.publicKey()), threshold: REGISTRY.threshold, revokeThreshold: REGISTRY.revokeThreshold, attesters: attesters.map((a) => a.publicKey.toString('hex')), attestThreshold: REGISTRY.attestThreshold, graceLedgers: REGISTRY.graceLedgers },
   imageRegistryConfig: { signers: [imageSigner.publicKey()], threshold: 1 },
   gmailProposal: { id: proposal, eligibleAt },
+  restoredPerchEntries: restored,
   account: e.account.address,
   guardian: e.guardian,
   attemptId: Number(attemptId),

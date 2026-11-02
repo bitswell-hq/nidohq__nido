@@ -275,8 +275,28 @@ document then holds the new passkey and not the lost one. Every
 transaction is read back from the network (`results/testnet.json`): its
 hash, the declared resources, the envelope's size, the fee charged with its
 rent, the wall clock of each step, and the host's metered figures when the
-RPC returns its `core_metrics` events. The mail provider and DNS stay
-mocked; the alert path is not run on testnet.
+RPC returns its `core_metrics` events (testnet's did). The mail provider
+and DNS stay mocked; the alert path is not run on testnet.
+
+**A precondition the run found.** Perch's doc compiler and recovery
+controller, instance and code, were archived on testnet. An enrollment's
+`apply_doc` reaches both, and restoring them inside it declares more write
+bytes than a transaction may (`txSorobanInvalid`), so the run restores each
+archived entry first in its own `RestoreFootprint` transaction (the restore
+rows of the table; the two code entries' rent dominates their fee). Any
+wallet enrolling on that deployment meets the same precondition until the
+entries are live again.
+
+**Comparison with the other environments.** Testnet's metered count for the
+email vote is close to the test host's and about 1.6 million above the local
+network's; testnet runs protocol 29 on core 30 and the local network protocol
+28 on core 29 (both read from the RPCs' `getVersionInfo`), and the networks'
+cost parameters are not compared here. Entries, bytes and the transaction's
+size are the same as on the local network. The fee differs with the network's
+fee settings: testnet charged about half of what the local network charged.
+As on the local network, the vote that authorizes the attempt (here the
+helper's, the second of a 2-of-2 quorum) pays the rent of the authorized
+attempt's record.
 
 ## On-chain cost of an email vote
 
@@ -319,7 +339,7 @@ The same call, the email vote with a real proof, in each environment (instructio
 | Domain | Test host invocation | Test host transaction | Test host footprint | Local network, metered | Local network, declared | Local footprint | Testnet, metered |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | fastmail.com | 121,857,413 | 131,203,427 | 12 + 2 | 120,043,543 | 124,918,098 | 10 + 2 |  |
-| gmail.com | 121,817,031 | 131,165,581 | 12 + 2 | 120,073,667 | 124,952,048 | 10 + 2 |  |
+| gmail.com | 121,817,031 | 131,165,581 | 12 + 2 | 120,073,667 | 124,952,048 | 10 + 2 | 121,639,784 |
 | gmx.de | 121,873,343 | 131,218,607 | 12 + 2 | 120,050,879 | 124,925,727 | 10 + 2 |  |
 | gmx.net | 121,855,989 | 131,203,739 | 12 + 2 | 120,029,651 | 124,906,271 | 10 + 2 |  |
 | hotmail.com | 121,916,929 | 131,256,349 | 12 + 2 | 120,044,323 | 124,921,530 | 10 + 2 |  |
@@ -332,7 +352,34 @@ The same call, the email vote with a real proof, in each environment (instructio
 
 The registry is in the footprint of 0 of the 19 local votes: each local approval is proven against its guardian's key pin (no registry key activates during a local run), so the guardian accepts the root without calling the registry. The test host's approvals use a registry root, and its footprints include the registry's instance and code.
 
-Testnet: not yet run.
+Testnet (`Test SDF Network ; September 2015`, https://soroban-testnet.stellar.org, Stellar RPC 30.0.0-13e53516633c3ce1281c7edbacb607107d3a4e55), run of 2026-11-02 02:16 UTC: one complete email-factor recovery, 23 transactions. Proving (bb.js in Node, on the machine of the proving table): 0.7 s witness, 3.4 s proving.
+
+| Step | Transaction | Instructions (metered) | Instructions (declared) | Read / write entries | Bytes written | Envelope bytes | Fee charged (stroops) | of which rent | Wall clock (ms) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| deploy the email contracts (upload nido_email_verifier) | [`d4c48e05c842…`](https://stellar.expert/explorer/testnet/tx/d4c48e05c842663c2094f5bea4c740cf1f085d51fa69847eabb8e9470deed9f4) | 39,379,581 | 40,956,128 | 1 / 0 | 0 | 45,864 | 113,050 | 0 | 3,586 |
+| deploy the email contracts (deploy nido_email_verifier) | [`a225fea7f32c…`](https://stellar.expert/explorer/testnet/tx/a225fea7f32c099c0de77f8b68624f63de1792f0b30339a9bafdc5426111a4e5) | 619,073 | 670,448 | 2 / 1 | 104 | 536 | 14,842 | 11,383 | 2,048 |
+| deploy the email contracts (upload nido_dkim_registry) | [`1096b46c5fb1…`](https://stellar.expert/explorer/testnet/tx/1096b46c5fb1a9080e4eea235eae9fd6072399bc4ff226957b8509b0f1ddaa52) | 58,457,223 | 60,796,876 | 1 / 0 | 0 | 68,520 | 168,386 | 0 | 7,002 |
+| deploy the email contracts (deploy nido_dkim_registry) | [`b9e490ae2318…`](https://stellar.expert/explorer/testnet/tx/b9e490ae231885476a1f6ca264e3eb513b5d06532b80804a00faadd15c6e3ff3) | 1,565,195 | 1,630,603 | 2 / 1 | 1,116 | 2,088 | 2,810,024 | 2,802,463 | 1,965 |
+| deploy the email contracts (upload nido_enclave_image_registry) | [`94578fb9ea0d…`](https://stellar.expert/explorer/testnet/tx/94578fb9ea0d6d4aba53e74c3732d24da72aab4fca4ebc1937c63449edaed0d5) | 9,615,493 | 10,001,477 | 1 / 0 | 0 | 10,400 | 26,463 | 0 | 2,662 |
+| deploy the email contracts (deploy nido_enclave_image_registry) | [`769923dc1864…`](https://stellar.expert/explorer/testnet/tx/769923dc18640a2b30e46b195ef83d1d977a28190d28cba3c3e6ebd9f4570427) | 848,131 | 902,617 | 2 / 1 | 208 | 664 | 528,537 | 524,686 | 6,559 |
+| deploy the email contracts (upload nido_email_guardian) | [`86c04faf160c…`](https://stellar.expert/explorer/testnet/tx/86c04faf160c5c934d2b22485909e34cfe36fb1413e091b156d5f4c5173fb3d0) | 29,145,959 | 30,313,161 | 1 / 0 | 0 | 33,728 | 83,404 | 0 | 7,383 |
+| registry: propose, approve and attest the Gmail mock key (registry propose_add gmail.com) | [`12b5f3b5c199…`](https://stellar.expert/explorer/testnet/tx/12b5f3b5c199c40e99c6ce8db8d8f11e04cc8cd731ae0992560a881b2ca8f792) | 9,496,461 | 9,884,886 | 4 / 2 | 1,536 | 1,324 | 1,066,944 | 1,055,385 | 1,253 |
+| registry: propose, approve and attest the Gmail mock key (registry approve 1) | [`c263b7cae164…`](https://stellar.expert/explorer/testnet/tx/c263b7cae16449e77c723cb3e72e32b39caf2874f1b696f8992a11d2fa2f8013) | 763,970 | 818,641 | 3 / 1 | 420 | 592 | 5,462 | 1,272 | 2,167 |
+| registry: propose, approve and attest the Gmail mock key (registry approve 1) | [`878c6aa117c8…`](https://stellar.expert/explorer/testnet/tx/878c6aa117c876b5786b83fb493a22edada8798f6a469b207dbe9327d74448b2) | 765,064 | 819,735 | 3 / 1 | 424 | 592 | 15,463 | 11,272 | 1,970 |
+| registry: propose, approve and attest the Gmail mock key (registry attest 1 by 0) | [`620ddaefcd15…`](https://stellar.expert/explorer/testnet/tx/620ddaefcd15128f2d91c05f1a09676303ae609840d0533264285fa7f1b57eb0) | 1,652,268 | 1,725,299 | 3 / 1 | 436 | 808 | 36,661 | 31,272 | 2,059 |
+| registry: propose, approve and attest the Gmail mock key (registry attest 1 by 1) | [`b57602eacedc…`](https://stellar.expert/explorer/testnet/tx/b57602eacedc43f3d5165c7d715d53bcab8cc8542d7ec3d6c0085999d572c955) | 1,654,248 | 1,727,358 | 3 / 1 | 452 | 808 | 46,668 | 41,272 | 1,751 |
+| restore Perch's archived entries (doc compiler instance, doc compiler code, recovery controller instance, recovery controller code) (restore doc compiler instance) | [`6b85123a745b…`](https://stellar.expert/explorer/testnet/tx/6b85123a745b7d284323a84342b2f43c1934d32b9d3079c3e74ecf657ff42423) | — | 0 | 1 (footprint) | 104 | 252 | 14,726 | 11,383 | 2,040 |
+| restore Perch's archived entries (doc compiler instance, doc compiler code, recovery controller instance, recovery controller code) (restore doc compiler code) | [`b39e79d0d692…`](https://stellar.expert/explorer/testnet/tx/b39e79d0d692365534c30a73f7f9e0aee77fd685f20016aa711b62ebac624a93) | — | 0 | 1 (footprint) | 110,048 | 240 | 78,873,057 | 78,798,878 | 1,900 |
+| restore Perch's archived entries (doc compiler instance, doc compiler code, recovery controller instance, recovery controller code) (restore recovery controller instance) | [`b9d82df040d8…`](https://stellar.expert/explorer/testnet/tx/b9d82df040d8d558fa1780b0c0824e676bd09fbede619765f447a2ae76f5776d) | — | 0 | 1 (footprint) | 104 | 252 | 14,726 | 11,383 | 2,076 |
+| restore Perch's archived entries (doc compiler instance, doc compiler code, recovery controller instance, recovery controller code) (restore recovery controller code) | [`9806a648675c…`](https://stellar.expert/explorer/testnet/tx/9806a648675c4b0cfeadb4b501dc2a7c8ae71ad2fa7bc55ad20560d6994bed79) | — | 0 | 1 (footprint) | 68,364 | 240 | 33,545,398 | 33,498,086 | 6,830 |
+| enroll: mint, deploy the guardian, apply the recovery document (mint testnet) | [`25bb1939faec…`](https://stellar.expert/explorer/testnet/tx/25bb1939faeca1678387d15bd13eb8e86dd4a59cf8b0d39b79886652dbbad400) | 3,303,767 | 3,469,152 | 10 / 5 | 1,468 | 1,064 | 1,344,343 | 1,331,243 | 5,022 |
+| enroll: mint, deploy the guardian, apply the recovery document (deploy guardian testnet) | [`4381a327a06d…`](https://stellar.expert/explorer/testnet/tx/4381a327a06d03ae43310a7d46a6e020c501be4be10fee9d4ef2052d7a1a7ac2) | 1,230,050 | 1,283,007 | 4 / 1 | 644 | 1,660 | 1,623,015 | 1,616,693 | 1,796 |
+| enroll: mint, deploy the guardian, apply the recovery document (apply_doc testnet) | [`24c2b9594a6a…`](https://stellar.expert/explorer/testnet/tx/24c2b9594a6a50493013b986220a9ebf00bea5122eb84bcfb02b9cc4fc969066) | 16,241,550 | 17,010,106 | 22 / 10 | 3,852 | 4,204 | 5,711,754 | 5,681,123 | 3,858 |
+| begin_lost_key | [`6e3a7e8c0892…`](https://stellar.expert/explorer/testnet/tx/6e3a7e8c0892fa9d54e98e93554c18abf277c7f19d8fc655b5ad8b10218ede82) | 13,121,774 | 13,690,643 | 16 / 2 | 1,236 | 1,844 | 365,909 | 353,423 | 1,864 |
+| submit_guardian (email vote, real proof) | [`08cdc915727c…`](https://stellar.expert/explorer/testnet/tx/08cdc915727cc9b569bd4015ea01a33fa5486d2d18cb673d30ab7d393b5810ff) | 121,639,784 | 126,548,373 | 12 / 2 | 1,208 | 18,080 | 82,428 | 1,333 | 1,715 |
+| submit_guardian (helper vote) | [`e1e4b757c083…`](https://stellar.expert/explorer/testnet/tx/e1e4b757c0833fdad4eea9156853ec6278715c7d81eccf79a2cd8bf0961c16bc) | 2,064,633 | 2,202,593 | 11 / 3 | 1,460 | 1,504 | 3,664,628 | 3,653,812 | 2,422 |
+| the delay | — | | | | | | | | 57,575 |
+| complete (apply_doc through the recovery rule) | [`ff431206c9e3…`](https://stellar.expert/explorer/testnet/tx/ff431206c9e3c9ad4d0880fececaec432b95ef159a531bbf58641d7889037be4) | 14,897,208 | 15,746,781 | 27 / 12 | 5,264 | 4,256 | 592,637 | 552,040 | 3,431 |
 <!-- END GENERATED cost -->
 
 **Comparison.** The same proof and statement shape give nearly the same
@@ -457,6 +504,9 @@ the runs).
 - **Timing.** Wall-clock figures come from one shared machine whose load
   average is recorded; other workloads ran on it. Local-network latency is
   dominated by quickstart's one-second ledgers, not by the contracts.
+- **One testnet run.** The testnet figures are one recovery at one time;
+  latency there depends on testnet's load and ledger timing (about 5
+  seconds), and fees on its fee settings at that time.
 - **Desktop, not phone.** Efficiency-core rows run a desktop's slower cores
   under macOS's background QoS; they are not a model of a phone.
 

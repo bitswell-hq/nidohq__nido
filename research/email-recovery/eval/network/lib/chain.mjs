@@ -10,7 +10,7 @@
 // `enforce`, so its footprint and resources include the guardian's checks
 // and the proof verification.
 import { performance } from 'node:perf_hooks';
-import { Account, Address, Keypair, Operation, StrKey, TransactionBuilder, rpc, scValToNative, xdr } from '@stellar/stellar-sdk';
+import { Account, Address, Keypair, Operation, SorobanDataBuilder, StrKey, TransactionBuilder, rpc, scValToNative, xdr } from '@stellar/stellar-sdk';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -70,6 +70,8 @@ export class Chain {
     this.friendbotUrl = o.friendbot;
     this.server = new rpc.Server(o.rpcUrl, { allowHttp: o.allowHttp ?? o.rpcUrl.startsWith('http://') });
     this.baseFee = o.baseFee ?? '1000000';
+    /** A pause after each confirmation, for RPCs whose nodes trail each other (not counted in the measurement). */
+    this.settleMs = o.settleMs ?? 0;
     /** Every transaction sent, with its measurement. */
     this.log = [];
   }
@@ -132,12 +134,24 @@ export class Chain {
       .build();
   }
 
-  /** Simulate `op` from `source`; throws `Refused('simulation', …)` on a host error. */
+  /**
+   * Simulate `op` from `source`; throws `Refused('simulation', …)` on a host
+   * error. A public RPC behind a load balancer can answer from a node a
+   * ledger behind the one that confirmed the previous transaction, so a
+   * just-written entry it reports missing is retried a few times.
+   */
   async simulate(source, op, authMode = 'record') {
-    const tx = await this.build(source, op);
-    const sim = await this.server.simulateTransaction(tx, undefined, authMode);
-    if (rpc.Api.isSimulationError(sim)) throw new Refused('simulation', decodeHostError(sim.error, sim.events ?? []));
-    return { tx, sim };
+    for (let attempt = 1; ; attempt++) {
+      const tx = await this.build(source, op);
+      const sim = await this.server.simulateTransaction(tx, undefined, authMode);
+      if (!rpc.Api.isSimulationError(sim)) return { tx, sim };
+      const refused = decodeHostError(sim.error, sim.events ?? []);
+      if (refused.kind === 'other' && /Storage, MissingValue/.test(refused.raw) && attempt < 6) {
+        await sleep(2_500);
+        continue;
+      }
+      throw new Refused('simulation', refused);
+    }
   }
 
   /** The return value of `contract.fn(args)`, simulated (a read). */
@@ -152,9 +166,16 @@ export class Chain {
       .addOperation(op)
       .setTimeout(60)
       .build();
-    const sim = await this.server.simulateTransaction(tx);
-    if (rpc.Api.isSimulationError(sim)) throw new Refused('simulation', decodeHostError(sim.error, sim.events ?? []));
-    return sim.result?.retval ? scValToNative(sim.result.retval) : undefined;
+    for (let attempt = 1; ; attempt++) {
+      const sim = await this.server.simulateTransaction(tx);
+      if (!rpc.Api.isSimulationError(sim)) return sim.result?.retval ? scValToNative(sim.result.retval) : undefined;
+      const refused = decodeHostError(sim.error, sim.events ?? []);
+      if (refused.kind === 'other' && /Storage, MissingValue/.test(refused.raw) && attempt < 6) {
+        await sleep(2_500);
+        continue;
+      }
+      throw new Refused('simulation', refused);
+    }
   }
 
   /**
@@ -162,15 +183,26 @@ export class Chain {
    * result. Returns the return value and the transaction's measurement.
    * Throws `Refused` at the stage that refused it.
    */
-  async send(source, op, { authMode = 'record', label = '' } = {}) {
+  async send(source, op, opts = {}) {
+    const { authMode = 'record', label = '' } = opts;
     const t0 = performance.now();
     const { tx, sim } = await this.simulate(source, op, authMode);
     const tSim = performance.now();
     const prepared = rpc.assembleTransaction(tx, sim).build();
     prepared.sign(source);
-    const sent = await this.server.sendTransaction(prepared);
+    let sent = await this.server.sendTransaction(prepared);
+    for (let attempt = 1; sent.status === 'TRY_AGAIN_LATER' && attempt < 6; attempt++) {
+      await sleep(2_500);
+      sent = await this.server.sendTransaction(prepared);
+    }
+    if (sent.status === 'ERROR' && /txBadSeq/.test(JSON.stringify(sent.errorResult?.result().switch().name ?? '')) && !opts.retried) {
+      // The account was read from a node a ledger behind: rebuild once.
+      await sleep(2_500);
+      return this.send(source, op, { ...opts, retried: true });
+    }
     if (sent.status === 'ERROR' || sent.status === 'TRY_AGAIN_LATER') {
-      throw new Refused('submission', { kind: sent.status, raw: sent.errorResult?.toXDR('base64') ?? '' });
+      const code = sent.errorResult?.result().switch().name ?? sent.status;
+      throw new Refused('submission', { kind: code, label, fee: prepared.fee, raw: sent.errorResult?.toXDR('base64') ?? '', ...measure(prepared, undefined, sim) });
     }
     const tSent = performance.now();
     let got;
@@ -190,11 +222,52 @@ export class Chain {
       ...m,
     };
     this.log.push(entry);
+    if (this.settleMs) await sleep(this.settleMs);
     if (got.status !== 'SUCCESS') {
       const diag = got.diagnosticEventsXdr ?? [];
       throw new Refused('execution', { ...decodeHostError(JSON.stringify(got.resultXdr?.result().switch().name ?? ''), diag), hash: sent.hash });
     }
     return { value: got.returnValue ? scValToNative(got.returnValue) : undefined, scVal: got.returnValue, ...entry };
+  }
+
+  /**
+   * Restore archived ledger entries (`keys`, LedgerKey XDR) with one
+   * RestoreFootprint transaction from `source`; returns its measurement.
+   */
+  async restore(source, keys, { label = 'restore' } = {}) {
+    const t0 = performance.now();
+    const tx = new TransactionBuilder(await this.server.getAccount(source.publicKey()), { fee: this.baseFee, networkPassphrase: this.passphrase })
+      .addOperation(Operation.restoreFootprint({}))
+      .setSorobanData(new SorobanDataBuilder().setReadWrite(keys).build())
+      .setTimeout(180)
+      .build();
+    const sim = await this.server.simulateTransaction(tx);
+    if (rpc.Api.isSimulationError(sim)) throw new Refused('simulation', decodeHostError(sim.error, sim.events ?? []));
+    const prepared = rpc.assembleTransaction(tx, sim).build();
+    prepared.sign(source);
+    const sent = await this.server.sendTransaction(prepared);
+    if (sent.status !== 'PENDING' && sent.status !== 'DUPLICATE') throw new Refused('submission', { kind: sent.errorResult?.result().switch().name ?? sent.status, label });
+    let got;
+    for (let i = 0; i < 240; i++) {
+      got = await this.server.getTransaction(sent.hash);
+      if (got.status !== 'NOT_FOUND') break;
+      await sleep(250);
+    }
+    const entry = { label, hash: sent.hash, status: got.status, ledger: got.ledger, ms: { total: Math.round(performance.now() - t0) }, ...measure(prepared, got, sim) };
+    this.log.push(entry);
+    if (this.settleMs) await sleep(this.settleMs);
+    if (got.status !== 'SUCCESS') throw new Refused('execution', { kind: got.status, label, hash: sent.hash });
+    return entry;
+  }
+
+  /** The keys among `keys` whose entries are archived (live until a past ledger, or reported at 0). */
+  async archived(keys) {
+    const latest = await this.ledger();
+    const r = await this.server.getLedgerEntries(...keys);
+    return keys.filter((k) => {
+      const e = r.entries.find((x) => x.key.toXDR('base64') === k.toXDR('base64'));
+      return !e || !e.liveUntilLedgerSeq || e.liveUntilLedgerSeq < latest;
+    });
   }
 
   /** `send`, but a refusal is returned rather than thrown. */
