@@ -1,0 +1,10 @@
+# The registry path of the Perch account built for the local network
+# (evaluation/scripts/local-stack.sh writes it over Perch's
+# crates/perch-smart-account/wasm/registry.path). TEST-ONLY: the root
+# deployer is the key whose seed is SHA-256("nido-eval/deployer"), and every
+# registry on the path is an instance of fixtures/stateless-deployer.
+# evaluation/harness/src/local_stack.rs and tests/support/emailLocalStack.mjs
+# derive and deploy the same chain.
+root-deployer GCICDV2PAWY7FPVPPJUHXMCF6BUIJSZLVUVUVVVWNESLGEU6RIPYQQAZ
+root-salt nido-eval/local-registry
+path perch/constructorless

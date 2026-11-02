@@ -3,12 +3,14 @@
 // local network (`stellar/quickstart --local`) and writes their addresses to
 // target/email-e2e/stack.json:
 //
-// - Perch's stack as a Nido account uses it: the evaluation's stateless
-//   deployer (evaluation/fixtures/stateless-deployer) at the address a fixed
-//   deployer key and salt give it, Perch's tier-0 contracts deployed through
-//   it (so the account finds them where perch-registry-resolve looks: the
-//   deployer and sha256(wasm)), the Perch account evaluation/scripts/local-stack.sh
-//   built for that deployer, and Nido's factory around that account;
+// - Perch's stack as a Nido account uses it: the registry chain of
+//   evaluation/fixtures/local-registry.path (each link an instance of
+//   evaluation/fixtures/stateless-deployer: the root from a fixed deployer
+//   key and salt, then one named deploy per path segment), Perch's tier-0
+//   contracts deployed through its last registry (so the account finds them
+//   where perch-registry-resolve looks: that registry and sha256(wasm)), the
+//   Perch account evaluation/scripts/local-stack.sh built with that path, and
+//   Nido's factory pinning that account;
 // - Nido's email contracts: the verifier, the DKIM key registry (one
 //   TEST-ONLY member and attester), the guardian's wasm (each enrollment
 //   deploys its own instance), and, standing in for the enclave-image
@@ -18,7 +20,7 @@
 //
 //   node tests/support/emailLocalStack.mjs [--rpc http://127.0.0.1:8000]
 //
-// Needs `just perch-infra`, evaluation/scripts/local-stack.sh <deployer>,
+// Needs `just perch-infra`, evaluation/scripts/local-stack.sh <registry>,
 // and the email contracts built into target/email-e2e/wasm
 // (scripts/email-recovery-e2e.sh does all of it).
 import { createHash } from 'node:crypto';
@@ -35,7 +37,42 @@ export const seeded = (label) => Keypair.fromRawEd25519Seed(sha256(label));
 export const DEPLOYER = seeded('nido-eval/deployer');
 export const REGISTRY_MEMBER = seeded('nido-email-e2e/registry-member');
 export const ATTESTER = seeded('nido-email-e2e/dns-attester');
-export const DEPLOYER_SALT = Buffer.alloc(32, 0x5e);
+
+/** The local registry path's fields (evaluation/fixtures/local-registry.path). */
+function registryPath() {
+  const text = readFileSync(repo + 'evaluation/fixtures/local-registry.path', 'utf8');
+  const field = (key) => {
+    const line = text.split('\n').find((l) => !l.trimStart().startsWith('#') && l.startsWith(key + ' '));
+    if (!line) throw new Error(`local-registry.path has no ${key} line`);
+    return line.slice(key.length + 1).trim();
+  };
+  return {
+    rootDeployer: field('root-deployer'),
+    rootSalt: sha256(field('root-salt')),
+    segments: field('path').replace(/^\/+|\/+$/g, '').split('/').filter(Boolean),
+  };
+}
+
+/** The contract `deployer` creates with `salt` on the local network. */
+function contractId(deployer, salt) {
+  const preimage = xdr.HashIdPreimage.envelopeTypeContractId(
+    new xdr.HashIdPreimageContractId({
+      networkId: hash(Buffer.from(PASSPHRASE)),
+      contractIdPreimage: xdr.ContractIdPreimage.contractIdPreimageFromAddress(
+        new xdr.ContractIdPreimageFromAddress({ address: Address.fromString(deployer).toScAddress(), salt }),
+      ),
+    }),
+  );
+  return StrKey.encodeContract(hash(preimage.toXDR()));
+}
+
+/** Every registry on the local path, root first; the last deploys the infra. */
+export function registryChain() {
+  const path = registryPath();
+  const chain = [contractId(path.rootDeployer, path.rootSalt)];
+  for (const name of path.segments) chain.push(contractId(chain.at(-1), sha256(name)));
+  return chain;
+}
 
 const PERCH = repo + 'target/wasm32v1-none/contract/';
 const LOCAL = repo + 'target/eval-local/wasm/';
@@ -80,10 +117,23 @@ export async function deployStack({ base = 'http://127.0.0.1:8000', imageMeasure
   const invoke = (signer, contract, fn, args) =>
     send(signer, Operation.invokeContractFunction({ contract, function: fn, args }));
 
-  // The stateless deployer, where the local account looks for its tier-0 contracts.
-  const stateless = await create(await upload(EMAIL + 'nido_eval_stateless_deployer.wasm'), DEPLOYER_SALT);
-  const expected = JSON.parse(readFileSync(repo + 'target/eval-local/build.json', 'utf8')).registry;
-  if (stateless !== expected) throw new Error(`stateless deployer at ${stateless}, the account was built for ${expected}`);
+  // The registry chain, whose last link the local account looks in for its
+  // tier-0 contracts.
+  const chain = registryChain();
+  const built = JSON.parse(readFileSync(repo + 'target/eval-local/build.json', 'utf8')).registry;
+  if (chain.at(-1) !== built) throw new Error(`the registry path derives ${chain.at(-1)}, the account was built for ${built}`);
+  const { rootDeployer, rootSalt, segments } = registryPath();
+  if (rootDeployer !== DEPLOYER.publicKey()) throw new Error(`the registry root deployer is ${rootDeployer}, not the deployer key`);
+  const registryWasm = await upload(EMAIL + 'nido_eval_stateless_deployer.wasm');
+  const root = await create(registryWasm, rootSalt);
+  if (root !== chain[0]) throw new Error(`registry root at ${root}, the path derives ${chain[0]}`);
+  for (const [i, name] of segments.entries()) {
+    const at = Address.fromScVal(
+      await invoke(DEPLOYER, chain[i], 'deploy_named', [xdr.ScVal.scvBytes(registryWasm), xdr.ScVal.scvBytes(Buffer.from(name))]),
+    ).toString();
+    if (at !== chain[i + 1]) throw new Error(`registry ${name} at ${at}, the path derives ${chain[i + 1]}`);
+  }
+  const stateless = chain.at(-1);
   const viaDeployer = async (file) =>
     Address.fromScVal(await invoke(DEPLOYER, stateless, 'deploy', [xdr.ScVal.scvBytes(await upload(file))])).toString();
   const perch = {};
@@ -91,8 +141,14 @@ export async function deployStack({ base = 'http://127.0.0.1:8000', imageMeasure
     perch[name] = await viaDeployer(PERCH + `${name}.wasm`);
   }
   const accountHash = await upload(LOCAL + 'perch_account.wasm');
-  const factory = await create(await upload(LOCAL + 'nido_factory.wasm'), Buffer.alloc(32, 1), [Address.fromString(DEPLOYER.publicKey()).toScVal()]);
-  await invoke(DEPLOYER, factory, 'set_registry_pins', [Address.fromString(perch.perch_webauthn_verifier).toScVal()]);
+  // Admin, the pinned WebAuthn verifier, no manager.
+  const factory = await create(await upload(LOCAL + 'nido_factory.wasm'), Buffer.alloc(32, 1), [
+    Address.fromString(DEPLOYER.publicKey()).toScVal(),
+    Address.fromString(perch.perch_webauthn_verifier).toScVal(),
+    xdr.ScVal.scvVoid(),
+  ]);
+  const pinned = Buffer.from(scValToNative(await invoke(DEPLOYER, factory, 'account_wasm_hash', [])));
+  if (!pinned.equals(accountHash)) throw new Error(`the factory pins account ${pinned.toString('hex')}, not the uploaded ${accountHash.toString('hex')}`);
 
   // Nido's email contracts.
   const verifier = await create(await upload(EMAIL + 'nido_email_verifier.wasm'), Buffer.alloc(32, 2));
