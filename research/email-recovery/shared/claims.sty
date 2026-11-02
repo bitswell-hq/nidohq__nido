@@ -19,6 +19,13 @@
 \definecolor{claim-assumed}{HTML}{B35806}
 \definecolor{claim-unproven}{HTML}{B2182B}
 
+% claims-to-tex.pl writes the operator's name as \OpName and \OpNameUpper, so
+% that a document can make it anonymous (shared/macros.tex); a document that
+% does not define them prints the name.
+\AtBeginDocument{%
+  \providecommand\OpName{Nido}%
+  \providecommand\OpNameUpper{NIDO}}
+
 \newcommand\ClaimDefine[4]{%
   \expandafter\def\csname claim@status@#1\endcsname{#2}%
   \expandafter\def\csname claim@text@#1\endcsname{#3}%
