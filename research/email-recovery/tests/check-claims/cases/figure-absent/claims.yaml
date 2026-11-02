@@ -1,0 +1,6 @@
+claims:
+  - id: x
+    statement: A vote uses 121,639,784 instructions and writes 1,208 bytes.
+    status: measured
+    evidence:
+      file: eval/verify.json

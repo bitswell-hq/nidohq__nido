@@ -16,6 +16,11 @@ claims:
     status: measured
     evidence:
       file: eval/verify.json
+  - id: a-measured-figures
+    statement: A vote uses 121,639,784 instructions and writes 1,208 bytes, 12 entries.
+    status: measured
+    evidence:
+      file: eval/figures.json
   - id: a-assumed
     statement: Assumed thing.
     status: assumed
