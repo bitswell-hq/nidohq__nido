@@ -17,6 +17,8 @@
 //   entry archived (archival-test-host.json) as transactions under mainnet's
 //   limits and fees (fees/archival.mjs), and the keeper's rent
 //   (keeper-local.json, code-entries.json);
+// - `migration`: one account's move to a new email guardian
+//   (migration-test-host.json) as transactions at mainnet's fees;
 // - `proving`: proving.json (proving/measure.mjs) when present.
 //
 // Every fee a network charged in these files is recomputed from that
@@ -531,6 +533,24 @@ function archivalBlock() {
   return out.length ? out.join('\n') : 'No archival measurement is recorded.';
 }
 
+function migrationBlock() {
+  const m = json('migration-test-host.json');
+  if (!m || !S.mainnet) return 'Not yet run.';
+  const s = S.mainnet.settings;
+  const out = [];
+  out.push(`At mainnet's settings: each transaction of \`email_migration.rs\` re-executed by the test host under mainnet's cost model and entry lifetimes with nothing archived, priced with fees/model.mjs at mainnet's fees, rent (at today's rate, ${n(schedule(s).rent1kb)} stroops per KB, which scales with the network's average state size as above) and the 100-stroop inclusion fee included. The deployment's rent prepays the new guardian's instance for the maximum lifetime (${n(s.state_archival.max_entry_ttl)} ledgers), to which its constructor extends it; the keeper's yearly rent for that instance is the per-account figure above.`);
+  out.push('');
+  out.push('| Profile | Transaction | Instructions | Bytes written | Fee (stroops) | of which rent |');
+  out.push('| --- | --- | --- | --- | --- | --- |');
+  for (const p of m.profiles) {
+    const txs = plan(p.steps, s);
+    for (const t of txs) out.push(`| ${p.profile} | ${t.step} | ${n(t.resources.instructions)} | ${n(t.resources.writeBytes)} | ${n(t.fee)} | ${n(t.rent)} |`);
+    const total = txs.reduce((x, t) => x + t.fee, 0);
+    out.push(`| **${p.profile}** | **${txs.length} transactions** | | | **${n(total)}** (${xlm(total)}) | ${n(txs.reduce((x, t) => x + t.rent, 0))} |`);
+  }
+  return out.join('\n');
+}
+
 /** The build's code that the network does not hold, whose rent size is the test host's own. */
 function offNetwork(code) {
   const off = (code?.entries ?? []).filter((e) => !e.onNetwork).map((e) => e.name);
@@ -560,7 +580,7 @@ function proving() {
 }
 
 let text = readFileSync(readme, 'utf8');
-for (const [name, body] of Object.entries({ settings: settingsTable(), attacks: attacks(), cost: cost(), archival: archivalBlock(), proving: proving() })) {
+for (const [name, body] of Object.entries({ settings: settingsTable(), attacks: attacks(), cost: cost(), archival: archivalBlock(), migration: migrationBlock(), proving: proving() })) {
   const re = new RegExp(`(<!-- BEGIN GENERATED ${name} by report\\.mjs; do not edit -->)[\\s\\S]*?(<!-- END GENERATED ${name} -->)`);
   if (!re.test(text)) throw new Error(`README.md has no generated block "${name}"`);
   text = text.replace(re, (_, begin, end) => `${begin}\n${body}\n${end}`);
