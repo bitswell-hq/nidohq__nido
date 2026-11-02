@@ -263,6 +263,16 @@ is tested, not proven.
   (`sequence()`), which check 9 compares with the statement's expiry, and the
   close time (`timestamp()`), which check 11 and `construct` compare with
   the pin's `valid_until`.
+  A call to a dependency that fails, a registry or verifier that traps or is
+  archived, is part of checks 11 and 12: the world's registry answers
+  `none` and its verifier `callFailed` or `vkParseError`, and `check` refuses
+  with `registryUnavailable` or `verifierUnavailable`. Such a refusal accepts
+  nothing, so the safety theorems are unaffected (`Accepted` needs the
+  registry to answer `some true` or the pin to hold, and the verifier `ok`).
+  It affects liveness: while a dependency fails, the email factor approves
+  nothing. An archived dependency is restored by whoever submits the next
+  transaction that reads it, and its bytes are unchanged; the cost is in
+  `research/email-recovery/eval/README.md`, "Archival and the keeper".
 - **Controller.** The transitions mirror `vendor/perch/crates/perch-recovery/src/contract.rs`
   (`begin`, `submit_guardian`, `submit_zk`, `after_evidence`, `promote`,
   `cancel`, `authorize_completion` and `complete`, `rcv_sync`, `rcv_cancel`,
@@ -277,9 +287,27 @@ is tested, not proven.
   `email_approval_counts_toward_a_protected_reconfiguration`).
 - **Abstractions**, each of which only adds behaviours, so a safety property of
   the model holds of the contract: ledger arithmetic is unbounded (Perch refuses
-  `u32` overflow); storage never expires (Perch's temporary entries do); the doc
-  compiler's `derive_target`, the ZK adapter's verdict, and the host's
-  acceptance of a guardian authorization entry are fields of the transaction.
+  `u32` overflow); storage never expires (see below); the doc compiler's
+  `derive_target`, the ZK adapter's verdict, and the host's acceptance of a
+  guardian authorization entry are fields of the transaction.
+- **Why storage that never expires is sound.** On the network, persistent
+  entries are archived, not lost: a transaction that reads one restores the
+  same bytes first, so archival changes cost and liveness, not state.
+  Temporary entries do expire, and Perch keeps exactly one kind of record
+  in them: a collecting attempt, with the votes it has counted
+  (`perch-recovery` `contract.rs`, `save`). `save` extends that record to
+  live at least until the attempt's evidence deadline, and moves an attempt
+  that is authorized, completed, or has an evidence window longer than a
+  temporary entry may live into persistent storage. A collecting attempt's
+  record therefore expires only after its evidence deadline has passed, when
+  `is_live` is already false. Every transition that changes an attempt
+  (`submit_guardian`, `submit_zk`, `rcv_cancel`) loads it through
+  `load_live`, which refuses it then: `AttemptNotLive` while the record is
+  present, `NoSuchAttempt` once it has expired; only the read-only views
+  (`attempt`, `statement`) tell the two apart. Expiry turns one refusal into
+  another and removes no record that a live attempt reads, so a vote can
+  neither be counted twice nor counted for an attempt the model refuses:
+  the contract's accepted transitions are the model's.
 - **Identifications**: a configuration is compared by value where Perch
   compares `config_hash`, which agree unless SHA-256 collides on two canonical
   recovery members (Perch §3.2); a derived target's configuration is the

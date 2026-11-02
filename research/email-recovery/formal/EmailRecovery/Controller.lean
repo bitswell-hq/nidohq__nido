@@ -18,8 +18,11 @@ this model holds of the contract:
 
 * Ledger arithmetic is unbounded; Perch refuses on `u32` overflow
   (`LedgerOverflow`).
-* Storage never expires; Perch's temporary entries expire (§3.6), which only
-  removes records.
+* Storage never expires. Perch's temporary entries expire (§3.6), but the
+  only record Perch keeps in them is a collecting attempt, which `save`
+  keeps alive until at least its evidence deadline; it expires only once
+  the attempt is no longer live, when every transition that changes it
+  already refuses (`research/email-recovery/formal/README.md`).
 * What the controller learns from other contracts is a field of the call: the
   doc compiler's `derive_target` verdict and target digests at T1, the ZK
   adapter's verdict, and whether a guardian's authorization entry is accepted
