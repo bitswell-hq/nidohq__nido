@@ -1,59 +1,34 @@
 \section{Implementation}\label{sec:impl}
 
-The implementation is one repository; Perch is a pinned dependency used
-unchanged, and the circuit is compiled and proven with exactly Perch's pinned
-toolchain, nargo 1.0.0-beta.9 and Barretenberg 0.87.0, so its proofs verify
-with Perch's Soroban verifier code\claim{circuit-size}. The optimized
-WebAssembly is 33{,}479 bytes for the guardian, 68{,}269 for the registry,
-45{,}616 for the verifier and 10{,}152 for the enclave-image
-registry\claim{contract-sizes}.
+Perch is a pinned dependency used unchanged, and the circuit is compiled and
+proven with exactly Perch's pinned toolchain, nargo 1.0.0-beta.9 and
+Barretenberg 0.87.0, so its proofs verify with Perch's Soroban verifier code.
+The circuit is a library of components (RSA-2048 PKCS\#1 v1.5 with SHA-256;
+the structural scan of the signed block; the \texttt{From},
+\texttt{DKIM-Signature} and \texttt{Subject} parsers; packing; the registry
+leaf and Merkle root) composed by one relation function. It vendors only
+noir-bignum and Noir's SHA-256, pinned file by file, and Perch's Poseidon2;
+no parser is reused\claim{circuit-vendoring}. It has 248{,}996 gates, 188{,}986
+at a 1024-byte header bound, both padded to $2^{18}$, so the larger bound
+costs the prover but not the verifier; 1536 bytes admit every launch domain's
+recovery email and, with a 124-byte address, a display name of 536 bytes at
+the tightest provider\claims{circuit-size,header-bound-fits}.
 
-\paragraph{Circuit.} The circuit is a library of components (RSA-2048
-PKCS\#1 v1.5 with SHA-256; the structural scan of the signed block; the
-\texttt{From}, \texttt{DKIM-Signature} and \texttt{Subject} parsers; packing;
-the registry leaf and Merkle root) composed by one relation function. It
-vendors only noir-bignum, for the 2048-bit modular multiplication, and
-Noir's SHA-256 library, each pinned file by file; Poseidon2 is Perch's
-vendored copy; no parser is reused\claim{circuit-vendoring}. The header parsers are written against
-the grammars of \S\ref{sec:design-circuit}, and every position in the header
-is an unconstrained hint that constrained code re-checks. At a 1024-byte
-header bound the same relation has 189{,}503 gates and the same padded size;
-the 1536-byte bound costs the prover more but leaves the verification key
-and the on-chain cost unchanged\claim{circuit-size}. That bound admits every
-launch domain's recovery email and, with a 124-byte address, a display name
-of 536 bytes at the tightest provider\claim{header-bound-fits}.
-
-\paragraph{Contracts.} The guardian, the registry, the verifier and the
-enclave-image registry are Soroban contracts in Rust. The verifier is a
-constructorless, immutable contract that embeds Perch's UltraHonk verifier
-from the same Perch commit as the other Perch dependencies, with the email
-circuit's verification key compiled in, and reports the key's SHA-256 as its
-circuit id; the guardian refuses at construction a verifier whose circuit id
-differs from its own configuration\claim{guardian-construction}. A real
-proof of each launch domain's recovery email verifies on chain through it,
-is refused with any public input changed, and counts as exactly one guardian
-vote\claim{onchain-email-vote}. The
-registry stores its tree with the host's Poseidon2 sponge and Perch's table
-of empty-subtree hashes, so the root it stores is the root the circuit proves
-against\claim{registry-hash-parity}.
-
-\paragraph{Wallet.} The browser side is TypeScript: an encoder from a raw
-message to the witness, the prover worker (noir\_js 1.0.0-beta.9 and bb.js
-0.87.0), which checks its downloads against pinned digests and verifies each
-proof locally against the guardian's circuit id\claim{browser-prover}, the
-enrollment and recovery pages, and the key lookup.
-
-\paragraph{Alert service.} The host watches the controller over Stellar
-RPC with a stored cursor, retries failed alerts, and never repeats one; the
-vault runs as a separate process standing in for the enclave. The wallet's
-HPKE reproduces RFC~9180's test vector, and the vault's Web Push encryption
-RFC~8291's example\claim{alert-formats}.
-
-\paragraph{Mocks.} Every third party is a test-only mock in its published
-format: the mail providers sign with test-only keys in each provider's layout,
-established from public mailing-list archives\claim{provider-mock-formats};
-DNS answers follow RFC~6376's key records and the DNS-over-HTTPS JSON
-format\claim{key-lookup}; the sending services follow their published APIs,
-Web Push its RFCs, and the enclave's attestation AWS's documented
-format~\cite{aws-nitro-attestation}\claim{vault-custody}; the DNS attester
-signs test-only Ed25519 attestations.
+The guardian, the registry, the verifier and the enclave-image registry are
+Soroban contracts in Rust, 33{,}577, 68{,}899, 45{,}616 and 10{,}584 bytes of
+optimized WebAssembly\claim{contract-sizes}. The verifier embeds Perch's
+UltraHonk verifier with the circuit's key and reports the key's SHA-256 as
+its circuit id; a real proof of each launch domain's recovery email verifies
+through it, is refused with any public input changed, and counts as exactly
+one vote\claim{onchain-email-vote}. The wallet's prover runs in a Web Worker
+(noir\_js 1.0.0-beta.9, bb.js 0.87.0) on every core when the page is
+cross-origin isolated, checks its downloads against pinned digests, and
+verifies each proof locally\claim{browser-prover}. The alert host watches the
+controller over Stellar RPC; the vault runs as a separate process standing in
+for the enclave; HPKE and Web Push encryption reproduce their RFCs' test
+vectors\claim{alert-formats}. Every third party is a test-only mock in its
+published format: the mail providers sign with test-only keys in each
+provider's layout, taken from public mailing-list
+archives\claim{provider-mock-formats}; DNS follows RFC~6376's key records;
+the sending services, Web Push and the enclave's
+attestation~\cite{aws-nitro-attestation} follow their published formats.

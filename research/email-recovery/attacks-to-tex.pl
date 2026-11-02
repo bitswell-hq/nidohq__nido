@@ -67,6 +67,9 @@ sub tex {
         '<'  => '\textless{}', '>' => '\textgreater{}',
     );
     $s =~ s/([\\{}\$&#%_^~<>])/$map{$1}/g;
+    # The operator's name follows the document's anonymity switch (macros.tex).
+    $s =~ s/\bNido\b/\\OpName{}/g;
+    $s =~ s/\bNIDO\b/\\OpNameUpper{}/g;
     $s =~ s/([^\x00-\x7f])/exists $unicode{$1} ? $unicode{$1}
         : die sprintf("error: cannot typeset U+%04X in '%s'\n", ord $1, $s)/ge;
     return $s;

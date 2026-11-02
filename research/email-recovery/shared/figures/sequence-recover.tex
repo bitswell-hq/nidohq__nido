@@ -1,0 +1,37 @@
+% Recovery as a message sequence, simplified for a slide: five parties, the
+% messages of the paper's Figure 1 (sequence.tex) that recovery needs, at a
+% size that is read unscaled on a 16:9 slide.
+\begin{tikzpicture}[
+    x=1cm, y=0.44cm,
+    actor/.style={draw, rounded corners=2pt, fill=white, align=center,
+                  font=\sffamily\figfontlarge, minimum width=22mm, minimum height=8mm, inner sep=2pt},
+    life/.style={densely dashed, gray},
+    msg/.style={-{Stealth[length=2mm]}, semithick},
+    reply/.style={msg, densely dashed},
+    lbl/.style={font=\sffamily\figfontlarge, align=center, inner sep=1.2pt, fill=white},
+    act/.style={font=\sffamily\figfontlarge, align=center, fill=gray!12, draw=gray!60,
+                rounded corners=1pt, inner sep=2pt},
+  ]
+  \foreach \x/\n/\t in {
+      0/w/{Wallet\\(a new device)},
+      2.9/p/{User's mail\\provider},
+      5.8/v/{Sealed vault\\and alert service},
+      8.7/c/{Perch recovery\\controller},
+      11.6/g/{Email guardian,\\registry, verifier}} {
+    \node[actor] (\n) at (\x, 0) {\t};
+    \draw[life] (\n.south) -- (\x, -14.4);
+  }
+  \draw[msg] (0, -1.9) -- node[lbl, above, pos=0.75] {\texttt{begin\_lost\_key}} (8.7, -1.9);
+  \draw[reply] (8.7, -3.0) -- node[lbl, above, pos=0.75] {statement $S$, $\digest = \Sha(S)$} (0, -3.0);
+  \draw[msg] (0, -4.1) -- node[lbl, above, pos=0.5] {register $T = \Blinded$} (5.8, -4.1);
+  \draw[msg] (0, -5.2) -- node[lbl, above] {email with $T$} (2.9, -5.2);
+  \draw[msg] (2.9, -6.3) -- node[lbl, above] {DKIM-signed copy} (5.8, -6.3);
+  \draw[reply] (5.8, -7.4) -- node[lbl, above, pos=0.5] {sealed to this browser} (0, -7.4);
+  \node[act, anchor=west] at (-1.1, -8.6) {prove C1--C6};
+  \draw[msg] (0, -9.8) -- node[lbl, above, pos=0.75] {\texttt{submit\_guardian} with the proof} (8.7, -9.8);
+  \draw[msg] (8.7, -10.9) -- node[lbl, above] {check: root? proof?} (11.6, -10.9);
+  \draw[reply] (11.6, -12.0) -- node[lbl, above] {one vote} (8.7, -12.0);
+  \draw[reply] (8.7, -13.1) -- node[lbl, above, pos=0.5] {events, state} (5.8, -13.1);
+  \node[act, anchor=north] at (5.8, -13.7) {push to the passkey device,\\leading with cancelling};
+  \node[act, anchor=north] at (10.3, -13.7) {completes after the delay,\\unless the owner cancels};
+\end{tikzpicture}

@@ -48,7 +48,7 @@ named in the sentence. Each requirement is marked with what backs it today:
 | Party | Holds | Role |
 | --- | --- | --- |
 | User | Their inbox, `account_code`, a new passkey | Sends one email per approval; proves it in the browser |
-| Mail provider | The DKIM signing key for its domain | Signs the user's outgoing mail; learns nothing about the attempt (§4.2) |
+| Mail provider | The DKIM signing key for its domain | Signs the user's outgoing mail; the Subject's content names no attempt (§4.2), though its timing can (§10.7) |
 | Email guardian | `C`, the registry, the pin, the controller, the account, allowed actions, the verifier | One per account; counts as one Perch guardian (§8) |
 | Perch controller | The account's recovery configuration and attempts | Collects guardian approvals, enforces quorum, delay, cancellation [Perch] |
 | DKIM key registry | A Merkle tree of `(domain, key_hash)` leaves, a k-of-n multisig, an attester set | Says which key-tree roots are acceptable now (§7.3, §7.6) |
@@ -1942,7 +1942,7 @@ cancel is.
 | The host, for inbound mail | Registration envelopes, inbox ids, sealed messages, their sizes and times, and the IP addresses that register and fetch them |
 | The wallet's static host (the key list, §7.7) | That someone fetched the same file every user fetches |
 | A DNS-over-HTTPS resolver, only after the user agrees (§7.7) | The user's IP address asking for one provider's key record: the provider, never the address |
-| The user's mail provider, for the approval email | The Subject phrase and `T` or `E`, which it cannot link to an account (§4.2), and that the recovery address received a Nido email |
+| The user's mail provider, for the approval email | The Subject phrase and `T` or `E`, whose content links the email to no account (§4.2), and that the recovery address received a Nido email; the on-chain vote, or the guardian deployment after an enrollment email, follows within seconds, so a provider watching the chain can link the two by timing whenever few such transactions land in that window |
 
 `infra/email-alerts/test/e2e.test.ts` checks the host, RPC, custodian, and
 push-service rows: with the vault in its own process, none of the messages
@@ -1950,7 +1950,11 @@ to or from it, the host's HTTP bodies, its log, its state file, the RPC
 calls, the custodians' decisions, or the push bodies contains the address
 **[built, tested]**. The privacy claim this supports is scoped: Nido's
 servers and staff cannot read the address; the sending service and the
-user's mail provider necessarily can.
+user's mail provider necessarily can. It also rests on the enclave's
+isolation and its custodians, on the recovery domain's MX, MTA-STS policy and
+mail exchanger TLS keys staying the enclave's (the operator controls that
+domain, and nothing built detects a change), and on users running the
+published wallet build: A8, A10 and A11 in `research/email-recovery/claims.yaml`.
 
 **Registry changes.** The key registry's events (§7.6) concern every
 account at once, so they are announced publicly rather than per account.

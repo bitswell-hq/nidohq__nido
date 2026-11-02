@@ -23,6 +23,9 @@ sub tex {
         '^'  => '\textasciicircum{}', '~' => '\textasciitilde{}',
     );
     $s =~ s/([\\{}\$&#%_^~])/$map{$1}/g;
+    # The operator's name follows the document's anonymity switch (macros.tex).
+    $s =~ s/\bNido\b/\\OpName{}/g;
+    $s =~ s/\bNIDO\b/\\OpNameUpper{}/g;
     return $s;
 }
 

@@ -3,8 +3,16 @@
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning,fit}
 
-\newcommand\Nido{Nido}
 \newcommand\Perch{Perch}
+% The operator's name. The review build is anonymous: the text says "the
+% operator", and the strings that carry the name (the scoped privacy claim the
+% wallet shows, the Subject phrases) show a placeholder. A camera-ready build
+% sets \camerareadytrue after \input{macros} to print the name.
+\newif\ifcameraready
+\newcommand\OpName{\ifcameraready Nido\else\ensuremath{\langle}Name\ensuremath{\rangle}\fi}
+\newcommand\OpNameUpper{\ifcameraready NIDO\else\ensuremath{\langle}NAME\ensuremath{\rangle}\fi}
+% The privacy claim the wallet makes to users, word for word.
+\newcommand\PrivacyClaim{``\OpName's servers and staff can't read your address''}
 \newcommand\code{\mathsf{code}}          % the user-held account code, at least 128 random bits
 \newcommand\addr{\mathsf{addr}}          % the exact From address captured at enrollment
 \newcommand\Cm{\mathsf{C}}               % the address commitment

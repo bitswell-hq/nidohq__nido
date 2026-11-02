@@ -392,11 +392,41 @@ claims:
       stroops, 1,333 of them rent, 1,715 ms from simulation to confirmation; six
       pin votes of a second run, on the guardian and registry whose windows are
       ledger close time, were metered at 121,624,691 to 121,683,179
-      instructions and charged 82,424 to 82,442 stroops.
+      instructions (126,534,101 to 126,594,928 declared) and charged 82,424 to
+      82,442 stroops.
     status: measured
     evidence:
       - file: research/email-recovery/eval/results/testnet.json
       - file: research/email-recovery/eval/results/testnet-votes.json
+
+  - id: fee-attribution
+    statement: >-
+      A port of the host's fee computation reproduces, to the stroop, every
+      fee charged in the evaluation's local-network and testnet runs from each
+      transaction's declared resources and the network's archived settings.
+      At mainnet's settings the Gmail email vote costs 37,971 stroops of
+      compute, 36,419 of history, 3,585 of transaction size, 3,016 for its
+      writes and 10 for events, 80,991 non-refundable, plus 2,049 rent and the
+      100-stroop inclusion fee: 83,150, its charge on the local network;
+      testnet charges the same components except rent, 1,333, because its
+      minimum temporary lifetime is 720 ledgers against mainnet's 17,280.
+    status: measured
+    evidence:
+      - file: research/email-recovery/eval/README.md
+      - file: docs/email-recovery/spec.md
+
+  - id: metering-attribution
+    statement: >-
+      Re-executed on the test host, the Gmail vote's transaction meters
+      130,031,418 instructions under mainnet's cost model and 130,065,594
+      under testnet's, which differs in nine CPU cost types; between the
+      networks the medians of the same wasm differ by 22,852 instructions
+      (0.02%); and the release-profile build of the contracts meters 1,559,822
+      fewer instructions per vote than the size-optimized wasm every network
+      here runs.
+    status: measured
+    evidence:
+      file: research/email-recovery/eval/README.md
 
   # Supporting results of the Lean model.
   - id: guardian-payload-irrelevant
@@ -1018,16 +1048,34 @@ claims:
 
   - id: servers-cannot-read-address
     statement: >-
-      With the vault in its own process and every third party mocked, no
-      message to or from the vault, host HTTP body, host log, host state
-      file, RPC call, custodian decision or push body contains the address:
-      Nido's servers and staff can't read your address.
+      On the alert path as built, with the vault in its own process and every
+      third party mocked, no message to or from the vault, host HTTP body,
+      host log, host state file, RPC call, custodian decision or push body
+      contains the address. The inbound mail's SMTP leg, the mail exchanger
+      inside the enclave and its TLS termination are not built: the tests
+      hand each message to the vault directly.
     status: tested
     evidence:
       - test: no party other than the vault and the sending service ever held the address
         file: infra/email-alerts/test/e2e.test.ts
       - test: "stores only sealed records: no address in the host state"
         file: infra/email-alerts/test/alerts.test.ts
+
+  - id: scoped-privacy-claim
+    statement: >-
+      Nido's servers and staff can't read your address: the claim the wallet
+      makes to its users, which holds only while the enclave keeps its memory
+      from its host and at most one key custodian is malicious (A8), mail to
+      the recovery address reaches only the enclave (A10), and the user runs
+      the published wallet build (A11). The user's mail provider and the
+      alert-sending service necessarily see the address.
+    status: assumed
+    evidence:
+      assumption: >-
+        A8, A10 and A11 hold together. The claim is not that the address can
+        never be leaked, and it is not a tested property of a deployment: the
+        tests cover the alert path with every third party mocked
+        (servers-cannot-read-address).
 
   - id: alert-formats
     statement: >-
@@ -1066,6 +1114,106 @@ claims:
     evidence:
       test: layouts reproduce observed line breaks
       file: packages/email-mocks/test/layouts.test.ts
+
+  # The circuit's reading of real and fuzzed headers (eval/parser/).
+  - id: parser-real-mail
+    statement: >-
+      On 5,327 DKIM-Signature fields of 5,154 real posts from all 11 launch
+      domains in 18 public mailing-list archives, verified under the
+      providers' real keys, the circuit agrees on every signature with
+      reference implementations (mailauth's strict DKIM verifier, RSA by
+      node:crypto, Python's standard-library address parser): 4,619 are accepted by both with
+      the same address and domain and every other one is refused by both; the
+      committed recovery artifact agrees with the test harness on all 10,320
+      executions. These are list archives' copies of ordinary posts, not
+      recovery mail, and no Fastmail signature verifies under any key DNS or
+      zkEmail's public archive holds, so Fastmail is covered only on the
+      refusing side.
+    status: measured
+    evidence:
+      file: research/email-recovery/eval/parser/results/differential.json
+
+  - id: parser-fuzzing
+    statement: >-
+      Over 50,000 seeded header blocks around the From grammar and the
+      DKIM-Signature tag list (49,779 signatures with a test-only key), every
+      From value the circuit accepts is read by Python's standard-library
+      address parser as exactly the mailbox it binds; 22,409 signatures are accepted and 23,967
+      refused by both the circuit and mailauth's strict verifier; the circuit
+      also accepts 2,692 fields that the DKIM standard tells verifiers to
+      ignore for a defect in a tag the circuit does not read, which only the
+      holder of the signing key can write, and refuses 711 that the standard
+      allows, for whitespace in a tag it reads. The committed recovery artifact agrees
+      with the harness on all 1,994 cross-checked signatures and refuses an
+      address list, an address before the angle-addr, a quoted word before an
+      address and an unclosed quoted string at its display-name check.
+    status: measured
+    evidence:
+      - file: research/email-recovery/eval/parser/results/fuzz.json
+      - file: research/email-recovery/eval/parser/results/from-finding.json
+
+  # The wallet's safeguards around the human steps (spec 5.4, 5.6, 5.7, 10.2, 11.4).
+  - id: phishing-defences
+    statement: >-
+      The recovery email the wallet prepares opens with a line telling a user
+      who was talked into sending it to stop; where the recovery code is
+      typed, the page says nobody from Nido will ask for it and how to compare
+      the page's address with the kit's; no alert says that a matching code
+      means nothing needs doing, and the push for an authorized attempt leads
+      with cancelling.
+    status: tested
+    evidence:
+      - test: the body opens by telling a talked-into sender to stop
+        file: packages/frontend/src/lib/recovery/emailModel.test.ts
+      - test: the code entry says nobody asks for it and how to check the origin against the kit
+        file: packages/frontend/src/lib/recovery/emailModel.test.ts
+      - test: "attempt_authorized: the push leads with cancelling, the email says who never asks for what, no code match reassures"
+        file: infra/email-alerts/test/alerts.test.ts
+
+  - id: wallet-live-attempts
+    statement: >-
+      Whenever it opens, the wallet reads the account's live attempts from
+      the controller, collecting and authorized, independently of the alert
+      service; a device holding the passkey is told it needs no recovery and
+      offered the owner's cancellation, and an email vote is called out.
+    status: tested
+    evidence:
+      - test: finds collecting and authorized attempts that are live, newest first, and the authorized one beyond the scan
+        file: packages/frontend/src/lib/recovery/liveAttempts.test.ts
+      - test: a device with the passkey is told it needs no recovery and offered the cancel; an email vote is called out
+        file: packages/frontend/src/lib/recovery/liveAttempts.test.ts
+
+  - id: enrollment-safeguards
+    statement: >-
+      Enrollment continues only after two groups of the recovery kit's code,
+      picked at random, are typed back; the kit names its account and its
+      recovery page and advises keeping it outside the inbox provider's
+      account; the alert address starts empty, and the enrolled inbox draws a
+      warning; and recovery settings check a typed code against the guardian's
+      pin root, storing and sending nothing.
+    status: tested
+    evidence:
+      - test: enrollment asks for two distinct groups of the kit back, and only they pass
+        file: packages/frontend/src/lib/recovery/emailModel.test.ts
+      - test: the kit names its Nido and where recovery starts
+        file: packages/frontend/src/lib/recovery/emailModel.test.ts
+      - test: enrollment warns, without blocking, when alerts would go to the enrolled inbox
+        file: packages/frontend/src/lib/recovery/emailModel.test.ts
+      - test: matches only the code whose salted leaf, with a known key, rebuilds the pin root
+        file: packages/frontend/src/lib/recovery/emailModel.test.ts
+
+  - id: recovery-page-aids
+    statement: >-
+      Opened at the wallet's apex, the recovery page finds the account from
+      the kit's address, a recovery page's address or the account's name; it
+      shows when the sealed-inbound registration ends, and then offers a new
+      email.
+    status: tested
+    evidence:
+      - test: the apex recovery page starts from the Nido address in a kit, its URL, or a name
+        file: packages/frontend/src/lib/recovery/emailModel.test.ts
+      - test: the sealed inbound deadline is shown, and its end offers a new email
+        file: packages/frontend/src/lib/recovery/emailModel.test.ts
 
   # Further evaluation figures.
   - id: privacy-no-address-on-chain
@@ -1325,8 +1473,9 @@ claims:
   - id: blinded-subject-hiding
     statement: >-
       The Subject value T reveals nothing about the statement digest to anyone
-      who does not know rho, so the mail provider cannot link the email to an
-      attempt on chain.
+      who does not know rho, so the email's content does not link it to an
+      attempt on chain; its timing, next to the on-chain vote that follows it,
+      can.
     status: assumed
     evidence:
       assumption: >-
@@ -1343,6 +1492,58 @@ claims:
       assumption: >-
         The enclave platform's isolation and attestation hold, and no two of
         the three independent custodians collude or are compromised together.
+
+  - id: recovery-domain-routing
+    statement: >-
+      (A10) Mail to the recovery address reaches only the enclave: the
+      recovery domain's MX records, its MTA-STS policy and the TLS keys of
+      its mail exchanger are the enclave's, and the operator does not change
+      them.
+    status: assumed
+    evidence:
+      assumption: >-
+        Sending providers follow the recovery domain's MX and MTA-STS policy
+        and check no enclave attestation, so an operator that repoints the MX
+        or relaxes the policy, with a certificate for the host it points to,
+        receives later enrollment and recovery emails outside the enclave.
+        Nothing built detects such a change; the production mail exchanger
+        inside the enclave and the domain's MTA-STS policy are not built.
+
+  - id: published-wallet-build
+    statement: >-
+      (A11) The user's browser runs the wallet build the operator publishes,
+      which reads the From address only in the browser and sends it only
+      sealed to the attested vault.
+    status: assumed
+    evidence:
+      assumption: >-
+        A browser runs whatever code the wallet's origin serves; a modified
+        build served to a user could read the address at enrollment or at
+        recovery. Nothing built lets the user check the served code against
+        a published build.
+
+  - id: alert-liveness
+    statement: >-
+      (A12) Under the email-plus-delay profile, the owner learns of an
+      authorized attempt within the delay: the alert service reaches the
+      push channel of a passkey device, or an alert address the inbox thief
+      does not hold, or the owner opens the wallet.
+    status: assumed
+    evidence:
+      assumption: >-
+        The alert service runs, or restarts and reconciles from the
+        controller's state, within the delay; the push subscription is live,
+        or its lapse is found by the weekly probe and acted on; and the owner
+        reads what reaches them. One-factor safety itself does not rest on
+        this: it bounds when a recovery can complete, not whether the owner
+        cancels.
+
+  - id: user-behaviour
+    statement: >-
+      Users keep the recovery code, notice an alert and cancel a wrongful
+      attempt within the delay, and refuse a caller who asks them to send a
+      recovery email or read out the code.
+    status: unproven
 
   - id: toolchain-correctness
     statement: >-

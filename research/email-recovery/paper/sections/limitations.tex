@@ -1,72 +1,63 @@
 \section{Limitations and open questions}\label{sec:limits}
 
-\paragraph{What is not built or not measured.} The production enclave is not
-built: the binding to the Nitro secure module, the vsock channel with TLS
-terminating inside the enclave, the recovery address's mail exchanger inside
-the enclave and its MTA-STS policy, and a reproducible image build that
-publishes the enclave's measurements. The custodians, the registry's members
-and attesters, and the enclave-image registry's signers are not named, and
-the custodians' production protocol is not specified. Every third party is
-a mock; whether each provider's real mail matches its mock, including the
-exact domains each provider signs with, its signed header block for very long
-addresses and display names, and whether its stored copy keeps the
-\texttt{DKIM-Signature}, is not confirmed. Proving on a phone is not
-measured\claim{phone-proving-budget}. There is no external audit and no
-fuzzing of the circuit; the system runs on testnet only, and mainnet waits
-for an audit. The model's agreement with the code is tested, not
-proven\claim{model-code-agreement}, and the circuit's obligations are tested,
-not proven.
+\paragraph{Not built, not measured.} The production enclave is not built:
+the binding to the Nitro secure module, TLS terminating inside it, the
+recovery address's mail exchanger inside it with the domain's MTA-STS
+policy, and a reproducible image build. The custodians, registry members and
+attesters are not named. Every third party is a mock, so whether each
+provider's outbound recovery mail matches its mock (its signing domains, its
+signed block for long addresses, whether its Sent copy keeps the signature)
+is not confirmed. Phones are not measured\claim{phone-proving-budget}, nor
+votes against a registry root on a network. There is no external audit; the
+system runs on testnet only, and mainnet waits for one. The model's
+agreement with the code and the circuit's parsing are tested, not
+proven\claim{model-code-agreement}.
+
+\paragraph{The privacy claim's conditions.} \PrivacyClaim{} rests on A8,
+A10 and A11, and nothing built detects a breach of either. Committing the
+recovery domain's MX, MTA-STS policy and TLS key in the enclave-image
+registry under its 14-day timelock, or publishing reproducible wallet builds,
+would make one public; neither is built. The \texttt{.eml} import does not
+rest on A10: the proof does not bind the recipient, so an email the user
+sends to their own address and imports reaches no new party.
 
 \paragraph{Inherent leakage.} The provider learns that its user sent a
-recovery approval, and when. The EU sending service sees the alert address
-and the alert's text, including the code. The alert host learns which
-accounts register or change contacts and when, and outbound traffic timing
-shows which accounts have contacts; whether to blur this with cover traffic
-or batched reads is open. A watcher stopped for longer than the RPC's event
-history loses events; reconciling from controller state is not built.
+recovery approval, and when. The blinded Subject hides which attempt, but
+the vote lands seconds later: the browser proves in 2.81\,s on a desktop and
+testnet confirmed the vote 1{,}715\,ms after
+simulation\claims{browser-proving-cost,testnet-email-recovery}. A provider
+watching the chain therefore links the email to its vote, and so to the
+account, whenever few email votes land in that window, which can be one;
+the same holds for an enrollment email and the guardian deployment that
+follows it. Unlinkability from the provider is thus content-level only;
+delaying submission within the statement's validity would widen the window
+at the cost of recovery time. The sending service sees alert addresses and
+codes; the alert host learns which accounts register contacts, and traffic
+timing which have them.
 
-\paragraph{Open design questions.} Each has a current setting and
-alternatives, stated neutrally.
-\begin{itemize}
-  \item \emph{Key pin semantics.} The pin is additive. A restrictive pin
-    makes a planted registry key useless but stops recovery at every provider
-    rotation until a new guardian is deployed, as does requiring both pin and
-    registry; a pin the owner can change lets whoever holds the owner key and
-    $\code$ pin a key of their own.
-  \item \emph{Pin lifetime.} The cap is 365 days\claim{guardian-construction}
-    and the wallet uses 30\claim{wallet-pin-lifetime}, covering the 7-day
-    timelock with margin and keeping short the window in which a revoked key
-    stays usable through a pin. The cap keeps the enrolled key usable longest
-    and a revoked one too; about 10 days narrows the window further but moves
-    recoveries onto the registry sooner.
-  \item \emph{Default allowed actions.} Guardians are deployed with every
-    action allowed. Initiation and cancellation only, or initiation only, are
-    alternatives, with the fourth wallet rule preventing a lock-out.
-  \item \emph{Where $\code$ is kept.} The wallet offers the encrypted copy
-    and the kit. Plain text in the enrollment email recovers best but lets the
-    provider compute $\Cm$ and link the inbox to the account; a kit alone
-    keeps no copy at the provider but is lost with the kit.
-  \item \emph{Registry grace period.} It is 24 hours, capped at 7 days. Seven
-    days strands fewer proofs but keeps a key blanked in DNS acceptable for a
-    week unless revoked; one hour narrows that but can strand a user whose
-    proof used the previous root.
-  \item \emph{Revocation threshold.} Two of five members revoke at once, and
-    a revoked key returns only on the 7-day path. The full threshold instead
-    stops two members from blocking a live key, but also from stopping a
-    planted key or cutting off a leaked one without a third approval.
-  \item \emph{Alert code derivation.} The code is keyed from $\code$, so any
-    device holding $\code$ shows it, a recovering one included. A key from
-    the passkey's PRF output would let the owner's device authenticate alerts
-    but not a recovering device; a code from the public digest needs no key
-    but lets the sending service and the provider match an alert to the
-    attempt, and whoever chooses a statement steer the code.
-  \item \emph{Enrollment on chain.} Only the wallet checks the enrollment
-    email. A guardian constructor that verifies a proof of it would make
-    $\Cm$ checkable by third parties, at the cost of a second circuit.
-\end{itemize}
-Smaller questions: whether to deploy guardians through a factory that fixes
-their code on chain, and who pays on mainnet; which key derives the alert
-code for accounts without an email guardian, which have no $\code$; larger
-address and domain bounds for custom domains, which need a new commitment and
-leaf format; and duplicate alerts when the second sending service, which has
-no idempotency key, retries a request the first accepted.
+\paragraph{Residual risks and burdens.} Under email plus delay, a phished
+user with no device left cannot cancel, and an owner whose push lapsed while
+alerts go to a stolen inbox learns of an attempt only by opening the wallet;
+a second helper closes both. The email factor is the inbox and a 128-bit
+code, so a lost code loses the factor; how often users keep it is unknown,
+and storing it with the inbox's provider joins the two. The factor covers
+losing every passkey device while the inbox stays reachable from a new one;
+a provider that requires the lost device to sign in, or a new phone without
+a mail app, defeats it, and an \texttt{.eml} import is hard on a phone. A
+lowered target close time shortens existing email-plus-delay members until
+they are rebuilt (A9), and a flood of sealed-inbound registrations from many
+clients can fill the vault, leaving the \texttt{.eml} path.
+
+\paragraph{Open questions.} Appendix~\ref{app:open} lists every decision
+that remains open, with its current setting and alternatives: the pin's
+semantics and lifetime; the default allowed actions, including whether an
+inbox thief's approvals of cancellations should be alerted; where the account
+code is kept; the registry's grace, revocation threshold and members; the
+alert code's derivation, where a key from the passkey's PRF output would give
+an alert the phisher cannot predict; an on-chain enrollment proof; guardian
+deployment and who pays on mainnet; reading the push channel's state on
+every open; larger bounds for custom domains; custodians, the production
+enclave and the image registry's governance; outages longer than RPC
+retention; codes for accounts without an email guardian; what the alert host
+learns; failover duplicates; probe visibility; a lowered close time; each
+provider's sender authentication; and who funds the keeper.
