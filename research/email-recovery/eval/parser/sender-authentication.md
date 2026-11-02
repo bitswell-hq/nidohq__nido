@@ -15,7 +15,11 @@ address is the user's rests on two assumptions (spec §11.1):
      display name, the provider authenticates the address the circuit binds
      (the angle-addr that ends the field). A `From` value that RFC 5322
      readers read as several addresses, a group, another mailbox or none
-     does not reach a proof: the circuit refuses it (§4.5);
+     does not reach a proof: the circuit refuses it (§4.5). A sub-case: the
+     circuit admits RFC 2047 encoded-words in the display name as atext, so
+     a provider that decodes the display name before reading the address
+     (`=?utf-8?Q?attacker=40gmail.com?= <victim@gmail.com>`) must still
+     authenticate the angle-addr, not the decoded text;
   2. sending as another address of the provider's own domain requires
      proof of control of that mailbox;
   3. an address is not reassigned to someone else, or, if it is, the new
@@ -67,8 +71,9 @@ path today. A controlled test settles it: from test accounts at each
 provider, submit (through the web client and, where offered, SMTP
 submission or the provider's bridge) messages with (a) two `From` fields
 naming the account and another in-domain address in both orders, (b) one
-`From` naming both addresses, as a list and as `address <address>`, and
-(c) a display name holding an address; record whether the provider
+`From` naming both addresses, as a list and as `address <address>`,
+(c) a display name holding an address, and (d) an encoded-word display name
+that decodes to another in-domain address; record whether the provider
 refuses, rewrites, or signs, and which `from` instance its `DKIM-Signature`
 covers. That test sends real mail through real providers, which this
 repository does not do (every provider here is a mock); it needs test

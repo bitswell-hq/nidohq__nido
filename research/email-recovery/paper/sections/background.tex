@@ -15,15 +15,12 @@ from the bottom of the header block upward, followed by the
 under \emph{relaxed} canonicalization names are lowercased, folded lines are
 unfolded, and runs of whitespace become one space. Naming a field in
 \texttt{h=} more often than it occurs (``oversigning'') makes later
-additions of that field break the signature. RFC~8301~\cite{rfc8301} requires
-\texttt{rsa-sha256} with keys of at least 1024 bits, recommending 2048;
-RFC~8463~\cite{rfc8463} adds Ed25519. A DKIM signature attests to the signing
-domain, not to the author: DMARC~\cite{rfc7489} calls a signature
-\emph{aligned} when \texttt{d=} matches the domain of the \texttt{From}
-address, whose syntax, with display names, quoting, comments and folding, is
-RFC~5322's~\cite{rfc5322}. Signatures stay verifiable as long as the key
-remains published, which makes email
-attributable~\cite{specter-keyforge}.
+additions of that field break the signature. RSA keys have at least 1024
+bits~\cite{rfc8301}. A DKIM signature attests to the signing domain, not to
+the author: DMARC~\cite{rfc7489} calls a signature \emph{aligned} when
+\texttt{d=} matches the domain of the \texttt{From} address, whose syntax,
+with display names, quoting, comments and folding, is
+RFC~5322's~\cite{rfc5322}.
 
 \subsection{Smart-account recovery on Perch}
 Soroban is the smart-contract platform of the Stellar
@@ -63,14 +60,12 @@ cancel it. Every configuration change and completion bumps the epoch, which
 invalidates older attempts and evidence.
 
 \subsection{Noir, UltraHonk and Soroban verification}
-Noir~\cite{noir-docs} is a language for zero-knowledge circuits.
-Barretenberg~\cite{barretenberg-docs} proves Noir circuits with UltraHonk, a
-Plonk-family~\cite{plonk} proof system whose verifier runs a sumcheck, as in
-HyperPlonk~\cite{hyperplonk}, over commitments under a universal reference
-string, so a new circuit needs a new verification key but no trusted setup of
-its own. Perch's ZK recovery backend proves its circuit with UltraHonk in
-Barretenberg's zero-knowledge flavor with a Keccak transcript and verifies it
-in a Soroban contract; its proofs are 16{,}224 bytes whatever the circuit's
-size\claim{circuit-size}. The email circuit targets the same verifier code
-with its own verification key. Poseidon2~\cite{poseidon2} is the algebraic
+Barretenberg~\cite{barretenberg-docs} proves Noir~\cite{noir-docs} circuits
+with UltraHonk, a Plonk-family~\cite{plonk} proof system whose verifier runs
+a sumcheck, as in HyperPlonk~\cite{hyperplonk}, under a universal reference
+string, so a new circuit needs a new verification key but no setup of its
+own. Perch verifies UltraHonk proofs in Barretenberg's zero-knowledge flavor
+with a Keccak transcript in a Soroban contract; proofs are 16{,}224 bytes
+whatever the circuit's size\claim{circuit-size}, and the email circuit uses
+the same verifier code with its own key. Poseidon2~\cite{poseidon2} is the
 hash shared by Perch's circuit and Soroban's host.

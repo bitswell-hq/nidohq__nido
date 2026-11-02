@@ -127,9 +127,14 @@ claims:
       device is live the wallet refuses configurations that keep the email
       guardian. The wallet says notifications reach a device only on a
       device the vault lists as live or that acknowledged recently; on any
-      other it says where they go and adds that device at once.
+      other it says where they go and adds that device at once. A real
+      alert's title starts "Security alert:" with its own icon; the probe
+      asks to be tapped, never says there is nothing to do, and carries the
+      wallet's icon.
     status: tested
     evidence:
+      - test: shows a probe as a request to tap, never as nothing to do, and unlike an alert
+        file: packages/frontend/src/lib/recovery/serviceWorker.test.ts
       - test: "rule 2: an email guardian needs a second alert channel"
         file: packages/passkey-sdk/src/perch/recoverySpec.test.ts
       - test: unacknowledged and lapsed devices break rule 2, as a lost subscription on this device does
@@ -405,8 +410,9 @@ claims:
       121,664,431 instructions (median 121,641,679) and declare 126,485,435 to
       126,577,531, which their fee is charged on; each reads 12 ledger entries
       and writes 2 (1,208 bytes) in an 18,080-byte transaction, and is charged
-      83,125 to 83,153 stroops, 2,047 to 2,049 of them rent: the fee mainnet's
-      settings give the same transaction. At mainnet's settings a ledger holds at
+      83,125 to 83,153 stroops (0.0083 XLM),
+      2,047 to 2,049 of them rent: the fee mainnet's settings give the same
+      transaction. At mainnet's settings a ledger holds at
       most 12 such votes, 4 in each of its 3 clusters of 580,000,000
       instructions.
     status: measured
@@ -418,8 +424,11 @@ claims:
   - id: testnet-email-recovery
     statement: >-
       On Stellar testnet, through Perch's deployment and Nido's factory and
-      with the email-recovery contracts deployed from this repository, one
-      complete email-factor recovery ran from enrollment to completion; its
+      with the email-recovery contracts deployed from commit ab274154 on main
+      (verifier wasm 5d7e195e, registry 7e115ff9, guardian e21515ae, the
+      verifier reporting circuit id a998d03e, the SHA-256 of the
+      verification key), one complete email-factor recovery ran from
+      enrollment to completion; its
       email vote, with a real proof against the guardian's key pin, was
       metered at 121,675,439 instructions
       (126,586,879 declared) in an 18,080-byte transaction charged 82,440
@@ -441,15 +450,16 @@ claims:
       fee charged in the evaluation's local-network and testnet runs from each
       transaction's declared resources and the network's archived settings.
       At mainnet's settings the Gmail email vote costs 37,969 stroops of
-      compute, 36,419 of history, 3,585 of transaction size, 3,016 for its
-      writes and 10 for events, 80,989 non-refundable, plus 2,049 rent and the
-      100-stroop inclusion fee: 83,148, its charge on the local network;
-      testnet charges the same components except rent, 1,333, because its
-      minimum temporary lifetime is 720 ledgers against mainnet's 17,280.
+      compute, 36,419 of history, 3,585 of transaction size, 2,500 for the
+      entries it writes, 516 for their bytes and 10 for events, 80,989
+      non-refundable, plus 2,049 rent and the 100-stroop inclusion fee:
+      83,148 (0.0083 XLM), its charge on the local network; testnet charges
+      the same components except rent, 1,333, because its minimum temporary
+      lifetime is 720 ledgers against mainnet's 17,280.
     status: measured
     evidence:
       - file: research/email-recovery/eval/README.md
-      - file: docs/email-recovery/spec.md
+      - file: research/email-recovery/eval/results/attacks-local.json
 
   - id: metering-attribution
     statement: >-
@@ -797,6 +807,18 @@ claims:
       - test: wrong_lengths_are_refused
         file: contracts/email-verifier/src/test.rs
 
+  - id: mauled-proofs-refused
+    statement: >-
+      The verifier refuses 67 well-formed proofs an observer can compute from
+      an honest approval (each of the proof's 41 G1 points negated, and two
+      independent proofs of one statement spliced at every section boundary),
+      both with the honest public inputs and with another statement's digest
+      under the same commitment and root.
+    status: tested
+    evidence:
+      test: mauled_proofs_are_refused
+      file: contracts/email-verifier/src/test.rs
+
   - id: registry-timelocks
     statement: >-
       A registry addition attested live in DNS activates exactly 72 hours of
@@ -1028,9 +1050,12 @@ claims:
       attempt_authorized go to every channel once, with generic text, as do
       the rest of a recovery's required alerts; opening an attempt alerts
       nothing by default, and at most one email a day per account when the
-      service is configured to send it.
+      service is configured to send it; while more than eight attempts are
+      open, one alert a day goes to every channel.
     status: tested
     evidence:
+      - test: griefing-repeated-attempts
+        file: research/email-recovery/eval/network/attacks.mjs
       - test: "attempt_begun sends nothing by default: anyone can open an attempt, and the wallet shows open ones"
         file: infra/email-alerts/test/alerts.test.ts
       - test: matches an independent computation for every subject kind
@@ -1195,6 +1220,18 @@ claims:
       - file: research/email-recovery/eval/parser/results/fuzz.json
       - file: research/email-recovery/eval/parser/results/from-finding.json
 
+  - id: parser-hint-mutation
+    statement: >-
+      Rerunning each of the 490 signatures the circuit accepts among the
+      first 1,000 fuzz cases with each unconstrained hint (the From address's
+      position, length and @ index, the DKIM-Signature tag starts, the h=
+      entries) moved or replaced, 39,256 mutated hints in all, the circuit
+      refuses 38,276 and binds the same address, domain and key hash on the
+      other 980; no mutated hint binds anything else.
+    status: measured
+    evidence:
+      file: research/email-recovery/eval/parser/results/hint-mutation.json
+
   # The wallet's safeguards around the human steps (spec 5.4, 5.6, 5.7, 10.2, 11.4).
   - id: phishing-defences
     statement: >-
@@ -1326,27 +1363,59 @@ claims:
   - id: testnet-recovery-total
     statement: >-
       The seven transactions of the testnet recovery from minting the
-      account to completion were charged 13,758,804 stroops, of which the
-      helper's authorizing vote paid 3,664,629 (3,653,812 rent); the delay was
-      12 ledgers (57,099 ms). An earlier run on the same Perch deployment found
-      Perch's doc compiler and recovery controller, instance and code,
-      archived and restored them first, one transaction per entry, for
-      112,447,907 stroops beside its recovery's 13,384,714. With every entry a
-      recovery reads archived, the same recovery at mainnet's settings takes 7
-      transactions and 3,959,831,748 stroops, against 5,237,377 with nothing
-      archived (re-executed on the test host); keeping the email verifier, the
-      key registry and the guardian's code live costs 3,304,297,283 stroops a
-      year at mainnet's settings and each account's guardian instance
-      3,245,716 (the keeper on a local network with mainnet's settings). These
-      price rent at mainnet's rate when its settings were read, the floor that
-      holds while the average state stays at most 2.0 GB; at 3.0 GB every
-      rent figure is ten times as large.
+      account to completion were charged 13,758,804 stroops (1.4 XLM), of
+      which the helper's authorizing vote paid 3,664,629 (3,653,812 rent); the
+      delay was 12 ledgers (57,099 ms). An earlier run on the same Perch
+      deployment found Perch's doc compiler and recovery controller, instance
+      and code, archived and restored them first, one transaction per entry,
+      for 112,447,907 stroops (11.2 XLM) beside its recovery's 13,384,714.
+      With every entry a recovery reads archived, the same recovery at
+      mainnet's settings takes 7 transactions and 3,959,831,748 stroops (396
+      XLM), against 5,237,377 with nothing archived (re-executed on the test
+      host); keeping the email verifier, the key registry and the guardian's
+      code live costs 3,304,297,283 stroops (330.4 XLM) a year at mainnet's
+      settings and each account's guardian instance 3,245,716 (0.3246 XLM)
+      (the keeper on a local network with mainnet's settings). These price
+      rent at mainnet's rate when its settings were read, the 1,000-stroop
+      floor per KB, which holds while the network's average state stays at
+      most 2.0 GB (it was 1.718 GB); every rent figure scales with the rate,
+      5.5 times at 2.5 GB and ten times at 3.0 GB, where the archived
+      recovery costs 39,593,358,424 stroops (3,959.3 XLM).
     status: measured
     evidence:
       - file: research/email-recovery/eval/results/testnet.json
       - file: research/email-recovery/eval/results/testnet-restorations.json
       - file: research/email-recovery/eval/results/archival-test-host.json
       - file: research/email-recovery/eval/results/keeper-local.json
+      - file: research/email-recovery/eval/README.md
+
+  - id: enrollment-cost
+    statement: >-
+      At mainnet's settings, on the local network that runs them, enrolling
+      an account costs 11,434,621 stroops (1.1 XLM): minting it 2,876,016,
+      deploying its email guardian 1,609,367, and the recovery document that
+      lists the guardian with one helper 6,949,238 (medians over the attack
+      run's 11 launch-domain accounts), almost all of it rent for new
+      entries' minimum lifetime of 2,073,600 ledgers.
+    status: measured
+    evidence:
+      - file: research/email-recovery/eval/README.md
+      - file: research/email-recovery/eval/results/attacks-local.json
+
+  - id: circuit-fix-migration
+    statement: >-
+      Moving an account with an email guardian and two helpers at quorum 2 to
+      a new guardian on another verifier, keeping its commitment, after which
+      the controller lists only the new guardian, costs at mainnet's settings
+      2 transactions and 2,631,221 stroops (0.2631 XLM) under the lost-key
+      profile (the deployment and the owner's apply_doc) and 4 transactions
+      and 3,159,077 stroops (0.3159 XLM) under Protected (with the two
+      helpers' approve_change votes), 1,601,271 of each being the new
+      guardian instance's prepaid rent; re-executed on the test host, the new
+      verifier's one deployment for all accounts not counted.
+    status: measured
+    evidence:
+      - file: research/email-recovery/eval/results/migration-test-host.json
       - file: research/email-recovery/eval/README.md
 
   - id: efficiency-core-proving
@@ -1428,8 +1497,9 @@ claims:
       of its mailboxes only when the holder of that mailbox submitted it: it
       refuses or rewrites a submission with two From fields, or
       authenticates the instance it signs, and for a From with a display name
-      authenticates the address the circuit binds (a From naming several
-      addresses the circuit refuses); sending as
+      authenticates the address the circuit binds, also when it decodes an
+      encoded-word display name before reading the address (a From naming
+      several addresses the circuit refuses); sending as
       another address of its domain needs proof of control of that mailbox;
       and an address it assigns again cannot be used against an existing
       enrollment.
@@ -1620,6 +1690,24 @@ claims:
         acts on either notice, and reads what reaches them. One-factor safety itself does not rest on
         this: it bounds when a recovery can complete, not whether the owner
         cancels.
+
+  - id: passkey-sync
+    statement: >-
+      The wallet creates discoverable passkeys without restricting the
+      authenticator, so on platforms whose credential manager syncs passkeys
+      (iCloud Keychain, Google Password Manager) the passkey is synced by
+      default, and losing every device does not lose it while the platform
+      account and its unlock secret are kept.
+    status: assumed
+    evidence:
+      assumption: >-
+        Platform credential managers sync a discoverable credential created
+        without an authenticator attachment restriction to the platform
+        account's other devices, and restore it on a new device once the user
+        signs in to that account and unlocks its end-to-end encrypted
+        keychain. The wallet's creation options (residentKey required, no
+        authenticatorAttachment) are in its source; the platforms' syncing
+        behaviour is not tested here.
 
   - id: user-behaviour
     statement: >-

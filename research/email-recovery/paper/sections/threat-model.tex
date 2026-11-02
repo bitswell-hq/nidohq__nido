@@ -24,8 +24,11 @@ sees the user's mail and holds the signing key; it wants to learn which
 account its user recovers. The \emph{network observer} sees the chain and
 every pending transaction. The \emph{malicious frontend} is a misbehaving
 wallet build: at recovery an attacker like any other client, at enrollment
-trusted (A7). The \emph{operator's staff} run the host and the recovery
-domain's DNS and want users' addresses. Any adversary may open recovery
+trusted (A7). The \emph{operator's staff} read and change the alert host's
+process, storage and logs, and the relayer, and want users' addresses; they
+do not alter the recovery domain's mail routing (its MX, MTA-STS policy or
+mail exchanger's TLS keys) or the wallet build users run (A10, A11), and
+against staff who do, nothing built detects it (\S\ref{sec:limits}). Any adversary may open recovery
 attempts against any account, send arbitrary email and run its own mail
 domain. None breaks the cryptographic assumptions, reads the enclave's
 memory, or holds two of the vault key's three shares.
@@ -35,9 +38,14 @@ properties rest on; each is a ledger entry with status \claimtag{assumed}.
 A1 is split: unforgeability (A1a) is cryptographic; sender authentication
 (A1b) is a property of each provider's submission path, which
 Appendix~\ref{app:providers} reviews from public sources, with every gap
-open. A9 separates two clocks: the windows this design adds are measured on
-ledger close time and keep their wall-clock length whatever the network's
-ledger rate; Perch's delay and the statement's expiry are ledger counts.
+open; a controlled submission test from real accounts is a check before
+mainnet. If A1b fails at a provider, for example by checking only the first
+of several \texttt{From} fields and signing the last, the factor there reduces to knowing
+the victim's address and $\code$, which still open the commitment, under
+the same delay, quorum and alerts\claim{email-factor-soundness}. A9
+separates two clocks: the windows this design adds are measured on ledger
+close time and keep their wall-clock length whatever the network's ledger
+rate; Perch's delay and the statement's expiry are ledger counts.
 
 \begin{table}[t]
   \caption{Assumptions. Each is \claimtag{assumed} in the claim ledger.}
@@ -57,9 +65,11 @@ ledger rate; Perch's delay and the statement's expiry are ledger counts.
     A2, A3 & SHA-256 and Poseidon2 are collision resistant, and no known
           input maps to zero under Poseidon2; for hiding, Poseidon2 is a
           random function\claims{hash-collision-resistance,commitment-hiding,blinded-subject-hiding}. \\
-    A4 & UltraHonk in Perch's zero-knowledge flavor is knowledge sound and
-          zero knowledge, and the pinned toolchain compiles and proves the
-          circuit as written\claims{proof-system-security,toolchain-correctness}. \\
+    A4 & UltraHonk in Perch's zero-knowledge flavor is zero knowledge and
+          weakly simulation extractable for adversaries that see honest
+          proofs (stated, not established), and the pinned toolchain compiles
+          and proves the circuit as
+          written\claims{proof-system-security,toolchain-correctness}. \\
     A5 & Every key the registry lists for a domain was published by that
           domain's provider\claim{registry-correctness}. \\
     A6 & $\code$ and $\blind$ come from a secure generator and stay with the
@@ -117,15 +127,48 @@ the sender's informed consent. The social engineer needs no fake page: the
 real recovery page on its own device opens a lost-key attempt for its key
 (opening is permissionless) and shows a Subject the user cannot check, and
 since alert codes derive from $\code$, the attacker holding it sees the code
-the alerts carry. What remains is the delay with the owner's cancellation,
-the push to a device holding the passkey, the wallet's own read of open
-attempts, other guardians, and warnings where the email is prepared and the
-code typed (\S\ref{sec:design-alerts}); a \texttt{Re:} reply to a phishing
-message is unprovable, since nothing may precede the Subject's phrase. Two
-risks remain under email plus delay: a phished user who has lost every
-device cannot cancel, and with alerts going to a stolen inbox and the push
-lapsed, only opening the wallet shows the attempt (\S\ref{sec:eval-attacks}).
-Whether users act on what reaches them is not measured\claim{user-behaviour}.
+the alerts carry. When the victim acts, typing the dictated Subject into
+their own mail client, no text of the operator's reaches them: the prepared
+body's warning and the warning where the code is typed render on the
+attacker's screen and aid honest users only. The alerts reach the victim
+after the vote, and each required alert says that whoever told the reader to
+expect it, or to ignore it, is trying to take the
+account\claim{phishing-defences}. What remains is the delay with the owner's
+cancellation, the push to the device set up for alerts, the wallet's own read
+of open attempts, and other guardians; a \texttt{Re:} reply to a phishing
+message is unprovable. Whether the recovery address's mail exchanger should
+reply to each approval's sender with a warning, with \texttt{To:} bound
+where signed so the reply cannot be skipped, is open
+(Appendix~\ref{app:open}). Two risks remain under email plus
+delay: a phished user who has lost every device cannot cancel, and with
+alerts going to a stolen inbox and no push device reachable, only opening the
+wallet shows the attempt (\S\ref{sec:eval-attacks}). Whether users act on
+what reaches them is not measured\claim{user-behaviour}.
+
+\paragraph{Which losses the factor covers.} Platforms that sync passkeys
+sync the wallet's by default, so losing every device loses such a passkey
+only with the platform account or its keychain's unlock
+secret\claim{passkey-sync}. For a Gmail or iCloud user the platform account
+can also hold the factor's inbox (Table~\ref{tab:losses}); enrollment notes
+such an inbox and recommends another inbox or
+helper\claim{enrollment-safeguards}.
+
+\begin{table}[t]
+  \caption{When the email factor adds recovery coverage, by passkey and
+    loss, assuming the inbox's provider does not require a lost device to
+    sign in.}
+  \label{tab:losses}
+  \small
+  \begin{tabularx}{\columnwidth}{@{}>{\raggedright\arraybackslash}p{0.2\columnwidth}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
+    \toprule
+    Lost & Device-bound passkey & Synced, inbox at the sync provider & Synced, inbox elsewhere \\
+    \midrule
+    Every device & covers & not needed: sync restores the passkey & not needed \\
+    Platform account & --- & adds nothing: the inbox is lost too & covers \\
+    Keychain unlock secret only & --- & covers & covers \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
 
 \paragraph{Non-goals.} The design does not hide that an account has an email
 guardian, that a recovery happened, or, from the mail provider, that its user

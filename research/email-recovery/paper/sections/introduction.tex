@@ -15,8 +15,10 @@ instead removes the server but publishes the signed \texttt{From} header.
 
 This paper shows that control of an inbox can be one recovery factor while
 the chain holds only a salted hash of the address,
-$\Commit$, where $\code$ is an account code that only the user holds, and
-the operator's servers see the address only inside an attested enclave. To
+$\Commit$, where $\code$ is an account code that only the user holds. The
+design confines the operator's view of the address to an attested enclave,
+which is not yet built, and holds against an operator that does not reroute
+the recovery domain's mail or serve a modified wallet (\S\ref{sec:threat}). To
 recover, the user sends one email from the inbox to a fixed address. Its
 Subject carries a blinded copy of the digest of the pending recovery
 statement, so the email's content names no account or attempt. The user's
@@ -48,35 +50,43 @@ time stops a wrongful recovery.
 \paragraph{Contributions.}
 \begin{itemize}
   \item A design for email as one guardian inside an existing recovery
-    protocol, unchanged (\S\ref{sec:design}). What is new against zkEmail's
-    recovery stack (\S\ref{sec:related}): the Subject binds the protocol's
-    own statement digest, blinded, rather than a readable command; the proof
-    is made in the user's browser, so no relayer receives the email or holds
-    the account code; the key registry is immutable, fed by DNS attestations,
-    with public timelocks, and the per-account pin is salted, expiring and
-    fixed with the guardian; and alerts come from the protocol's own events
-    through a sealed vault, with a liveness probe and a wallet that reads
-    open attempts itself\claim{guardian-on-perch}.
+    protocol, unchanged (\S\ref{sec:design})\claim{guardian-on-perch}. What
+    is new against zkEmail's recovery stack (\S\ref{sec:related}): the
+    Subject binds the protocol's own statement digest, blinded; recovery
+    proves in the browser, so no relayer receives the email or the account
+    code; the key registry is immutable and attested, and the pin salted and
+    expiring; and alerts come from the protocol's events and each email vote's
+    transaction through a sealed vault, with acknowledged push probes.
   \item Four properties stated over a Lean model of the guardian, the
     circuit's relation and Perch's controller (\S\ref{sec:properties}).
-    \emph{Proven} over the model: soundness and replay resistance, each the
-    property or a hash collision on inputs the theorem computes, with
-    knowledge extraction per accepted proof; one-factor safety over every
-    trace; privacy as a simulation theorem in an ideal model of the commitment
-    and the
+    \emph{Proven} over the model: soundness, including that an accepted
+    email binds one statement, and replay resistance, each the property or a
+    hash collision on inputs the theorem computes, with extraction failing on
+    the accepted proof as the proof system's bad event; one-factor safety
+    over every trace; privacy as a simulation theorem in an ideal model of
+    the commitment and the
     proofs\claims{email-factor-soundness,replay-resistance,one-factor-safety,address-privacy}.
     \emph{Assumed}: the cryptography behind the ideal model and the named
-    breaks, and that providers authenticate senders. \emph{Tested}: the
-    model's agreement with the contracts, and the circuit's parsing.
+    breaks, UltraHonk's simulation extractability, and that providers
+    authenticate
+    senders\claims{commitment-hiding,proof-system-security,provider-authenticates-sender}.
+    \emph{Tested}: the model's agreement with the contracts, and the
+    circuit's parsing\claim{model-code-agreement}.
   \item A Noir circuit that refuses each publicly documented soundness issue
-    class of open-source email circuits at a named assertion, and whose
-    parsing agrees with reference implementations on real mail and fuzzed
-    headers\claims{circuit-issue-classes,parser-real-mail,parser-fuzzing}.
+    class of open-source email circuits at a named
+    assertion\claim{circuit-issue-classes}. Its parsing agrees with reference
+    implementations on 5{,}327 real signatures, and over 50{,}000 fuzzed
+    headers every \texttt{From} it accepts is the mailbox a reference reader
+    reads\claims{parser-real-mail,parser-fuzzing}.
   \item An evaluation on the test host, a local network running mainnet's
-    settings, and testnet (\S\ref{sec:eval}): a 73-row attack suite that
-    includes phishing, deleted alerts, a lapsed push, a watcher outage and
-    repeated attempts; each environment's fees attributed to its settings;
-    archival and its keeper; proving time on a desktop; phones not measured.
+    settings, and testnet, from a recorded commit (\S\ref{sec:eval}): a
+    73-row attack suite with phishing, deleted alerts, a lapsed push, a
+    switched phone and an email vote among repeated
+    attempts\claims{network-attack-suite,registry-timelock-attacks}. Fees
+    are attributed to each network's settings, and enrollment, archival and
+    the move to a fixed circuit priced at
+    mainnet's\claims{fee-attribution,enrollment-cost,testnet-recovery-total,circuit-fix-migration}.
+    Phones are not measured, and no user study was run.
   \item A claim ledger giving every claim a status and its evidence, checked
     by the build (Appendix~\ref{app:claims}).
 \end{itemize}

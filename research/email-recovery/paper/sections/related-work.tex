@@ -18,10 +18,12 @@ delay, with per-user keys that take effect at once and per-user revocation and
 reactivation; the contract is upgradeable by its owner, who can also replace
 the authorizer. The ideas shared with this work are the account-code
 commitment, the email guardian under a delay, and a delayed registry with a
-per-user path. What is new here: the email binds the recovery protocol's own
-statement digest, blinded from the provider, not a readable command; the
-proof is made in the user's browser, so no relayer receives the email or the
-code; the registry is immutable, its additions need a multisig threshold and
+per-user path. zkEmail's blueprint SDK can also prove in the
+browser~\cite{zkemail-sdk-js}; its recovery stack proves at a relayer. What
+is new here:
+the email binds the recovery protocol's own statement digest, blinded from
+the provider, not a readable command; recovery proves in the user's browser,
+so no relayer receives the email or the code; the registry is immutable, its additions need a multisig threshold and
 wait 72 hours of close time after DNS attestation or 7 days without, and an
 emergency threshold revokes; the per-account pin is salted, expiring, and
 fixed with the guardian, so changing it passes the recovery protocol's own
@@ -32,9 +34,8 @@ implementations on real mail.
 
 \paragraph{Credentials from existing infrastructure.} zkLogin~\cite{zklogin}
 and Aptos's keyless accounts~\cite{aptos-aip61} make an OpenID Connect token
-the account's key, hiding the off-chain identity; Aptos names a DKIM proof as
-a possible recovery path. An OIDC path here would be a second way to produce
-the email factor, never a factor independent of the same provider's DKIM.
+the account's key, hiding the off-chain identity; an OIDC path here would be
+a second way to produce the email factor, never an independent factor.
 DECO~\cite{deco} and zk-creds~\cite{zkcreds} likewise turn an authority's
 existing signature into a credential and inherit that authority's trust.
 KeyForge~\cite{specter-keyforge} would publish expired DKIM keys so stolen
@@ -43,25 +44,21 @@ those keys into forgeable keys, and the registry's retirement and revocation
 and the pin's lifetime are the levers such a policy would act on.
 
 \paragraph{Guardian and server recovery.} Social recovery
-wallets~\cite{buterin-social-recovery} let guardians replace the signing key;
-Argent's guardians trigger a recovery the owner can cancel during a security
-period~\cite{argent-spec}; Stellar's SEP-30 servers hold signing keys and
-authenticate users by email or phone~\cite{sep30}. This design keeps their
-delay and veto and removes the operator from the check.
+wallets~\cite{buterin-social-recovery,argent-spec} let guardians replace the
+key, with a delay the owner can use to cancel; SEP-30 servers hold signing
+keys and authenticate users by email or phone~\cite{sep30}. This design keeps
+the delay and veto and removes the operator from the check.
 
 \paragraph{Recovery and notifications in usable security.} Secret questions
 are guessable and forgotten~\cite{schechter-secret-questions,bonneau-recovery};
-trustees can vouch for a user but must resist impersonators of
-that user~\cite{schechter-social-recovery}; users of recovery codes lose them
-or hold codes that no longer work~\cite{holtervennhoff-recovery-codes}; and manual hijackers who take an
-inbox use it to lock the owner out~\cite{bursztein-hijacking}, the inbox
-thief of \S\ref{sec:threat}. Notification design changes behaviour at
+trustees must resist impersonators~\cite{schechter-social-recovery}; users
+lose recovery codes~\cite{holtervennhoff-recovery-codes}; and hijackers who
+take an inbox use it to lock the owner out~\cite{bursztein-hijacking}. Notification design changes behaviour at
 scale~\cite{golla-2fa-notifications}, yet few users act on a notice of a
 malicious sign-in~\cite{markert-login-notifications}, and repeated warnings
 habituate~\cite{anderson-habituation}. These results motivate the
-email-plus-delay floor, alerts that lead with cancelling on a passkey
-device, silence on attempts that grant nothing, and a check of the recovery
-code before it is needed; they also mark A12 and the user's behaviour as the
-weakest links. Providers' sender authentication, which A1b needs, has been
-measured to fail in several submission
+email-plus-delay floor, alerts that lead with cancelling, silence on
+attempts that grant nothing, and a probe unlike an alert; they also mark A12
+and the user's behaviour as the weakest links. Providers' sender
+authentication, which A1b needs, has failed in several measured submission
 paths~\cite{chen-composition-kills,shen-weak-links}.

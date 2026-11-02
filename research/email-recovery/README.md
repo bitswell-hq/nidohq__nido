@@ -1,4 +1,4 @@
-# Email Recovery Without Plaintext: paper and slides
+# Email Recovery Without Plaintext On Chain: paper and slides
 
 The paper (ACM `acmart`, `sigconf`, BibTeX with `ACM-Reference-Format`) and
 the Beamer slide deck for zero-knowledge email as a recovery factor for

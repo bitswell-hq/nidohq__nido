@@ -10,13 +10,15 @@ Perch's controller for one account as a state machine whose transitions cite
 Perch's T1 to T9, with an event log; and, for privacy, the honest wallet and
 an adaptive adversary. SHA-256 and Poseidon2 are abstract functions. The
 header-level functions (which bytes are the \texttt{From} address, the
-Subject, \texttt{d=}; lowercasing; hex; the PKCS\#1 encoding) are parameters,
+Subject, \texttt{d=}; lowercasing; the PKCS\#1 encoding) are parameters,
 so the theorems hold for any parser and computing them as
 \S\ref{sec:design-circuit} says is a tested obligation of the circuit
-(\S\ref{sec:hardening}), not a proven one. No assumption is an axiom: the
+(\S\ref{sec:hardening}), not a proven one; $\mathrm{hex}$ is the spec's
+formula, injective below $2^{256}$. No assumption is an axiom: the
 build pins every theorem's axioms to Lean's built-in three\claim{lean-axioms}.
 Appendix~\ref{app:obligations} lists each property's obligations and their
-status.
+status, and Appendix~\ref{sec:gap} how the model's agreement with the
+contracts is tested.
 
 \paragraph{Reading the breaks.} A conclusion ``$P$, or Poseidon2 has a
 collision'' says nothing, since by pigeonhole every hash from unbounded
@@ -24,13 +26,30 @@ inputs to a field has collisions. Each break here is instead a proposition
 about specific inputs the theorem computes from its own data, so each
 theorem is a reduction: whoever violates $P$ hands over a collision, the
 reading of collision resistance for a fixed, unkeyed
-hash~\cite{rogaway-human-ignorance}. Knowledge soundness is treated the same
-way. A deterministic extractor that succeeds on every accepted proof would be
-perfect soundness, which a succinct argument does not have; the theorem takes
-any extractor $X$, a function of the public inputs and the proof, and
-concludes the email facts of $X$'s witness or that $X$ fails on the one proof
-the guardian accepted. A4 is that an efficient $X$ exists for which an
-efficient prover gets such a proof accepted only with negligible probability.
+hash~\cite{rogaway-human-ignorance}. Extraction is different: it is isolated
+as A4's bad event on the accepted proof, not reduced. An extractor that
+succeeds on every accepted proof would be perfect soundness, which a
+succinct argument does not have, so the theorem takes any function $X$ from
+public inputs and proof to witness and concludes the email facts of $X$'s
+witness or that $X$ fails on the one proof the guardian accepted. $X$ is not
+one extractor working from public data, which would compute the user's
+address from an honest approval; it is the per-run output of A4's extractor.
+A4 is weak simulation extractability with zero knowledge: for every efficient
+adversary that sees honest proofs, as anyone reading the chain does, an
+extractor that may read its code, coins and oracle queries returns a witness
+for every accepted proof whose public inputs no given proof has, except with
+negligible probability. With $X$ that extractor, failure has negligible
+probability, so Theorem~\ref{thm:soundness} holds against adversaries who
+have seen honest approvals; a new proof for a given proof's public inputs
+approves a digest the controller counts once (Theorem~\ref{thm:replay}). No
+published proof covers UltraHonk, so A4 is stated, not established; the
+nearest results cover Fiat--Shamir Plonk~\cite{ganesh-fs-se}, compiled
+polynomial IOPs~\cite{kohlweiss-piop-se}, and the non-malleability of
+deployed Plonk~\cite{faonio-nonmalleable} and of sumcheck-based arguments
+with another commitment~\cite{faonio-sumcheck-nonmalleable}\claim{proof-system-security}.
+The verifier refuses 67 proofs mauled from honest ones by negating a point
+or splicing two honest proofs, a necessary condition for A4, not
+evidence of it\claim{mauled-proofs-refused}.
 
 \subsection{Soundness}
 
@@ -65,7 +84,12 @@ trusted key of $\mathrm{domain}(a^\ast)$ was produced by its provider) and
 A1b (which signed it for the holder of $a^\ast$), both outside the model.
 The key trees' empty leaf is $0$, so a key leaf hashing to $0$ would stand
 in for any empty slot; collision resistance alone does not exclude that,
-hence the separate break.
+hence the separate break. The email binds one statement: two accepted approvals whose extracted emails
+share a header carry the same statement, unless extraction fails on one, the
+blinding inputs collide under Poseidon2, or the statements collide under
+SHA-256 (\textsf{email\_binds\_statement}, through
+\textsf{subject\_binds\_digest}), so an old recovery email in a thief's Sent
+folder approves nothing new\claim{email-factor-soundness}.
 
 \subsection{Privacy}
 
@@ -85,15 +109,23 @@ This is \textsf{EmailRecovery.\allowbreak privacy\_simulation}; so two wallets w
 different addresses and codes give every adversary the same view
 (\textsf{privacy\_two\_runs})\claim{address-privacy}. A prover that writes the
 address into its proof makes the views differ, so the view does contain the
-proofs. Without the ideal model, a structural lemma
-(\textsf{structural\_noninterference}) holds for the real formulas: for any
-fixed transactions, the contracts' state, verdicts and events depend on the
-address only through $\Cm$ and the salted pin root, and the proof's public
-inputs are $\Cm$, the digest limbs and the root. The step from the ideal
-model to Poseidon2 and UltraHonk, that $(\Cm, \text{pin root})$ for a uniform
-$\code$ is indistinguishable from two handles and an honest proof from
-$\mathsf{sim}$'s output, is assumed (A3, A4,
-A6)\claims{commitment-hiding,proof-system-security}. The view reveals that
+proofs. Theorem~\ref{thm:privacy} is the last hybrid of a game-hopping
+argument, and only it is machine-checked: from the real game $H_0$, $H_1$
+replaces honest proofs by $\mathsf{sim}$'s outputs one query at a time (A4's
+zero knowledge), and $H_2$, the ideal model, replaces $\Cm$ and the pin root
+by independent uniform handles (A3 with Poseidon2 as a random function, and
+A6: both hash a fresh 128-bit $\code$ under distinct domain tags). Those two
+steps are assumed\claims{commitment-hiding,proof-system-security}. The
+theorem is thus an information-flow result, and hiding comes from A3, A4 and
+A6 alone. The two theorems abstract Poseidon2 differently, and no single
+model has both: Theorem~\ref{thm:soundness} keeps it a function whose
+collisions on named inputs are the breaks, while the ideal commitment is
+constant and binds nothing. Without the
+ideal model, a structural lemma (\textsf{structural\_noninterference}) holds
+for the real formulas: for any fixed transactions, the contracts' state,
+verdicts and events depend on the address only through $\Cm$ and the salted
+pin root, and the proof's public inputs are $\Cm$, the digest limbs and the
+root\claim{address-privacy}. The view reveals that
 the account has an email guardian, its allowed actions, when each approval
 happened, and whether it used the pin or which registry root.
 
@@ -139,11 +171,11 @@ evidence is $G$'s: under a quorum of two or more, or in \texttt{combined} or
 holds for the recovery condition of a \texttt{Protected}
 reconfiguration\claims{completion-waits-for-delay,email-only-never-authorizes,email-alone-change-condition}. During the delay a
 \texttt{Loss} owner's cancellation of a live attempt
-succeeds\claim{owner-can-cancel}. Under the wallet policy, stated as a
-predicate on recovery members, the email guardian alone reaches the quorum
-only under \texttt{Loss}, with a delay of at least seven days at the target
-close time and a second alert channel\claim{wallet-policy-one-factor}; in
-wall-clock time that rests on A9, and its use as a defence on A12.
+succeeds\claim{owner-can-cancel}. Under the wallet policy, a predicate on
+recovery members, the email guardian alone reaches the quorum only under
+\texttt{Loss}, with seven days at the target close time and a second alert
+channel\claim{wallet-policy-one-factor}; in wall-clock time that rests on
+A9, and as a defence on A12.
 
 \subsection{The circuit's parsing}\label{sec:hardening}
 Public audits of zkEmail's Circom and Noir
@@ -164,26 +196,11 @@ upstream~\cite{noir-bignum-pr270}); the circuit range-checks the modulus, the
 signature and every product itself, and relies on the library's carry
 argument as stated\claim{toolchain-correctness}.
 
-That parsing is tested two ways beyond the authored cases
-(\S\ref{sec:eval-parser}): differentially on real provider mail, and by
-grammar-based fuzzing against reference implementations. Neither is a
-proof; a Lean specification of the parser is not built.
-
-\subsection{From the model to the code}\label{sec:gap}
-The model's agreement with the code is tested, not proven. $\mathsf{check}$
-mirrors the guardian's Rust \texttt{check}, each refusal pinned by a unit
-test, and the guardian on Perch's deployed WebAssembly is pinned by
-integration tests: one approval is one vote, a resubmission is refused,
-approvals do not transfer, and email approvals alone never complete a
-recovery\claims{guardian-checks,guardian-on-perch}. The model's abstractions only add
-behaviours, so its safety properties hold of the contracts: ledger arithmetic
-is unbounded; a dependency that traps is a refusal, which affects liveness,
-not safety; and storage never expires. Archived persistent entries are
-restored with the same bytes, and Perch keeps only collecting attempts in
-temporary storage, extended past their evidence deadline, so expiry turns
-one refusal (\texttt{AttemptNotLive}) into another and never removes a record
-a live attempt reads. Configurations are compared by value where Perch
-compares \texttt{config\_hash}. Not modelled: the account's own state beyond
-its document, Perch's ZK pool, the header parsing, and Noir and Rust
-semantics. The registry's tree hashing is cross-checked against an
-independent Noir implementation\claim{registry-hash-parity}.
+That parsing is tested three ways beyond the authored cases
+(\S\ref{sec:eval-parser}): differentially on real provider mail, by
+grammar-based fuzzing against reference implementations, and by mutating
+the hints a dishonest prover chooses. None is a proof; a Lean specification
+of the parser is not built. Every compile prints two expected
+\texttt{nargo} diagnostics about unconstrained calls, at the hint finder and
+in noir-bignum; the circuit's \texttt{SECURITY.md} says why each is
+expected.

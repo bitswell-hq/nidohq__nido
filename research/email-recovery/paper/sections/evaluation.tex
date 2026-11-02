@@ -5,7 +5,8 @@ layer the design assigns it to (\S\ref{sec:eval-attacks}), whether the
 circuit reads real and fuzzed headers as reference implementations do
 (\S\ref{sec:eval-parser}), what an email vote costs in each environment and
 on mainnet (\S\ref{sec:eval-cost}), and how long a user waits for a proof
-(\S\ref{sec:eval-proving}).
+(\S\ref{sec:eval-proving}); Appendix~\ref{app:repro} gives the threats to
+validity.
 
 \paragraph{Environments.} The \emph{test host} is Soroban's in-process host
 in the integration tests, with Perch's controller and account from Perch's
@@ -71,14 +72,12 @@ registry's production WebAssembly.
 expected one\claims{network-attack-suite,registry-timelock-attacks}. Forged
 emails fail at the circuit; a real proof under a key no tree holds fails
 check 11; a 1024-bit key or a domain outside the allowlist fails at the
-registry. A body replaced after signing counts one vote by design, since
-the provider signed the header block, which is all the proof binds. Replays
-fail at the first of checks 1, 2, 11 and 12 they fail, or at Perch; another
-account's pin root fails check 11, because pins are salted. A planted key is
-refused during its timelock, can be stopped by two members, and after
-activation cannot approve without the account code. A copy submitted first
-by an observer records the guardian's single vote and cannot be redirected
-to a cancellation, attempt or account\claim{front-running-one-vote}.
+registry. A body replaced after signing counts one vote by design: the proof
+binds only the header block. Replays fail at checks 1, 2, 11 or 12, or at
+Perch; another account's pin root fails check 11, because pins are salted. A
+planted key is refused during its timelock and after it cannot approve
+without the account code. A copy submitted first by an observer records the
+guardian's single vote and cannot be redirected\claim{front-running-one-vote}.
 
 \paragraph{The inbox thief and the alert path.} Without the account code the
 thief fails at the circuit and, with a real proof for its own guess, at
@@ -87,14 +86,17 @@ the code, under a 2-of-2 quorum the email vote leaves the attempt collecting
 and is itself alerted on every channel. As the only guardian, under
 \texttt{Loss} and a seven-day delay, the thief authorizes an attempt but
 cannot complete it within the delay; it deletes every email sent to the
-stolen inbox, which the worst allowed setup uses as the alert address, the
-push to the passkey device still arrives, and the owner's cancellation
-succeeds. A watcher that missed the events finds the authorized attempt from
+stolen inbox, which the worst allowed setup uses as the alert address, a
+push is still accepted for the device the owner set up for alerts, and the
+owner's cancellation succeeds. A watcher that missed the events finds the authorized attempt from
 the controller's state after it restarts\claim{compromised-inbox-alerted}.
 With the push lapsed as well, the vault marks it and emails the stolen
 inbox, so nothing reaches the owner; a wallet opened during the delay reads
 the attempt from the controller and offers to cancel it. That row, a residual
-risk, is the case A12 excludes.
+risk, is the case A12 excludes. When the owner switches phones and leaves
+the old one off but subscribed, the vault marks it unacknowledged after its
+missed probes, and the new phone, added at once, receives the
+push\claim{wallet-second-alert-channel}.
 
 \paragraph{Phishing and repeated attempts.} The victim's own email for the
 phisher's statement is a valid approval: the proof binds the statement, not
@@ -111,9 +113,12 @@ transactions contains any of its 27 inboxes' addresses, in any encoding,
 account codes or pin salt leaves, a sanity check behind
 Theorem~\ref{thm:privacy}, not evidence of hiding\claim{privacy-no-address-on-chain}.
 
-A cognitive walkthrough of the current pages by their designers, not a user
-study, lists the issues they leave open\claim{expert-walkthrough}. How often
-people keep the code, read an alert, or resist a phishing script is not
+An expert walkthrough of the current pages, by their designers rather than
+participants or an independent expert, leaves ten issues open, among them
+that a phished user sees no warning of the operator's before sending the
+email\claim{expert-walkthrough}. No user study was run: nobody enrolled,
+recovered, read an alert or faced a phishing script, so how often people
+keep the code, act on an alert, or resist a caller is not
 measured\claim{user-behaviour}.
 
 \subsection{The circuit's parsing on real and fuzzed headers}\label{sec:eval-parser}
@@ -127,13 +132,16 @@ same address and domain, the rest refused by both. These are archived list
 posts, not recovery mail, and no Fastmail signature verifies under any known
 key\claim{parser-real-mail}. Over 50{,}000 seeded headers around the
 \texttt{From} grammar and the tag list, every \texttt{From} the circuit
-accepts is read by Python as exactly the mailbox it binds; an address list,
-an address before the angle-address, a quoted word before an address and an
-unclosed quote are refused. The two sides disagree only where the circuit
-accepts a field the DKIM standard tells verifiers to ignore for a defect in a
-tag the circuit does not read, which only the key holder can write, and
-refuses one whose tag it reads has whitespace the standard
-allows\claim{parser-fuzzing}.
+accepts is read by Python as exactly the mailbox it binds, and the circuit
+and mailauth's strict verifier both accept 22{,}409 signatures and both
+refuse 23{,}967. They disagree on 2{,}692 fields the circuit accepts though
+the DKIM standard tells verifiers to ignore them for a defect in a tag the
+circuit does not read, which only the key holder can write, and on 711 it
+refuses for whitespace the standard allows in a tag it
+reads\claim{parser-fuzzing}. Moving or replacing each unconstrained hint of
+the 490 signatures the circuit accepts among the first 1{,}000 cases, 39{,}256
+times in all, never binds anything else: 38{,}276 are refused and 980 bind the
+same address, domain and key\claim{parser-hint-mutation}.
 
 \subsection{On-chain cost}\label{sec:eval-cost}
 Table~\ref{tab:cost} gives one \texttt{submit\_guardian} carrying an email
@@ -145,18 +153,19 @@ Fees are charged on declared resources, so the table gives both counts.
 \begin{table}[t]
   \caption{One email vote. Test host: 12 fixtures, transaction re-executed,
     rent excluded. Local network (mainnet's settings): 20 votes. Testnet: 6
-    votes. Fees include rent and a 100-stroop inclusion fee.}
+    votes. Fees include rent and a 100-stroop inclusion fee; 1 XLM is
+    $10^7$ stroops.}
   \label{tab:cost}
   \small
   \begin{tabularx}{\columnwidth}{@{}>{\raggedright\arraybackslash}X r r r@{}}
     \toprule
     & Test host & Local & Testnet \\
     \midrule
-    Instr.\ metered (M) & 131.17--131.25 & 121.58--121.66 & 121.62--121.68 \\
-    Instr.\ declared (M) & --- & 126.49--126.58 & 126.53--126.59 \\
-    Entries read / written & 12 + 2 & 12 / 2 & 12 / 2 \\
+    Instr.\ metered (M) & 131.17--131.25 & 121.58--121.66 & 121.61--121.70 \\
+    Instr.\ declared (M) & --- & 126.49--126.58 & 126.52--126.61 \\
+    Entries read / written & 14 / 2 & 12 / 2 & 12 / 2 \\
     Transaction (bytes) & 18{,}148 & 18{,}080 & 18{,}080 \\
-    Fee (stroops) & 178{,}196--178{,}249 & 83{,}125--83{,}153 & 82{,}424--82{,}442 \\
+    Fee (stroops) & 178{,}196--178{,}249 & 83{,}125--83{,}153 & 82{,}419--82{,}446 \\
     \quad mainnet's rates & 82{,}530 & as charged & --- \\
     \quad of which rent & --- & 2{,}047--2{,}049 & 1{,}333 \\
     Key path & registry root & pin & pin \\
@@ -164,38 +173,45 @@ Fees are charged on declared resources, so the table gives both counts.
   \end{tabularx}
 \end{table}
 
-\paragraph{Attributing the differences.} A port of the host's fee
-computation reproduces every fee the networks charged from the declared
-resources and archived settings. The test host prices with the SDK's
-2026-07-10 snapshot; at mainnet's current settings the same transaction
-costs 82{,}530 stroops before rent, under half\claim{onchain-verification-cost}. The local network runs mainnet's
-settings, so its charge is the mainnet projection: 83{,}125 to 83{,}153
-stroops a vote, and at most 12 votes fit a ledger\claim{network-verification-cost}.
-Of the Gmail vote's 83{,}148, compute is 37{,}969 and history, the 18\,KB
-envelope around the 16\,KB proof, 36{,}419; testnet charges the same
-components except rent, since its temporary entries' minimum lifetime is 720
-ledgers against mainnet's 17{,}280\claim{fee-attribution}. Metering differs mainly by build: testnet's
-cost model moves a vote by 0.02\%, while the release-profile build meters
-1.57 million fewer instructions per vote than the size-optimized wasm the
-networks run\claim{metering-attribution}. Every network vote uses the pin;
+\paragraph{Attributing the differences.} The test host prices with the
+SDK's 2026-07-10 snapshot; at mainnet's current settings the same
+transaction costs 82{,}530 stroops before
+rent\claim{onchain-verification-cost}. The local network runs mainnet's
+settings, so its charge, 83{,}125 to 83{,}153 stroops a vote, is the mainnet
+projection, and at most 12 votes fit a ledger\claim{network-verification-cost}.
+A port of the host's fee computation reproduces every fee charged; of the
+Gmail vote's 83{,}148, compute is 37{,}969 and history, the 18\,KB envelope
+around the 16\,KB proof, 36{,}419\claim{fee-attribution}. The
+release-profile build meters 1.57 million fewer instructions per vote than
+the size-optimized wasm the networks run\claim{metering-attribution}. Every
+network vote uses the pin;
 a registry root adds \texttt{is\_accepted\_root}, 565{,}410 instructions, and
-the registry's instance and code to the footprint\claim{registry-costs}.
-Votes against a registry root on a network are not yet measured: both runs
-are enrolled and vote once their additions' 72-hour attested timelock
-elapses. The vote that authorizes an attempt also writes it and pays its
-rent: 3{,}632{,}052 stroops, 3{,}545{,}582 of it rent\claim{authorizing-vote-cost}.
+the registry's instance and code to the footprint on the test
+host\claim{registry-costs}. Votes against a registry root have not been
+measured on a network. The vote that authorizes an attempt also writes it
+and pays its rent: 3{,}632{,}052 stroops, 3{,}545{,}582 of it
+rent\claim{authorizing-vote-cost}. Enrolling costs 11{,}434{,}621 stroops
+(1.1 XLM) at mainnet's settings, almost all of it rent for the new
+account, its guardian and its recovery document\claim{enrollment-cost}.
 
 \paragraph{Archival and the keeper.} Recovery is the operation least likely
 to have run recently, so the entries it reads are the likeliest to be
-archived. On testnet, Perch's doc compiler and controller had been, and
-restoring them cost 112{,}447{,}907 stroops, 8.4 times the 13{,}384{,}714 of
-the seven-transaction recovery itself. At mainnet's settings, a recovery
-with every entry it reads archived takes 7 transactions and 3{,}935{,}930{,}637
-stroops, against 5{,}237{,}377 with nothing archived. The operator's keeper
-extends the verifier, the registry and the guardian's code for
-3{,}304{,}297{,}283 stroops a year at mainnet's settings, plus 3{,}245{,}716
-per account's guardian instance\claim{testnet-recovery-total}. If it fails,
-recovery still works, restoring the same bytes, and the submitter pays.
+archived. On testnet, an earlier run found Perch's doc compiler and
+controller archived, and restoring them cost 112{,}447{,}907 stroops (11.2
+XLM), 8.4 times the 13{,}384{,}714 of that run's seven-transaction recovery.
+At mainnet's settings, a recovery with every entry it reads archived takes 7
+transactions and 3{,}959{,}831{,}748 stroops (396 XLM), against 5{,}237{,}377
+with nothing archived. The operator's keeper extends the verifier, the
+registry and the guardian's code for 3{,}304{,}297{,}283 stroops (330.4 XLM)
+a year, plus 3{,}245{,}716 (0.3246 XLM) per account's guardian instance.
+These price rent at mainnet's rate when its settings were read, the
+1{,}000-stroop floor per KB, which holds while the network's average state
+stays at most 2.0\,GB (it was 1.718\,GB); every rent figure is 5.5 times as
+large at 2.5\,GB and ten times at 3.0\,GB\claim{testnet-recovery-total}. If
+the keeper fails, recovery still works, restoring the same bytes, and the
+submitter pays. The recovering device holds no XLM, and the wallet has no
+path for restorations too large to make inline, so who pays an archived
+recovery on mainnet is open (Appendix~\ref{app:open}).
 
 \subsection{Proving}\label{sec:eval-proving}
 Table~\ref{tab:proving} gives the time to prove one recovery email (the Gmail
@@ -203,8 +219,9 @@ fixture, the circuit build the verifier embeds) natively, with bb.js in Node,
 and in Chrome with the wallet's prover worker on the recovery route's
 isolation headers\claims{desktop-proving-cost,browser-proving-cost,efficiency-core-proving}.
 The browser total includes cached assets, Barretenberg's start and local
-verification. A first proof downloads 18{,}664{,}335 octets, cached
-thereafter\claim{prover-download}. The machine ran at a load average of
+verification. A first proof downloads 18{,}664{,}335 octets of proving
+inputs, cached thereafter, and with the page and the prover's code,
+uncompressed, transfers 27{,}192{,}989\claim{prover-download}. The machine ran at a load average of
 about 6; a second run of the same build at 5.4 agrees within 2\%, though the
 slower tier's background-priority threads yield to other work.
 
@@ -232,41 +249,26 @@ slower tier's background-priority threads yield to other work.
   \end{tabularx}
 \end{table}
 
-\paragraph{Phones are not measured.} No phone was available, although a
+\paragraph{Phones are not measured.} No phone was measured, although a
 user who lost every device will often recover on a new phone. The design
-budgets up to about two minutes there; that is a target, not a
-result\claim{phone-proving-budget}, and whether a mobile browser holds the
-1.4 to 2.5\,GiB the desktop renderer peaks at is open. The slower desktop
-tier, under background scheduling, is still desktop cores, not a model of a
-phone; DevTools CPU throttling leaves proving unchanged, because Chrome does
-not throttle the workers in which it runs\claim{devtools-throttling}. A
-self-contained benchmark page runs the same prover on any device, and the
-recovery page runs in any browser, so a desktop remains a way to recover.
+budgets up to about two minutes there, a target, not a
+result\claim{phone-proving-budget}; whether a mobile browser holds the 1.4
+to 2.5\,GiB the desktop renderer peaks at is open. The slower desktop tier is
+not a model of a phone, and DevTools CPU throttling leaves proving unchanged,
+because Chrome does not throttle workers\claim{devtools-throttling}. A
+desktop remains a way to recover.
 
 \subsection{Alerts, end to end, and testnet}\label{sec:eval-e2e}
 With every service a loopback mock, an \texttt{attempt\_authorized} event
 reaches the sending mock in 11 to 62\,ms (median 16.5) and the push mock in
 13 to 66\,ms (median 19), and a restarted vault restores its key from two
-custodians in 147 to 238\,ms (median 152)\claim{alert-latency}; a
-deployment adds the watcher's polling interval and the providers' delivery.
-On a local network, a browser test enrolls an inbox, deploys and lists its
+custodians in 147 to 238\,ms (median 152)\claim{alert-latency}. On a local
+network, a browser test enrolls an inbox, deploys and lists its
 guardian, and after the passkey is lost recovers with one email proven in
 the browser and a second helper, the alert email and push carrying the code
-the page shows\claim{end-to-end-local}. On testnet, one complete
-email-factor recovery ran from minting to completion, after which the
-account's document held the new passkey and not the lost
-one\claim{testnet-email-recovery}.
-
-\subsection{Threats to validity}\label{sec:eval-threats}
-Every email is signed by a mock in its provider's published layout, and DNS,
-the sending and push services, the enclave and the custodians are mocks; the
-real-mail corpus checks the parser, not each provider's outbound recovery
-mail. No registry addition leaves its timelock during a network run, so
-network votes use the pin, and scenarios needing an active key run on the
-test host, which runs the same contracts but is not a network; so does the
-recovery with everything archived. The local network closes about one ledger
-a second while reporting a 5-second target, so there a 120{,}960-ledger delay
-lasts about 34 hours; close-time windows are unaffected. A scenario reports
-only the first layer that refuses it. Timing comes from one shared machine,
-testnet figures from one period, and the alert rows show mechanisms, not
-people.
+the page shows\claim{end-to-end-local}. On testnet, with the contracts
+built from commit \texttt{ab274154} on \texttt{main} and the verifier
+reporting circuit id \texttt{a998d03e}\ldots{} read back, one complete
+email-factor recovery ran from minting to completion, leaving the new
+passkey in the account's document; both testnet runs keep every
+transaction's XDR\claim{testnet-email-recovery}.

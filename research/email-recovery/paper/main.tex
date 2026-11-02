@@ -15,7 +15,7 @@
 
 \begin{document}
 
-\title{Email Recovery Without Plaintext: Zero-Knowledge Email as a Recovery Factor for Smart Accounts}
+\title{Email Recovery Without Plaintext On Chain: Zero-Knowledge Email as a Recovery Factor for Smart Accounts}
 
 \author{Anonymous Author(s)}
 \affiliation{%
@@ -24,34 +24,44 @@
 
 \begin{abstract}
 A smart account can use control of an email inbox as one recovery factor
-while the chain holds only a salted commitment to the address and the
-operator's servers see it only inside an attested enclave. The account
-commits to a salted Poseidon2 hash of the address. To recover, the user sends
-one email from that inbox to a fixed address; the user's browser proves in
-zero knowledge that the provider DKIM-signed it and that its Subject carries a
-blinded copy of the recovery statement's digest; and a per-account guardian
-contract verifies the proof on Soroban and counts it as one approval in
-Perch's delayed, quorum-based recovery, used unchanged. Email approvals never
-complete a recovery before its delay has passed; email alone authorizes one only
-under a lost-key profile with at least seven days of delay and a second alert
+while the chain holds only a salted commitment to the address, and the
+design confines the operator's view of the address to an attested enclave,
+provided the operator neither reroutes the recovery domain's mail nor serves
+a modified wallet (assumptions A8, A10, A11); that enclave is not yet
+built\claim{scoped-privacy-claim}. The account commits to a salted Poseidon2
+hash of the address. To recover, the user sends one email from that inbox to
+a fixed address; the user's browser proves in zero knowledge that the
+provider DKIM-signed it and that its Subject carries a blinded copy of the
+recovery statement's digest; and a per-account guardian contract verifies
+the proof on Soroban and counts it as one approval in Perch's delayed,
+quorum-based recovery, used unchanged. Email approvals never complete a
+recovery before its delay has passed; email alone authorizes one only under
+a lost-key profile with at least seven days of delay and a second alert
 channel, where the owner's cancellation is the defence. Over a Lean model of
 the guardian, the circuit's relation and Perch's controller, we prove
-soundness and replay resistance as reductions to named hash collisions and
-per-proof extraction, one-factor safety over every controller trace, and
-privacy as a simulation theorem in an ideal model of the commitment and the
+soundness, including that an accepted email binds one recovery statement,
+and replay resistance as reductions to named hash collisions and to the
+proof system's extraction, one-factor safety over every controller trace,
+and privacy as a simulation theorem in an ideal model of the commitment and
+the
 proofs\claims{email-factor-soundness,replay-resistance,one-factor-safety,address-privacy}.
-The step from that ideal model to Poseidon2 and UltraHonk is assumed, and the
-circuit's header parsing is tested, not proven: it agrees with reference
-implementations on 5{,}327 real DKIM signatures and 50{,}000 fuzzed
-headers\claims{parser-real-mail,parser-fuzzing}. The Noir circuit has
+The step from that ideal model to Poseidon2 and UltraHonk, and UltraHonk's
+simulation extractability, are assumed\claims{commitment-hiding,proof-system-security}.
+The circuit's header parsing is tested, not proven: on 5{,}327 real DKIM
+signatures it agrees with reference implementations on every one, and on
+50{,}000 fuzzed headers every \texttt{From} it accepts is the mailbox an
+RFC~5322 reader reads, while it differs from a strict DKIM verifier on tags
+it does not read and on whitespace it
+refuses\claims{parser-real-mail,parser-fuzzing}. The Noir circuit has
 248{,}996 UltraHonk gates\claim{circuit-size}. On a local Stellar network
 running mainnet's settings, an email vote is metered at 121.6 million of a
 transaction's 400 million instructions and charged 83{,}125 to 83{,}153
-stroops, and desktop Chrome proves in 1.44\,s on 18 threads; phones are not
-measured\claims{network-verification-cost,onchain-verification-cost,browser-proving-cost}. All 73
-rows of an attack suite, phishing, deleted alerts and a lapsed push among
-them, have their expected outcome, three of them residual risks the design
-does not stop\claims{network-attack-suite,registry-timelock-attacks}.
+stroops (0.0083 XLM), and desktop Chrome proves in 1.44\,s on 18
+threads\claims{network-verification-cost,browser-proving-cost}. Phones are not
+measured, and no user study was run. All 73 rows of an attack suite,
+phishing, deleted alerts, a lapsed push and a switched phone among them, have
+their expected outcome, two of them residual risks the design does not
+stop\claims{network-attack-suite,registry-timelock-attacks}.
 \end{abstract}
 
 \begin{CCSXML}

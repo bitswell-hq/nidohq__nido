@@ -36,14 +36,17 @@ and the test-host scenarios. The build fails if any row's observed outcome
 differs from its expected one, so each row shows one outcome for both.
 ``Layer'' is the first layer that refuses; ``P'' is the property of
 \S\ref{sec:threat} the row exercises; ``Where'' is the local network or the
-integration-test host. The emails behind the circuit rows are listed in
-Appendix~\ref{app:circuit}.
+integration-test host. The circuit's verdict on each adversarial email
+behind the circuit rows, with the attacker's strongest witness, is in
+\nolinkurl{research/email-recovery/eval/results/attacks-local.json}; the build
+fails unless each equals the verdict the unit attack suite pins for the same
+email\claim{circuit-refuses-attacks}.
 
 \newcommand\AttackTable[3]{%
   \begin{table*}[p]
     \caption{#1}
     \label{#2}
-    \scriptsize\renewcommand\arraystretch{0.95}
+    \scriptsize\renewcommand\arraystretch{0.92}
     \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}p{0.2\textwidth}>{\raggedright\arraybackslash}p{0.14\textwidth}cc@{}}
       \toprule
       Scenario & Expected and observed outcome & Layer & P & Where \\
@@ -57,29 +60,3 @@ Appendix~\ref{app:circuit}.
   new key in the statement\claim{network-attack-suite}.}{tab:attacks-a}{\AttackTableA}
 \AttackTable{Attack scenarios: registry keys, the compromised inbox, header
   quirks, front-running, and privacy on chain\claims{network-attack-suite,registry-timelock-attacks}.}{tab:attacks-b}{\AttackTableB}
-
-\section{The circuit's verdict on each adversarial email}\label{app:circuit}
-
-Table~\ref{tab:circuit-cases} lists every adversarial email of the provider
-mocks as the local-network run built it for a live attempt, with the
-attacker's strongest witness. ``Mocks' verdict'' is what a standard DKIM
-verifier says of the email: valid, valid but whose claim the circuit must
-refuse, or invalid. ``Tree'' is the key tree the witness uses: the account's
-pin, or a tree planted with a key no registry would hold. ``Outcome'' is the
-circuit's failing assertion, or \emph{accepted}. The build fails unless each
-outcome equals the one the unit attack suite pins for the same
-email\claim{circuit-refuses-attacks}.
-
-\begin{table*}[p]
-  \caption{The circuit's verdict on each adversarial email of the provider
-    mocks.}
-  \label{tab:circuit-cases}
-  \scriptsize\renewcommand\arraystretch{0.95}
-  \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.3\textwidth}>{\raggedright\arraybackslash}p{0.14\textwidth}l>{\raggedright\arraybackslash}X@{}}
-    \toprule
-    Email & Mocks' verdict & Tree & Outcome \\
-    \midrule
-    \AttackCircuitRows
-    \bottomrule
-  \end{tabularx}
-\end{table*}

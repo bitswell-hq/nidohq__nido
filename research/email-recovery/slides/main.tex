@@ -9,7 +9,7 @@
 
 \input{macros}
 
-\title{Email Recovery Without Plaintext}
+\title{Email Recovery Without Plaintext On Chain}
 \subtitle{Zero-Knowledge Email as a Recovery Factor for Smart Accounts}
 \author{Anonymous Author(s)}
 \date{}
@@ -25,25 +25,36 @@
 \end{frame}
 
 \begin{frame}{The problem}
+  \small
   \begin{itemize}
-    \item A passkey smart account is lost with the last device that holds the passkey.
-    \item An inbox is a credential people keep for years~\cite{bonneau-recovery}.
+    \item A passkey smart account is lost with the last device that holds
+      the passkey; an inbox is a credential people keep for
+      years~\cite{bonneau-recovery}.
     \item Naive email recovery puts the address in a database and makes the
-      checker a party that can recover any account~\cite{sep30}.
-    \item Checking DKIM on chain removes the server but publishes the
-      \texttt{From} header.
+      checker a party that can recover any account~\cite{sep30}; checking
+      DKIM on chain publishes the \texttt{From} header.
   \end{itemize}
-  \bigskip
+  \smallskip
   \textbf{Thesis:} inbox control can be \emph{one} recovery factor while the
-  chain holds only a salted commitment and the operator's servers see the
-  address only inside an attested enclave. Email never skips the recovery
-  delay; alone it authorizes only under email plus delay (7 days, a second
-  alert channel), where the owner's veto is the defence.
+  chain holds only a salted commitment to the address. Email never skips the
+  recovery delay; alone it authorizes only under email plus delay (7 days, a
+  second alert channel), where the owner's veto is the defence.
+  \par\smallskip\footnotesize
+  \begin{itemize}
+    \item The operator sees the address only in an attested enclave, not yet
+      built, if its staff neither reroute the recovery domain's mail nor
+      ship a modified wallet (A8, A10, A11)\claim{scoped-privacy-claim}.
+    \item Parsing agrees with reference implementations on 5{,}327 real
+      signatures; on 50{,}000 fuzzed headers every accepted \texttt{From} is
+      the mailbox an RFC~5322 reader reads, disagreeing with a strict DKIM
+      verifier only on tags it does not read and whitespace it
+      refuses\claims{parser-real-mail,parser-fuzzing}.
+  \end{itemize}
 \end{frame}
 
 \begin{frame}{The approach in one picture}
   \centering
-  \resizebox{0.92\linewidth}{!}{\input{figures/recovery-flow}}
+  \input{figures/recovery-flow}
   \par\medskip\small
   A per-account guardian with $\Cm = \commitf(\addr, \code)$, counted as one
   guardian in Perch's recovery, used unchanged\claim{guardian-on-perch}.
@@ -107,14 +118,17 @@
         \item mail provider (curious, not forging)
         \item network observer
         \item malicious frontend (trusted at enrollment)
-        \item the operator's staff (host, DNS)
+        \item the operator's staff (host and relayer; not the mail
+          routing or the wallet build)
       \end{itemize}
     \end{column}
     \begin{column}{0.56\textwidth}
       \textbf{Assumptions}
       \begin{itemize}
         \item A1a DKIM unforgeable; A1b providers authenticate senders\claims{dkim-unforgeability,provider-authenticates-sender}
-        \item A2, A3 hashes; A4 UltraHonk; A5 registry; A6 secrets; A7 enrollment\claims{hash-collision-resistance,proof-system-security,registry-correctness,secret-generation,honest-enrollment}
+        \item A2, A3 hashes; A4 UltraHonk zero knowledge and simulation
+          extractable (stated, not established); A5 registry; A6 secrets; A7
+          enrollment\claims{hash-collision-resistance,proof-system-security,registry-correctness,secret-generation,honest-enrollment}
         \item A8 enclave and custodians\claim{enclave-isolation}
         \item A9 close time and ledger rate\claim{ledger-timing}
         \item A10 recovery domain's MX, MTA-STS and TLS keys unchanged\claim{recovery-domain-routing}
@@ -144,9 +158,9 @@
     \item Subject: \texttt{APPROVE \OpNameUpper{} ACCOUNT RECOVERY}
       $\mathrm{hex}(T)$, $T = \blindf(\digest, \blind)$, $\blind$ kept in the
       browser\claim{subject-blinding}.
-    \item $T$'s content names no attempt\claim{blinded-subject-hiding}; but
-      the vote lands seconds after the email, so a provider watching the
-      chain can link them by timing, possibly to a set of
+    \item $T$'s content names no attempt\claim{blinded-subject-hiding}.
+    \item But the vote lands seconds after the email, so a provider watching
+      the chain can link them by timing, possibly to a set of
       one\claims{browser-proving-cost,testnet-email-recovery}.
     \item The mail reaches the browser sealed by the vault, or as an
       \texttt{.eml} file\claim{sealed-inbound}.
@@ -177,6 +191,10 @@
       a trapping registry or verifier is a refusal.
     \item Construction refuses bad commitments, pins over 365 days, and a
       verifier for another circuit\claim{guardian-construction}.
+    \item Its circuit is fixed for life: a fix reaches an account through a
+      new guardian, 2 transactions and 0.26 XLM under \texttt{Loss}, 4 and
+      0.32 XLM under \texttt{Protected}\claim{circuit-fix-migration}.
+      Accounts that cannot reconfigure keep the old relation.
   \end{itemize}
 \end{frame}
 
@@ -198,18 +216,19 @@
 \begin{frame}{Alerts, and the privacy claim's conditions}
   \small
   \begin{itemize}
-    \item From Perch's events, the votes' transactions and state: an
-      authorized attempt, and an email vote below quorum, on every channel;
-      opening an attempt alerts nothing\claims{alert-code,compromised-inbox-alerted}.
-    \item Web Push to a passkey device required, probed monthly for a signed
-      tap; with no device live, keeping the email helper is blocked\claim{wallet-second-alert-channel}.
-    \item Vault key 2-of-3; enclave images after a 14-day public
-      timelock\claim{vault-custody}.
-    \item Mocked alert path: no server-side record holds the
-      address\claim{servers-cannot-read-address}.
+    \item From Perch's events and each email vote's own transaction: an
+      authorized attempt, and every email vote, on every channel; opening
+      attempts hides none\claims{alert-code,compromised-inbox-alerted}.
+    \item Web Push required; a monthly ``tap to confirm'' probe, unlike an
+      alert; a device silent for two probes is unacknowledged, and a new one
+      is added at once\claim{wallet-second-alert-channel}.
+    \item A12 rests on a device the owner still uses: a silent one is found
+      only 60 to 90 days later\claim{alert-liveness}.
     \item The wallet's claim, \PrivacyClaim, holds only under A8, A10,
       A11\claim{scoped-privacy-claim}. The mail provider and the sending
       service see the address.
+    \item Mocked alert path: no server-side record holds the
+      address\claim{servers-cannot-read-address}.
   \end{itemize}
 \end{frame}
 
@@ -217,33 +236,63 @@
   \small
   \textbf{Social engineer:} the real recovery page on its own device opens
   the attempt and shows the Subject; the victim's email is a valid approval,
-  and the attacker sees the same alert code.\par\medskip
+  and the attacker sees the same alert code. When the victim acts, nothing
+  of ours reaches them: the page's warnings are on the attacker's
+  screen.\par\medskip
   \textbf{What remains}
   \begin{itemize}
-    \item the delay and the owner's cancellation; the push leads with
-      cancelling; the wallet reads open attempts itself\claims{phishing-defences,wallet-live-attempts}
-    \item other guardians; warnings where the email is prepared and the code typed
+    \item the delay and the owner's cancellation; the alerts, after the vote,
+      lead with cancelling and say a caller who announced them is an
+      attacker\claim{phishing-defences}
+    \item the wallet's own read of open attempts\claim{wallet-live-attempts}
+    \item other guardians
+    \item open: a reply to each approval's sender, with \texttt{To:} bound
   \end{itemize}
   \textbf{Residual risk under email plus delay}
   \begin{itemize}
     \item a phished user with no device left cannot cancel
-    \item alerts to a stolen inbox and a lapsed push: only opening the wallet
-      shows the attempt
+    \item alerts to a stolen inbox and no reachable push device
     \item whether people act in time is not measured\claim{user-behaviour}
   \end{itemize}
 \end{frame}
 
+\begin{frame}{Which losses the factor covers}
+  \small
+  Passkeys sync by default on Apple's and Google's
+  platforms\claim{passkey-sync}.\par\medskip
+  \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{0.24\linewidth}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
+    \toprule
+    Lost & Device-bound passkey & Synced, inbox at the sync provider & Synced, inbox elsewhere \\
+    \midrule
+    Every device & covers & not needed & not needed \\
+    Platform account & --- & adds nothing & covers \\
+    Keychain unlock secret only & --- & covers & covers \\
+    \bottomrule
+  \end{tabularx}
+  \par\medskip
+  Enrollment notes an inbox at the platform that likely syncs the passkey
+  and recommends another inbox or helper\claim{enrollment-safeguards}.
+\end{frame}
+
 \begin{frame}{What is proven, tested and assumed}
   \small
-  \begin{description}[Soundness]
-    \item[Soundness] An accepted approval yields, for every extractor, the
-      email facts or the extractor's failure on that proof; with A5 and A7,
-      the enrolled address and a trusted key, or a Poseidon2 collision on
-      inputs the theorem computes\claim{email-factor-soundness}.
-    \item[Privacy] In an ideal model (handles for $\Cm$ and the pin root,
-      simulated proofs), an adaptive adversary's view, proofs included, is
-      simulated from public data\claim{address-privacy}; the step to
-      Poseidon2 and UltraHonk is assumed\claims{commitment-hiding,proof-system-security}.
+  \begin{description}[Soundness]\footnotesize
+    \item[Soundness] An accepted approval yields the email facts, or
+      extraction fails on that proof (A4's bad event); with A5 and A7, the
+      enrolled address and a trusted key, or a Poseidon2 collision on inputs
+      the theorem computes. The email binds one statement: an old email
+      approves nothing new\claim{email-factor-soundness}.
+    \item[A4] Weak simulation extractability, since every honest proof is
+      public; no published proof covers UltraHonk, so it is stated, not
+      established\claim{proof-system-security}.
+    \item[Privacy] The last hybrid of a game-hopping argument: in an ideal
+      model (handles for $\Cm$ and the pin root, simulated proofs), an
+      adaptive adversary's view, proofs included, is simulated from public
+      data\claim{address-privacy}.
+    \item[Hybrids] Real proofs to simulated (A4), $\Cm$ and the pin root to
+      handles (A3, A6): assumed. The ideal commitment binds nothing, so the
+      two theorems abstract Poseidon2
+      differently\claim{commitment-hiding}.
   \end{description}
   \medskip
   Lean~4, no axioms beyond Lean's own\claim{lean-axioms}. Not proven: the
@@ -288,7 +337,10 @@
     \item Real mail: 5{,}327 signatures from all 11 launch domains, the same
       verdict as mailauth and Python on every one\claim{parser-real-mail}.
     \item Fuzzing: 50{,}000 headers; every accepted \texttt{From} is the
-      mailbox Python reads\claim{parser-fuzzing}.
+      mailbox Python reads; disagreements with mailauth only on tags the
+      circuit does not read, and whitespace it refuses\claim{parser-fuzzing}.
+    \item Hint mutation: 39{,}256 dishonest hints, none binds another
+      address\claim{parser-hint-mutation}.
   \end{itemize}
 \end{frame}
 
@@ -305,10 +357,10 @@
         Replays & 12 & 12 \\
         Wrong account or key & 5 & 5 \\
         Registry keys & 8 & 7 \\
-        Compromised inbox & 12 & 7 \\
-        Alert path & 3 & --- \\
+        Compromised inbox & 13 & 7 \\
+        Alert path & 6 & --- \\
         Phishing & 6 & 2 \\
-        Repeated attempts & 1 & --- \\
+        Repeated attempts & 2 & --- \\
         Header quirks & 5 & 2 \\
         Front-running & 4 & 4 \\
         Privacy on chain & 1 & --- \\
@@ -320,8 +372,9 @@
       73 rows, each with its expected outcome: 70 on a local network, 3 on
       the test host\claims{network-attack-suite,registry-timelock-attacks}.\\[4pt]
       Thief with the code, email plus delay: deletes the alert emails; the
-      push reaches the owner, who cancels; a missed event is found by
-      reconciliation\claim{compromised-inbox-alerted}.\\[4pt]
+      push is accepted for the owner's device and the owner cancels; an email
+      vote among 32 newer attempts is still alerted; a missed event is found
+      by reconciliation\claim{compromised-inbox-alerted}.\\[4pt]
       Residual: a phished user with no device; a lapsed push.\\[4pt]
       No address or code in 263 transactions\claim{privacy-no-address-on-chain}.
     \end{column}
@@ -335,22 +388,24 @@
     & Test host & Local network & Testnet \\
     \midrule
     Settings & SDK snapshot & mainnet's & testnet's \\
-    Instructions, metered (M) & 131.2 & 121.6 & 121.6 \\
+    Instructions, metered (M) & 131.2 & 121.6 & 121.7 \\
     Transaction (bytes) & 18{,}148 & 18{,}080 & 18{,}080 \\
-    Fee (stroops) & 178{,}196 & 83{,}125--83{,}153 & 82{,}424--82{,}442 \\
+    Fee (stroops) & 178{,}196 & 83{,}125--83{,}153 & 82{,}419--82{,}446 \\
     \bottomrule
   \end{tabular}
   \par\smallskip{\footnotesize\claims{onchain-verification-cost,network-verification-cost,testnet-email-recovery}}
   \par\medskip
   \begin{itemize}\footnotesize
-    \item Mainnet projection: 83{,}148 for the Gmail vote: 37{,}969 compute,
-      36{,}419 history (an 18\,KB envelope), 2{,}049 rent\claim{fee-attribution}.
-    \item The test host's SDK prices with an old fee snapshot; at mainnet's
-      settings the same transaction is 82{,}530\claim{onchain-verification-cost}.
-    \item Everything archived, at mainnet's settings: 3{,}935{,}930{,}637
-      stroops; a keeper keeps the email contracts live for
-      3{,}304{,}297{,}283 a year\claim{testnet-recovery-total}.
-    \item Registry-root votes on a network: scheduled, not yet measured.
+    \item Mainnet projection: 83{,}148 stroops (0.0083 XLM) for the Gmail
+      vote: 37{,}969 compute, 36{,}419 history (an 18\,KB envelope),
+      2{,}049 rent\claim{fee-attribution}.
+    \item Enrollment at mainnet's settings: 11{,}434{,}621 stroops (1.1
+      XLM)\claim{enrollment-cost}.
+    \item Everything archived: 3{,}959{,}831{,}748 stroops (396 XLM); the
+      keeper, 330.4 XLM a year; both at the rent floor, ten times at 3\,GB of
+      state\claim{testnet-recovery-total}.
+    \item Testnet: built from \texttt{ab274154} on \texttt{main}, circuit id
+      read back. Registry-root votes on a network: not measured.
   \end{itemize}
 \end{frame}
 
@@ -372,6 +427,8 @@
   \begin{itemize}\footnotesize
     \item macOS names the tiers Super (6) and Performance (12); load average
       about 6, a second run within 2\%.
+    \item A first proof transfers 27{,}192{,}989 octets, 18{,}664{,}335 of
+      them cached proving inputs\claim{prover-download}.
     \item Chrome's renderer peaks at 1.4 to 2.5\,GiB; a phone's limits are
       untested. Budget of about two minutes: a target\claim{phone-proving-budget}.
   \end{itemize}
@@ -384,9 +441,11 @@
       an account code, a relayer that proves and stores the codes, and a
       registry with a delayed authorizer and per-user
       overrides~\cite{zkemail-recovery,zkemail-tx-builder,zkemail-user-overrideable-registry}.
-    \item New here: the protocol's own statement, blinded; proofs in the
-      browser; an immutable, attested registry with a salted, expiring pin;
-      machine-checked composition; parsing checked on real mail.
+    \item New here: the protocol's own statement, blinded; recovery proven
+      in the browser, with no relayer (zkEmail's blueprint SDK also proves
+      in the browser~\cite{zkemail-sdk-js}); an immutable, attested registry
+      with a salted, expiring pin; machine-checked composition; parsing
+      checked on real mail.
     \item zkLogin and Aptos keyless make OIDC the key~\cite{zklogin,aptos-aip61}.
     \item Usable security: secret questions, trustees, recovery codes,
       login notifications and
@@ -398,13 +457,19 @@
   \small
   \begin{itemize}
     \item Not built: the production enclave and its mail exchanger. All third
-      parties are mocks. Not measured: phones, people. No audit; testnet only.
+      parties are mocks. Not measured: phones, people (no user study). No
+      audit; testnet only.
+    \item Toward a malicious operator: committing the recovery domain's mail
+      routing under the image registry's timelock, certificate-transparency
+      monitoring, reproducible wallet builds; none built.
+    \item Before mainnet: real provider mail, Fastmail first, and a
+      submission test of A1b; where it fails, the factor reduces to knowing
+      the code.
     \item The provider can link an email to its vote by timing; the sending
       service sees alert addresses.
-    \item Open: pin semantics and lifetime, default actions, where the code
-      is kept, registry parameters, the alert code's key, an on-chain
-      enrollment proof, sender authentication per provider, who funds the
-      keeper.
+    \item Open: a reply to approvals with \texttt{To:} bound; circuit fixes
+      for accounts that cannot move; pin semantics; the alert code's key;
+      who pays restorations and the keeper.
   \end{itemize}
 \end{frame}
 
