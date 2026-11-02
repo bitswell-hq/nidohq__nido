@@ -1,0 +1,705 @@
+{
+ "about": "The restorations of Perch archived contracts that testnet/run.sh found and performed before enrolling, and the recovery transactions of that run, from its record (results/testnet.json as that run wrote it). Perch contracts are independent of the email-recovery build; a later run on the same deployment found them live.",
+ "generated": "2026-11-02T02:16:03.722Z",
+ "network": "Test SDF Network ; September 2015",
+ "rpc": "https://soroban-testnet.stellar.org",
+ "rpcVersion": {
+  "version": "30.0.0-13e53516633c3ce1281c7edbacb607107d3a4e55",
+  "commitHash": "13e53516633c3ce1281c7edbacb607107d3a4e55",
+  "buildTimestamp": "2026-10-20T22:36:51",
+  "captiveCoreVersion": "stellar-core 30.0.0 (0e49751aa9ddf892302cca02cea7f3f5d97df9f1)",
+  "protocolVersion": 29
+ },
+ "commit": "da4450b23cf22f7dd015a0f64cc4f0eea7663bc9",
+ "perch": {
+  "network": "Test SDF Network ; September 2015",
+  "factory": "CDDIW3F63PB6ZKMJN7CCGJSCYXTAVAVEEYNS36K2YFEJH7GQ3ADVZSVS",
+  "webauthnVerifier": "CDEV5YPS5IITPLQPYTKJGWBNZ2YZ7FQZIJNSHUMJRBE4QWYK2IVK4EJT",
+  "statelessRegistry": "CDZGU4AIND6QRCGAN72I7DCS2EKRZ76JSKYY7KKJR4CG5IR2AMFIBZTM",
+  "docCompiler": "CAYCPM5O6SGGAZOCCAUJ27CZZ7SMHU4VYSA25ZHDMGKILP4Z5RGF467E",
+  "interpreter": "CBOGVUQWY5G7BP7OWEJX3Z5PSZLYJXHM54A7OEMXQQ7ZO4GHHM4WCEAP",
+  "spendingLimit": "CAG3IDO3FXE2HQVQHRGRBKWGL2IPAA2V6B3UMHES4ZUNS7OEV646HYV5",
+  "recoveryController": "CBOFO5KWQKCZ7LBS4LDIYXA6LGZSUSA6JKOHHBBL64KQNZLPGDJ252FT",
+  "zkPool": "CASXCXSBIG6ECB3LO4LCEW6SZIFHZDTJ3PFOZJK5JI56VKXLSZY6J67P",
+  "zkAdapter": "CDWVAUSTU2DHBBWANQKGSHCXFK5C46WMUEMWRBOV2LBVXQGK4PGIFBQS",
+  "circuitId": "9e39c41f4f35aad43e64b255dfe3ba13f10e8c9d36d6f56fce23c2d97c0a0b4a",
+  "treeDepth": 32,
+  "accountWasmHash": "2c976bfd98678f3b6fcf5514420a81ef5e5b9fc1c5b6c60ec6f2dd64448479d5"
+ },
+ "restored": [
+  "doc compiler instance",
+  "doc compiler code",
+  "recovery controller instance",
+  "recovery controller code"
+ ],
+ "restores": [
+  {
+   "label": "restore doc compiler instance",
+   "hash": "6b85123a745b7d284323a84342b2f43c1934d32b9d3079c3e74ecf657ff42423",
+   "status": "SUCCESS",
+   "ledger": 5512398,
+   "ms": {
+    "total": 2040
+   },
+   "envelopeBytes": 252,
+   "declared": {
+    "instructions": 0,
+    "diskReadBytes": 104,
+    "writeBytes": 104,
+    "readOnly": 0,
+    "readWrite": 1,
+    "resourceFee": 20356
+   },
+   "footprint": {
+    "readOnly": [],
+    "readWrite": [
+     "data CAYCPM persistent instance"
+    ]
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 20356
+   },
+   "authEntryBytes": 0,
+   "feeCharged": 14726,
+   "feeSplit": {
+    "nonRefundableResource": 3243,
+    "refundableResource": 11383,
+    "rent": 11383
+   }
+  },
+  {
+   "label": "restore doc compiler code",
+   "hash": "b39e79d0d692365534c30a73f7f9e0aee77fd685f20016aa711b62ebac624a93",
+   "status": "SUCCESS",
+   "ledger": 5512399,
+   "ms": {
+    "total": 1900
+   },
+   "envelopeBytes": 240,
+   "declared": {
+    "instructions": 0,
+    "diskReadBytes": 110048,
+    "writeBytes": 110048,
+    "readOnly": 0,
+    "readWrite": 1,
+    "resourceFee": 90696812
+   },
+   "footprint": {
+    "readOnly": [],
+    "readWrite": [
+     "code 2730a7d3"
+    ]
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 90696812
+   },
+   "authEntryBytes": 0,
+   "feeCharged": 78873057,
+   "feeSplit": {
+    "nonRefundableResource": 74079,
+    "refundableResource": 78798878,
+    "rent": 78798878
+   }
+  },
+  {
+   "label": "restore recovery controller instance",
+   "hash": "b9d82df040d8d558fa1780b0c0824e676bd09fbede619765f447a2ae76f5776d",
+   "status": "SUCCESS",
+   "ledger": 5512400,
+   "ms": {
+    "total": 2076
+   },
+   "envelopeBytes": 252,
+   "declared": {
+    "instructions": 0,
+    "diskReadBytes": 104,
+    "writeBytes": 104,
+    "readOnly": 0,
+    "readWrite": 1,
+    "resourceFee": 20356
+   },
+   "footprint": {
+    "readOnly": [],
+    "readWrite": [
+     "data CBOFO5 persistent instance"
+    ]
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 20356
+   },
+   "authEntryBytes": 0,
+   "feeCharged": 14726,
+   "feeSplit": {
+    "nonRefundableResource": 3243,
+    "refundableResource": 11383,
+    "rent": 11383
+   }
+  },
+  {
+   "label": "restore recovery controller code",
+   "hash": "9806a648675c4b0cfeadb4b501dc2a7c8ae71ad2fa7bc55ad20560d6994bed79",
+   "status": "SUCCESS",
+   "ledger": 5512402,
+   "ms": {
+    "total": 6830
+   },
+   "envelopeBytes": 240,
+   "declared": {
+    "instructions": 0,
+    "diskReadBytes": 68364,
+    "writeBytes": 68364,
+    "readOnly": 0,
+    "readWrite": 1,
+    "resourceFee": 38574034
+   },
+   "footprint": {
+    "readOnly": [],
+    "readWrite": [
+     "code daaf09d9"
+    ]
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 38574034
+   },
+   "authEntryBytes": 0,
+   "feeCharged": 33545398,
+   "feeSplit": {
+    "nonRefundableResource": 47212,
+    "refundableResource": 33498086,
+    "rent": 33498086
+   }
+  }
+ ],
+ "recovery": [
+  {
+   "label": "mint testnet",
+   "hash": "25bb1939faeca1678387d15bd13eb8e86dd4a59cf8b0d39b79886652dbbad400",
+   "status": "SUCCESS",
+   "ledger": 5512404,
+   "ms": {
+    "simulate": 201,
+    "submit": 34,
+    "confirm": 4788,
+    "total": 5022
+   },
+   "envelopeBytes": 1064,
+   "declared": {
+    "instructions": 3469152,
+    "diskReadBytes": 0,
+    "writeBytes": 1468,
+    "readOnly": 5,
+    "readWrite": 5,
+    "resourceFee": 1549058
+   },
+   "footprint": {
+    "readOnly": [
+     "data CDDIW3 persistent instance",
+     "data CDEV5Y persistent instance",
+     "code 02482b9a",
+     "code 2c976bfd",
+     "code f2e1dfce"
+    ],
+    "readWrite": [
+     "data CCMXZU persistent InstalledRules",
+     "data CCMXZU persistent ContextRuleData",
+     "data CCMXZU persistent SignerData",
+     "data CCMXZU persistent SignerLookup",
+     "data CCMXZU persistent instance"
+    ]
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 1549058
+   },
+   "authEntryBytes": 0,
+   "feeCharged": 1344343,
+   "feeSplit": {
+    "nonRefundableResource": 10832,
+    "refundableResource": 1333411,
+    "rent": 1331243
+   },
+   "metered": {
+    "read_entry": 10,
+    "write_entry": 5,
+    "ledger_read_byte": 0,
+    "ledger_write_byte": 1468,
+    "read_key_byte": 0,
+    "write_key_byte": 0,
+    "read_data_byte": 0,
+    "write_data_byte": 1468,
+    "read_code_byte": 0,
+    "write_code_byte": 0,
+    "emit_event": 3,
+    "emit_event_byte": 888,
+    "cpu_insn": 3303767,
+    "mem_byte": 2192903,
+    "invoke_time_nsecs": 740513,
+    "max_rw_key_byte": 116,
+    "max_rw_data_byte": 492,
+    "max_rw_code_byte": 0,
+    "max_emit_event_byte": 316
+   }
+  },
+  {
+   "label": "deploy guardian testnet",
+   "hash": "4381a327a06d03ae43310a7d46a6e020c501be4be10fee9d4ef2052d7a1a7ac2",
+   "status": "SUCCESS",
+   "ledger": 5512405,
+   "ms": {
+    "simulate": 73,
+    "submit": 27,
+    "confirm": 1696,
+    "total": 1796
+   },
+   "envelopeBytes": 1660,
+   "declared": {
+    "instructions": 1283007,
+    "diskReadBytes": 0,
+    "writeBytes": 644,
+    "readOnly": 3,
+    "readWrite": 1,
+    "resourceFee": 1870141
+   },
+   "footprint": {
+    "readOnly": [
+     "data CD7UBC persistent instance",
+     "code 0e4239ca",
+     "code 9e7f39ef"
+    ],
+    "readWrite": [
+     "data CCLG2C persistent instance"
+    ]
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 1870141
+   },
+   "authEntryBytes": 648,
+   "feeCharged": 1623015,
+   "feeSplit": {
+    "nonRefundableResource": 6124,
+    "refundableResource": 1616791,
+    "rent": 1616693
+   },
+   "metered": {
+    "read_entry": 4,
+    "write_entry": 1,
+    "ledger_read_byte": 0,
+    "ledger_write_byte": 644,
+    "read_key_byte": 0,
+    "write_key_byte": 0,
+    "read_data_byte": 0,
+    "write_data_byte": 644,
+    "read_code_byte": 0,
+    "write_code_byte": 0,
+    "emit_event": 0,
+    "emit_event_byte": 40,
+    "cpu_insn": 1230050,
+    "mem_byte": 961948,
+    "invoke_time_nsecs": 320082,
+    "max_rw_key_byte": 48,
+    "max_rw_data_byte": 644,
+    "max_rw_code_byte": 0,
+    "max_emit_event_byte": 0
+   }
+  },
+  {
+   "label": "apply_doc testnet",
+   "hash": "24c2b9594a6a50493013b986220a9ebf00bea5122eb84bcfb02b9cc4fc969066",
+   "status": "SUCCESS",
+   "ledger": 5512407,
+   "ms": {
+    "simulate": 358,
+    "submit": 47,
+    "confirm": 3452,
+    "total": 3858
+   },
+   "envelopeBytes": 4204,
+   "declared": {
+    "instructions": 17010106,
+    "diskReadBytes": 0,
+    "writeBytes": 3852,
+    "readOnly": 12,
+    "readWrite": 10,
+    "resourceFee": 6569049
+   },
+   "footprint": {
+    "readOnly": [
+     "data CAYCPM persistent instance",
+     "data CBOFO5 persistent Authorized",
+     "data CBOFO5 temporary Completing",
+     "data CBOFO5 persistent instance",
+     "data CCMXZU persistent ContextRuleData",
+     "data CCMXZU persistent Revoked",
+     "data CCMXZU persistent SignerData",
+     "data CDEV5Y persistent instance",
+     "code 2730a7d3",
+     "code 2c976bfd",
+     "code daaf09d9",
+     "code f2e1dfce"
+    ],
+    "readWrite": [
+     "data CBOFO5 persistent Config",
+     "data CBOFO5 persistent Epoch",
+     "data CCMXZU persistent AppliedDocBytes",
+     "data CCMXZU persistent AppliedFingerprints",
+     "data CCMXZU persistent InstalledRules",
+     "data CCMXZU persistent ContextRuleData",
+     "data CCMXZU persistent PolicyData",
+     "data CCMXZU persistent PolicyLookup",
+     "data CCMXZU persistent instance",
+     "data CCMXZU temporary _maxDepth"
+    ]
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 6569049
+   },
+   "authEntryBytes": 1532,
+   "feeCharged": 5711754,
+   "feeSplit": {
+    "nonRefundableResource": 29007,
+    "refundableResource": 5682647,
+    "rent": 5681123
+   },
+   "metered": {
+    "read_entry": 22,
+    "write_entry": 10,
+    "ledger_read_byte": 0,
+    "ledger_write_byte": 3852,
+    "read_key_byte": 0,
+    "write_key_byte": 0,
+    "read_data_byte": 0,
+    "write_data_byte": 3852,
+    "read_code_byte": 0,
+    "write_code_byte": 0,
+    "emit_event": 2,
+    "emit_event_byte": 624,
+    "cpu_insn": 16241550,
+    "mem_byte": 1787372,
+    "invoke_time_nsecs": 3143263,
+    "max_rw_key_byte": 116,
+    "max_rw_data_byte": 872,
+    "max_rw_code_byte": 0,
+    "max_emit_event_byte": 368
+   }
+  },
+  {
+   "label": "begin_lost_key",
+   "hash": "6e3a7e8c0892fa9d54e98e93554c18abf277c7f19d8fc655b5ad8b10218ede82",
+   "status": "SUCCESS",
+   "ledger": 5512408,
+   "ms": {
+    "simulate": 139,
+    "submit": 29,
+    "confirm": 1697,
+    "total": 1864
+   },
+   "envelopeBytes": 1844,
+   "declared": {
+    "instructions": 13690643,
+    "diskReadBytes": 0,
+    "writeBytes": 1236,
+    "readOnly": 14,
+    "readWrite": 2,
+    "resourceFee": 423721
+   },
+   "footprint": {
+    "readOnly": [
+     "data CAYCPM persistent instance",
+     "data CBOFO5 persistent Attempt",
+     "data CBOFO5 persistent Authorized",
+     "data CBOFO5 persistent Config",
+     "data CBOFO5 persistent Epoch",
+     "data CBOFO5 persistent instance",
+     "data CCMXZU persistent AppliedDocBytes",
+     "data CCMXZU persistent Revoked",
+     "data CCMXZU persistent instance",
+     "data CDEV5Y persistent instance",
+     "code 2730a7d3",
+     "code 2c976bfd",
+     "code daaf09d9",
+     "code f2e1dfce"
+    ],
+    "readWrite": [
+     "data CBOFO5 temporary Collecting",
+     "data CBOFO5 persistent NextAttempt"
+    ]
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 423721
+   },
+   "authEntryBytes": 0,
+   "feeCharged": 365909,
+   "feeSplit": {
+    "nonRefundableResource": 11751,
+    "refundableResource": 354058,
+    "rent": 353423
+   },
+   "metered": {
+    "read_entry": 16,
+    "write_entry": 2,
+    "ledger_read_byte": 0,
+    "ledger_write_byte": 1236,
+    "read_key_byte": 0,
+    "write_key_byte": 0,
+    "read_data_byte": 0,
+    "write_data_byte": 1236,
+    "read_code_byte": 0,
+    "write_code_byte": 0,
+    "emit_event": 1,
+    "emit_event_byte": 260,
+    "cpu_insn": 13121774,
+    "mem_byte": 1885016,
+    "invoke_time_nsecs": 2244903,
+    "max_rw_key_byte": 140,
+    "max_rw_data_byte": 1096,
+    "max_rw_code_byte": 0,
+    "max_emit_event_byte": 248
+   }
+  },
+  {
+   "label": "submit_guardian (email)",
+   "hash": "08cdc915727cc9b569bd4015ea01a33fa5486d2d18cb673d30ab7d393b5810ff",
+   "status": "SUCCESS",
+   "ledger": 5512410,
+   "ms": {
+    "simulate": 201,
+    "submit": 46,
+    "confirm": 1468,
+    "total": 1715
+   },
+   "envelopeBytes": 18080,
+   "declared": {
+    "instructions": 126548373,
+    "diskReadBytes": 0,
+    "writeBytes": 1208,
+    "readOnly": 10,
+    "readWrite": 2,
+    "resourceFee": 90555
+   },
+   "footprint": {
+    "readOnly": [
+     "data CBOFO5 persistent Attempt",
+     "data CBOFO5 persistent Config",
+     "data CBOFO5 persistent Epoch",
+     "data CBOFO5 persistent InvalidateBelow",
+     "data CBOFO5 persistent instance",
+     "data CCLG2C persistent instance",
+     "data CD7UBC persistent instance",
+     "code 0e4239ca",
+     "code 9e7f39ef",
+     "code daaf09d9"
+    ],
+    "readWrite": [
+     "data CBOFO5 temporary Collecting",
+     "data CCLG2C temporary _maxDepth"
+    ]
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 90555
+   },
+   "authEntryBytes": 16784,
+   "feeCharged": 82428,
+   "feeSplit": {
+    "nonRefundableResource": 80985,
+    "refundableResource": 1343,
+    "rent": 1333
+   },
+   "metered": {
+    "read_entry": 12,
+    "write_entry": 2,
+    "ledger_read_byte": 0,
+    "ledger_write_byte": 1208,
+    "read_key_byte": 0,
+    "write_key_byte": 0,
+    "read_data_byte": 0,
+    "write_data_byte": 1208,
+    "read_code_byte": 0,
+    "write_code_byte": 0,
+    "emit_event": 0,
+    "emit_event_byte": 4,
+    "cpu_insn": 121639784,
+    "mem_byte": 5565907,
+    "invoke_time_nsecs": 17530387,
+    "max_rw_key_byte": 140,
+    "max_rw_data_byte": 1136,
+    "max_rw_code_byte": 0,
+    "max_emit_event_byte": 0
+   }
+  },
+  {
+   "label": "submit_guardian (helper)",
+   "hash": "e1e4b757c0833fdad4eea9156853ec6278715c7d81eccf79a2cd8bf0961c16bc",
+   "status": "SUCCESS",
+   "ledger": 5512411,
+   "ms": {
+    "simulate": 134,
+    "submit": 33,
+    "confirm": 2255,
+    "total": 2422
+   },
+   "envelopeBytes": 1504,
+   "declared": {
+    "instructions": 2202593,
+    "diskReadBytes": 0,
+    "writeBytes": 1460,
+    "readOnly": 7,
+    "readWrite": 4,
+    "resourceFee": 4217487
+   },
+   "footprint": {
+    "readOnly": [
+     "data CBOFO5 persistent Config",
+     "data CBOFO5 persistent Epoch",
+     "data CBOFO5 persistent NextAttempt",
+     "data CBOFO5 persistent instance",
+     "data CCMXZU persistent instance",
+     "code 2c976bfd",
+     "code daaf09d9"
+    ],
+    "readWrite": [
+     "data CBOFO5 persistent Attempt",
+     "data CBOFO5 persistent Authorized",
+     "data CBOFO5 temporary Collecting",
+     "data CBOFO5 persistent InvalidateBelow"
+    ]
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 4217487
+   },
+   "authEntryBytes": 112,
+   "feeCharged": 3664628,
+   "feeSplit": {
+    "nonRefundableResource": 10159,
+    "refundableResource": 3654369,
+    "rent": 3653812
+   },
+   "metered": {
+    "read_entry": 11,
+    "write_entry": 3,
+    "ledger_read_byte": 0,
+    "ledger_write_byte": 1460,
+    "read_key_byte": 0,
+    "write_key_byte": 0,
+    "read_data_byte": 0,
+    "write_data_byte": 1460,
+    "read_code_byte": 0,
+    "write_code_byte": 0,
+    "emit_event": 1,
+    "emit_event_byte": 228,
+    "cpu_insn": 2064633,
+    "mem_byte": 809245,
+    "invoke_time_nsecs": 518933,
+    "max_rw_key_byte": 136,
+    "max_rw_data_byte": 1176,
+    "max_rw_code_byte": 0,
+    "max_emit_event_byte": 224
+   }
+  },
+  {
+   "label": "complete (apply_doc)",
+   "hash": "ff431206c9e3c9ad4d0880fececaec432b95ef159a531bbf58641d7889037be4",
+   "status": "SUCCESS",
+   "ledger": 5512424,
+   "ms": {
+    "simulate": 251,
+    "submit": 30,
+    "confirm": 3150,
+    "total": 3431
+   },
+   "envelopeBytes": 4256,
+   "declared": {
+    "instructions": 15746781,
+    "diskReadBytes": 0,
+    "writeBytes": 5264,
+    "readOnly": 10,
+    "readWrite": 17,
+    "resourceFee": 680714
+   },
+   "footprint": {
+    "readOnly": [
+     "data CAYCPM persistent instance",
+     "data CBOFO5 persistent instance",
+     "data CCMXZU persistent ContextRuleData",
+     "data CCMXZU persistent PolicyData",
+     "data CCMXZU persistent Revoked",
+     "data CDEV5Y persistent instance",
+     "code 2730a7d3",
+     "code 2c976bfd",
+     "code daaf09d9",
+     "code f2e1dfce"
+    ],
+    "readWrite": [
+     "data CBOFO5 persistent Attempt",
+     "data CBOFO5 persistent Authorized",
+     "data CBOFO5 temporary Collecting",
+     "data CBOFO5 temporary Completing",
+     "data CBOFO5 persistent Config",
+     "data CBOFO5 persistent Epoch",
+     "data CCMXZU persistent AppliedDocBytes",
+     "data CCMXZU persistent AppliedFingerprints",
+     "data CCMXZU persistent InstalledRules",
+     "data CCMXZU persistent ContextRuleData",
+     "data CCMXZU persistent Revoked",
+     "data CCMXZU persistent SignerData",
+     "data CCMXZU persistent SignerData",
+     "data CCMXZU persistent SignerLookup",
+     "data CCMXZU persistent SignerLookup",
+     "data CCMXZU persistent instance",
+     "data CCMXZU temporary _maxDepth"
+    ]
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 680714
+   },
+   "authEntryBytes": 988,
+   "feeCharged": 592637,
+   "feeSplit": {
+    "nonRefundableResource": 38094,
+    "refundableResource": 554443,
+    "rent": 552040
+   },
+   "metered": {
+    "read_entry": 27,
+    "write_entry": 12,
+    "ledger_read_byte": 0,
+    "ledger_write_byte": 5264,
+    "read_key_byte": 0,
+    "write_key_byte": 0,
+    "read_data_byte": 0,
+    "write_data_byte": 5264,
+    "read_code_byte": 0,
+    "write_code_byte": 0,
+    "emit_event": 4,
+    "emit_event_byte": 984,
+    "cpu_insn": 14897208,
+    "mem_byte": 2022927,
+    "invoke_time_nsecs": 3279200,
+    "max_rw_key_byte": 136,
+    "max_rw_data_byte": 1176,
+    "max_rw_code_byte": 0,
+    "max_emit_event_byte": 368
+   }
+  }
+ ]
+}

@@ -50,8 +50,10 @@ export function restoreEnvelopeBytes(keys) {
  * that fit inline, the RestoreFootprint transactions it needs before it,
  * and every transaction's fee by component.
  */
-export function plan(steps, settings, { rentSizes = {} } = {}) {
+export function plan(steps, settings, { rentSizes = {}, rent1kb } = {}) {
   const sch = schedule(settings);
+  // `rent1kb` prices rent at another effective rate (the network's follows its state size).
+  if (rent1kb !== undefined) sch.rent1kb = BigInt(rent1kb);
   const lim = limits(settings);
   const minPersistent = settings.state_archival.min_persistent_ttl;
   const size = (e) => rentSizes[e.keyXdr] ?? e.rentBytes;

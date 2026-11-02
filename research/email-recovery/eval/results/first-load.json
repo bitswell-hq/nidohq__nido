@@ -1,0 +1,306 @@
+{
+ "generated": "2026-11-02T13:02:43.100Z",
+ "page": "/security/recover/bench/?threads=1&runs=1&cold=1 (packages/frontend build), fresh profile, empty cache",
+ "crossOriginIsolated": true,
+ "proverReportedBytes": 18664335,
+ "total": {
+  "requests": 18,
+  "bytes": 10278839
+ },
+ "byKind": {
+  "page": {
+   "requests": 4,
+   "bytes": 35334
+  },
+  "script": {
+   "requests": 10,
+   "bytes": 3918312
+  },
+  "data": {
+   "requests": 2,
+   "bytes": 1885536
+  },
+  "wasm": {
+   "requests": 2,
+   "bytes": 4439657
+  }
+ },
+ "responses": [
+  {
+   "path": "/_astro/acvm_js_bg-BvxvrAml.wasm",
+   "status": 200,
+   "type": "application/wasm",
+   "bytes": 3800295
+  },
+  {
+   "path": "/_astro/barretenberg-threads-CEUSJ7or.js",
+   "status": 200,
+   "type": "application/javascript",
+   "bytes": 3415910
+  },
+  {
+   "path": "/_astro/recovery.DeF17qnE.json",
+   "status": 200,
+   "type": "application/json",
+   "bytes": 1885167
+  },
+  {
+   "path": "/_astro/noirc_abi_wasm_bg-DRbWm09M.wasm",
+   "status": 200,
+   "type": "application/wasm",
+   "bytes": 639362
+  },
+  {
+   "path": "/_astro/worker-DWSmb-j5.js",
+   "status": 200,
+   "type": "application/javascript",
+   "bytes": 204422
+  },
+  {
+   "path": "/_astro/pako.esm.Cefuglax.js",
+   "status": 200,
+   "type": "application/javascript",
+   "bytes": 178832
+  },
+  {
+   "path": "/_astro/effWordlist.BedXCfyp.js",
+   "status": 200,
+   "type": "application/javascript",
+   "bytes": 84164
+  },
+  {
+   "path": "/_astro/index.DYUsnNMp.css",
+   "status": 200,
+   "type": "text/css",
+   "bytes": 30100
+  },
+  {
+   "path": "/_astro/main.worker-B1Dh1a4H.js",
+   "status": 200,
+   "type": "application/javascript",
+   "bytes": 18764
+  },
+  {
+   "path": "/_astro/index.astro_astro_type_script_index_0_lang.DiN7zElN.js",
+   "status": 200,
+   "type": "application/javascript",
+   "bytes": 9419
+  },
+  {
+   "path": "/_astro/emailProver.E_F2HeKN.js",
+   "status": 200,
+   "type": "application/javascript",
+   "bytes": 4514
+  },
+  {
+   "path": "/security/recover/bench/",
+   "status": 200,
+   "type": "text/html",
+   "bytes": 4272
+  },
+  {
+   "path": "/_astro/preload-helper.BlTxHScW.js",
+   "status": 200,
+   "type": "application/javascript",
+   "bytes": 1110
+  },
+  {
+   "path": "/_astro/NidoLayout.astro_astro_type_script_index_0_lang.DqZQGCr5.js",
+   "status": 200,
+   "type": "application/javascript",
+   "bytes": 615
+  },
+  {
+   "path": "/_astro/passkeySupport.DzdQbRDZ.js",
+   "status": 200,
+   "type": "application/javascript",
+   "bytes": 562
+  },
+  {
+   "path": "/favicon.svg",
+   "status": 200,
+   "type": "image/svg+xml",
+   "bytes": 481
+  },
+  {
+   "path": "/favicon.svg",
+   "status": 200,
+   "type": "image/svg+xml",
+   "bytes": 481
+  },
+  {
+   "path": "/manifest.webmanifest",
+   "status": 200,
+   "type": "application/manifest+json",
+   "bytes": 369
+  }
+ ],
+ "browserLog": {
+  "requests": 23,
+  "bytes": 10192724,
+  "byOrigin": [
+   {
+    "origin": "http://localhost:4422",
+    "bytes": 10057198
+   },
+   {
+    "origin": "https://fonts.googleapis.com",
+    "bytes": 1492
+   },
+   {
+    "origin": "https://fonts.gstatic.com",
+    "bytes": 133490
+   },
+   {
+    "origin": "https://crs.aztec.network",
+    "bytes": 544
+   }
+  ],
+  "requestsLogged": [
+   {
+    "url": "http://localhost:4422/_astro/acvm_js_bg-BvxvrAml.wasm",
+    "origin": "http://localhost:4422",
+    "type": "fetch",
+    "bytes": 3800820
+   },
+   {
+    "url": "http://localhost:4422/_astro/barretenberg-threads-CEUSJ7or.js",
+    "origin": "http://localhost:4422",
+    "type": "script",
+    "bytes": 3416390
+   },
+   {
+    "url": "http://localhost:4422/_astro/recovery.DeF17qnE.json",
+    "origin": "http://localhost:4422",
+    "type": "fetch",
+    "bytes": 1885439
+   },
+   {
+    "url": "http://localhost:4422/_astro/noirc_abi_wasm_bg-DRbWm09M.wasm",
+    "origin": "http://localhost:4422",
+    "type": "fetch",
+    "bytes": 639455
+   },
+   {
+    "url": "http://localhost:4422/_astro/pako.esm.Cefuglax.js",
+    "origin": "http://localhost:4422",
+    "type": "script",
+    "bytes": 178862
+   },
+   {
+    "url": "http://localhost:4422/_astro/effWordlist.BedXCfyp.js",
+    "origin": "http://localhost:4422",
+    "type": "script",
+    "bytes": 84185
+   },
+   {
+    "url": "https://fonts.gstatic.com/s/fraunces/v38/6NU78FyLNQOQZAnv9bYEvDiIdE9Ea92uemAk_WBq8U_9v0c2Wa0KxC9TeP2Xz5c.woff2",
+    "origin": "https://fonts.gstatic.com",
+    "type": "font",
+    "bytes": 67425
+   },
+   {
+    "url": "https://fonts.gstatic.com/s/hankengrotesk/v12/ieVn2YZDLWuGJpnzaiwFXS9tYtpd59CxCis4.woff2",
+    "origin": "https://fonts.gstatic.com",
+    "type": "font",
+    "bytes": 34696
+   },
+   {
+    "url": "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPxDcwgknk-4.woff2",
+    "origin": "https://fonts.gstatic.com",
+    "type": "font",
+    "bytes": 31369
+   },
+   {
+    "url": "http://localhost:4422/_astro/index.DYUsnNMp.css",
+    "origin": "http://localhost:4422",
+    "type": "stylesheet",
+    "bytes": 30113
+   },
+   {
+    "url": "http://localhost:4422/_astro/index.astro_astro_type_script_index_0_lang.DiN7zElN.js",
+    "origin": "http://localhost:4422",
+    "type": "script",
+    "bytes": 9432
+   },
+   {
+    "url": "http://localhost:4422/_astro/emailProver.E_F2HeKN.js",
+    "origin": "http://localhost:4422",
+    "type": "script",
+    "bytes": 4527
+   },
+   {
+    "url": "http://localhost:4422/security/recover/bench/",
+    "origin": "http://localhost:4422",
+    "type": "document",
+    "bytes": 4285
+   },
+   {
+    "url": "https://fonts.googleapis.com/css2",
+    "origin": "https://fonts.googleapis.com",
+    "type": "stylesheet",
+    "bytes": 1492
+   },
+   {
+    "url": "http://localhost:4422/_astro/preload-helper.BlTxHScW.js",
+    "origin": "http://localhost:4422",
+    "type": "script",
+    "bytes": 1122
+   },
+   {
+    "url": "http://localhost:4422/_astro/NidoLayout.astro_astro_type_script_index_0_lang.DqZQGCr5.js",
+    "origin": "http://localhost:4422",
+    "type": "script",
+    "bytes": 627
+   },
+   {
+    "url": "http://localhost:4422/_astro/passkeySupport.DzdQbRDZ.js",
+    "origin": "http://localhost:4422",
+    "type": "script",
+    "bytes": 574
+   },
+   {
+    "url": "https://crs.aztec.network/g2.dat",
+    "origin": "https://crs.aztec.network",
+    "type": "fetch",
+    "bytes": 544
+   },
+   {
+    "url": "http://localhost:4422/favicon.svg",
+    "origin": "http://localhost:4422",
+    "type": "other",
+    "bytes": 493
+   },
+   {
+    "url": "http://localhost:4422/favicon.svg",
+    "origin": "http://localhost:4422",
+    "type": "other",
+    "bytes": 493
+   },
+   {
+    "url": "http://localhost:4422/manifest.webmanifest",
+    "origin": "http://localhost:4422",
+    "type": "manifest",
+    "bytes": 381
+   },
+   {
+    "url": "http://localhost:4422/_astro/worker-DWSmb-j5.js",
+    "origin": "http://localhost:4422",
+    "type": "script",
+    "bytes": 0
+   },
+   {
+    "url": "http://localhost:4422/_astro/main.worker-B1Dh1a4H.js",
+    "origin": "http://localhost:4422",
+    "type": "script",
+    "bytes": 0
+   }
+  ]
+ },
+ "firstProof": {
+  "code": 8393672,
+  "inputs": 18664335,
+  "otherOrigins": 134982,
+  "total": 27192989
+ }
+}
