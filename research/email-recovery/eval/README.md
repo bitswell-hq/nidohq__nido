@@ -3,15 +3,17 @@
 This directory evaluates email recovery as built in this repository
 (`docs/email-recovery/spec.md`): an attack suite on a local Stellar network,
 the email-recovery contracts on Stellar testnet with one complete
-email-factor recovery, the on-chain cost of an email vote on the test host,
-on the local network and on testnet, and the time and memory of proving a
-recovery email natively, in Node and in a browser. The circuit's reading
-of real and fuzzed headers, and the per-provider review of sender
-authentication, are in [`parser/`](parser/README.md). Every table below is
-generated from a file in `results/` (or from `browser-prover.json` and
-`onchain.md`), and every file there is written by one of the commands under
-[Running it](#running-it); figures quoted in the prose come from those
-tables or from spec §12.
+email-factor recovery and votes on both key paths, the on-chain cost of an
+email vote on the test host, on the local network and on testnet, with each
+fee attributed to the network settings that produce it, what recovery
+costs when the contracts it reads have been archived and what keeping them
+live costs, and the time and memory of proving a recovery email natively,
+in Node and in a browser. The circuit's reading of real and fuzzed headers,
+and the per-provider review of sender authentication, are in
+[`parser/`](parser/README.md). Every table below is generated from a file in
+`results/` (or from `browser-prover.json` and `onchain.md`), and every file
+there is written by one of the commands under [Running it](#running-it);
+figures quoted in the prose come from those tables or from spec §12.
 
 The four properties the scenarios exercise are those of spec §11.2:
 **1** soundness of the email factor, **2** privacy, **3** replay and
@@ -21,11 +23,16 @@ front-running resistance, **4** one-factor safety.
 
 | What | Command | Writes |
 | --- | --- | --- |
-| Attack suite (local network and test host) | `just email-recovery-attacks` (`network/run-attacks.sh`) | `results/attacks-local.json`, `results/attacks-test-host.jsonl`, the tables below |
+| Network settings, read-only | `node research/email-recovery/eval/fees/settings.mjs mainnet testnet --limits`; `fees/code-entries.mjs` | `results/settings/{mainnet,testnet}.json`, `network/limits/mainnet.json`, `results/code-entries.json` |
+| Attack suite (local network and test host) | `just email-recovery-attacks` (`network/run-attacks.sh`) | `results/attacks-local.json`, `results/settings/local.json`, `results/attacks-test-host.jsonl`, the tables below |
+| Votes against a registry root on a local network (about 15 hours) | `research/email-recovery/eval/network/run-registry-root.sh` | `results/registry-root-local.json` |
+| The keeper on a local network | `research/email-recovery/eval/network/run-keeper.sh` | `results/keeper-local.json` |
+| Recovery with every entry archived (test host) | `research/email-recovery/eval/archival.sh` | `results/archival-test-host.json` |
 | Proving on this machine | `just email-recovery-proving` (`proving/measure.sh`) | `results/proving.json`, the proving table |
 | Browser rows of the proving table | `node research/email-recovery/eval/measure-browser.mjs --runs 5` after `npx astro build --root packages/frontend` | `browser-prover.json`, `browser-prover.md` |
 | Benchmark page for a phone | `just email-recovery-bench-phone` (`phone/build.mjs`, `phone/serve.mjs`); `node research/email-recovery/eval/phone/check.mjs` runs the build in headless Chrome | `target/email-bench-phone/`, served on the local network |
 | Testnet deployment and recovery | `research/email-recovery/eval/testnet/run.sh` | `results/testnet.json`, `DEPLOYED.md` |
+| Testnet votes on both key paths | `node research/email-recovery/eval/testnet/votes.mjs setup`, then, once its registry addition is eligible (about 72 hours later), `… vote` | `results/testnet-votes.json` |
 | Tables | `node research/email-recovery/eval/report.mjs` | this file |
 | The circuit's parsing against real mail and fuzzed headers | `just email-recovery-parser-check` (`parser/check.sh`) | `parser/results/`, the tables of `parser/README.md` |
 
@@ -41,12 +48,67 @@ An expert walkthrough of the enrollment and recovery pages, with the issues
 it found and which were fixed, is [`walkthrough.md`](walkthrough.md). It is
 not a user study.
 
+## Environments and their settings
+
+- **Test host**: Soroban's in-process host in the integration tests
+  (soroban-env-host 27.0.1, the host soroban-sdk 27.0.6 links), with
+  Perch's controller and account from Perch's deployed wasm and every
+  email-recovery contract from its own. It prices with the fee schedule the
+  SDK hardcodes, its snapshot of mainnet's settings of 2026-07-10, which is
+  not today's mainnet schedule (table below).
+- **Local network**: `stellar/quickstart --local`, pinned by digest in
+  `network/quickstart.env` (stellar-core and Stellar RPC 30.0.0), started
+  at protocol 29 with mainnet's archived Soroban settings loaded by a
+  settings upgrade at start (`network/start-local.sh`,
+  `network/limits/mainnet.json`): mainnet's fee schedule, cost model,
+  entry lifetimes and limits, leaving out the settings that name mainnet's
+  own ledger entries or that the network maintains itself. Quickstart's
+  local mode keeps closing about one ledger a second. Its email contracts
+  are the wasm `just build-contracts` writes, the bytes testnet runs.
+- **Testnet**: protocol 29, its own settings.
+- **Mainnet**: not run; its settings are read, read-only, and every
+  mainnet figure below is computed from them.
+
+Each network's settings were read with `stellar network settings` and Stellar
+RPC (`fees/settings.mjs`) and are archived in `results/settings/` with the
+time they were read, the network's protocol and its latest ledger. The rent
+rate a network charges is not a setting but follows from its average Soroban
+state size; all three are at the 1,000-stroop floor per KB.
+
+<!-- BEGIN GENERATED settings by report.mjs; do not edit -->
+- **mainnet**: `Public Global Stellar Network ; September 2015`, protocol 29, stellar-core 29.0.0 (4eb83337380a29ad0907f4e32196ce97b8dc7649), Stellar RPC 29.0.1; read from https://mainnet.sorobanrpc.com at ledger 65,261,654, 2026-11-02 04:34 UTC.
+- **testnet**: `Test SDF Network ; September 2015`, protocol 29, stellar-core 30.0.0 (0e49751aa9ddf892302cca02cea7f3f5d97df9f1), Stellar RPC 30.0.0; read from https://soroban-testnet.stellar.org at ledger 5,514,083, 2026-11-02 04:34 UTC.
+- **local**: `Standalone Network ; February 2017`, protocol 29, v30.0.0, Stellar RPC 30.0.0; read from http://127.0.0.1:18800/rpc at ledger 113, 2026-11-02 05:24 UTC.
+
+| Setting | mainnet | testnet | local | SDK snapshot (test host) |
+| --- | --- | --- | --- | --- |
+| Fee per 10,000 instructions | 3 | 3 | 3 | 7 |
+| Fee per entry read from disk | 781 | 781 | 781 | 1,563 |
+| Fee per KB read from disk | 223 | 223 | 223 | 447 |
+| Fee per entry written | 1,250 | 1,250 | 1,250 | 2,500 |
+| Fee per KB written | 437 | 437 | 437 | 875 |
+| Fee per KB of history (transaction + 300) | 2,029 | 2,029 | 2,029 | 4,059 |
+| Fee per KB of transaction size | 203 | 203 | 203 | 406 |
+| Fee per KB of events | 2,500 | 2,500 | 2,500 | 5,000 |
+| Rent per KB, effective (average state size) | 1,000 (1,718,307,330 B) | 1,000 (4,216,190,194 B) | 1,000 (33,100 B) | 12,000 (fixed) |
+| Rent denominators, persistent / temporary | 1,215 / 2,430 | 1,215 / 2,430 | 1,215 / 2,430 | 1,215 / 2,430 |
+| Minimum persistent / temporary lifetime (ledgers) | 2,073,600 / 17,280 | 120,960 / 720 | 2,073,600 / 17,280 |  |
+| Maximum entry lifetime (ledgers) | 3,110,400 | 3,110,400 | 3,110,400 |  |
+| Instructions per transaction / per ledger cluster | 400,000,000 / 580,000,000 | 400,000,000 / 580,000,000 | 400,000,000 / 580,000,000 |  |
+| Dependent transaction clusters per stage | 3 | 3 | 3 |  |
+| Bytes read from disk / written per transaction | 200,000 / 132,096 | 200,000 / 132,096 | 200,000 / 132,096 |  |
+| Transaction size / ledger transactions size (bytes) | 132,096 / 864,000 | 132,096 / 864,000 | 132,096 / 864,000 |  |
+| Ledger target close time (ms) | 5,000 | 5,000 | 5,000 (local mode closes about one ledger a second) |  |
+
+Cost models: 86 cost types on each network; testnet's CPU model differs from mainnet's in 9 of them and its memory model in 0; the local network's models are mainnet's (0 CPU and 0 memory differences).
+<!-- END GENERATED settings -->
+
 ## The attack suite
 
 ### Method
 
-`network/attacks.mjs` runs under `node:test` against `stellar/quickstart
---local` (pinned by digest in `network/run-attacks.sh`). Everything on the
+`network/attacks.mjs` runs under `node:test` against the local network
+([Environments](#environments-and-their-settings)). Everything on the
 network is deployed from wasm by the suite itself (`network/lib/stack.mjs`):
 
 - Perch's stack as a Nido account uses it (the local network's stateless
@@ -134,7 +196,9 @@ cannot wait out, so they run on the integration-test host instead: the
 registry's production wasm, its real timelocks and grace, the clock
 advanced, a real proof in every approval
 (`crates/integration-tests/tests/it/email_guardian.rs`, `registry_*`; their
-rows say "test host").
+rows say "test host"). Votes against an activated registry key on
+a network are measured separately, in runs that wait out the 72-hour
+timelock ([On-chain cost](#on-chain-cost-of-an-email-vote)).
 
 **In CI.** The local-network suite runs in its own workflow
 (`.github/workflows/email-recovery-attacks.yml`) on pull requests and pushes
@@ -146,7 +210,7 @@ and that workflow re-proves their fixtures.
 ### Results
 
 <!-- BEGIN GENERATED attacks by report.mjs; do not edit -->
-Local network: `stellar/quickstart --local` (stellar/quickstart@sha256:487fe637ba48c972d5be0ed8965f8df1dcbc3e8e1ee53d24d915b25b6f2b6d99), protocol 28, Stellar RPC 29.0.1 with captive core v29.0.0; run of 2026-11-02 06:02 UTC, 11 minutes, 213 transactions.
+Local network: `stellar/quickstart --local` (stellar/quickstart@sha256:e05d68bb3b2629a829310dc3434fc0ee3f801854bdfa1a7c8c362d2f1c9060f8), protocol 29, mainnet's settings, Stellar RPC 30.0.0 with captive core v30.0.0; run of 2026-11-02 05:34 UTC, 10 minutes, 165 transactions.
 Test host: 3 rows from `crates/integration-tests/tests/it/email_guardian.rs` (`registry_*`).
 
 | Class | Scenario | Expected | Observed | Refusing layer | Test | Property | Where |
@@ -172,17 +236,17 @@ Test host: 3 rows from `crates/integration-tests/tests/it/email_guardian.rs` (`r
 | Replayed emails and proofs | replay-another-network: an approval of the statement with the testnet network id | refused: DigestMismatch | refused: DigestMismatch | guardian check 2 | `attacks.mjs` replay-another-network | 3 | local |
 | Replayed emails and proofs | replay-another-network-spliced: this network's statement with that proof | refused: ProofRejected | refused: ProofRejected | guardian check 12 | `attacks.mjs` replay-another-network | 3 | local |
 | Replayed emails and proofs | replay-another-controller: A's approval, asked for by a contract that is not A's controller | refused: UnexpectedContext | refused: UnexpectedContext | guardian check 1 | `attacks.mjs` replay-another-controller | 3 | local |
-| Replayed emails and proofs | replay-expired-statement: proved before, submitted after the evidence deadline (ledger 226, the statement's valid_until_ledger) | refused: AttemptNotLive | refused: AttemptNotLive | Perch controller | `attacks.mjs` replay-expired-statement | 3 | local |
+| Replayed emails and proofs | replay-expired-statement: proved before, submitted after the evidence deadline (ledger 311, the statement's valid_until_ledger) | refused: AttemptNotLive | refused: AttemptNotLive | Perch controller | `attacks.mjs` replay-expired-statement | 3 | local |
 | Replayed emails and proofs | replay-email-circuit: an honest email presented for another statement of A, and for B | refused: 2 of 2 | refused: 2 of 2 | circuit | `attacks.mjs` forged-emails-circuit | 1 | local |
 | Wrong account or new key in the statement | statement-other-new-key: the owner's approval (owner's new key) presented for the attacker's attempt (attacker's key) | refused: DigestMismatch | refused: DigestMismatch | guardian check 2 | `attacks.mjs` statement-other-new-key | 1 | local |
 | Wrong account or new key in the statement | statement-other-new-key-spliced: the attacker's statement with the owner's proof | refused: ProofRejected | refused: ProofRejected | guardian check 12 | `attacks.mjs` statement-other-new-key | 1 | local |
 | Wrong account or new key in the statement | statement-other-account: B's approval presented to A's guardian for A's attempt | refused: DigestMismatch | refused: DigestMismatch | guardian check 2 | `attacks.mjs` statement-other-account | 1 | local |
 | Wrong account or new key in the statement | statement-other-account-spliced: A's statement with B's proof and key root: B's salted pin root, which A's guardian does not accept | refused: UnknownRoot | refused: UnknownRoot | guardian check 11 | `attacks.mjs` statement-other-account | 1 | local |
 | Wrong account or new key in the statement | statement-other-account-rooted: A's statement and A's pin root with B's proof (another commitment) | refused: ProofRejected | refused: ProofRejected | guardian check 12 | `attacks.mjs` statement-other-account | 1 | local |
-| Stale or malicious registry keys | registry-planted-key-timelock: not seen in DNS: the 72-hour path is closed, eligible at close time 1794203737 (approved at 1793598937, +604,800 s) | refused: TimelockActive | refused: TimelockActive | registry | `attacks.mjs` registry-planted-key-in-timelock | 1 | local |
+| Stale or malicious registry keys | registry-planted-key-timelock: not seen in DNS: the 72-hour path is closed, eligible at ledger 121338 (approved at 378, +120,960) | refused: TimelockActive | refused: TimelockActive | registry | `attacks.mjs` registry-planted-key-in-timelock | 1 | local |
 | Stale or malicious registry keys | registry-planted-key-proof: a real proof against the root the planted addition would produce, during its timelock | refused: UnknownRoot | refused: UnknownRoot | guardian check 11 | `attacks.mjs` registry-planted-key-in-timelock | 1 | local |
 | Stale or malicious registry keys | registry-planted-key-revoked: revoke_threshold (2) members stop the pending addition | refused: KeyRevoked | refused: KeyRevoked | registry | `attacks.mjs` registry-planted-key-in-timelock | 1 | local |
-| Stale or malicious registry keys | registry-pin-live: pin valid until close time 1793599041 | accepted | accepted | — | `attacks.mjs` registry-pin-expiry | 1 | local |
+| Stale or malicious registry keys | registry-pin-live: pin valid until ledger 485 | accepted | accepted | — | `attacks.mjs` registry-pin-expiry | 1 | local |
 | Stale or malicious registry keys | registry-pin-expiry: proved inside the pin window, submitted after it; the registry still holds the key only as a pending addition | refused: UnknownRoot | refused: UnknownRoot | guardian check 11 | `attacks.mjs` registry-pin-expiry | 1 | local |
 | Stale or malicious registry keys | registry-grace-expiry: accepted at the last second of the 24-hour grace; refused one second later | refused: UnknownRoot | refused: UnknownRoot | guardian check 11 (registry: grace) | `email_guardian.rs` registry_grace_expiry | 1 | test host |
 | Stale or malicious registry keys | registry-planted-key-after-activation: a planted key active after its 7-day timelock; the attacker's proof opens another commitment | refused: ProofRejected | refused: ProofRejected | guardian check 12 | `email_guardian.rs` registry_planted_key_after_activation_without_account_code | 1 | test host |
@@ -191,9 +255,9 @@ Test host: 3 rows from `crates/integration-tests/tests/it/email_guardian.rs` (`r
 | Compromised inbox | inbox-without-account-code-proof: the attacker's real proof for its own guess; without the code it cannot build the salted pin's path, and the registry has no accepted root yet | refused: UnknownRoot | refused: UnknownRoot | guardian check 11 | `attacks.mjs` inbox-without-account-code | 4 | local |
 | Compromised inbox | inbox-backup-without-passphrase: the backup block in the Sent folder, opened with another passphrase | refused: BackupError | refused: BackupError | account code backup (Argon2id, AES-256-GCM) | `attacks.mjs` inbox-without-account-code | 4 | local |
 | Compromised inbox | inbox-with-code-quorum: the email vote counted (attempt still Collecting, 1 of 2 votes); completion refused: no authorized attempt | refused: AttemptNotLive | refused: AttemptNotLive | Perch controller | `attacks.mjs` inbox-with-account-code-quorum | 4 | local |
-| Compromised inbox | inbox-email-plus-delay-authorizes: quorum 1, delay 120,960 ledgers: the attempt is Authorized, executable after ledger 121388 | accepted | accepted | — | `attacks.mjs` inbox-email-plus-delay | 4 | local |
+| Compromised inbox | inbox-email-plus-delay-authorizes: quorum 1, delay 120,960 ledgers: the attempt is Authorized, executable after ledger 121486 | accepted | accepted | — | `attacks.mjs` inbox-email-plus-delay | 4 | local |
 | Compromised inbox | inbox-email-plus-delay-completion: completion inside the delay | refused: NotExecutableYet | refused: NotExecutableYet | Perch controller | `attacks.mjs` inbox-email-plus-delay | 4 | local |
-| Compromised inbox | inbox-email-plus-delay-alerts: attempt_authorized: 1 email to the enrolled inbox, deleted by the thief; the push carries the code 845 170 and leads with cancelling | owner alerted: push only | owner alerted: push only | alert path | `attacks.mjs` inbox-email-plus-delay | 4 | local |
+| Compromised inbox | inbox-email-plus-delay-alerts: attempt_authorized: the email and the Web Push carry the attempt's code 701 802 | alerted: email and push | alerted: email and push | alert path | `attacks.mjs` inbox-email-plus-delay | 4 | local |
 | Compromised inbox | inbox-email-plus-delay-owner-cancels: the owner's passkey cancels within the delay | accepted | accepted | — | `attacks.mjs` inbox-email-plus-delay | 4 | local |
 | Compromised inbox | inbox-email-plus-delay-cancelled: completion of the cancelled attempt | refused: AttemptNotLive | refused: AttemptNotLive | Perch controller | `attacks.mjs` inbox-email-plus-delay | 4 | local |
 | Compromised inbox | inbox-email-plus-delay-new-attempt: a new attempt needs a new email | refused: DigestMismatch | refused: DigestMismatch | guardian check 2 | `attacks.mjs` inbox-email-plus-delay | 4 | local |
@@ -340,25 +404,21 @@ rent, the wall clock of each step, and the host's metered figures when the
 RPC returns its `core_metrics` events (testnet's did). The mail provider
 and DNS stay mocked; the alert path is not run on testnet.
 
-**A precondition the run found.** Perch's doc compiler and recovery
+`testnet/votes.mjs` adds votes on both key paths: it deploys a new email
+verifier and DKIM key registry, admits the Gmail mock's TEST-ONLY key on the
+attested 72-hour path, enrolls six accounts with a pin over that key (one
+helper each, quorum 2), and submits one email vote per account against its
+pin; about 72 hours later, once the addition is eligible, `vote` executes it
+and submits votes against the registry's root (`results/testnet-votes.json`).
+
+**Archived Perch contracts.** Perch's doc compiler and recovery
 controller, instance and code, were archived on testnet. An enrollment's
 `apply_doc` reaches both, and restoring them inside it declares more write
 bytes than a transaction may (`txSorobanInvalid`), so the run restores each
-archived entry first in its own `RestoreFootprint` transaction (the restore
-rows of the table; the two code entries' rent dominates their fee). Any
-wallet enrolling on that deployment meets the same precondition until the
-entries are live again.
-
-**Comparison with the other environments.** Testnet's metered count for the
-email vote is close to the test host's and about 1.6 million above the local
-network's; testnet runs protocol 29 on core 30 and the local network protocol
-28 on core 29 (both read from the RPCs' `getVersionInfo`), and the networks'
-cost parameters are not compared here. Entries, bytes and the transaction's
-size are the same as on the local network. The fee differs with the network's
-fee settings: testnet charged about half of what the local network charged.
-As on the local network, the vote that authorizes the attempt (here the
-helper's, the second of a 2-of-2 quorum) pays the rent of the authorized
-attempt's record.
+archived entry first in its own `RestoreFootprint` transaction. Those four
+restorations cost several times the recovery itself; [Archival and the
+keeper](#archival-and-the-keeper) gives both totals and what the same
+restoration costs on mainnet.
 
 ## On-chain cost of an email vote
 
@@ -367,23 +427,32 @@ approval with a real proof:
 
 - **Test host** (`onchain.md`, `measure-onchain.py`): `cost_estimate()` of
   the invocation in the integration tests, and the same call re-executed as
-  a signed transaction in a fresh host, priced with the SDK's snapshot of
-  mainnet fee rates. Not a network.
+  a signed transaction in a fresh host, priced with the SDK's 2026-07-10 fee
+  snapshot. Not a network.
 - **Local network** (below): every accepted email vote of the attack run,
-  read back from the network. The instruction and byte counts are the
-  host's own metering (`core_metrics` diagnostic events, which quickstart
-  emits); the fee is what the network charged at its fee settings.
+  read back from the network, and the votes of a run that activates
+  registry keys. The instruction and byte counts are the host's own
+  metering (`core_metrics` diagnostic events, which quickstart emits); the
+  fee is what the network charged at mainnet's settings.
 - **Testnet** (below): the same readings for the steps of one complete
-  recovery.
+  recovery and for the votes run.
+
+Fees are charged on what a transaction declares (instructions, entries,
+bytes, its size), not on what the host meters, so the tables give both.
+`fees/model.mjs` computes a fee from a network's settings as the host's
+`fees.rs` does; it reproduces every fee charged in these runs, which is how
+each fee below is attributed to its components.
 
 <!-- BEGIN GENERATED cost by report.mjs; do not edit -->
-Local network: every accepted email vote of the attack run, each `submit_guardian` with a real proof, simulated with its authorization entry enforced and sent; figures read from each transaction's result and the host's `core_metrics` events. 20 votes leave their attempt collecting (a 2-of-n quorum); 1 authorizes its attempt (the email-plus-delay account, quorum 1, delay 120,960 ledgers), which also writes the authorized attempt.
+Fees: fees/model.mjs reproduces every fee charged in these runs from the network's archived settings, to the stroop: 179 transactions on the local network, 63 transactions on testnet (non-refundable and refundable resource fee as each transaction's fee split records them; the rest is the inclusion fee).
+
+Local network, pin path: every accepted email vote of the attack run, each `submit_guardian` with a real proof, simulated with its authorization entry enforced and sent; figures read from each transaction's result and the host's `core_metrics` events. 18 votes leave their attempt collecting (a 2-of-n quorum); 1 authorizes its attempt (the email-plus-delay account, quorum 1, delay 120,960 ledgers), which also writes the authorized attempt.
 
 | Figure | Vote, attempt still collecting: median (range), 20 | Vote that authorizes the attempt |
 | --- | --- | --- |
-| Instructions (metered) | 120,051,498 (119,993,200 to 120,090,525) | 120,889,761 |
-| Instructions (declared in the transaction) | 124,927,679 (124,868,360 to 124,969,110) | 125,845,429 |
-| Memory bytes (metered) | 5,517,130 (5,515,506 to 5,518,409) | 5,598,426 |
+| Instructions (metered) | 121,621,586 (121,541,620 to 121,658,284) | 122,420,893 |
+| Instructions (declared in the transaction) | 126,531,922 (126,449,808 to 126,571,138) | 127,392,040 |
+| Memory bytes (metered) | 5,566,313 (5,564,080 to 5,567,328) | 5,646,594 |
 | Ledger entries read (metered) | 12 (12 to 12) | 16 |
 | Ledger entries written (metered) | 2 (2 to 2) | 4 |
 | Ledger bytes read from disk (metered) | 0 (0 to 0) | 0 |
@@ -391,28 +460,71 @@ Local network: every accepted email vote of the attack run, each `submit_guardia
 | Footprint entries (read-only + read-write) | 12 (12 to 12) | 16 |
 | Signed envelope bytes | 18,080 (18,080 to 18,080) | 18,396 |
 | Authorization entry bytes | 16,784 (16,784 to 16,784) | 16,784 |
-| Fee charged (stroops) | 176,232 (176,190 to 176,260) | 3,734,675 |
-| of which rent (stroops) | 2,604 (2,601 to 2,604) | 3,550,194 |
-| Resource fee declared (stroops) | 192,580 (192,538 to 192,608) | 4,283,466 |
-| Wall clock, simulation to confirmation (ms) | 1,119 (826 to 1,872) | 843 |
+| Fee charged (stroops) | 83,140 (83,114 to 83,151) | 3,632,036 |
+| of which rent (stroops) | 2,049 (2,046 to 2,049) | 3,545,582 |
+| Resource fee declared (stroops) | 91,374 (91,348 to 91,385) | 4,171,952 |
+| Wall clock, simulation to confirmation (ms) | 1,346 (825 to 3,125) | 1,463 |
 
-The same call, the email vote with a real proof, in each environment (instructions; footprint as read-only + read-write entries). Test host from `onchain.md`; local network from this run; testnet from `results/testnet.json` (Gmail only).
+Testnet: 7 email votes against the guardian's pin (the recovery run's and 6 of the votes run of 2026-11-02 04:58 UTC), read back from the network.
+
+| Figure: median (range) | Pin (7) |
+| --- | --- |
+| Instructions (metered) | 121,640,762 (121,574,030 to 121,661,860) |
+| Instructions (declared) | 126,548,373 (126,479,884 to 126,571,332) |
+| Signed envelope bytes | 18,080 (18,080 to 18,080) |
+| Fee charged (stroops) | 82,428 (82,407 to 82,435) |
+| of which rent (stroops) | 1,333 (1,333 to 1,333) |
+| Wall clock, simulation to confirmation (ms) | 2,601 (1,715 to 6,847) |
+
+The votes run's registry admits the Gmail mock's TEST-ONLY key on the attested 72-hour path; the addition is eligible from ledger 5,566,157, about 72 hours after the run, and the registry-root votes follow it (`testnet/votes.mjs vote`).
+
+The same call, the email vote with a real proof, in each environment (instructions; footprint as read-only + read-write entries). Test host from `onchain.md`; local network from the attack run; testnet from `results/testnet.json` (Gmail only).
 
 | Domain | Test host invocation | Test host transaction | Test host footprint | Local network, metered | Local network, declared | Local footprint | Testnet, metered |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| fastmail.com | 121,878,185 | 131,248,265 | 12 + 2 | 120,044,502 | 124,921,246 | 10 + 2 |  |
-| gmail.com | 121,837,803 | 131,210,419 | 12 + 2 | 120,029,100 | 124,903,075 | 10 + 2 | 121,639,784 |
-| gmx.de | 121,894,115 | 131,263,445 | 12 + 2 | 120,073,896 | 124,952,284 | 10 + 2 |  |
-| gmx.net | 121,876,761 | 131,248,577 | 12 + 2 | 120,029,880 | 124,906,507 | 10 + 2 |  |
-| hotmail.com | 121,937,701 | 131,301,187 | 12 + 2 | 120,088,568 | 124,967,542 | 10 + 2 |  |
-| icloud.com | 121,884,287 | 131,248,473 | 12 + 2 | 120,066,560 | 124,944,654 | 10 + 2 |  |
-| outlook.com | 121,855,423 | 131,221,824 | 12 + 2 | 120,044,552 | 124,921,766 | 10 + 2 |  |
-| proton.me | 121,822,719 | 131,194,635 | 12 + 2 | 120,037,216 | 124,914,136 | 10 + 2 |  |
-| protonmail.com | 121,854,331 | 131,218,217 | 12 + 2 | 120,073,896 | 124,952,284 | 10 + 2 |  |
-| web.de | 121,837,811 | 131,210,627 | 12 + 2 | 119,993,200 | 124,868,360 | 10 + 2 |  |
-| yahoo.com | 121,826,935 | 131,187,545 | 12 + 2 | 120,029,880 | 124,906,507 | 10 + 2 |  |
+| fastmail.com | 121,857,413 | 131,203,427 | 12 + 2 | 121,541,620 | 126,449,808 | 10 + 2 |  |
+| gmail.com | 121,817,031 | 131,165,581 | 12 + 2 | 121,636,416 | 126,548,396 | 10 + 2 | 121,639,784 |
+| gmx.de | 121,873,343 | 131,218,607 | 12 + 2 | 121,650,752 | 126,563,305 | 10 + 2 |  |
+| gmx.net | 121,855,989 | 131,203,739 | 12 + 2 | 121,607,120 | 126,517,928 | 10 + 2 |  |
+| hotmail.com | 121,916,929 | 131,256,349 | 12 + 2 | 121,620,988 | 126,530,250 | 10 + 2 |  |
+| icloud.com | 121,863,515 | 131,203,635 | 12 + 2 | 121,614,236 | 126,525,328 | 10 + 2 |  |
+| outlook.com | 121,834,651 | 131,176,986 | 12 + 2 | 121,622,184 | 126,533,594 | 10 + 2 |  |
+| proton.me | 121,801,947 | 131,149,797 | 12 + 2 | 121,628,624 | 126,538,191 | 10 + 2 |  |
+| protonmail.com | 121,833,559 | 131,173,379 | 12 + 2 | 121,599,796 | 126,510,311 | 10 + 2 |  |
+| web.de | 121,817,039 | 131,165,789 | 12 + 2 | 121,613,560 | 126,522,524 | 10 + 2 |  |
+| yahoo.com | 121,806,163 | 131,142,707 | 12 + 2 | 121,628,988 | 126,540,670 | 10 + 2 |  |
 
-The registry is in the footprint of 0 of the 21 local votes: each local approval is proven against its guardian's key pin (no registry key activates during a local run), so the guardian accepts the root without calling the registry. The test host's approvals use a registry root, and its footprints include the registry's instance and code.
+One email vote (Gmail's) by fee component, in stroops: each column computes the components from the transaction's declared resources (instructions, entries, bytes written, envelope size, event bytes) under one schedule. The network columns' components add up to the fee each network charged, rent and inclusion fee included; the last columns price the local votes under mainnet's archived settings, with the rent the local network charged (it runs mainnet's settings, entry lifetimes included, and charges the same rent rate) and the 100-stroop inclusion fee every vote here paid. The test host's columns leave rent out.
+
+| Component | Test host transaction, SDK snapshot | Test host transaction, mainnet's settings | Local network, pin: charged | Testnet, pin: charged | Mainnet's settings, pin |
+| --- | --- | --- | --- | --- | --- |
+| Compute (instructions) | 91,816 | 39,350 | 37,965 | 37,965 | 37,965 |
+| Entries read from disk | 0 | 0 | 0 | 0 | 0 |
+| Entries written | 5,000 | 2,500 | 2,500 | 2,500 | 2,500 |
+| Bytes read from disk | 0 | 0 | 0 | 0 | 0 |
+| Bytes written | 1,033 | 516 | 516 | 516 | 516 |
+| History (envelope + 300 bytes) | 73,126 | 36,554 | 36,419 | 36,419 | 36,419 |
+| Transaction size | 7,196 | 3,598 | 3,585 | 3,585 | 3,585 |
+| Non-refundable total | 178,171 | 82,518 | 80,985 | 80,985 | 80,985 |
+| Events | 20 | 10 | 10 | 10 | 10 |
+| Rent | — | — | 2,049 | 1,333 | 2,049 |
+| Inclusion fee | — | — | 100 | 100 | 100 |
+| **Total** | 178,191 | 82,528 | 83,144 | 82,428 | 83,144 |
+
+Instructions of the same email vote by host and cost model. The test host's transaction readings re-execute the vote in recording mode, the mode RPC simulation runs, with the host the Soroban SDK links; the networks' metered counts are the host's own metering as the network applied the transaction.
+
+| Reading | Host | Cost model | Instructions |
+| --- | --- | --- | --- |
+| Test host, transaction (Gmail) | soroban-env-host 27.0.1 | the host's built-in | 131,165,581 |
+| Test host, transaction (Gmail) | soroban-env-host 27.0.1 | mainnet's | 130,020,995 |
+| Test host, transaction (Gmail) | soroban-env-host 27.0.1 | testnet's | 130,055,171 |
+| Local network, applied: 18 pin votes | soroban-env-host 29.0.2 (stellar-core 30.0.0, protocol 29) | mainnet's | 121,621,586 (121,541,620 to 121,658,284) |
+| Local network, declared after simulation | Stellar RPC 30.0.0 | mainnet's | 126,531,922 (126,449,808 to 126,571,138) |
+| Local network, applied: 18 pin votes, the email contracts' release-profile build (`release-build-votes-local.json`) | soroban-env-host 29.0.2 (stellar-core 30.0.0, protocol 29) | mainnet's | 120,059,771 (120,008,419 to 120,075,223) |
+| Testnet, applied: 7 pin votes | soroban-env-host 29.0.2 (stellar-core 30.0.0, protocol 29) | testnet's | 121,640,762 (121,574,030 to 121,661,860) |
+| Testnet, declared after simulation | Stellar RPC 30.0.0 | testnet's | 126,548,373 (126,479,884 to 126,571,332) |
+
+Capacity (mainnet's settings, CAP-0063): a ledger's Soroban transactions run in stages of at most 3 clusters with no conflicting footprints, and the sum over stages of each stage's largest cluster, counted in declared instructions, must stay within 580,000,000. At 126,571,138 declared instructions, a cluster holds 4 email votes, so one ledger holds at most 12 votes on different attempts and 4 that conflict; the ledger's other limits allow 47 votes by transaction size (18,080 bytes each), 245 by bytes written and 2,000 by count. That is 2.4 votes a second at 5-second ledgers.
 
 Testnet (`Test SDF Network ; September 2015`, https://soroban-testnet.stellar.org, Stellar RPC 30.0.0-13e53516633c3ce1281c7edbacb607107d3a4e55), run of 2026-11-02 02:16 UTC: one complete email-factor recovery, 23 transactions. Proving (bb.js in Node, on the machine of the proving table): 0.7 s witness, 3.4 s proving.
 
@@ -444,27 +556,126 @@ Testnet (`Test SDF Network ; September 2015`, https://soroban-testnet.stellar.or
 | complete (apply_doc through the recovery rule) | [`ff431206c9e3…`](https://stellar.expert/explorer/testnet/tx/ff431206c9e3c9ad4d0880fececaec432b95ef159a531bbf58641d7889037be4) | 14,897,208 | 15,746,781 | 27 / 12 | 5,264 | 4,256 | 592,637 | 552,040 | 3,431 |
 <!-- END GENERATED cost -->
 
-**Comparison.** The same proof and statement shape give nearly the same
-call everywhere; three things differ, and only the first is attributed.
+**Why the readings differ.** Each difference between the environments is
+attributed:
 
-- *The key path.* Every local (and testnet) approval is proven against its
-  guardian's key pin, because no registry key activates during a run, so
-  the guardian accepts the root without calling the registry. The test
-  host's approvals use a registry root: its transaction footprint for the
-  Gmail fixture, read from what `nido_integration_tests::transaction::measure`
-  records, lists the registry's instance and code among its 12 read-only
-  entries, the two the local footprints (10 + 2) do not have, and the
-  registry's `is_accepted_root` costs about 565,000 instructions there (spec §12).
-- *Metering.* The local network's metered count is below the test host's
-  invocation count by more than the registry call. The rest is not
-  attributed here: each host meters with its own cost parameters (the SDK's
-  built-in ones on the test host, the network configuration's on a
-  network), and this evaluation does not compare them. Bytes written (1,208)
-  and the authorization entry (16,784 bytes around the 16,224-byte proof)
-  are the same everywhere.
-- *Fees.* Each environment prices with its own fee settings: the test-host
-  transaction reading uses the SDK's snapshot of mainnet rates without rent;
-  the local network charges at quickstart's settings, rent included.
+- *The fee schedule.* The test host's transaction reading prices with the
+  SDK's 2026-07-10 snapshot of mainnet's schedule; mainnet's schedule has
+  since been reduced (the settings table: 3 rather than 7 stroops per 10,000
+  instructions, 2,029 rather than 4,059 per KB of history, 203 rather than
+  406 per KB of size, 1,250 rather than 2,500 per entry written, 437 rather
+  than 875 per KB written). The same resources priced at mainnet's archived
+  settings come to less than half (the fee table's first two columns). The
+  local network runs mainnet's settings, so its charge is the mainnet
+  projection; testnet runs the same schedule as mainnet. Compute and
+  history (the envelope's size) are most of a vote's fee: the 16 KB proof
+  in the authorization entry makes the transaction about 18 KB.
+- *Rent.* A vote that leaves its attempt collecting writes two temporary
+  entries; their rent follows the network's minimum temporary lifetime
+  (mainnet 17,280 ledgers, testnet 720), so a vote on mainnet's settings pays
+  more rent than a testnet one for the same writes. The vote that
+  authorizes an attempt also writes the authorized attempt's persistent
+  record and pays its rent.
+- *Metering.* The metering table separates the host, the cost model and
+  the build. On the test host, the cost model moves the vote's count by
+  under one percent (the host's built-in model against mainnet's), and
+  testnet's model, which differs from mainnet's in nine CPU cost types
+  (among them BN254 operations of proof verification), adds about 30,000
+  instructions to mainnet's, on the test host and between the networks
+  alike: with the same wasm, the local network and testnet meter a vote
+  within 0.03% of each other. The build matters more: the end-to-end test's
+  release-profile build of the same contracts meters about 1.6 million fewer
+  instructions per vote than the size-optimized wasm `just build-contracts`
+  writes, which every network here runs. The networks' metered counts are
+  below the test host's recording-mode re-execution, and the declared
+  counts, which RPC simulation produces and the fee is charged on, lie
+  between the two; the host versions (27.0.1 and 29.0.2) and recording
+  against applying are not separated here.
+- *The key path.* A vote against a registry root adds the registry's
+  `is_accepted_root` call and puts the registry's instance and code in the
+  footprint; the registry-root table measures it on a network beside pin
+  votes of the same run.
+
+## Archival and the keeper
+
+Soroban archives a persistent entry, contract code included, once its
+lifetime runs out (at most 3,110,400 ledgers ahead on every network here,
+about 180 days at 5 seconds), and a transaction that reads an archived
+entry must first restore it, paying rent for the network's minimum
+persistent lifetime (mainnet 2,073,600 ledgers, 120 days). Recovery is the
+operation least likely to have run recently, so the entries it reads are
+the ones most likely to be archived when it is needed: the email guardian
+(its instance per account, its code shared), the email verifier, the DKIM
+key registry, and Perch's controller, doc compiler, WebAuthn verifier and
+account.
+
+**Who keeps them live.** The operator runs a keeper (`network/keeper.mjs`)
+that extends every one of those entries before it expires: each contract's
+instance and code, read from the instance, extended to the network's
+maximum lifetime with one ExtendFootprintTTL transaction whenever fewer than
+30 days remain, and restored first if it has been archived. Extending and
+restoring need no authority and no contract call, so the keeper holds only a
+funded account; the guardian's and the registry's `renew` entry points
+extend their own instance and code from inside a transaction. Nido's keeper keeps the email verifier,
+the registry, the guardian's code and every enrolled account's guardian
+instance; Perch's contracts are Perch's operator's to keep, and an account's
+own entries its wallet's.
+
+**If the keeper fails**, recovery still works: whoever submits the first
+transaction that reads an archived entry restores it, inline when the
+restoration fits the transaction's limits and in RestoreFootprint
+transactions of its own otherwise, and pays its rent. Safety does not
+change: restoring an entry restores the same bytes. The cost and the number
+of transactions do, as below.
+
+<!-- BEGIN GENERATED archival by report.mjs; do not edit -->
+Testnet run of 2026-11-02 02:16 UTC: Perch's doc compiler and recovery controller, instance and code, had been archived and were restored before enrollment, one RestoreFootprint transaction per entry (testnet's minimum persistent lifetime, 120,960 ledgers, prepaid as rent).
+
+| Transactions | Count | Fee charged (stroops) | of which rent |
+| --- | --- | --- | --- |
+| restore doc compiler instance | 1 | 14,726 | 11,383 |
+| restore doc compiler code | 1 | 78,873,057 | 78,798,878 |
+| restore recovery controller instance | 1 | 14,726 | 11,383 |
+| restore recovery controller code | 1 | 33,545,398 | 33,498,086 |
+| **Restorations** | 4 | **112,447,907** (11.2 XLM) | 112,319,730 |
+| The recovery, mint to completion | 7 | 13,384,714 (1.3 XLM) | 13,189,667 |
+| **Both** | 11 | **125,832,621** (12.6 XLM) | |
+
+Every entry archived, at mainnet's settings: the test host's recovery (`email_archival.rs`: begin, the email vote, the helper's vote, completion) with every one of the 160 ledger entries archived when it starts, each step re-executed under mainnet's cost model and entry lifetimes with the host restoring what it reads. A step whose restorations do not fit one transaction (mainnet allows 200,000 bytes read from disk and 132,096 written) restores its largest entries first in their own RestoreFootprint transactions. Fees are fees/model.mjs at mainnet's settings; the rent sizes of code entries are the network's (`codeRentBytes` over the entries testnet holds, `results/code-entries.json`), 2 to 20% above the test host's own.
+
+| Transaction | Restores | Bytes restored | Fee (stroops) | of which rent |
+| --- | --- | --- | --- | --- |
+| RestoreFootprint before begin_lost_key | Perch doc compiler code | 110,048 | 1,350,891,562 | 1,350,817,383 |
+| RestoreFootprint before begin_lost_key | Perch account code | 70,804 | 758,099,046 | 758,050,160 |
+| begin_lost_key | Perch recovery controller code; Perch WebAuthn verifier code; account data; recovery controller data (2); account instance; doc compiler instance; WebAuthn verifier instance; recovery controller instance | 83,204 | 749,325,953 | 749,223,260 |
+| RestoreFootprint before submit_guardian (email) | DKIM key registry code | 68,372 | 541,444,701 | 541,397,383 |
+| submit_guardian (email) | email verifier code; email guardian code; DKIM key registry instance; email guardian instance; email verifier instance | 82,312 | 538,305,999 | 538,158,090 |
+| submit_guardian (helper) | helper data (2); helper instance | 928 | 5,220,029 | 5,196,062 |
+| complete (apply_doc) | account data (8) | 3,040 | 6,671,702 | 6,613,207 |
+| **Everything archived** | 28 entries | | **3,949,958,992** (395 XLM), 7 transactions | 3,949,455,545 |
+| The same steps, nothing archived | — | — | 5,237,374 (0.5237 XLM), 4 transactions | 5,072,498 |
+
+The keeper (`network/keeper.mjs`), run once on the local network with mainnet's settings (`network/keeper-costs.mjs`, 2026-11-02 05:47 UTC): one ExtendFootprintTTL transaction per entry, each extending it to the maximum lifetime (3,110,400 ledgers). Every extension's rent is reproduced from the entry's size for rent (14 of 14 entries: an instance's XDR size, and for code `codeRentBytes` over the parsing inputs the network recorded for it). A year is 6,307,200 ledgers at 5 seconds; a restoration prepays mainnet's minimum persistent lifetime (2,073,600 ledgers, 120 days). Besides rent, each keeper transaction paid a median 1,240 stroops of resource and inclusion fees.
+
+| Entry | Kept by | Size for rent (bytes) | Rent for a year at mainnet's settings | Restoring it on mainnet (rent) |
+| --- | --- | --- | --- | --- |
+| email verifier instance | Nido's keeper | 104 | 528,494 (0.0528 XLM) | 174,605 (0.0175 XLM) |
+| email verifier code | Nido's keeper | 643,337 | 1,087,121,665 (108.7 XLM) | 357,410,716 (35.7 XLM) |
+| DKIM key registry instance | Nido's keeper | 1,116 | 5,658,771 (0.5659 XLM) | 1,861,271 (0.1861 XLM) |
+| DKIM key registry code | Nido's keeper | 974,513 | 1,646,747,776 (164.7 XLM) | 541,397,383 (54.1 XLM) |
+| email guardian instance | Nido's keeper | 644 | 3,265,994 (0.3266 XLM) | 1,074,605 (0.1075 XLM) |
+| email guardian code | Nido's keeper | 316,256 | 534,415,346 (53.4 XLM) | 175,699,049 (17.6 XLM) |
+| recovery controller instance | Perch's operator | 104 | 528,494 (0.0528 XLM) | 174,605 (0.0175 XLM) |
+| recovery controller code | Perch's operator | 1,033,616 | 1,746,620,901 (174.7 XLM) | 574,232,383 (57.4 XLM) |
+| doc compiler instance | Perch's operator | 104 | 528,494 (0.0528 XLM) | 174,605 (0.0175 XLM) |
+| doc compiler code | Perch's operator | 2,431,469 | 4,108,733,609 (410.9 XLM) | 1,350,817,383 (135.1 XLM) |
+| WebAuthn verifier instance | Perch's operator | 104 | 528,494 (0.0528 XLM) | 174,605 (0.0175 XLM) |
+| WebAuthn verifier code | Perch's operator | 305,581 | 516,376,572 (51.6 XLM) | 169,768,494 (17 XLM) |
+| account instance | the account's wallet | 484 | 2,454,883 (0.2455 XLM) | 807,938 (0.0808 XLM) |
+| account code | Perch's operator | 1,363,364 | 2,303,833,957 (230.4 XLM) | 757,425,716 (75.7 XLM) |
+
+A year of rent at mainnet's settings: 3,274,472,052 stroops (327.4 XLM) for the email verifier, the DKIM key registry (instance and code) and the guardian's code, shared by every account; 3,265,994 (0.3266 XLM) per enrolled account for its guardian's instance; 8,677,150,521 (867.7 XLM) for the Perch contracts a recovery runs (instances and code), which Perch's operator keeps; and 2,454,883 (0.2455 XLM) for an account's instance, without its other data entries.
+<!-- END GENERATED archival -->
 
 ## Proving
 
@@ -531,6 +742,15 @@ Run, in this repository, on the machine of the proving table:
   contracts built from this tree and Perch's fetched testnet wasm, with every
   approval proven by bb.js in Node, and its three registry scenarios on the
   integration-test host;
+- the registry-root run on its own local network (`network/run-registry-root.sh`),
+  which waited out the attested 72-hour timelock in real time;
+- the keeper on its own local network (`network/run-keeper.sh`);
+- the recovery with every entry archived, on the test host (`archival.sh`);
+- on testnet, the recovery run (`testnet/run.sh`) and the votes run's setup
+  (`testnet/votes.mjs setup`); its registry-root votes are scheduled for when
+  its addition is eligible;
+- read-only reads of mainnet's and testnet's settings and of testnet's code
+  entries (`fees/settings.mjs`, `fees/code-entries.mjs`);
 - the proving measurements (`proving/measure.sh`, `measure-browser.mjs`);
 - the self-contained benchmark build and its server, on this machine only.
 
@@ -539,7 +759,11 @@ exercise (its spec, `vendor/perch/docs/recovery/spec.md`); the providers'
 real signing formats, which the mocks follow from their published
 documentation (spec §13 question 6); quickstart's ledger timing (one ledger
 about every second in local mode, from its configuration and observed in
-the runs).
+the runs); the fee, rent and code-sizing rules, from soroban-env-host's
+`fees.rs` and `e2e_invoke.rs` (27.0.1 and 29.0.2) and stellar-core's
+settings validation, which `fees/model.mjs` ports and every recorded fee
+checks; CAP-0063 for how a ledger's instruction limit applies to parallel
+clusters.
 
 ## Threats to validity
 
@@ -548,19 +772,32 @@ the runs).
   the alert path's sending services, push service, enclave and custodians are
   mocks. A provider whose real mail differs from its mock (spec §13
   question 6) is not covered.
-- **The local network's registry state.** The registry's timelocks are 72
+- **The attack suite's registry state.** The registry's timelocks are 72
   hours and 7 days of ledger close time, so no key addition leaves its
-  timelock during a run: the local scenarios run with every launch key
-  pending and the accounts' pins carrying their keys. The three scenarios
-  that need an activated key or an elapsed grace period run on the
+  timelock during a suite run: the local scenarios run with every launch
+  key pending and the accounts' pins carrying their keys. The three
+  scenarios that need an activated key or an elapsed grace period run on the
   integration-test host with the registry's production wasm and real
   timelocks, where the clock is advanced rather than waited for; that host
-  runs the same contracts but is not a network.
+  runs the same contracts but is not a network. Votes against an activated
+  key on a network are the registry-root runs', a cost measurement rather
+  than an attack scenario.
 - **The local network's ledger rate.** It reports the 5,000 ms target close
   time of testnet and mainnet but closes about one ledger a second, so the
   wallet sizes the email-plus-delay floor at 120,960 ledgers there, about 34
   hours of wall-clock time (spec §11.1 A9). Close-time windows (the
-  registry's, the pin's) are unaffected.
+  registry's, the pin's) are unaffected: they take as long as on mainnet.
+- **The local network's settings.** The local network loads mainnet's
+  settings as they were read (`results/settings/mainnet.json`); mainnet can
+  change them by a settings upgrade, and its rent rate moves with its state
+  size, which is far from the point where the rate leaves its floor.
+- **Archival on the test host.** No network here can archive within a run
+  (stellar-core requires a maximum entry lifetime of at least 1,054,080
+  ledgers), so the recovery with every entry archived runs on the test host:
+  its steps, their restorations and their rent changes are the host's own,
+  under mainnet's cost model and entry lifetimes; code entries are sized
+  for rent as the network sizes them. Entries the recovery creates live as
+  the test ledger sets them, which changes the rent of later extensions.
 - **The enclave-image registry stand-in.** The alert vault's custodians read
   image activation from a TEST-ONLY allowlist contract on the local network
   (as in the email end-to-end test), because the enclave-image registry's
@@ -571,11 +808,12 @@ the runs).
 - **Timing.** Wall-clock figures come from one shared machine whose load
   average is recorded; other workloads ran on it. Local-network latency is
   dominated by quickstart's one-second ledgers, not by the contracts.
-- **One testnet run.** The testnet figures are one recovery at one time;
-  latency there depends on testnet's load and ledger timing (about 5
-  seconds), and fees on its fee settings at that time.
-- **Desktop, not phone.** Efficiency-core rows run a desktop's slower cores
-  under macOS's background QoS; they are not a model of a phone.
+- **Testnet at one time.** The testnet figures are one recovery and one
+  votes run; latency there depends on testnet's load and ledger timing
+  (about 5 seconds), and fees on its settings at that time.
+- **Desktop, not phone.** The background-QoS rows run on the desktop's
+  Performance-tier cores, the slower of its two tiers, which are still
+  desktop cores; they are not a model of a phone.
 - **Mechanisms, not people.** The alert-path, phishing and repeated-attempt
   rows show what reaches the owner and that a cancellation within the delay
   succeeds. Whether people read the push, recognise a phishing script, or
@@ -591,5 +829,7 @@ the runs).
 - Proving on a phone-class device.
 - Real provider mail, real DNS, a production enclave, and real sending and
   push services.
-- Mainnet.
+- Mainnet: its costs are computed from its archived settings, not
+  measured.
 - Alerts on testnet: the alert path runs on the local network only.
+- Archival on a network: the archived recovery runs on the test host.
