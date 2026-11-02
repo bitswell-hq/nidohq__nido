@@ -49,6 +49,24 @@ theorem beNat_lt : ∀ bs : Bytes, beNat bs < 256 ^ bs.length
     rw [Nat.mul_comm (256 ^ t.length)]
     omega
 
+/-- A chunk of at most 31 bytes is a field element. -/
+theorem beNat_take_canonical (bs : Bytes) : Canonical (beNat (bs.take 31)) := by
+  refine Canonical.of_lt (Nat.lt_of_lt_of_le (beNat_lt _) ?_) (by decide : 256 ^ 31 ≤ fieldModulus)
+  exact Nat.pow_le_pow_right (by decide) (List.length_take_le _ _)
+
+theorem chunks_canonical : ∀ (k : Nat) (bs : Bytes), CanonicalList (chunks k bs)
+  | 0, _ => by simp [chunks, CanonicalList]
+  | k + 1, bs => by
+    intro x hx
+    simp only [chunks, List.mem_cons] at hx
+    rcases hx with rfl | hx
+    · exact beNat_take_canonical bs
+    · exact chunks_canonical k _ x hx
+
+/-- Every limb `pack` cuts is a field element (below `2 ^ 248`). -/
+theorem pack_canonical (bs : Bytes) (max : Nat) : CanonicalList (pack bs max) :=
+  chunks_canonical _ _
+
 theorem beNat_injective : ∀ a b : Bytes, a.length = b.length → beNat a = beNat b → a = b
   | [], [], _, _ => rfl
   | x :: s, y :: t, hlen, h => by

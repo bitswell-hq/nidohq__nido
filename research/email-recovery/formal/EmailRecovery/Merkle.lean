@@ -11,7 +11,8 @@ the node at level `i` is a right child.
 `path_binds` is the binding property the soundness corollaries use: a path
 from `leaf` at index `i` that reaches a tree's root shows that the tree holds
 `leaf` at `i`, unless the two pairs `pathBreak` computes from the tree and the
-path are a Poseidon2 collision.
+path are a Poseidon2 collision. Its pairs are field elements when the tree's
+leaves, the path's leaf and its siblings are.
 -/
 
 namespace EmailRecovery
@@ -60,6 +61,20 @@ variable {H}
 theorem levels_succ (n : Nat) (f : Nat → Nat) :
     levels H (n + 1) f = levels H n (levelUp H f) := rfl
 
+theorem levelPair_canonical {f : Nat → Nat} (hf : ∀ i, Canonical (f i)) (i : Nat) :
+    CanonicalList (levelPair f i) := by
+  intro x hx
+  simp only [levelPair, List.mem_cons, List.not_mem_nil, or_false] at hx
+  rcases hx with rfl | rfl <;> exact hf _
+
+theorem pathPair_canonical {cur index s : Nat} (hc : Canonical cur) (hs : Canonical s) :
+    CanonicalList (pathPair cur index s) := by
+  intro x hx
+  unfold pathPair at hx
+  split at hx <;>
+  · simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
+    rcases hx with rfl | rfl <;> assumption
+
 /-- Equal pairs at one level put `cur` at `index`. -/
 theorem levelPair_eq {f : Nat → Nat} {cur index s : Nat}
     (h : levelPair f (index / 2) = pathPair cur index s) : f index = cur := by
@@ -79,28 +94,31 @@ theorem levelPair_eq {f : Nat → Nat} {cur index s : Nat}
 /-- A path that reaches the node above position `index` shows that position
 holds `cur`, unless the pairs `pathBreak` names collide. -/
 theorem path_binds_levels :
-    ∀ (sibs : List Nat) (f : Nat → Nat) (cur index : Nat),
+    ∀ (sibs : List Nat) (f : Nat → Nat) (cur index : Nat), (∀ i, Canonical (f i)) →
+      Canonical cur → CanonicalList sibs →
       pathRoot H cur index sibs = levels H sibs.length f (index / 2 ^ sibs.length) →
       f index = cur ∨ H.P2Collides (pathBreak H f cur index sibs) := by
   intro sibs
   induction sibs with
   | nil =>
-    intro f cur index h
+    intro f cur index _ _ _ h
     simp only [pathRoot, List.length_nil, Nat.pow_zero, Nat.div_one, levels] at h
     exact Or.inl h.symm
   | cons s ss ih =>
-    intro f cur index h
+    intro f cur index hf hcur hsibs h
     simp only [pathRoot, List.length_cons, levels_succ] at h
     have hdiv : index / 2 ^ (ss.length + 1) = index / 2 / 2 ^ ss.length := by
       rw [Nat.div_div_eq_div_mul, Nat.pow_succ, Nat.mul_comm]
     rw [hdiv] at h
-    have hup := ih (levelUp H f) _ (index / 2) h
+    have hs : Canonical s := hsibs s (List.mem_cons_self ..)
+    have hup := ih (levelUp H f) _ (index / 2) (fun _ => H.p2_canonical _) (H.p2_canonical _)
+      (fun x hx => hsibs x (List.mem_cons_of_mem _ hx)) h
     simp only [pathBreak]
     by_cases heq : levelUp H f (index / 2) = H.p2 (pathPair cur index s)
     · rw [ite_eq_left heq]
       by_cases hpair : levelPair f (index / 2) = pathPair cur index s
       · exact Or.inl (levelPair_eq hpair)
-      · exact Or.inr ⟨hpair, heq⟩
+      · exact Or.inr ⟨levelPair_canonical hf _, pathPair_canonical hcur hs, hpair, heq⟩
     · rw [ite_eq_right heq]
       rcases hup with hup | hup
       · exact absurd hup heq
@@ -108,12 +126,14 @@ theorem path_binds_levels :
 
 /-- A path of `treeDepth` siblings from `cur` at `index < 2 ^ treeDepth` that
 reaches the root of the tree over `f` shows `f index = cur`, unless the pairs
-`pathBreak` computes from `f` and the path are a Poseidon2 collision. -/
+`pathBreak` computes from `f` and the path are a Poseidon2 collision. The tree's
+leaves, `cur` and the siblings are field elements, so the pairs are. -/
 theorem path_binds {f : Nat → Nat} {cur index : Nat} {sibs : List Nat}
+    (hf : ∀ i, Canonical (f i)) (hcur : Canonical cur) (hsibs : CanonicalList sibs)
     (hlen : sibs.length = treeDepth) (hidx : index < 2 ^ treeDepth)
     (h : pathRoot H cur index sibs = treeRoot H treeDepth f) :
     f index = cur ∨ H.P2Collides (pathBreak H f cur index sibs) := by
-  apply path_binds_levels sibs f cur index
+  apply path_binds_levels sibs f cur index hf hcur hsibs
   rw [hlen, Nat.div_eq_of_lt hidx]
   exact h
 

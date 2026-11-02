@@ -31,7 +31,7 @@ with `#guard_msgs`: every theorem depends on at most Lean's built-in `propext`,
 
 | Module | Contents |
 | --- | --- |
-| `Basic` | Byte strings, the BN254 modulus and canonical field elements, Perch's `split_hi_lo`, the domain tags, SHA-256 and Poseidon2 as abstract functions (Poseidon2's outputs field elements), and their breaks on given inputs (`Sha256Collides`, `P2Collides`, `P2Zero`) |
+| `Basic` | Byte strings, the BN254 modulus and canonical field elements, Perch's `split_hi_lo`, the domain tags, SHA-256 and Poseidon2 as abstract functions (SHA-256's outputs 32 bytes, Poseidon2's field elements), and their breaks on given inputs (`Sha256Collides`; `P2Collides` and `P2Zero` on lists of field elements) |
 | `Statement` | Perch's `RecoveryStatement` (Perch §4), the fields the guardian reads (`View`), the encoding and its code facts (`Encoding.Facts`), the digest, entry points and authorization contexts |
 | `Merkle` | The depth-16 key trees (§7.2), membership paths, `pathBreak` (the pairs a path collides on), and `path_binds` |
 | `Pack` | `pack` (§2) and `pack_injective` |
@@ -71,6 +71,12 @@ characters determine the token `T`. `modulusLimbs` is §7.1's 18 little-endian 1
 (`modulusLimbs_spec`: for `n < 2^2048` there are 18, each below `2^120`,
 recomposing to `n`), and different moduli have different limbs
 (`modulusLimbs_injective`), so the key hash binds the modulus itself.
+The relation also bounds the private inputs the circuit types as `Field`
+(`codeCanonical`, `rhoCanonical`, `siblingsCanonical`), so every list the
+circuit hashes is a list of field elements: the domain tags, the address and
+domain lengths, the 31-byte limbs `pack` cuts (`pack_canonical`, below
+`2^248`), the 120-bit modulus limbs, the digest limbs (below `2^128`, since
+SHA-256 returns 32 bytes) and Poseidon2's own outputs.
 
 **Perch's controller.** `Controller.lean` models one controller serving one
 account: the stored configuration (profile, mode with guardian set and quorum,
@@ -132,7 +138,9 @@ tree holds the leaf at that index, unless the pairs `pathBreak` computes
 collide), `commit_binds` (the commitment binds the address and account code),
 `keyHash_binds` (the key hash binds the modulus), `keyLeaf_binds` (a leaf binds
 its domain and key hash), `slot_binds` (a slot whose leaf is a key's leaf holds
-that key, unless `SlotBreak` holds), `subject_binds_digest` (a header whose
+that key, unless `SlotBreak` holds; `slot_fits` shows every slot behind an
+accepted root holds an RSA-2048 key of a domain of at most 62 bytes, the
+16-byte salt, or nothing), `subject_binds_digest` (a header whose
 Subject opens to two digests (C5) opens to one, unless the two blinding inputs
 collide) and `digest_binds` (a digest binds the statement, unless the two
 encodings collide under SHA-256). The injectivity lemmas are `pack_injective`,
@@ -151,7 +159,10 @@ after the delay (`trace₀`, `trace₀_events`); and two wallets with different
 addresses and account codes under tools in the ideal model (`privacy₀`).
 `leaky_prover_distinguishes` shows the privacy theorem's view contains the
 proofs: with a prover that writes the address into its proof, one query gives
-the two wallets different views.
+the two wallets different views. `aliased_code_is_no_break` shows why the
+relation bounds its `Field` inputs: under a hash that reads its inputs modulo
+`r`, as Poseidon2 does, the account codes `code` and `code + r` open one
+commitment, and siblings `s` and `s + r` hash alike, though nothing is broken.
 
 ## Reading the breaks
 
@@ -163,7 +174,13 @@ inputs of the extracted address and code and of the enrolled ones; the pair of
 children `pathBreak` finds along the extracted path; the extracted key's leaf
 input and the input of the slot it sits in; the two moduli's key-hash inputs;
 the blinding inputs of two Subjects; the two statements' encodings. Each theorem is then a reduction: anyone who
-violates `P` hands over a collision computed from the data. That is the reading
+violates `P` hands over a collision computed from the data. A Poseidon2 break
+is a collision on `F_r^k`: `P2Collides` and `P2Zero` require every entry of the
+lists they name to be a canonical field element. Poseidon2 reads its inputs
+modulo `r`, so a pair such as `code` and `code + r` hashes alike without
+anything being broken; the relation's bounds on the witness, the enrollment's
+16-byte code and the registry's and pin's key shapes make every pair the
+theorems name a list of field elements, so each is a genuine collision. That is the reading
 of collision resistance for a fixed, unkeyed hash function (P. Rogaway,
 "Formalizing Human Ignorance: Collision-Resistant Hashing without the Keys",
 VIETCRYPT 2006, <https://eprint.iacr.org/2006/281>). Existentially quantified
@@ -253,13 +270,13 @@ chain (`T`, and the timing of the email) is outside this view.
 | A1a RSA-2048 PKCS#1 v1.5 is unforgeable; providers keep keys secret | Not stated. Theorem 1 concludes that a valid signature under the key exists; A1a is the step from there to "the provider signed this header", a computational claim | The argument after Theorem 1 |
 | A1b providers sign a `from` naming one of their mailboxes only for its holder | Not stated. The model's `Format` reads the From address from the signed header; A1b is the step from "the provider signed this From" to "the mailbox's holder sent it", a property of each provider (`research/email-recovery/eval/parser/sender-authentication.md`) | The argument after Theorem 1 |
 | A2 SHA-256 collision resistance | `Sha256Collides` on the encodings of the two statements, an alternative in the conclusion | Theorem 3 (`digest_fixes`, `email_vote_replay`); `email_binds_statement` |
-| A3 Poseidon2 collision resistance | `P2Collides` on the commitment inputs, the path pairs, the leaf and slot inputs, the key-hash inputs, or the two blinding inputs, and `P2Zero` on the key's leaf input, alternatives in the conclusion (`SoundnessAssumptions.Break`, `email_binds_statement`) | Theorem 1 (`soundness`, `from_is_enrolled`, `key_is_trusted`, `email_binds_statement`) |
+| A3 Poseidon2 collision resistance on `F_r^k` | `P2Collides` (two different lists of field elements with one hash) on the commitment inputs, the path pairs, the leaf and slot inputs, the key-hash inputs, or the two blinding inputs, and `P2Zero` on the key's leaf input, alternatives in the conclusion (`SoundnessAssumptions.Break`, `email_binds_statement`) | Theorem 1 (`soundness`, `from_is_enrolled`, `key_is_trusted`, `email_binds_statement`) |
 | A3 Poseidon2 as a random function | The ideal model's handles: with A6, `(C, pin root)` is indistinguishable from two uniform handles (computational, assumed) | The step from Theorem 2's ideal model to the real tools |
 | A4 simulation extractability | `ExtractionFails` on the accepted approval's public inputs and proof, an alternative in the conclusion, for every extractor; A4 is that, for the per-run extractor above, it holds only with negligible probability | Theorem 1 (`soundness`, `email_binds_statement`) |
 | A4 zero knowledge | The ideal model's prover: an honest proof is `sim` of its public inputs (computational, assumed) | The step from Theorem 2's ideal model to the real tools |
-| A5 the registry holds only real keys | Hypothesis `RegistryTrees`: for every accepted root, the keys at the leaves of its depth-16 tree (`keyAt`), each `Trusted`. The tree's shape is the registry contract's (tested); that its keys are trusted is the registry's governance (§7.6) | `soundness`, `key_is_trusted` |
+| A5 the registry holds only real keys | Hypothesis `RegistryTrees`: for every accepted root, the keys at the leaves of its depth-16 tree (`keyAt`), each `Trusted` and each an RSA-2048 modulus of a domain of 1 to 62 bytes (`fits`). The tree's shape and the key and domain checks are the registry contract's (tested); that its keys are trusted is the registry's governance (§7.6) | `soundness`, `key_is_trusted` |
 | A6 `account_code` and `rho` secret and uniform | Not stated: with A3 it makes `C` and the pin root hide the address and pinned keys | The step from Theorem 2's ideal model to the real tools |
-| A7 honest enrollment | Hypotheses `HonestCommitment` (`C` is the enrolled address's commitment) and `HonestPin` (the pin root is the wallet's pin tree over the enrolled account code and `Trusted` keys) | `soundness` |
+| A7 honest enrollment | Hypotheses `HonestCommitment` (`C` is the enrolled address's commitment under a 16-byte account code) and `HonestPin` (the pin root is the wallet's pin tree over that code and `Trusted` RSA-2048 keys of domains of at most 62 bytes) | `soundness` |
 
 `SoundnessAssumptions` bundles A5 and A7 for Theorem 1. Theorem 4 needs no
 cryptographic hypothesis. Theorem 2's cryptography is its ideal model, and the
