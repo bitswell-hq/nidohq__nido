@@ -51,10 +51,13 @@ pub const VERSION: u32 = 1;
 /// field elements in the circuit's `pub` parameter order.
 pub const PUBLIC_INPUTS_LEN: u32 = 128;
 
-/// Longest key pin the constructor accepts, in ledgers past the deployment
-/// ledger: 365 days at 5-second ledgers. A key the registry revokes stays
-/// usable through the pin until the pin's expiry, so this bounds that window.
-pub const MAX_PIN_LIFETIME_LEDGERS: u32 = 6_307_200;
+/// Longest key pin the constructor accepts, in seconds of ledger close time
+/// past the deployment ledger's close time: 365 days. A key the registry
+/// revokes stays usable through the pin until the pin's expiry, so this
+/// bounds that window. The pin is measured on close time, like the
+/// registry's timelocks and grace, so the window keeps its wall-clock
+/// length whatever the network's target ledger close time.
+pub const MAX_PIN_LIFETIME_SECONDS: u64 = 365 * 86_400;
 
 /// Allowed-action bits: bit `code - 1` for each Perch action code
 /// (`docs/recovery/statement.md`, byte 25).
@@ -69,12 +72,12 @@ pub const ALLOW_ALL: u32 =
 
 /// The per-account key pin: the root of a salted key tree (spec "DKIM key
 /// identity and registry leaf format"), accepted in place of a registry root
-/// through `valid_until_ledger` inclusive.
+/// while the ledger's close time is at most `valid_until` (Unix seconds).
 #[contracttype]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct KeyPin {
     pub root: BytesN<32>,
-    pub valid_until_ledger: u32,
+    pub valid_until: u64,
 }
 
 /// Everything fixed at construction.

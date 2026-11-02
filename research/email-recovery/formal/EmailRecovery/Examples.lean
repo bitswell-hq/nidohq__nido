@@ -71,6 +71,7 @@ def w₀ : Witness where
 
 def env₀ : Env where
   ledger := 50
+  closeTime := 1793500000
   network := 1
   registry := fun _ root => some (root == 1)
   verifier := fun _ x π => if x = x₀ ∧ π = [] then .ok else .rejected

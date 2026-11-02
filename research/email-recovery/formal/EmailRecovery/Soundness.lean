@@ -156,7 +156,7 @@ namespace SoundnessAssumptions
 the pin accepts the root (the check the guardian makes first), the registry's
 otherwise. -/
 def slot (A : SoundnessAssumptions H c env Trusted) (root : Nat) : Nat → Slot :=
-  if c.pinned env.ledger root then pinSlot A.enrolledCode A.pinnedKeys
+  if c.pinned env.closeTime root then pinSlot A.enrolledCode A.pinnedKeys
   else registrySlot (A.registry.keyAt root)
 
 /-- The good outcome of Theorem 1 for a witness: the enrolled address and
@@ -218,7 +218,7 @@ theorem slot_root (A : SoundnessAssumptions H c env Trusted) {root : Nat}
     (h : RootAccepted c env root) :
     treeRoot H treeDepth (fun i => (A.slot root i).leaf H) = root := by
   unfold SoundnessAssumptions.slot
-  by_cases hp : c.pinned env.ledger root = true
+  by_cases hp : c.pinned env.closeTime root = true
   · rw [ite_eq_left hp]
     unfold GuardianConfig.pinned at hp
     split at hp
@@ -236,7 +236,7 @@ theorem slot_root (A : SoundnessAssumptions H c env Trusted) {root : Nat}
 theorem slot_trusted (A : SoundnessAssumptions H c env Trusted) {root i : Nat} {d : Bytes} {n : Nat}
     (h : RootAccepted c env root) (hk : A.slot root i = .key d n) : Trusted d n := by
   unfold SoundnessAssumptions.slot at hk
-  by_cases hp : c.pinned env.ledger root = true
+  by_cases hp : c.pinned env.closeTime root = true
   · rw [ite_eq_left hp] at hk
     exact A.pin.2 _ (pinSlot_key hk)
   · rw [ite_eq_right hp] at hk

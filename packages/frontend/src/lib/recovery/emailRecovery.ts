@@ -43,7 +43,7 @@ import { submitPermissionlessOp } from '../recoverySubmit.js';
 import { getSubmitter } from '../primaryPasskeySigner.js';
 import { relayerSubmitAndConfirm } from '../signing/submit.js';
 import { DUMMY_SOURCE, simulateRead } from '../simulateRead.js';
-import { latestLedger } from './chain.js';
+import { latestCloseTime, latestLedger } from './chain.js';
 import { type EmailRecoveryDeployment, requireEmailRecovery } from './emailConfig.js';
 import {
   type GuardianConfig,
@@ -153,7 +153,7 @@ export async function resolveRecoveryKey(opts: {
   const candidates: { modulus: bigint; source: 'list' | 'dns' }[] = [];
   const list = await keyList(d);
   for (const k of list ? keyCandidates(list, domain, selector) : []) candidates.push({ modulus: BigInt(k.modulus), source: 'list' });
-  const ledger = await latestLedger();
+  const now = await latestCloseTime();
   const tryKey = async (c: { modulus: bigint; source: 'list' | 'dns' }): Promise<ResolvedKey | string> => {
     if (!(await alignedSignedBlock(opts.eml, c.modulus).then(() => true, () => false))) return 'mismatch';
     const pin = opts.guardian.keyPin[0];
@@ -164,8 +164,8 @@ export async function resolveRecoveryKey(opts: {
     }
     const reg = await registryKeyView(opts.guardian.registry, domain, c.modulus);
     const choice = chooseKeyPath({
-      ledger,
-      pin: pin ? { root: bigHex(pin.root), validUntilLedger: pin.validUntilLedger, path: pinPath } : undefined,
+      now,
+      pin: pin ? { root: bigHex(pin.root), validUntil: pin.validUntil, path: pinPath } : undefined,
       registry: 'root' in reg && reg.root !== undefined ? { root: reg.root, accepted: reg.accepted, path: reg.present ? reg.path : undefined } : undefined,
     });
     if (choice.kind === 'none') return choice.why;

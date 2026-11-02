@@ -13,9 +13,9 @@
  *   evidence, baselines, and completions.
  */
 
-import type { xdr } from '@stellar/stellar-sdk';
+import { rpc, type xdr } from '@stellar/stellar-sdk';
 import { loadCredential, parsePolicyDocJson, perch, type PolicyDoc } from '@nidohq/passkey-sdk';
-import { NETWORK_PASSPHRASE, RPC_URL, latestLedgerSequence } from '../network.js';
+import { NETWORK_PASSPHRASE, RPC_URL, latestLedgerCloseTime, latestLedgerSequence } from '../network.js';
 import { adminBaseline } from '../policy/docDraft.js';
 import { fetchVerifierAddress } from '../policyChainFetch.js';
 import { applyDocWithPasskey, getSubmitter, signAndSubmit } from '../primaryPasskeySigner.js';
@@ -78,6 +78,18 @@ export async function currentOrFirstDoc(account: string): Promise<{ doc: PolicyD
 
 export async function latestLedger(): Promise<number> {
   return latestLedgerSequence();
+}
+
+/** The chain tip's close time, Unix seconds. */
+export async function latestCloseTime(): Promise<number> {
+  return latestLedgerCloseTime();
+}
+
+/** The network's target ledger close time in milliseconds
+ *  (`scp_timing.ledger_target_close_time_milliseconds`), for the recovery
+ *  rules that turn days into a Perch ledger count. */
+export async function targetCloseMs(): Promise<number> {
+  return perch.ledgerTargetCloseMs(new rpc.Server(RPC_URL));
 }
 
 /** Apply `doc` with the owner's passkey, landing only at `baseRevision`,

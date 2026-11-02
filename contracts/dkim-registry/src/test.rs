@@ -15,8 +15,8 @@ use crate::hash::{Hasher, MODULUS_BYTES};
 use crate::{
     root_of, DkimRegistry, DkimRegistryClient, DkimRegistryError as Error, DnsAttested,
     KeyActivated, KeyProposed, KeyRetired, KeyRevoked, ProposalApproved, ProposalKind,
-    RegistryConfig, MAX_LIVE_ROOTS, PROPOSAL_LIFETIME_LEDGERS, REGISTRY_DEPTH,
-    TIMELOCK_ATTESTED_LEDGERS, TIMELOCK_LEDGERS,
+    RegistryConfig, MAX_LIVE_ROOTS, PROPOSAL_LIFETIME_SECONDS, REGISTRY_DEPTH,
+    TIMELOCK_ATTESTED_SECONDS, TIMELOCK_SECONDS,
 };
 use ed25519_dalek::{Signer, SigningKey};
 use perch_zk_primitives::contract_id;
@@ -26,7 +26,7 @@ use std::vec::Vec as StdVec;
 
 const START: u32 = 1_000;
 const START_TS: u64 = 1_793_500_000;
-const GRACE: u32 = 17_280;
+const GRACE: u64 = 86_400;
 
 struct T {
     e: Env,
@@ -64,7 +64,7 @@ fn base_config(e: &Env, members: &[Address], attesters: &[SigningKey]) -> Regist
         revoke_threshold: 2,
         attesters: at,
         attest_threshold: 2,
-        grace_ledgers: GRACE,
+        grace_seconds: GRACE,
         domains,
     }
 }
@@ -136,15 +136,18 @@ fn leaf_of(e: &Env, domain: &str, key_hash: &BytesN<32>) -> BytesN<32> {
 }
 
 impl T {
-    fn advance(&self, ledgers: u32) {
+    /// Move the close time forward by `seconds`, in a single ledger: every
+    /// window the registry keeps is measured on the close time, so the
+    /// number of ledgers in between is irrelevant to it.
+    fn advance(&self, seconds: u64) {
         self.e.ledger().with_mut(|l| {
-            l.sequence_number += ledgers;
-            l.timestamp += 5 * u64::from(ledgers);
+            l.sequence_number += 1;
+            l.timestamp += seconds;
         });
     }
 
-    fn now(&self) -> u32 {
-        self.e.ledger().sequence()
+    fn now(&self) -> u64 {
+        self.e.ledger().timestamp()
     }
 
     fn registry_id(&self) -> [u8; 32] {
@@ -227,7 +230,7 @@ impl T {
         let id = self.approved_add(domain, &n);
         self.attest(id, 0, true);
         self.attest(id, 1, true);
-        self.advance(TIMELOCK_ATTESTED_LEDGERS);
+        self.advance(TIMELOCK_ATTESTED_SECONDS);
         let root = self.c.execute(&id);
         (id, key_hash_of(&self.e, &n), root)
     }
@@ -349,10 +352,10 @@ fn construction_refuses_bad_attester_sets_grace_and_domains() {
         Err(Error::InvalidAttestThreshold)
     );
     assert_eq!(
-        construct(|_, c| c.grace_ledgers = 120_961),
+        construct(|_, c| c.grace_seconds = 604_801),
         Err(Error::InvalidGrace)
     );
-    assert_eq!(construct(|_, c| c.grace_ledgers = 120_960), Ok(()));
+    assert_eq!(construct(|_, c| c.grace_seconds = 604_800), Ok(()));
     for bad in [
         "Gmail.com",
         "localhost",
@@ -508,7 +511,7 @@ fn the_key_hash_is_computed_never_supplied() {
         Err(Ok(Error::AttestationMismatch))
     );
 
-    t.advance(TIMELOCK_LEDGERS);
+    t.advance(TIMELOCK_SECONDS);
     let root = t.c.execute(&id);
     let leaf = leaf_of(&t.e, "gmail.com", &kh);
     assert_eq!(t.c.siblings(&1).get_unchecked(0), leaf);
@@ -548,7 +551,7 @@ fn an_addition_needs_k_of_n_approvals() {
     );
     t.c.approve(&t.members[1], &id);
     assert_eq!(t.c.proposal(&id).unwrap().approved_at, None);
-    t.advance(TIMELOCK_LEDGERS);
+    t.advance(TIMELOCK_SECONDS);
     assert_eq!(t.c.try_execute(&id), Err(Ok(Error::NotApproved)), "2 of 5");
     assert_eq!(t.c.eligible_at(&id), None);
 
@@ -584,7 +587,7 @@ fn proposals_lapse_after_their_lifetime() {
     let t = setup();
     let id =
         t.c.propose_add(&t.members[0], &bytes(&t.e, "gmail.com"), &modulus(&t.e, 1));
-    t.advance(PROPOSAL_LIFETIME_LEDGERS);
+    t.advance(PROPOSAL_LIFETIME_SECONDS);
     t.c.approve(&t.members[1], &id);
     t.advance(1);
     assert_eq!(
@@ -608,9 +611,9 @@ fn an_attested_addition_activates_after_exactly_72_hours() {
     t.attest(id, 2, true);
     let from = t.now();
     assert_eq!(t.c.proposal(&id).unwrap().attested_at, Some(from));
-    assert_eq!(t.c.eligible_at(&id), Some(from + TIMELOCK_ATTESTED_LEDGERS));
+    assert_eq!(t.c.eligible_at(&id), Some(from + TIMELOCK_ATTESTED_SECONDS));
 
-    t.advance(TIMELOCK_ATTESTED_LEDGERS - 1);
+    t.advance(TIMELOCK_ATTESTED_SECONDS - 1);
     assert_eq!(t.c.try_execute(&id), Err(Ok(Error::TimelockActive)));
     t.advance(1);
     let root = t.c.execute(&id);
@@ -636,33 +639,33 @@ fn the_72_hours_run_from_the_later_of_approval_and_attestation() {
     // Attested first, approved a day later: the clock starts at approval.
     t.attest(id, 0, true);
     t.attest(id, 1, true);
-    t.advance(17_280);
+    t.advance(86_400);
     t.c.approve(&t.members[1], &id);
     t.c.approve(&t.members[2], &id);
     let approved = t.now();
     assert_eq!(
         t.c.eligible_at(&id),
-        Some(approved + TIMELOCK_ATTESTED_LEDGERS)
+        Some(approved + TIMELOCK_ATTESTED_SECONDS)
     );
 
     // Approved first, attested two days later: the clock starts at the
     // attestation that reached the threshold.
     let id = t.approved_add("outlook.com", &modulus(&t.e, 2));
-    t.advance(34_560);
+    t.advance(172_800);
     t.attest(id, 0, true);
     t.attest(id, 1, true);
     assert_eq!(
         t.c.eligible_at(&id),
-        Some(t.now() + TIMELOCK_ATTESTED_LEDGERS)
+        Some(t.now() + TIMELOCK_ATTESTED_SECONDS)
     );
 
     // Attested so late that the 7-day path comes first.
     let id = t.approved_add("fastmail.com", &modulus(&t.e, 3));
     let approved = t.now();
-    t.advance(100_000);
+    t.advance(500_000);
     t.attest(id, 0, true);
     t.attest(id, 1, true);
-    assert_eq!(t.c.eligible_at(&id), Some(approved + TIMELOCK_LEDGERS));
+    assert_eq!(t.c.eligible_at(&id), Some(approved + TIMELOCK_SECONDS));
 }
 
 #[test]
@@ -675,9 +678,9 @@ fn any_other_addition_activates_after_exactly_7_days() {
     t.attest(id, 0, true);
     t.attest(id, 1, false);
     let approved = t.c.proposal(&id).unwrap().approved_at.unwrap();
-    assert_eq!(t.c.eligible_at(&id), Some(approved + TIMELOCK_LEDGERS));
+    assert_eq!(t.c.eligible_at(&id), Some(approved + TIMELOCK_SECONDS));
 
-    t.advance(TIMELOCK_LEDGERS - 1);
+    t.advance(TIMELOCK_SECONDS - 1);
     assert_eq!(t.c.try_execute(&id), Err(Ok(Error::TimelockActive)));
     t.advance(1);
     let root = t.c.execute(&id);
@@ -692,6 +695,40 @@ fn any_other_addition_activates_after_exactly_7_days() {
     };
     assert!(t.published().contains(&event.to_xdr(&t.e, &t.id)));
     assert!(t.accepted(&root));
+}
+
+#[test]
+fn timelocks_and_grace_follow_close_time_not_ledger_count() {
+    let t = setup();
+    let ledgers = |n: u32, seconds: u64| {
+        t.e.ledger().with_mut(|l| {
+            l.sequence_number += n;
+            l.timestamp += seconds;
+        });
+    };
+    // Ledgers closing at a quarter of a second: four times the ledgers of
+    // 72 hours at 5-second ledgers, one second short of 72 hours.
+    let n = modulus(&t.e, 1);
+    let id = t.approved_add("gmail.com", &n);
+    t.attest(id, 0, true);
+    t.attest(id, 1, true);
+    ledgers(4 * 51_840, TIMELOCK_ATTESTED_SECONDS - 1);
+    assert_eq!(t.c.try_execute(&id), Err(Ok(Error::TimelockActive)));
+    ledgers(1, 1);
+    let first = t.c.execute(&id);
+
+    // The same holds for the 7-day path.
+    let id = t.approved_add("outlook.com", &modulus(&t.e, 2));
+    ledgers(4 * 120_960, TIMELOCK_SECONDS - 1);
+    assert_eq!(t.c.try_execute(&id), Err(Ok(Error::TimelockActive)));
+    ledgers(1, 1);
+    t.c.execute(&id);
+
+    // A superseded root keeps its whole grace period in seconds.
+    ledgers(4 * 17_280, GRACE);
+    assert!(t.accepted(&first), "at superseded + grace");
+    ledgers(1, 1);
+    assert!(!t.accepted(&first));
 }
 
 // --- acceptance and grace --------------------------------------------------------
@@ -741,7 +778,7 @@ fn at_most_max_live_roots_are_kept_and_the_oldest_loses_its_grace() {
         t.attest(id, 1, true);
         ids.push(id);
     }
-    t.advance(TIMELOCK_ATTESTED_LEDGERS);
+    t.advance(TIMELOCK_ATTESTED_SECONDS);
     let mut roots = StdVec::new();
     for id in &ids {
         roots.push(t.c.execute(id));
@@ -827,7 +864,7 @@ fn a_retired_key_can_be_admitted_again() {
 #[test]
 fn revocation_refuses_every_root_containing_the_key_at_once() {
     // Admissions here are 72 hours apart; keep every root in its grace.
-    let t = setup_with(|c| c.grace_ledgers = crate::MAX_GRACE_LEDGERS);
+    let t = setup_with(|c| c.grace_seconds = crate::MAX_GRACE_SECONDS);
     let (_, kh_a, only_a) = t.admit("gmail.com", 1);
     let (_, _, a_and_b) = t.admit("outlook.com", 2);
     // A third change that does not touch A, inside the grace of the others.
@@ -896,7 +933,7 @@ fn revocation_stops_a_pending_addition() {
     t.attest(id, 1, true);
     // Two members see a key nobody published and revoke it.
     t.revoke("gmail.com", &key_hash_of(&t.e, &n));
-    t.advance(TIMELOCK_LEDGERS);
+    t.advance(TIMELOCK_SECONDS);
     assert_eq!(t.c.try_execute(&id), Err(Ok(Error::KeyRevoked)));
 }
 
@@ -909,10 +946,10 @@ fn a_revoked_key_returns_only_through_a_new_addition_on_the_7_day_path() {
     t.attest(id, 0, true);
     t.attest(id, 1, true);
     let approved = t.now();
-    assert_eq!(t.c.eligible_at(&id), Some(approved + TIMELOCK_LEDGERS));
-    t.advance(TIMELOCK_ATTESTED_LEDGERS);
+    assert_eq!(t.c.eligible_at(&id), Some(approved + TIMELOCK_SECONDS));
+    t.advance(TIMELOCK_ATTESTED_SECONDS);
     assert_eq!(t.c.try_execute(&id), Err(Ok(Error::TimelockActive)));
-    t.advance(TIMELOCK_LEDGERS - TIMELOCK_ATTESTED_LEDGERS);
+    t.advance(TIMELOCK_SECONDS - TIMELOCK_ATTESTED_SECONDS);
     let root = t.c.execute(&id);
     assert!(t.accepted(&root));
 }
@@ -1016,21 +1053,21 @@ fn an_attesters_latest_observation_counts() {
     assert_eq!(p.attested_at, Some(t.now()));
 
     // The key disappears for attester 1: below the threshold, the clock stops.
-    t.advance(100);
+    t.advance(500);
     observe(1, false, t.e.ledger().timestamp())
         .unwrap()
         .unwrap();
     assert_eq!(t.c.proposal(&id).unwrap().attested_at, None);
     let approved = t.c.proposal(&id).unwrap().approved_at.unwrap();
-    assert_eq!(t.c.eligible_at(&id), Some(approved + TIMELOCK_LEDGERS));
+    assert_eq!(t.c.eligible_at(&id), Some(approved + TIMELOCK_SECONDS));
 
     // Seen again: the 72 hours restart from now.
-    t.advance(100);
+    t.advance(500);
     observe(1, true, t.e.ledger().timestamp()).unwrap().unwrap();
     assert_eq!(t.c.proposal(&id).unwrap().attested_at, Some(t.now()));
     assert_eq!(
         t.c.eligible_at(&id),
-        Some(t.now() + TIMELOCK_ATTESTED_LEDGERS)
+        Some(t.now() + TIMELOCK_ATTESTED_SECONDS)
     );
 }
 
@@ -1162,7 +1199,7 @@ fn every_change_emits_an_event() {
 
     // Activation and retirement events are pinned by the timelock and
     // retirement tests; revocation's here.
-    t.advance(TIMELOCK_LEDGERS);
+    t.advance(TIMELOCK_SECONDS);
     let with_key = t.c.execute(&id);
     let rid = t.c.propose_revoke(&t.members[3], &gmail, &kh);
     t.c.approve(&t.members[4], &rid);
@@ -1249,7 +1286,7 @@ fn noir_vectors() {
 
     let step = |domain: &str, n: &Bytes| {
         let id = t.approved_add(domain, n);
-        t.advance(TIMELOCK_LEDGERS);
+        t.advance(TIMELOCK_SECONDS);
         t.c.execute(&id)
     };
     assert_eq!(

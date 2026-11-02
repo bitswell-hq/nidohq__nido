@@ -8,6 +8,7 @@
 export * from './deployment.js';
 export * from './statement.js';
 export * from './doc.js';
+export * from './ledgerTiming.js';
 export * from './recovery.js';
 export * from './guardianApproval.js';
 export * from './account.js';

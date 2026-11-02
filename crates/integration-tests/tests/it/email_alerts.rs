@@ -17,7 +17,7 @@
 //! rewrites it.
 
 use nido_email_guardian::ALLOW_ALL;
-use nido_enclave_image_registry::{EnclaveImageRegistryClient, TIMELOCK_LEDGERS};
+use nido_enclave_image_registry::{EnclaveImageRegistryClient, TIMELOCK_SECONDS};
 use nido_integration_tests::email::EmailInfra;
 use nido_integration_tests::email_proof::Inbox;
 use nido_integration_tests::world::{
@@ -120,7 +120,7 @@ fn approve_vault_image(w: &World, rec: &mut Recorder) -> (Address, BytesN<32>) {
     rec.take(w);
     reg.approve(&signers[1], &measurement);
     rec.take(w);
-    w.advance(TIMELOCK_LEDGERS);
+    w.advance_seconds(TIMELOCK_SECONDS);
     reg.activate(&measurement);
     rec.take(w);
     assert!(reg.is_active(&measurement));

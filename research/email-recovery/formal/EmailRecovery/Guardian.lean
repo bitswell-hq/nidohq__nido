@@ -47,8 +47,8 @@ theorem allowAll_allows (a : Action) : allowAll.testBit (a.code - 1) = true := b
 
 /-! ## Construction (§8.2) -/
 
-/-- `MAX_PIN_LIFETIME_LEDGERS`. -/
-def maxPinLifetime : Nat := 6307200
+/-- `MAX_PIN_LIFETIME_SECONDS`: 365 days of ledger close time. -/
+def maxPinLifetime : Nat := 31536000
 
 /-- The construction variants of `EmailGuardianError`. -/
 inductive ConstructError
@@ -63,7 +63,8 @@ inductive ConstructError
 
 /-- What the constructor reads from the ledger. -/
 structure DeployEnv where
-  ledger : Nat
+  /-- The ledger's close time, Unix seconds: the pin's clock. -/
+  closeTime : Nat
   isContract : Nat → Bool
   /-- `verifier.circuit_id()` of the contract at an address; `none` if the call
   fails. -/
@@ -71,8 +72,8 @@ structure DeployEnv where
 
 def pinInvalid (env : DeployEnv) : Option KeyPin → Bool
   | none => false
-  | some p => !decide (Canonical p.root) || decide (p.validUntil < env.ledger) ||
-      decide (env.ledger + maxPinLifetime < p.validUntil)
+  | some p => !decide (Canonical p.root) || decide (p.validUntil < env.closeTime) ||
+      decide (env.closeTime + maxPinLifetime < p.validUntil)
 
 /-- `__constructor`'s checks, in `contract.rs::validate` order. A `Vec` of more
 than one pin is unrepresentable here (`Option`). `allowed & !ALLOW_ALL != 0` on
@@ -103,7 +104,11 @@ inductive VerifyResult
 /-- The ledger and the other contracts as the guardian sees them during one
 `__check_auth`. -/
 structure Env where
+  /-- The ledger sequence number: the statement's expiry is Perch's, in ledgers. -/
   ledger : Nat
+  /-- The ledger's close time, Unix seconds: the pin's expiry, and the clock of
+  the registry's timelocks and grace. -/
+  closeTime : Nat
   network : Nat
   /-- `is_accepted_root` of the registry contract at an address, at this ledger;
   `none` when the call fails. -/
@@ -158,15 +163,15 @@ the authorized digest, and the root check 11 accepted (§6.1, §8.3 check 12). -
 def publicInputs (c : GuardianConfig) (d root : Nat) : PublicInputs :=
   ⟨c.commitment, hi d, lo d, root⟩
 
-/-- The pin accepts `root` at ledger `L`. -/
-def GuardianConfig.pinned (c : GuardianConfig) (L root : Nat) : Bool :=
+/-- The pin accepts `root` at close time `T`. -/
+def GuardianConfig.pinned (c : GuardianConfig) (T root : Nat) : Bool :=
   match c.pin with
-  | some p => p.root == root && decide (L ≤ p.validUntil)
+  | some p => p.root == root && decide (T ≤ p.validUntil)
   | none => false
 
 /-- Check 11. -/
 def checkRoot (c : GuardianConfig) (env : Env) (root : Nat) : Except GuardianError Unit :=
-  if c.pinned env.ledger root then .ok ()
+  if c.pinned env.closeTime root then .ok ()
   else match env.registry c.registry root with
     | some true => .ok ()
     | some false => .error .unknownRoot
@@ -206,10 +211,10 @@ def check (H : Hashes) (E : Encoding) (c : GuardianConfig) (env : Env) (_payload
 
 /-! ## What acceptance establishes -/
 
-/-- Check 11's rule: the pin with the ledger at most its `valid_until_ledger`,
-or a root the registry accepts at this ledger. -/
+/-- Check 11's rule: the pin with the close time at most its `valid_until`, or
+a root the registry accepts at this ledger. -/
 def RootAccepted (c : GuardianConfig) (env : Env) (root : Nat) : Prop :=
-  (∃ p, c.pin = some p ∧ p.root = root ∧ env.ledger ≤ p.validUntil) ∨
+  (∃ p, c.pin = some p ∧ p.root = root ∧ env.closeTime ≤ p.validUntil) ∨
     env.registry c.registry root = some true
 
 /-- Every check passed: the facts `check` returning `ok` amounts to. -/
@@ -265,7 +270,7 @@ theorem checkRoot_of_rootAccepted {root : Nat} (h : RootAccepted c env root) :
     checkRoot c env root = .ok () := by
   unfold checkRoot
   rcases h with ⟨q, hq, hroot, hl⟩ | h
-  · have : c.pinned env.ledger root = true := by
+  · have : c.pinned env.closeTime root = true := by
       simp [GuardianConfig.pinned, hq, hroot, hl]
     simp [this]
   · split

@@ -1,7 +1,7 @@
 use crate::error::RegistryError as Error;
 use crate::{
     Measurement, MeasurementActivated, MeasurementApproved, MeasurementProposed, MeasurementQueued,
-    MeasurementRevocationVoted, MeasurementRevoked, Status, MAX_SIGNERS, TIMELOCK_LEDGERS, VERSION,
+    MeasurementRevocationVoted, MeasurementRevoked, Status, MAX_SIGNERS, TIMELOCK_SECONDS, VERSION,
 };
 use soroban_sdk::{
     contract, contractimpl, contracttype, panic_with_error, symbol_short, Address, BytesN, Env,
@@ -88,18 +88,19 @@ impl EnclaveImageRegistry {
 
     /// `signer` votes to approve `measurement`. The first vote is the
     /// proposal. The vote that reaches the threshold queues the measurement
-    /// with `active_from = now + TIMELOCK_LEDGERS`.
+    /// with `active_from = now + TIMELOCK_SECONDS`, `now` being the ledger's
+    /// close time.
     ///
     /// # Errors
     /// [`Error::NotASigner`], [`Error::Revoked`], [`Error::NotPending`] once
     /// queued or active, [`Error::AlreadyVoted`].
     ///
     /// # Panics
-    /// If the ledger sequence is within [`TIMELOCK_LEDGERS`] of `u32::MAX`.
+    /// If the close time is within [`TIMELOCK_SECONDS`] of `u64::MAX`.
     #[allow(clippy::needless_pass_by_value)]
     pub fn approve(e: Env, signer: Address, measurement: BytesN<32>) -> Result<Measurement, Error> {
         authorize(&e, &signer)?;
-        let now = e.ledger().sequence();
+        let now = e.ledger().timestamp();
         let mut record = if let Some(record) = load(&e, &measurement) {
             record
         } else {
@@ -135,8 +136,8 @@ impl EnclaveImageRegistry {
         .publish(&e);
         if record.approvals.len() >= threshold(&e) {
             let active_from = now
-                .checked_add(TIMELOCK_LEDGERS)
-                .expect("ledger sequence below u32::MAX - TIMELOCK_LEDGERS");
+                .checked_add(TIMELOCK_SECONDS)
+                .expect("close time below u64::MAX - TIMELOCK_SECONDS");
             record.status = Status::Queued;
             record.active_from = active_from;
             MeasurementQueued {
@@ -166,7 +167,7 @@ impl EnclaveImageRegistry {
             Status::Revoked => return Err(Error::Revoked),
             Status::Pending | Status::Active => return Err(Error::NotQueued),
         }
-        let now = e.ledger().sequence();
+        let now = e.ledger().timestamp();
         if now < record.active_from {
             return Err(Error::TimelockNotElapsed);
         }
@@ -207,7 +208,7 @@ impl EnclaveImageRegistry {
         .publish(&e);
         if record.revocations.len() >= threshold(&e) {
             record.status = Status::Revoked;
-            record.revoked_at = e.ledger().sequence();
+            record.revoked_at = e.ledger().timestamp();
             MeasurementRevoked {
                 measurement: measurement.clone(),
             }
@@ -244,10 +245,10 @@ impl EnclaveImageRegistry {
         threshold(e)
     }
 
-    /// See [`TIMELOCK_LEDGERS`].
+    /// See [`TIMELOCK_SECONDS`].
     #[must_use]
-    pub fn timelock_ledgers() -> u32 {
-        TIMELOCK_LEDGERS
+    pub fn timelock_seconds() -> u64 {
+        TIMELOCK_SECONDS
     }
 
     /// See [`VERSION`].

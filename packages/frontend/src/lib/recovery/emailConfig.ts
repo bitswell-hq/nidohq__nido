@@ -71,5 +71,6 @@ export function requireEmailRecovery(): EmailRecoveryDeployment {
   return d;
 }
 
-/** How long the guardian's key pin lasts (spec §7.4): 30 days, within the 365-day cap. */
-export const PIN_LIFETIME_LEDGERS = 518_400;
+/** How long the guardian's key pin lasts (spec §7.4), in seconds of ledger
+ *  close time: 30 days, within the 365-day cap. */
+export const PIN_LIFETIME_SECONDS = 30 * 86_400;

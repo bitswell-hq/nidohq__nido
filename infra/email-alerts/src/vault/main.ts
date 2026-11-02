@@ -39,7 +39,7 @@ async function handle(method: string, p: Record<string, unknown>): Promise<unkno
     case 'dispatch':
       return vault.dispatch(p as never);
     case 'due':
-      return vault.due(p.ledger as number);
+      return vault.due(p.at as never);
     case 'mature':
       return vault.mature(p.views as never);
     case 'inbound':

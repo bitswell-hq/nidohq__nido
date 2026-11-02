@@ -38,6 +38,8 @@ vi.mock('./chain.js', () => ({
   applyDoc: vi.fn(async () => 'hash'),
   currentOrFirstDoc: vi.fn(),
   latestLedger: vi.fn(async () => 100),
+  // testnet's and mainnet's target ledger close time
+  targetCloseMs: vi.fn(async () => 5_000),
   submitOpen: vi.fn(async () => ({ hash: 'h' })),
 }));
 vi.mock('./deployment.js', () => ({ perchDeployment: () => deployment, requireDeployment: () => deployment }));

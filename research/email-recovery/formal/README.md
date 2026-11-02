@@ -118,7 +118,7 @@ in its ideal model (see "The privacy model").
 | | `EmailRecovery.Perch.one_factor_safety` | The two combined, for every completed recovery |
 | | `EmailRecovery.Perch.quorum_one_of_conditionMet` | `G`'s approval alone meets `require_condition` (Protected reconfiguration and upgrade) only at quorum 1, guardian-only |
 | | `EmailRecovery.Perch.owner_can_cancel` | During the delay a `Loss` owner's cancellation of a live attempt succeeds (T7) |
-| 4, wallet policy | `EmailRecovery.Perch.wallet_policy_email_alone`, `one_factor_under_wallet_policy` | Under the §9.3 rules (`WalletPolicy`), the email guardian alone reaches the quorum only under `loss`, with `delay_ledgers ≥ 120,960` and a second alert channel |
+| 4, wallet policy | `EmailRecovery.Perch.wallet_policy_email_alone`, `one_factor_under_wallet_policy` | Under the §9.3 rules (`WalletPolicy`), the email guardian alone reaches the quorum only under `loss`, with a delay lasting at least 7 days at the network's target ledger close time (`emailOnlyFloor_lasts`: `604,800,000 ≤ t · ⌈604,800,000 / t⌉` ms for every `t > 0`; 120,960 ledgers at 5,000 ms) and a second alert channel |
 | | `EmailRecovery.Perch.wallet_policy_needed_email_allows_every_action` | Rule 4: a needed email vote allows every action |
 
 Supporting lemmas. The binding lemmas each conclude equality, or a collision on
@@ -257,7 +257,11 @@ is tested, not proven.
   and `construct` mirrors `validate`, check for check. Every refusal is pinned by
   a test in `contracts/email-guardian/src/test.rs`
   (`refuses_anything_but_one_controller_call_carrying_a_digest` through
-  `refuses_a_tampered_proof`, and the `construction_refuses_*` tests).
+  `refuses_a_tampered_proof`, and the `construction_refuses_*` tests). Its
+  `Env` carries two clocks, as the contract reads them: the ledger number
+  (`sequence()`), which check 9 compares with the statement's expiry, and the
+  close time (`timestamp()`), which check 11 and `construct` compare with
+  the pin's `valid_until`.
 - **Controller.** The transitions mirror `vendor/perch/crates/perch-recovery/src/contract.rs`
   (`begin`, `submit_guardian`, `submit_zk`, `after_evidence`, `promote`,
   `cancel`, `authorize_completion` and `complete`, `rcv_sync`, `rcv_cancel`,
@@ -289,8 +293,9 @@ is tested, not proven.
   correct is out of scope.
 - **Wallet policy.** `WalletPolicy` mirrors `checkEmailGuardian` in
   `packages/passkey-sdk/src/perch/doc.ts` rule for rule: at most one email
-  guardian, a second alert channel, `loss` and at least 120,960 ledgers when
-  the mode is guardian-only with quorum 1, and `ALLOW_ALL` when the other
+  guardian, a second alert channel, `loss` and at least `⌈604,800,000 / t⌉`
+  ledgers for the network's target close time `t` (milliseconds, a field of
+  `Member`) when the mode is guardian-only with quorum 1, and `ALLOW_ALL` when the other
   listed guardians number fewer than the quorum. `recoverySpec.test.ts` pins
   each rule at its boundary; agreement with the predicate is tested, not
   proven. The theorem is about configurations that satisfy the predicate.

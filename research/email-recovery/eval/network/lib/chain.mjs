@@ -108,6 +108,27 @@ export class Chain {
     }
   }
 
+  /** The latest ledger's close time, Unix seconds. */
+  async closeTime() {
+    return Number((await this.call('getLatestLedger')).closeTime);
+  }
+
+  /** Wait until the network has closed a ledger at close time `t` or later. */
+  async untilCloseTime(t, { pollMs = 500 } = {}) {
+    for (;;) {
+      const at = await this.closeTime();
+      if (at >= t) return at;
+      await sleep(pollMs);
+    }
+  }
+
+  /** The network's target ledger close time, `scp_timing.ledger_target_close_time_milliseconds`. */
+  async targetCloseMs() {
+    const key = xdr.LedgerKey.configSetting(new xdr.LedgerKeyConfigSetting({ configSettingId: xdr.ConfigSettingId.configSettingScpTiming() }));
+    const { entries } = await this.call('getLedgerEntries', { keys: [key.toXDR('base64')] });
+    return xdr.LedgerEntryData.fromXDR(entries[0].xdr, 'base64').configSetting().contractScpTiming().ledgerTargetCloseTimeMilliseconds();
+  }
+
   async fund(kp) {
     for (let attempt = 1; ; attempt++) {
       const r = await fetch(`${this.friendbotUrl}?addr=${kp.publicKey()}`);

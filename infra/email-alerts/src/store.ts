@@ -23,6 +23,10 @@ export interface HostState {
   /** Authorized attempts per account, from `attempt_authorized` until it ends. */
   authorized: Record<string, { attemptId: string; expiresAt: number }>;
   latestLedger: number;
+  /** The latest ledger's close time, Unix seconds, as `getEvents` reports it
+   *  (`latestLedgerCloseTime`); `0` until the first page, and in state files
+   *  that predate the field. */
+  latestCloseTime?: number;
   /** The vault's sealed blobs (base64): records under their lookup, and the delivery log. */
   sealed: { records: Record<string, string>; deliveries?: string };
   /** Inbound mail the vault sealed to a browser's device key (base64), by inbox id, with when it was stored. */
@@ -41,7 +45,7 @@ export interface SerializedDispatch {
 }
 
 export function emptyState(startLedger: number): HostState {
-  return { v: 1, startLedger, handled: [], retries: {}, begun: {}, authorized: {}, latestLedger: 0, sealed: { records: {} } };
+  return { v: 1, startLedger, handled: [], retries: {}, begun: {}, authorized: {}, latestLedger: 0, latestCloseTime: 0, sealed: { records: {} } };
 }
 
 export function loadState(path: string, startLedger: number): HostState {

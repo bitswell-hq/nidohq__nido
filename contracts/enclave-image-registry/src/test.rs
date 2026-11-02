@@ -6,12 +6,13 @@ extern crate std;
 use crate::{
     EnclaveImageRegistry, EnclaveImageRegistryClient, MeasurementActivated, MeasurementApproved,
     MeasurementProposed, MeasurementQueued, MeasurementRevocationVoted, MeasurementRevoked,
-    RegistryError, Status, MAX_SIGNERS, TIMELOCK_LEDGERS,
+    RegistryError, Status, MAX_SIGNERS, TIMELOCK_SECONDS,
 };
 use soroban_sdk::testutils::{Address as _, Events as _, Ledger as _, MockAuth, MockAuthInvoke};
 use soroban_sdk::{vec, Address, BytesN, Env, Event as _, IntoVal, Vec};
 
 const START: u32 = 1_000;
+const START_TS: u64 = 1_793_500_000;
 
 struct Setup {
     e: Env,
@@ -29,6 +30,7 @@ fn env() -> Env {
     let e = Env::default();
     e.ledger().with_mut(|l| {
         l.sequence_number = START;
+        l.timestamp = START_TS;
         l.min_persistent_entry_ttl = 1_000_000;
         l.max_entry_ttl = 10_000_000;
     });
@@ -51,8 +53,13 @@ fn m(e: &Env, b: u8) -> BytesN<32> {
     BytesN::from_array(e, &[b; 32])
 }
 
-fn advance(e: &Env, ledgers: u32) {
-    e.ledger().with_mut(|l| l.sequence_number += ledgers);
+/// Move the close time forward by `seconds`, in a single ledger: the
+/// timelock is measured on the close time, not on the ledger count.
+fn advance(e: &Env, seconds: u64) {
+    e.ledger().with_mut(|l| {
+        l.sequence_number += 1;
+        l.timestamp += seconds;
+    });
 }
 
 fn register(e: &Env, signers: Vec<Address>, threshold: u32) {
@@ -60,10 +67,10 @@ fn register(e: &Env, signers: Vec<Address>, threshold: u32) {
 }
 
 #[test]
-fn timelock_is_fourteen_days_of_five_second_ledgers() {
-    assert_eq!(TIMELOCK_LEDGERS, 14 * 17_280);
+fn timelock_is_fourteen_days_of_close_time() {
+    assert_eq!(TIMELOCK_SECONDS, 14 * 86_400);
     let s = setup(3, 2);
-    assert_eq!(s.client().timelock_ledgers(), 241_920);
+    assert_eq!(s.client().timelock_seconds(), 1_209_600);
     assert_eq!(s.client().threshold(), 2);
     assert_eq!(s.client().signers().len(), 3);
 }
@@ -112,7 +119,7 @@ fn constructor_refuses_threshold_above_the_signer_count() {
     );
 }
 
-/// Proposal, approval to the threshold, the timelock to the exact ledger,
+/// Proposal, approval to the threshold, the timelock to the exact second,
 /// activation, and every event along the way.
 #[test]
 fn a_measurement_activates_only_after_the_threshold_and_the_timelock() {
@@ -122,7 +129,7 @@ fn a_measurement_activates_only_after_the_threshold_and_the_timelock() {
 
     let r = c.approve(&s.signers[0], &mm);
     assert_eq!(r.status, Status::Pending);
-    assert_eq!(r.proposed_at, START);
+    assert_eq!(r.proposed_at, START_TS);
     assert_eq!(
         s.e.events().all().filter_by_contract(&s.id),
         [
@@ -147,7 +154,7 @@ fn a_measurement_activates_only_after_the_threshold_and_the_timelock() {
 
     advance(&s.e, 5);
     let r = c.approve(&s.signers[1], &mm);
-    let active_from = START + 5 + TIMELOCK_LEDGERS;
+    let active_from = START_TS + 5 + TIMELOCK_SECONDS;
     assert_eq!(r.status, Status::Queued);
     assert_eq!(r.active_from, active_from);
     assert_eq!(
@@ -173,8 +180,8 @@ fn a_measurement_activates_only_after_the_threshold_and_the_timelock() {
         "votes past the threshold are refused"
     );
 
-    advance(&s.e, TIMELOCK_LEDGERS - 1);
-    assert_eq!(s.e.ledger().sequence(), active_from - 1);
+    advance(&s.e, TIMELOCK_SECONDS - 1);
+    assert_eq!(s.e.ledger().timestamp(), active_from - 1);
     assert_eq!(
         c.try_activate(&mm),
         Err(Ok(RegistryError::TimelockNotElapsed))
@@ -207,7 +214,7 @@ fn activate_refuses_unknown_and_pending_measurements() {
         Err(Ok(RegistryError::UnknownMeasurement))
     );
     c.approve(&s.signers[0], &mm);
-    advance(&s.e, TIMELOCK_LEDGERS * 2);
+    advance(&s.e, TIMELOCK_SECONDS * 2);
     assert_eq!(
         c.try_activate(&mm),
         Err(Ok(RegistryError::NotQueued)),
@@ -279,7 +286,7 @@ fn revocation_takes_effect_at_the_threshold_from_every_stage() {
             c.approve(&s.signers[1], &mm);
         }
         if stage == Status::Active {
-            advance(&s.e, TIMELOCK_LEDGERS);
+            advance(&s.e, TIMELOCK_SECONDS);
             c.activate(&mm);
             assert!(c.is_active(&mm));
         }
@@ -304,7 +311,7 @@ fn revocation_takes_effect_at_the_threshold_from_every_stage() {
         advance(&s.e, 1);
         let r = c.revoke(&s.signers[0], &mm);
         assert_eq!(r.status, Status::Revoked);
-        assert_eq!(r.revoked_at, s.e.ledger().sequence());
+        assert_eq!(r.revoked_at, s.e.ledger().timestamp());
         assert_eq!(
             s.e.events().all().filter_by_contract(&s.id),
             [
@@ -330,7 +337,7 @@ fn revocation_takes_effect_at_the_threshold_from_every_stage() {
             c.try_revoke(&s.signers[1], &mm),
             Err(Ok(RegistryError::Revoked))
         );
-        advance(&s.e, TIMELOCK_LEDGERS);
+        advance(&s.e, TIMELOCK_SECONDS);
         assert!(!c.is_active(&mm), "revocation is final");
     }
 }
@@ -353,12 +360,34 @@ fn a_single_signer_registry_still_waits_out_the_timelock() {
     let mm = m(&s.e, 5);
     let r = c.approve(&s.signers[0], &mm);
     assert_eq!(r.status, Status::Queued);
-    assert_eq!(r.active_from, START + TIMELOCK_LEDGERS);
+    assert_eq!(r.active_from, START_TS + TIMELOCK_SECONDS);
     assert_eq!(
         c.try_activate(&mm),
         Err(Ok(RegistryError::TimelockNotElapsed))
     );
-    advance(&s.e, TIMELOCK_LEDGERS);
+    advance(&s.e, TIMELOCK_SECONDS);
+    c.activate(&mm);
+    assert!(c.is_active(&mm));
+}
+
+/// Ledgers closing faster than the network's 5-second target do not
+/// shorten the timelock: five times the ledgers of 14 days at 5-second
+/// ledgers, one second short of 14 days, still refuse activation.
+#[test]
+fn the_timelock_follows_close_time_not_ledger_count() {
+    let s = setup(1, 1);
+    let c = s.client();
+    let mm = m(&s.e, 6);
+    c.approve(&s.signers[0], &mm);
+    s.e.ledger().with_mut(|l| {
+        l.sequence_number += 5 * 241_920;
+        l.timestamp += TIMELOCK_SECONDS - 1;
+    });
+    assert_eq!(
+        c.try_activate(&mm),
+        Err(Ok(RegistryError::TimelockNotElapsed))
+    );
+    advance(&s.e, 1);
     c.activate(&mm);
     assert!(c.is_active(&mm));
 }

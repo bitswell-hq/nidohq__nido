@@ -5,7 +5,7 @@
 //! (`contracts/dkim-registry/src/test.rs`) and, through the email guardian,
 //! by `email_guardian.rs`.
 
-use nido_dkim_registry::TIMELOCK_ATTESTED_LEDGERS;
+use nido_dkim_registry::TIMELOCK_ATTESTED_SECONDS;
 use nido_dns_attestation_mock::{fixture, key_hash, modulus_2048};
 use nido_integration_tests::email::TestRegistry;
 use nido_integration_tests::world::world;
@@ -126,7 +126,7 @@ fn dkim_registry_costs() {
     let attest = report("attest");
     registry.attest(&w, id, 1, &record);
 
-    w.advance(TIMELOCK_ATTESTED_LEDGERS);
+    w.advance_seconds(TIMELOCK_ATTESTED_SECONDS);
     let root = client.execute(&id);
     let activation = report("execute (activation: 16-level root recomputation)");
     assert!(client.is_accepted_root(&root));

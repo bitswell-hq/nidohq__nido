@@ -17,7 +17,7 @@ pub enum DkimRegistryError {
     InvalidAttesters = 3,
     /// Not `1 ≤ attest_threshold ≤ attesters`.
     InvalidAttestThreshold = 4,
-    /// `grace_ledgers` above `MAX_GRACE_LEDGERS`.
+    /// `grace_seconds` above `MAX_GRACE_SECONDS`.
     InvalidGrace = 5,
     /// No domains, more than `MAX_DOMAINS`, a malformed one, or a duplicate.
     InvalidDomains = 6,
@@ -36,7 +36,7 @@ pub enum DkimRegistryError {
     KeyNotPresent = 14,
     /// No proposal has this id.
     UnknownProposal = 15,
-    /// The proposal is older than `PROPOSAL_LIFETIME_LEDGERS`.
+    /// The proposal is older than `PROPOSAL_LIFETIME_SECONDS`.
     ProposalExpired = 16,
     /// The proposal was already executed.
     ProposalClosed = 17,

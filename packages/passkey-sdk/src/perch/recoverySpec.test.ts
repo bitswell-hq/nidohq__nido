@@ -78,19 +78,42 @@ describe('email guardian rules', () => {
     );
   });
 
-  it('rule 3: email alone needs the loss profile and a delay of at least 120960 ledgers', () => {
+  it('rule 3: email alone needs the loss profile and a delay of at least 7 days of ledgers at the network close time', () => {
     const alone = (over: Partial<RecoveryChoice>) =>
-      withEmail({ guardians: [email()], quorum: 1, ...over });
+      withEmail({ guardians: [email()], quorum: 1, ledgerCloseMs: 5_000, ...over });
+    // 5-second ledgers (testnet and mainnet): 120,960 ledgers.
     expect(() => recoverySpec(TESTNET, alone({ delayLedgers: 120_959 }))).toThrow(
-      /at least 120960/,
+      /at least 120960 ledgers \(7 days at 5000 ms/,
     );
     expect(recoverySpec(TESTNET, alone({ delayLedgers: 120_960 })).delayLedgers).toBe(120_960);
     expect(recoverySpec(TESTNET, alone({})).delayLedgers).toBe(RECOVERY_DEFAULTS.delayLedgers);
     expect(() => recoverySpec(TESTNET, alone({ profile: 'protected' }))).toThrow(/loss profile/);
     // Quorum 1 with other guardians listed: the email vote still suffices.
-    expect(() => recoverySpec(TESTNET, withEmail({ quorum: 1, delayLedgers: 120_959 }))).toThrow(
-      /at least 120960/,
+    expect(() =>
+      recoverySpec(TESTNET, withEmail({ quorum: 1, ledgerCloseMs: 5_000, delayLedgers: 120_959 })),
+    ).toThrow(/at least 120960/);
+    // A lower target close time raises the floor: 4-second ledgers (the
+    // protocol's current lower bound) need 151,200, and the 5-second default
+    // no longer suffices.
+    const fast = (delayLedgers?: number) => alone({ ledgerCloseMs: 4_000, delayLedgers });
+    expect(() => recoverySpec(TESTNET, fast())).toThrow(/at least 151200 ledgers/);
+    expect(() => recoverySpec(TESTNET, fast(151_199))).toThrow(/at least 151200/);
+    expect(recoverySpec(TESTNET, fast(151_200)).delayLedgers).toBe(151_200);
+    // A close time that does not divide 7 days rounds the floor up:
+    // 604,800,000 ms / 4,096 ms = 147,656.25 ledgers.
+    expect(() => recoverySpec(TESTNET, alone({ ledgerCloseMs: 4_096, delayLedgers: 147_656 }))).toThrow(
+      /at least 147657/,
     );
+    expect(recoverySpec(TESTNET, alone({ ledgerCloseMs: 4_096, delayLedgers: 147_657 })).delayLedgers).toBe(
+      147_657,
+    );
+    // Without the network's close time, or with a nonsensical one, no member is built.
+    expect(() => recoverySpec(TESTNET, alone({ ledgerCloseMs: undefined }))).toThrow(
+      /target ledger close time/,
+    );
+    for (const bad of [0, -5_000, 2.5, Number.NaN]) {
+      expect(() => recoverySpec(TESTNET, alone({ ledgerCloseMs: bad }))).toThrow(/not a ledger close time/);
+    }
   });
 
   it('rule 3: does not apply when the email vote alone cannot authorize', () => {

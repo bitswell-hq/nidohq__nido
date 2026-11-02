@@ -19,7 +19,7 @@ pub enum EmailGuardianError {
     NonCanonicalCommitment = 4,
     /// More than one pin, a pin root that is not a canonical field element,
     /// or a pin that has already expired or outlives
-    /// [`crate::MAX_PIN_LIFETIME_LEDGERS`].
+    /// [`crate::MAX_PIN_LIFETIME_SECONDS`].
     InvalidPin = 5,
     /// `allowed_actions` is empty or names a bit no action uses.
     InvalidAllowedActions = 6,

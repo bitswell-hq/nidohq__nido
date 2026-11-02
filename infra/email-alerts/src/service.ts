@@ -46,7 +46,7 @@ import type { VaultApi } from './channel.js';
 import { ALERTS, type AlertName, type PerchEvent, alertEventId, alertSubject, decodePerchEvent } from './events.js';
 import { type ChainReads, RpcError, type StellarRpc } from './rpc.js';
 import { type HostState, type SerializedDispatch, loadState, saveState } from './store.js';
-import type { ChainView, DispatchRequest, Writes } from './vault/vault.js';
+import type { ChainTime, ChainView, DispatchRequest, Writes } from './vault/vault.js';
 
 const { toHex, fromHex, toBase64Url, fromBase64Url } = bytes;
 
@@ -349,6 +349,7 @@ export class AlertService {
       }
       const readAt = performance.now();
       this.state.latestLedger = Math.max(this.state.latestLedger, page.latestLedger);
+      this.state.latestCloseTime = Math.max(this.state.latestCloseTime ?? 0, Number(page.latestLedgerCloseTime ?? 0));
       const handled = new Set(this.state.handled);
       for (const raw of page.events) {
         if (handled.has(raw.id)) continue;
@@ -430,7 +431,7 @@ export class AlertService {
     if (probes.probed) this.log(`push probes: ${probes.probed} sent, ${probes.lapsed} gone`);
     this.persist(probes.writes);
 
-    const due = await this.vault.due(this.state.latestLedger);
+    const due = await this.vault.due(this.chainTime());
     if (due.length) {
       const views: Record<string, ChainView> = {};
       for (const account of due) views[account] = await this.chainView(account);
@@ -557,9 +558,14 @@ export class AlertService {
     }
   }
 
+  /** The latest ledger and its close time, as the last `getEvents` page reported them. */
+  chainTime(): ChainTime {
+    return { ledger: this.state.latestLedger, closeTime: this.state.latestCloseTime ?? 0 };
+  }
+
   async chainView(account: string): Promise<ChainView> {
     return {
-      ledger: this.state.latestLedger,
+      ...this.chainTime(),
       signers: await this.cfg.signers(account),
       authorized: this.isAuthorized(account),
     };
@@ -582,7 +588,7 @@ export class AlertService {
       // A confirmation is proven by the emailed code, not by a passkey: no chain read.
       const view =
         req.op === 'confirm'
-          ? { ledger: this.state.latestLedger, signers: [], authorized: this.isAuthorized(req.account) }
+          ? { ...this.chainTime(), signers: [], authorized: this.isAuthorized(req.account) }
           : await this.chainView(req.account);
       const { result, writes } = await this.vault.contact(req, view);
       this.log(`contact ${req.op} ${req.account}: ${result.ok ? result.status : `refused (${result.error})`}`);

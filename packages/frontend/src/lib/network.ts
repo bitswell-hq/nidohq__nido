@@ -44,6 +44,13 @@ export async function latestLedgerSequence(server = new rpc.Server(RPC_URL)): Pr
   return (await server._getLatestLedger()).sequence;
 }
 
+/** The chain tip's close time in Unix seconds, from the same raw answer:
+ *  the clock the DKIM registry's timelocks and the email guardian's key pin
+ *  are measured on. */
+export async function latestLedgerCloseTime(server = new rpc.Server(RPC_URL)): Promise<number> {
+  return Number((await server._getLatestLedger()).closeTime);
+}
+
 /** Stellar Expert's path segment for this network: it names mainnet
  *  `public`, not `mainnet`. Every Stellar Expert URL builds from this. */
 export const EXPLORER_NETWORK: "public" | "testnet" = NETWORK_NAME === "mainnet" ? "public" : "testnet";

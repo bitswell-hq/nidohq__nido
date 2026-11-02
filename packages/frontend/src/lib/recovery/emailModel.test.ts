@@ -39,7 +39,7 @@ import {
   guardianConfigScVal,
   submitGuardianOperation,
 } from './emailGuardian';
-import { PIN_LIFETIME_LEDGERS, parseEmailRecoveryDeployment } from './emailConfig';
+import { PIN_LIFETIME_SECONDS, parseEmailRecoveryDeployment } from './emailConfig';
 import { EMAIL_CIRCUIT_ID } from './emailProver';
 
 const contract = (n: number) => StrKey.encodeContract(Buffer.alloc(32, n));
@@ -84,14 +84,16 @@ describe('the email to send', () => {
 describe('the key path', () => {
   const path = (root: bigint) => ({ index: 1, siblings: [], root });
   it('prefers a live pin that holds the key, else an accepted registry root', () => {
-    expect(chooseKeyPath({ ledger: 10, pin: { root: 5n, validUntilLedger: 10, path: path(5n) } })).toMatchObject({ kind: 'pin', root: 5n });
+    // The pin's expiry is a close time in seconds.
+    const T = 1_793_500_000;
+    expect(chooseKeyPath({ now: T, pin: { root: 5n, validUntil: T, path: path(5n) } })).toMatchObject({ kind: 'pin', root: 5n });
     expect(
-      chooseKeyPath({ ledger: 11, pin: { root: 5n, validUntilLedger: 10, path: path(5n) }, registry: { root: 6n, accepted: true, path: path(6n) } }),
+      chooseKeyPath({ now: T + 1, pin: { root: 5n, validUntil: T, path: path(5n) }, registry: { root: 6n, accepted: true, path: path(6n) } }),
     ).toMatchObject({ kind: 'registry', root: 6n });
-    expect(chooseKeyPath({ ledger: 11, pin: { root: 5n, validUntilLedger: 10, path: path(5n) } })).toMatchObject({ kind: 'none', why: /pin has expired/ });
-    expect(chooseKeyPath({ ledger: 1, registry: { root: 6n, accepted: false, path: path(6n) } })).toMatchObject({ kind: 'none' });
+    expect(chooseKeyPath({ now: T + 1, pin: { root: 5n, validUntil: T, path: path(5n) } })).toMatchObject({ kind: 'none', why: /pin has expired/ });
+    expect(chooseKeyPath({ now: T, registry: { root: 6n, accepted: false, path: path(6n) } })).toMatchObject({ kind: 'none' });
     // A pin path that does not open to the guardian's pin root is no path.
-    expect(chooseKeyPath({ ledger: 1, pin: { root: 5n, validUntilLedger: 10, path: path(7n) } })).toMatchObject({ kind: 'none' });
+    expect(chooseKeyPath({ now: T, pin: { root: 5n, validUntil: T, path: path(7n) } })).toMatchObject({ kind: 'none' });
   });
 });
 
@@ -131,7 +133,7 @@ describe('the email guardian on chain', () => {
     controller: contract(2),
     commitment: new Uint8Array(32).fill(3),
     registry: contract(4),
-    keyPin: [{ root: new Uint8Array(32).fill(5), validUntilLedger: 777 }],
+    keyPin: [{ root: new Uint8Array(32).fill(5), validUntil: 1_796_092_000 }],
     allowedActions: 31,
     verifier: contract(6),
     circuitId: new Uint8Array(32).fill(7),
@@ -142,7 +144,8 @@ describe('the email guardian on chain', () => {
     const keys = v.map()!.map((e) => e.key().sym().toString());
     expect(keys).toEqual(['account', 'allowed_actions', 'circuit_id', 'commitment', 'controller', 'key_pin', 'registry', 'verifier']);
     const pin = v.map()![5]!.val().vec()![0]!;
-    expect(pin.map()!.map((e) => e.key().sym().toString())).toEqual(['root', 'valid_until_ledger']);
+    expect(pin.map()!.map((e) => e.key().sym().toString())).toEqual(['root', 'valid_until']);
+    expect(pin.map()![1]!.val().u64().toBigInt()).toBe(1_796_092_000n);
     // Round trip through the XDR and the native form `config()` returns.
     const back = xdr.ScVal.fromXDR(v.toXDR());
     expect(back.toXDR('base64')).toBe(v.toXDR('base64'));
@@ -181,7 +184,7 @@ describe('the email guardian on chain', () => {
       controller: cfg.controller,
       commitment: cfg.commitment,
       registry: cfg.registry,
-      key_pin: [{ root: cfg.keyPin[0]!.root, valid_until_ledger: 777 }],
+      key_pin: [{ root: cfg.keyPin[0]!.root, valid_until: 1_796_092_000n }],
       allowed_actions: 31,
       verifier: cfg.verifier,
       circuit_id: cfg.circuitId,
@@ -307,10 +310,10 @@ describe('checking a recovery code against the pin', () => {
 });
 
 describe('the key pin the wallet deploys', () => {
-  it('lasts 30 days (518,400 ledgers): past the registry 7-day timelock, within the guardian 365-day cap', () => {
-    expect(PIN_LIFETIME_LEDGERS).toBe(30 * 17_280);
-    expect(pinValidUntil(1_000)).toBe(1_000 + 518_400);
-    expect(PIN_LIFETIME_LEDGERS).toBeGreaterThan(120_960);
-    expect(PIN_LIFETIME_LEDGERS).toBeLessThanOrEqual(6_307_200);
+  it('lasts 30 days of close time: past the registry 7-day timelock, within the guardian 365-day cap', () => {
+    expect(PIN_LIFETIME_SECONDS).toBe(30 * 86_400);
+    expect(pinValidUntil(1_793_500_000)).toBe(1_793_500_000 + 2_592_000);
+    expect(PIN_LIFETIME_SECONDS).toBeGreaterThan(7 * 86_400);
+    expect(PIN_LIFETIME_SECONDS).toBeLessThanOrEqual(365 * 86_400);
   });
 });

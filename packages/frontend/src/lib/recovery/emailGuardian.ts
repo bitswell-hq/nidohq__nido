@@ -20,7 +20,8 @@ export const ALLOW_ALL = 31;
 
 export interface KeyPin {
   root: Uint8Array;
-  validUntilLedger: number;
+  /** The last ledger close time (Unix seconds) the pin is accepted at. */
+  validUntil: number;
 }
 
 export interface GuardianConfig {
@@ -62,7 +63,8 @@ function check32(name: string, b: Uint8Array) {
 
 export function keyPinScVal(p: KeyPin): xdr.ScVal {
   check32('a pin root', p.root);
-  return struct({ root: bytes(p.root), valid_until_ledger: xdr.ScVal.scvU32(p.validUntilLedger) });
+  if (!Number.isSafeInteger(p.validUntil) || p.validUntil < 0) throw new Error('a pin expiry is a close time in seconds');
+  return struct({ root: bytes(p.root), valid_until: xdr.ScVal.scvU64(new xdr.Uint64(BigInt(p.validUntil))) });
 }
 
 export function guardianConfigScVal(c: GuardianConfig): xdr.ScVal {
@@ -89,7 +91,7 @@ export function guardianConfigFromNative(v: unknown): GuardianConfig {
     controller: String(m.controller),
     commitment: b(m.commitment),
     registry: String(m.registry),
-    keyPin: ((m.key_pin as Record<string, unknown>[]) ?? []).map((p) => ({ root: b(p.root), validUntilLedger: Number(p.valid_until_ledger) })),
+    keyPin: ((m.key_pin as Record<string, unknown>[]) ?? []).map((p) => ({ root: b(p.root), validUntil: Number(p.valid_until) })),
     allowedActions: Number(m.allowed_actions),
     verifier: String(m.verifier),
     circuitId: b(m.circuit_id),
