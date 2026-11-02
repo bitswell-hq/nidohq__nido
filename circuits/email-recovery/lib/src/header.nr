@@ -19,12 +19,14 @@
 //!
 //! A line starts at byte 0 or right after a CRLF; nothing else is a line
 //! start, so text inside a field value can never be taken for a field. The
-//! scan returns, per byte, the index of the line it belongs to and running
-//! counts of angle brackets and of bytes outside printable ASCII, which the
-//! field parsers use to prove that a range stays inside one line, holds
-//! exactly the angle brackets it claims, and is printable.
+//! scan returns, per byte, the index of the line it belongs to and a running
+//! count of display-name faults: each line is read by the display-name
+//! automaton of `tables` (spec section 4.5), and a byte is a fault when it
+//! breaks that grammar in the state the line has reached. The From parser
+//! uses them to prove that a range stays inside one line and is a display
+//! name followed by the `<` of the angle-addr.
 
-use crate::tables::{CR, HTAB, LF, NOT_PRINTABLE, SP};
+use crate::tables::{CR, HTAB, LF, PHRASE_FAULT, PHRASE_NEXT, PHRASE_OUT, SP};
 
 comptime fn pack_be<let L: u32>(bytes: [u8; L]) -> Field {
     let mut acc: Field = 0;
@@ -42,11 +44,9 @@ pub global SUBJECT_NAME_LEN: u32 = 8;
 pub struct HeaderLayout<let N: u32> {
     /// `line_of[i]` is the index of the line containing byte `i`.
     pub line_of: [Field; N],
-    /// `angle_upto[i]` is the number of `<` and `>` bytes in `0..=i`.
-    pub angle_upto: [Field; N],
-    /// `unprintable_upto[i]` is the number of bytes in `0..=i` outside
-    /// printable ASCII (`0x20..=0x7e`).
-    pub unprintable_upto: [Field; N],
+    /// `phrase_faults_upto[i]` is the number of display-name faults in
+    /// `0..=i`.
+    pub phrase_faults_upto: [Field; N],
     /// Start of the only `from:` line.
     pub from_start: u32,
     /// Start of the only `subject:` line.
@@ -96,11 +96,10 @@ pub fn scan_header<let N: u32>(header: BoundedVec<u8, N>) -> HeaderLayout<N> {
     }
 
     let mut line_of: [Field; N] = [0; N];
-    let mut angle_upto: [Field; N] = [0; N];
-    let mut unprintable_upto: [Field; N] = [0; N];
+    let mut phrase_faults_upto: [Field; N] = [0; N];
     let mut line: Field = 0;
-    let mut angles: Field = 0;
-    let mut unprintable: Field = 0;
+    let mut phrase: u8 = PHRASE_OUT;
+    let mut phrase_faults: Field = 0;
     let mut last_start: Field = 0;
     let mut from_count: Field = 0;
     let mut from_at: Field = 0;
@@ -155,12 +154,11 @@ pub fn scan_header<let N: u32>(header: BoundedVec<u8, N>) -> HeaderLayout<N> {
             std::as_witness(subject_at);
         }
 
-        angles += ((c == 60) | (c == 62)) as Field;
-        unprintable += NOT_PRINTABLE[c as u32];
-        std::as_witness(angles);
-        std::as_witness(unprintable);
-        angle_upto[i] = angles;
-        unprintable_upto[i] = unprintable;
+        let k = phrase as u32 * 256 + c as u32;
+        phrase_faults += PHRASE_FAULT[k];
+        std::as_witness(phrase_faults);
+        phrase_faults_upto[i] = phrase_faults;
+        phrase = PHRASE_NEXT[k];
     }
 
     assert(from_count == 1, "header: exactly one signed From field is required");
@@ -168,8 +166,7 @@ pub fn scan_header<let N: u32>(header: BoundedVec<u8, N>) -> HeaderLayout<N> {
 
     HeaderLayout {
         line_of,
-        angle_upto,
-        unprintable_upto,
+        phrase_faults_upto,
         from_start: to_u32(from_at),
         subject_start: to_u32(subject_at),
         last_line_start: to_u32(last_start),

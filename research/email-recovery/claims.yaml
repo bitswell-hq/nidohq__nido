@@ -170,7 +170,8 @@ claims:
     statement: >-
       Every adversarial email of the provider mocks that a standard DKIM
       verifier accepts but whose claim must not be provable (display-name,
-      comment, quoted and folded From spoofing; unsigned From or Subject
+      comment, quoted and folded From spoofing; From values read as an
+      address list, another mailbox or none; unsigned From or Subject
       fields; a misaligned or extra signature; an RSA-1024 key; an l= body;
       encoded, folded or split Subjects; replay into another statement or
       account) is refused by the recovery circuit, each at a named check.
@@ -229,16 +230,16 @@ claims:
     statement: >-
       One submit_guardian carrying an email approval with a real proof, for
       each of the 12 fixtures (every launch domain and a 124-byte address), uses
-      121,822,719 to 121,937,701 instructions on the test host, 30.5% of the
+      121,799,565 to 121,883,583 instructions on the test host, 30.4 to 30.5% of the
       400 million a Soroban transaction may use, with the approval proven
       against a registry root; it reads 14 ledger entries and writes 2 (1,208
-      bytes), with an invocation resource fee of 94,435 to 94,516
+      bytes), with an invocation resource fee of 94,419 to 94,478
       stroops before rent; re-executed as a signed transaction it uses
-      131,187,545 to 131,301,187 instructions in an 18,148-byte envelope, whose
+      131,172,469 to 131,248,057 instructions in an 18,148-byte envelope, whose
       16,784-byte authorization entry holds the 16,224-byte proof, with a
-      resource fee of 178,207 to 178,286 stroops before rent at the Soroban SDK's
+      resource fee of 178,196 to 178,249 stroops before rent at the Soroban SDK's
       2026-07-10 snapshot of mainnet's fee schedule; mainnet's archived settings
-      price the same transaction at 82,542 stroops before rent. Measured on the
+      price the same transaction at 82,530 stroops before rent. Measured on the
       test host, not on a network.
     status: measured
     evidence:
@@ -250,12 +251,12 @@ claims:
     statement: >-
       On an 18-core desktop (Apple M5 Max) at a one-minute load average of
       about 6, proving one recovery email takes, as the median of five runs,
-      0.96 seconds natively on every core and 4.69 seconds on one thread (1.61
-      and 5.34 seconds with the witness, at 879 and 872 MiB peak), and 3.34
-      seconds with bb.js in Node on 18 threads and 13.4 seconds on one (4.10 and
-      14.2 seconds with the witness, at 1,715 and 1,419 MiB); a second run at a
-      load average of 5.4 agrees within 4%; phone-class devices are not
-      measured.
+      0.94 seconds natively on every core and 4.64 seconds on one thread (1.69
+      and 5.38 seconds with the witness, at 876 and 870 MiB peak), and 3.24
+      seconds with bb.js in Node on 18 threads and 13.4 seconds on one (3.97 and
+      14.1 seconds with the witness, at 1,662 and 1,386 MiB); a second run of
+      the same build at a load average of 5.4 agrees within 2%; phone-class
+      devices are not measured.
     status: measured
     evidence:
       - file: circuits/email-recovery/MEASUREMENTS.md
@@ -352,10 +353,10 @@ claims:
   - id: browser-proving-cost
     statement: >-
       In headless Chrome 151 on the same desktop, the wallet's own prover
-      worker proves a recovery email in 1.43 seconds on 18 threads and 8.40
-      seconds on one (median of five warm runs), 2.82 and 9.95 seconds from the
-      page's request to the locally verified proof, with Barretenberg using 805
-      and 738 MiB and the renderer peaking at 2,595 and 1,463 MiB; phone-class
+      worker proves a recovery email in 1.44 seconds on 18 threads and 8.37
+      seconds on one (median of five warm runs), 2.81 and 9.88 seconds from the
+      page's request to the locally verified proof, with Barretenberg using 791
+      and 757 MiB and the renderer peaking at 2,586 and 1,432 MiB; phone-class
       devices are not measured.
     status: measured
     evidence:
@@ -366,11 +367,11 @@ claims:
     statement: >-
       On a local Stellar network at protocol 29 with mainnet's settings, the
       20 email votes with a real proof that leave their attempt collecting, each
-      proven against its guardian's key pin, are metered at 121,576,647 to
-      121,693,623 instructions (median 121,641,913) and declare 126,486,236 to
-      126,607,891, which their fee is charged on; each reads 12 ledger entries
+      proven against its guardian's key pin, are metered at 121,576,543 to
+      121,671,547 instructions (median 121,627,161) and declare 126,486,128 to
+      126,584,932, which their fee is charged on; each reads 12 ledger entries
       and writes 2 (1,208 bytes) in an 18,080-byte transaction, and is charged
-      83,125 to 83,162 stroops, 2,046 to 2,049 of them rent: the fee mainnet's
+      83,125 to 83,155 stroops, 2,047 to 2,049 of them rent: the fee mainnet's
       settings give the same transaction. At mainnet's settings a ledger holds at
       most 12 such votes, 4 in each of its 3 clusters of 580,000,000
       instructions.
@@ -479,9 +480,9 @@ claims:
   # The circuit, the guardian and the registry, by component.
   - id: circuit-size
     statement: >-
-      The recovery circuit has 251,561 UltraHonk gates (117,491 ACIR
+      The recovery circuit has 248,996 UltraHonk gates (109,809 ACIR
       opcodes), padded to 2^18; the same relation at a 1024-byte header bound
-      has 189,503 gates, also padded to 2^18; every proof is 16,224 bytes.
+      has 188,986 gates, also padded to 2^18; every proof is 16,224 bytes.
     status: measured
     evidence:
       file: circuits/email-recovery/MEASUREMENTS.md
@@ -537,13 +538,22 @@ claims:
   - id: circuit-from-grammar
     statement: >-
       The circuit reads the From address only as a bare address or as the one
-      angle-bracketed address that ends the field; a decoy address in the
-      display name, a quoted local part, a comment and a value spanning into
-      the next field are refused.
+      angle-bracketed address that ends the field, after a display name of
+      atoms, dots and closed quoted strings that an RFC 5322 reader reads as
+      no address; a decoy address in the display name, an address list, an
+      address before the angle-addr, an unclosed quoted string, a quoted
+      local part, a comment and a value spanning into the next field are
+      refused.
     status: tested
     evidence:
       - test: decoy_angle_addr_in_display_name_is_refused
         file: circuits/email-recovery/tests/src/soundness.nr
+      - test: address_list_is_refused
+        file: circuits/email-recovery/tests/src/display_name_tests.nr
+      - test: address_before_the_angle_addr_is_refused
+        file: circuits/email-recovery/tests/src/display_name_tests.nr
+      - test: unbalanced_quote_is_refused
+        file: circuits/email-recovery/tests/src/display_name_tests.nr
       - test: address_like_display_name_cannot_be_claimed
         file: circuits/email-recovery/tests/src/soundness.nr
       - test: quoted_local_part_is_refused
@@ -557,7 +567,7 @@ claims:
 
   - id: circuit-issue-classes
     statement: >-
-      The circuit library's 123 tests include a negative test for each
+      The circuit library's 143 tests include a negative test for each
       publicly documented soundness issue class of open-source email circuits,
       each refused at its named assertion.
     status: tested
@@ -934,7 +944,7 @@ claims:
 
   - id: prover-download
     statement: >-
-      A first proof downloads 18,790,270 octets (the circuit, its
+      A first proof downloads 18,664,335 octets (the circuit, its
       verification key and the prefix of Barretenberg's reference string),
       checked against pinned digests and cached, so a retry downloads
       nothing.
@@ -1090,8 +1100,8 @@ claims:
     statement: >-
       On the local network, the email vote that authorizes an attempt with a
       seven-day delay also writes the authorized attempt: about 122 million
-      instructions metered (127,464,918 declared), 1,488 bytes written, and
-      3,632,058 stroops charged, of which 3,545,582 are rent.
+      instructions metered (127,436,042 declared), 1,488 bytes written, and
+      3,632,049 stroops charged, of which 3,545,582 are rent.
     status: measured
     evidence:
       file: research/email-recovery/eval/results/attacks-local.json
@@ -1105,7 +1115,7 @@ claims:
       instance and code, were archived on testnet and were restored first, one
       transaction per entry, for 112,447,907 stroops more. With every entry a
       recovery reads archived, the same recovery at mainnet's settings takes 7
-      transactions and 3,959,831,759 stroops, against 5,237,388 with nothing
+      transactions and 3,935,930,637 stroops, against 5,237,377 with nothing
       archived (re-executed on the test host); keeping the email verifier, the
       key registry and the guardian's code live costs 3,304,297,283 stroops a
       year at mainnet's settings and each account's guardian instance
@@ -1121,12 +1131,13 @@ claims:
     statement: >-
       On one thread of the desktop's slower core tier (the 12 cores macOS names
       Performance, selected with background QoS), a recovery email proves in
-      15.8 seconds natively, 50.3 seconds with bb.js in Node, and 32.0 seconds in
-      Chrome (37.0 seconds to the verified proof, the renderer peaking at 1,421
-      MiB); on four such threads in 5.46, 19.0 and 10.2 seconds (Chrome: 14.9
-      seconds, 2,094 MiB). A second run under steadier load was 12 to 17% slower
-      on this tier, whose background-QoS threads yield to other work; these are
-      desktop cores, not a model of a phone.
+      16.1 seconds natively, 50.3 seconds with bb.js in Node, and 32.5 seconds in
+      Chrome (37.3 seconds to the verified proof, the renderer peaking at 1,398
+      MiB); on four such threads in 5.60, 19.0 and 10.3 seconds (Chrome: 14.9
+      seconds, 2,034 MiB). A second run of the same build agreed within 2% on
+      this tier, whose background-QoS threads yield to other work, so its times
+      depend on the machine's load; these are desktop cores, not a model of a
+      phone.
     status: measured
     evidence:
       file: research/email-recovery/eval/results/proving.json
@@ -1193,8 +1204,10 @@ claims:
     statement: >-
       (A1b) A launch provider DKIM-signs a message whose From address is one
       of its mailboxes only when the holder of that mailbox submitted it: it
-      refuses or rewrites a submission with two From fields or several
-      addresses, or authenticates the address the circuit binds; sending as
+      refuses or rewrites a submission with two From fields, or
+      authenticates the instance it signs, and for a From with a display name
+      authenticates the address the circuit binds (a From naming several
+      addresses the circuit refuses); sending as
       another address of its domain needs proof of control of that mailbox;
       and an address it assigns again cannot be used against an existing
       enrollment.
@@ -1207,7 +1220,8 @@ claims:
         measurements in research/email-recovery/eval/parser/sender-authentication.md:
         how each submission path handles two From fields or several
         addresses is unknown today for every provider, and was not met by
-        Yahoo, iCloud and Fastmail in 2020; Fastmail and GMX/WEB.DE assign
+        Yahoo, iCloud and Fastmail in 2020, though the circuit refuses a From
+        naming several addresses (spec 4.5); Fastmail and GMX/WEB.DE assign
         deleted or inactive addresses again, which the account code covers.
 
   - id: registry-correctness

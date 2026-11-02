@@ -58,8 +58,8 @@ fn victim_hints(h: BoundedVec<u8, HEADER_MAX>) -> crate::common::Hints {
 // Header Field Sequence Length" (a long display name hides the real `<`).
 
 /// The honest reading of `"x <victim@gmail.com> AAA..." <attacker@gmail.com>`
-/// is refused: the field holds two angle-addrs.
-#[test(should_fail_with = "From: the field must hold exactly one angle-addr")]
+/// is refused: the display name holds a second angle-addr.
+#[test(should_fail_with = "From: invalid display name")]
 fn decoy_angle_addr_in_display_name_is_refused() {
     let _ = verify(
         header(DECOY_IN_DISPLAY_NAME_HEADER.as_bytes()),

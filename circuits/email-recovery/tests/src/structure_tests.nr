@@ -73,9 +73,9 @@ fn domain_longer_than_62_bytes_is_refused() {
     );
 }
 
-/// A UTF-8 display name: the From value must be printable ASCII (an RFC 2047
-/// encoded word carries such a name).
-#[test(should_fail_with = "From: field value must be printable ASCII")]
+/// A UTF-8 display name: the display name must be printable ASCII (an RFC
+/// 2047 encoded word carries such a name).
+#[test(should_fail_with = "From: invalid display name")]
 fn non_ascii_display_name_is_refused() {
     let _ = verify(
         header(NON_ASCII_DISPLAY_NAME_HEADER),

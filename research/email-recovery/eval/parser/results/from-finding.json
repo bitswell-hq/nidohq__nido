@@ -34,8 +34,8 @@
     "syntax": "valid"
    },
    "circuit": {
-    "accepts": true,
-    "opensCommitmentWith": "t5w6.i9otz@yahoo.com"
+    "accepts": false,
+    "refusal": "From: invalid display name"
    }
   },
   {
@@ -56,8 +56,8 @@
     "syntax": "lax"
    },
    "circuit": {
-    "accepts": true,
-    "opensCommitmentWith": "t5w6.i9otz@yahoo.com"
+    "accepts": false,
+    "refusal": "From: invalid display name"
    }
   },
   {
@@ -77,8 +77,8 @@
     "syntax": "invalid"
    },
    "circuit": {
-    "accepts": true,
-    "opensCommitmentWith": "t5w6.i9otz@yahoo.com"
+    "accepts": false,
+    "refusal": "From: invalid display name"
    }
   },
   {
@@ -95,8 +95,8 @@
     "syntax": "invalid"
    },
    "circuit": {
-    "accepts": true,
-    "opensCommitmentWith": "t5w6.i9otz@yahoo.com"
+    "accepts": false,
+    "refusal": "From: invalid display name"
    }
   }
  ]

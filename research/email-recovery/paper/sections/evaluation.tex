@@ -168,14 +168,14 @@ a retry downloads nothing\claim{prover-download}.
     \toprule
     Prover & Threads & Proving & Total & Memory \\
     \midrule
-    Native \texttt{bb} & 18 & 0.94 & 1.58 & 879 MiB \\
-    Native \texttt{bb} & 1 & 4.67 & 5.31 & 872 MiB \\
-    bb.js, Node & 18 & 3.30 & 4.06 & 1{,}716 MiB \\
-    bb.js, Node & 1 & 13.5 & 14.3 & 1{,}421 MiB \\
-    Chrome 151 & 18 & 1.48 & 2.92 & 2{,}616 MiB \\
-    Chrome 151 & 1 & 8.42 & 9.96 & 1{,}468 MiB \\
-    Chrome, efficiency cores & 4 & 12.0 & 17.5 & 2{,}015 MiB \\
-    Chrome, efficiency cores & 1 & 36.4 & 41.3 & 1{,}428 MiB \\
+    Native \texttt{bb} & 18 & 0.94 & 1.69 & 876 MiB \\
+    Native \texttt{bb} & 1 & 4.64 & 5.38 & 870 MiB \\
+    bb.js, Node & 18 & 3.24 & 3.97 & 1{,}662 MiB \\
+    bb.js, Node & 1 & 13.4 & 14.1 & 1{,}386 MiB \\
+    Chrome 151 & 18 & 1.44 & 2.81 & 2{,}586 MiB \\
+    Chrome 151 & 1 & 8.37 & 9.88 & 1{,}432 MiB \\
+    Chrome, efficiency cores & 4 & 10.3 & 14.9 & 2{,}034 MiB \\
+    Chrome, efficiency cores & 1 & 32.5 & 37.3 & 1{,}398 MiB \\
     Phone-class device & --- & \multicolumn{3}{c}{not measured} \\
     \bottomrule
   \end{tabularx}
@@ -185,8 +185,8 @@ a retry downloads nothing\claim{prover-download}.
 budgets up to about two minutes of proving on a phone, behind a progress
 indicator; that budget is a target, not a result\claim{phone-proving-budget}.
 Two desktop proxies bound what can be said. The desktop's efficiency cores,
-selected with macOS's background scheduling class, prove in 36.4 seconds on
-one thread in Chrome, 56.6 in Node and 18.2 natively\claim{efficiency-core-proving};
+selected with macOS's background scheduling class, prove in 32.5 seconds on
+one thread in Chrome, 50.3 in Node and 16.1 natively\claim{efficiency-core-proving};
 they are a slower class of core, not a model of a phone. DevTools CPU
 throttling at 4x and 6x leaves proving unchanged, because Chrome throttles
 pages but refuses to throttle the workers in which all proving

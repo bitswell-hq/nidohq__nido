@@ -6,9 +6,9 @@
     "networkCostTypes": 86
   },
   "emailVoteMetering": {
-    "builtIn": 131210419,
-    "mainnet": 130068038,
-    "testnet": 130102214
+    "builtIn": 131172469,
+    "mainnet": 130031418,
+    "testnet": 130065594
   },
   "entriesAtRest": 160,
   "live": [
@@ -50,7 +50,7 @@
       "diskReadBytes": 0,
       "envelopeBytes": 18148,
       "eventsBytes": 4,
-      "instructions": 130068038,
+      "instructions": 130031418,
       "ledger": 52840,
       "readOnly": 12,
       "readWrite": 2,
@@ -428,7 +428,7 @@
       "diskReadBytes": 151456,
       "envelopeBytes": 18176,
       "eventsBytes": 4,
-      "instructions": 138053490,
+      "instructions": 138016870,
       "ledger": 52840,
       "readOnly": 6,
       "readWrite": 8,
@@ -485,8 +485,8 @@
         },
         {
           "code": true,
-          "key": "code 0e4239ca",
-          "keyXdr": "AAAABw5COcqS0+OKnvxAwk7S1CN8Q3JTodNTcsjGpap8MZS5",
+          "key": "code 5d7e195e",
+          "keyXdr": "AAAAB11+GV4/LMXx/S6acFYhmCje1BJqfFCExRr5Pn9fNt/Y",
           "newLiveUntil": 2126439,
           "newSize": 600315,
           "oldLiveUntil": 0,
@@ -541,8 +541,8 @@
         },
         {
           "code": true,
-          "key": "code 0e4239ca",
-          "keyXdr": "AAAABw5COcqS0+OKnvxAwk7S1CN8Q3JTodNTcsjGpap8MZS5",
+          "key": "code 5d7e195e",
+          "keyXdr": "AAAAB11+GV4/LMXx/S6acFYhmCje1BJqfFCExRr5Pn9fNt/Y",
           "removed": false,
           "rentBytes": 600315,
           "xdrBytes": 45716

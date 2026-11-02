@@ -1,5 +1,5 @@
 {
- "generated": "2026-11-02T07:28:18.675Z",
+ "generated": "2026-11-02T10:37:00.695Z",
  "machine": {
   "cpu": "Apple M5 Max",
   "logical_cpus": 18,
@@ -16,13 +16,13 @@
   "memory_gib": 128,
   "os": "macOS 26.5.2",
   "node": "v24.18.0",
-  "load_average_at_start": "6.13 7.58 25.05",
-  "load_average_at_end": "6.67 5.30 13.23"
+  "load_average_at_start": "5.93 5.06 7.12",
+  "load_average_at_end": "6.45 5.15 5.69"
  },
  "circuit": {
   "artifact": "circuits/email-recovery/artifacts/recovery.json",
-  "artifact_sha256": "5d793cbe967bf11fd0e51ee0923be763c5949ed26d45207fb68ea98556e5448f",
-  "vk_sha256": "2837d0cfd7ddad684006e3eb4eba4ff7f4ed732a9d93423a79e69523d4a43b64",
+  "artifact_sha256": "eec1e8f70f87c3d3a7a1694de977ba4694f516a6a31ed1417b6b23feb534dfa2",
+  "vk_sha256": "a998d03e2069b41c875235876c3aa9c54bbc054c16fab0c38296651d01a93dbc",
   "nargo": "nargo version = 1.0.0-beta.9",
   "bb": "v0.87.0",
   "fixture": "crates/integration-tests/fixtures/email/provider-gmail-com"
@@ -36,29 +36,29 @@
    "background_qos": false,
    "runs": [
     {
-     "witness_ms": 650,
-     "prove_ms": 980,
-     "peak_rss_mib": 878
+     "witness_ms": 740,
+     "prove_ms": 970,
+     "peak_rss_mib": 875
     },
     {
-     "witness_ms": 660,
-     "prove_ms": 950,
-     "peak_rss_mib": 879
+     "witness_ms": 730,
+     "prove_ms": 930,
+     "peak_rss_mib": 875
     },
     {
-     "witness_ms": 640,
-     "prove_ms": 960,
-     "peak_rss_mib": 878
-    },
-    {
-     "witness_ms": 650,
+     "witness_ms": 730,
      "prove_ms": 940,
      "peak_rss_mib": 876
     },
     {
-     "witness_ms": 660,
+     "witness_ms": 750,
+     "prove_ms": 940,
+     "peak_rss_mib": 875
+    },
+    {
+     "witness_ms": 750,
      "prove_ms": 970,
-     "peak_rss_mib": 871
+     "peak_rss_mib": 874
     }
    ]
   },
@@ -69,29 +69,29 @@
    "background_qos": false,
    "runs": [
     {
-     "witness_ms": 650,
-     "prove_ms": 4670,
-     "peak_rss_mib": 871
+     "witness_ms": 750,
+     "prove_ms": 4720,
+     "peak_rss_mib": 870
     },
     {
-     "witness_ms": 640,
+     "witness_ms": 740,
      "prove_ms": 4640,
-     "peak_rss_mib": 871
+     "peak_rss_mib": 870
     },
     {
-     "witness_ms": 640,
-     "prove_ms": 4730,
-     "peak_rss_mib": 871
+     "witness_ms": 740,
+     "prove_ms": 4610,
+     "peak_rss_mib": 869
     },
     {
-     "witness_ms": 650,
-     "prove_ms": 4750,
-     "peak_rss_mib": 872
+     "witness_ms": 730,
+     "prove_ms": 4630,
+     "peak_rss_mib": 869
     },
     {
-     "witness_ms": 650,
+     "witness_ms": 730,
      "prove_ms": 4690,
-     "peak_rss_mib": 871
+     "peak_rss_mib": 870
     }
    ]
   },
@@ -102,29 +102,29 @@
    "background_qos": true,
    "runs": [
     {
-     "witness_ms": 2000,
-     "prove_ms": 15810,
-     "peak_rss_mib": 884
+     "witness_ms": 2340,
+     "prove_ms": 15710,
+     "peak_rss_mib": 869
     },
     {
-     "witness_ms": 2140,
-     "prove_ms": 15010,
-     "peak_rss_mib": 883
+     "witness_ms": 2320,
+     "prove_ms": 15600,
+     "peak_rss_mib": 882
     },
     {
-     "witness_ms": 2050,
-     "prove_ms": 15590,
-     "peak_rss_mib": 871
+     "witness_ms": 2390,
+     "prove_ms": 16080,
+     "peak_rss_mib": 881
     },
     {
-     "witness_ms": 1990,
-     "prove_ms": 16050,
-     "peak_rss_mib": 870
+     "witness_ms": 2670,
+     "prove_ms": 16070,
+     "peak_rss_mib": 877
     },
     {
-     "witness_ms": 2150,
-     "prove_ms": 15930,
-     "peak_rss_mib": 883
+     "witness_ms": 2480,
+     "prove_ms": 16080,
+     "peak_rss_mib": 869
     }
    ]
   },
@@ -135,29 +135,29 @@
    "background_qos": true,
    "runs": [
     {
-     "witness_ms": 2030,
-     "prove_ms": 5370,
+     "witness_ms": 2450,
+     "prove_ms": 5610,
+     "peak_rss_mib": 890
+    },
+    {
+     "witness_ms": 2510,
+     "prove_ms": 5640,
      "peak_rss_mib": 870
     },
     {
-     "witness_ms": 1950,
-     "prove_ms": 5230,
-     "peak_rss_mib": 909
+     "witness_ms": 2630,
+     "prove_ms": 5360,
+     "peak_rss_mib": 881
     },
     {
-     "witness_ms": 1960,
-     "prove_ms": 5460,
-     "peak_rss_mib": 882
+     "witness_ms": 2390,
+     "prove_ms": 5380,
+     "peak_rss_mib": 881
     },
     {
-     "witness_ms": 2100,
-     "prove_ms": 5580,
-     "peak_rss_mib": 871
-    },
-    {
-     "witness_ms": 2110,
-     "prove_ms": 5570,
-     "peak_rss_mib": 872
+     "witness_ms": 2560,
+     "prove_ms": 5600,
+     "peak_rss_mib": 870
     }
    ]
   },
@@ -168,29 +168,29 @@
    "background_qos": false,
    "runs": [
     {
-     "witness_ms": 769,
-     "prove_ms": 13422,
-     "peak_rss_mib": 1419
+     "witness_ms": 735,
+     "prove_ms": 13359,
+     "peak_rss_mib": 1386
     },
     {
-     "witness_ms": 749,
-     "prove_ms": 13511,
-     "peak_rss_mib": 1348
+     "witness_ms": 728,
+     "prove_ms": 13129,
+     "peak_rss_mib": 1321
     },
     {
-     "witness_ms": 751,
-     "prove_ms": 13398,
-     "peak_rss_mib": 1383
+     "witness_ms": 742,
+     "prove_ms": 13336,
+     "peak_rss_mib": 1356
     },
     {
-     "witness_ms": 769,
-     "prove_ms": 13357,
-     "peak_rss_mib": 1384
+     "witness_ms": 731,
+     "prove_ms": 13428,
+     "peak_rss_mib": 1324
     },
     {
-     "witness_ms": 767,
-     "prove_ms": 13458,
-     "peak_rss_mib": 1419
+     "witness_ms": 731,
+     "prove_ms": 13554,
+     "peak_rss_mib": 1323
     }
    ]
   },
@@ -201,29 +201,29 @@
    "background_qos": false,
    "runs": [
     {
-     "witness_ms": 748,
-     "prove_ms": 3266,
-     "peak_rss_mib": 1715
+     "witness_ms": 745,
+     "prove_ms": 3222,
+     "peak_rss_mib": 1656
     },
     {
-     "witness_ms": 769,
-     "prove_ms": 3328,
-     "peak_rss_mib": 1711
+     "witness_ms": 731,
+     "prove_ms": 3242,
+     "peak_rss_mib": 1651
     },
     {
-     "witness_ms": 766,
-     "prove_ms": 3344,
-     "peak_rss_mib": 1680
+     "witness_ms": 731,
+     "prove_ms": 3237,
+     "peak_rss_mib": 1661
     },
     {
-     "witness_ms": 767,
-     "prove_ms": 3398,
-     "peak_rss_mib": 1713
+     "witness_ms": 731,
+     "prove_ms": 3293,
+     "peak_rss_mib": 1657
     },
     {
-     "witness_ms": 760,
-     "prove_ms": 3336,
-     "peak_rss_mib": 1682
+     "witness_ms": 741,
+     "prove_ms": 3337,
+     "peak_rss_mib": 1662
     }
    ]
   },
@@ -234,29 +234,29 @@
    "background_qos": true,
    "runs": [
     {
-     "witness_ms": 2576,
-     "prove_ms": 47449,
-     "peak_rss_mib": 1311
+     "witness_ms": 2355,
+     "prove_ms": 50431,
+     "peak_rss_mib": 1276
     },
     {
-     "witness_ms": 2340,
-     "prove_ms": 50375,
-     "peak_rss_mib": 1280
+     "witness_ms": 2336,
+     "prove_ms": 50112,
+     "peak_rss_mib": 1310
     },
     {
-     "witness_ms": 2425,
-     "prove_ms": 50297,
-     "peak_rss_mib": 1316
+     "witness_ms": 2409,
+     "prove_ms": 50797,
+     "peak_rss_mib": 1259
     },
     {
-     "witness_ms": 2423,
-     "prove_ms": 51281,
-     "peak_rss_mib": 1288
+     "witness_ms": 2413,
+     "prove_ms": 50349,
+     "peak_rss_mib": 1321
     },
     {
-     "witness_ms": 2478,
-     "prove_ms": 50306,
-     "peak_rss_mib": 1292
+     "witness_ms": 2339,
+     "prove_ms": 47080,
+     "peak_rss_mib": 1264
     }
    ]
   },
@@ -267,29 +267,29 @@
    "background_qos": true,
    "runs": [
     {
-     "witness_ms": 2448,
-     "prove_ms": 18988,
-     "peak_rss_mib": 1283
+     "witness_ms": 2357,
+     "prove_ms": 18978,
+     "peak_rss_mib": 1416
     },
     {
-     "witness_ms": 2364,
-     "prove_ms": 19047,
-     "peak_rss_mib": 1446
+     "witness_ms": 2387,
+     "prove_ms": 18505,
+     "peak_rss_mib": 1373
     },
     {
-     "witness_ms": 1668,
-     "prove_ms": 18015,
-     "peak_rss_mib": 1393
+     "witness_ms": 2460,
+     "prove_ms": 19169,
+     "peak_rss_mib": 1344
     },
     {
-     "witness_ms": 2432,
-     "prove_ms": 19160,
-     "peak_rss_mib": 1426
+     "witness_ms": 2314,
+     "prove_ms": 19045,
+     "peak_rss_mib": 1341
     },
     {
-     "witness_ms": 2424,
-     "prove_ms": 18291,
-     "peak_rss_mib": 1408
+     "witness_ms": 2400,
+     "prove_ms": 19328,
+     "peak_rss_mib": 1379
     }
    ]
   },
@@ -300,38 +300,38 @@
    "background_qos": false,
    "runs": [
     {
-     "witness_ms": 820,
-     "prove_ms": 8464,
-     "total_ms": 10036,
-     "bb_wasm_mib": 738
+     "witness_ms": 783,
+     "prove_ms": 8453,
+     "total_ms": 9957,
+     "bb_wasm_mib": 757
     },
     {
-     "witness_ms": 795,
-     "prove_ms": 8342,
-     "total_ms": 9852,
-     "bb_wasm_mib": 738
+     "witness_ms": 773,
+     "prove_ms": 8317,
+     "total_ms": 9813,
+     "bb_wasm_mib": 757
     },
     {
-     "witness_ms": 792,
-     "prove_ms": 8495,
-     "total_ms": 10005,
-     "bb_wasm_mib": 738
+     "witness_ms": 777,
+     "prove_ms": 8501,
+     "total_ms": 9998,
+     "bb_wasm_mib": 757
     },
     {
-     "witness_ms": 802,
-     "prove_ms": 8399,
-     "total_ms": 9947,
-     "bb_wasm_mib": 738
+     "witness_ms": 781,
+     "prove_ms": 8369,
+     "total_ms": 9878,
+     "bb_wasm_mib": 757
     },
     {
-     "witness_ms": 796,
-     "prove_ms": 8378,
-     "total_ms": 9897,
-     "bb_wasm_mib": 738
+     "witness_ms": 776,
+     "prove_ms": 8347,
+     "total_ms": 9840,
+     "bb_wasm_mib": 757
     }
    ],
-   "peak_renderer_rss_mib": 1463,
-   "recorded": "2026-11-02T07:15:47.852Z"
+   "peak_renderer_rss_mib": 1432,
+   "recorded": "2026-11-02T10:24:24.931Z"
   },
   {
    "prover": "browser",
@@ -340,38 +340,38 @@
    "background_qos": false,
    "runs": [
     {
-     "witness_ms": 799,
-     "prove_ms": 1512,
-     "total_ms": 3051,
-     "bb_wasm_mib": 805
+     "witness_ms": 787,
+     "prove_ms": 1532,
+     "total_ms": 3061,
+     "bb_wasm_mib": 791
     },
     {
-     "witness_ms": 743,
-     "prove_ms": 1433,
-     "total_ms": 2818,
-     "bb_wasm_mib": 805
+     "witness_ms": 731,
+     "prove_ms": 1452,
+     "total_ms": 2832,
+     "bb_wasm_mib": 791
     },
     {
-     "witness_ms": 741,
-     "prove_ms": 1418,
-     "total_ms": 2805,
-     "bb_wasm_mib": 805
-    },
-    {
-     "witness_ms": 745,
-     "prove_ms": 1423,
+     "witness_ms": 734,
+     "prove_ms": 1441,
      "total_ms": 2812,
-     "bb_wasm_mib": 805
+     "bb_wasm_mib": 791
     },
     {
-     "witness_ms": 743,
-     "prove_ms": 1435,
-     "total_ms": 2824,
-     "bb_wasm_mib": 805
+     "witness_ms": 727,
+     "prove_ms": 1437,
+     "total_ms": 2793,
+     "bb_wasm_mib": 791
+    },
+    {
+     "witness_ms": 721,
+     "prove_ms": 1408,
+     "total_ms": 2764,
+     "bb_wasm_mib": 791
     }
    ],
-   "peak_renderer_rss_mib": 2595,
-   "recorded": "2026-11-02T07:15:47.852Z"
+   "peak_renderer_rss_mib": 2586,
+   "recorded": "2026-11-02T10:24:24.931Z"
   },
   {
    "prover": "browser",
@@ -380,38 +380,38 @@
    "background_qos": true,
    "runs": [
     {
-     "witness_ms": 2532,
-     "prove_ms": 31718,
-     "total_ms": 36531,
-     "bb_wasm_mib": 738
+     "witness_ms": 2407,
+     "prove_ms": 31865,
+     "total_ms": 36653,
+     "bb_wasm_mib": 757
     },
     {
-     "witness_ms": 2590,
-     "prove_ms": 32075,
-     "total_ms": 36989,
-     "bb_wasm_mib": 738
+     "witness_ms": 2476,
+     "prove_ms": 32678,
+     "total_ms": 37319,
+     "bb_wasm_mib": 757
     },
     {
-     "witness_ms": 2554,
-     "prove_ms": 32050,
-     "total_ms": 36894,
-     "bb_wasm_mib": 738
+     "witness_ms": 2547,
+     "prove_ms": 32505,
+     "total_ms": 37520,
+     "bb_wasm_mib": 757
     },
     {
-     "witness_ms": 2554,
-     "prove_ms": 32711,
-     "total_ms": 37526,
-     "bb_wasm_mib": 738
+     "witness_ms": 2486,
+     "prove_ms": 32266,
+     "total_ms": 37046,
+     "bb_wasm_mib": 757
     },
     {
-     "witness_ms": 2661,
-     "prove_ms": 31957,
-     "total_ms": 37039,
-     "bb_wasm_mib": 738
+     "witness_ms": 2576,
+     "prove_ms": 32714,
+     "total_ms": 37560,
+     "bb_wasm_mib": 757
     }
    ],
-   "peak_renderer_rss_mib": 1421,
-   "recorded": "2026-11-02T07:15:47.852Z"
+   "peak_renderer_rss_mib": 1398,
+   "recorded": "2026-11-02T10:24:24.931Z"
   },
   {
    "prover": "browser",
@@ -420,39 +420,39 @@
    "background_qos": true,
    "runs": [
     {
-     "witness_ms": 2608,
-     "prove_ms": 10567,
-     "total_ms": 15437,
-     "bb_wasm_mib": 771
+     "witness_ms": 2522,
+     "prove_ms": 9583,
+     "total_ms": 14477,
+     "bb_wasm_mib": 757
     },
     {
-     "witness_ms": 2642,
-     "prove_ms": 10173,
-     "total_ms": 14917,
-     "bb_wasm_mib": 771
+     "witness_ms": 2470,
+     "prove_ms": 10325,
+     "total_ms": 14790,
+     "bb_wasm_mib": 757
     },
     {
-     "witness_ms": 2280,
-     "prove_ms": 10189,
-     "total_ms": 14372,
-     "bb_wasm_mib": 771
+     "witness_ms": 2546,
+     "prove_ms": 11037,
+     "total_ms": 15683,
+     "bb_wasm_mib": 757
     },
     {
-     "witness_ms": 2559,
-     "prove_ms": 10143,
-     "total_ms": 14883,
-     "bb_wasm_mib": 771
+     "witness_ms": 2543,
+     "prove_ms": 10245,
+     "total_ms": 14902,
+     "bb_wasm_mib": 757
     },
     {
-     "witness_ms": 2685,
-     "prove_ms": 10181,
-     "total_ms": 14970,
-     "bb_wasm_mib": 771
+     "witness_ms": 2428,
+     "prove_ms": 10465,
+     "total_ms": 14886,
+     "bb_wasm_mib": 757
     }
    ],
-   "peak_renderer_rss_mib": 2094,
-   "recorded": "2026-11-02T07:15:47.852Z"
+   "peak_renderer_rss_mib": 2034,
+   "recorded": "2026-11-02T10:24:24.931Z"
   }
  ],
- "table": "Generated by `research/email-recovery/eval/proving/measure.mjs` on 2026-11-02 07:28 UTC (browser rows: `measure-browser.mjs`, 2026-11-02T07:15:47.852Z).\nMachine: Apple M5 Max, 18 logical CPUs (6 Super and 12 Performance, as macOS names its core tiers), 128 GiB, macOS 26.5.2, Node v24.18.0; load average 6.13 7.58 25.05 at the start and 6.67 5.30 13.23 at the end; browser rows on the same machine, load average 5.01 24.41 45.57 at their start.\nCircuit build: `circuits/email-recovery/artifacts/recovery.json` (sha256 `5d793cbe967bf11f…`), verification key sha256 `2837d0cfd7ddad68…` (the verifier's circuit id); nargo version = 1.0.0-beta.9, bb v0.87.0; the Gmail fixture's recovery email. Times in seconds: median (minimum to maximum) of 5 runs (browser: 5 warm runs).\n\n| Prover | Threads | Witness (s) | Proving (s) | Total (s) | Peak memory | Runs |\n| --- | --- | --- | --- | --- | --- | --- |\n| Native bb, every core | 18 | 0.65 (0.64 to 0.66) | 0.96 (0.94 to 0.98) | 1.61 (1.59 to 1.63) | 879 MiB (`bb prove` RSS) | 5 |\n| Native bb, one thread | 1 | 0.65 (0.64 to 0.65) | 4.69 (4.64 to 4.75) | 5.34 (5.28 to 5.40) | 872 MiB (`bb prove` RSS) | 5 |\n| Native bb, Performance-tier cores (background QoS), one thread | 1 | 2.05 (1.99 to 2.15) | 15.8 (15.0 to 16.1) | 17.8 (17.1 to 18.1) | 884 MiB (`bb prove` RSS) | 5 |\n| Native bb, Performance-tier cores (background QoS), four threads | 4 | 2.03 (1.95 to 2.11) | 5.46 (5.23 to 5.58) | 7.42 (7.18 to 7.68) | 909 MiB (`bb prove` RSS) | 5 |\n| bb.js in Node, one thread | 1 | 0.77 (0.75 to 0.77) | 13.4 (13.4 to 13.5) | 14.2 (14.1 to 14.3) | 1,419 MiB (process RSS) | 5 |\n| bb.js in Node, 18 threads | 18 | 0.77 (0.75 to 0.77) | 3.34 (3.27 to 3.40) | 4.10 (4.01 to 4.17) | 1,715 MiB (process RSS) | 5 |\n| bb.js in Node, Performance-tier cores (background QoS), one thread | 1 | 2.42 (2.34 to 2.58) | 50.3 (47.4 to 51.3) | 52.7 (50.0 to 53.7) | 1,316 MiB (process RSS) | 5 |\n| bb.js in Node, Performance-tier cores (background QoS), four threads | 4 | 2.42 (1.67 to 2.45) | 19.0 (18.0 to 19.2) | 21.4 (19.7 to 21.6) | 1,446 MiB (process RSS) | 5 |\n| Chrome/151.0.7922.34 (headless), one thread | 1 | 0.80 (0.79 to 0.82) | 8.40 (8.34 to 8.49) | 9.95 (9.85 to 10.0) | 1,463 MiB (renderer RSS); 738 MiB Barretenberg memory | 5 |\n| Chrome/151.0.7922.34 (headless), 18 threads | 18 | 0.74 (0.74 to 0.80) | 1.43 (1.42 to 1.51) | 2.82 (2.81 to 3.05) | 2,595 MiB (renderer RSS); 805 MiB Barretenberg memory | 5 |\n| Chrome/151.0.7922.34 (headless), Performance-tier cores (background QoS), one thread | 1 | 2.55 (2.53 to 2.66) | 32.0 (31.7 to 32.7) | 37.0 (36.5 to 37.5) | 1,421 MiB (renderer RSS); 738 MiB Barretenberg memory | 5 |\n| Chrome/151.0.7922.34 (headless), Performance-tier cores (background QoS), 4 threads | 4 | 2.61 (2.28 to 2.69) | 10.2 (10.1 to 10.6) | 14.9 (14.4 to 15.4) | 2,094 MiB (renderer RSS); 771 MiB Barretenberg memory | 5 |\n| Phone-class device | — | not measured | not measured | not measured | not measured | 0 |\n\nWitness: native `nargo execute`; Node the encoder and noir_js; browser the encoder and noir_js in the prover worker. Total: native and Node witness plus proving; browser from the page's request to the locally verified proof (cached assets, Barretenberg's start and the verification included)."
+ "table": "Generated by `research/email-recovery/eval/proving/measure.mjs` on 2026-11-02 10:37 UTC (browser rows: `measure-browser.mjs`, 2026-11-02T10:24:24.931Z).\nMachine: Apple M5 Max, 18 logical CPUs (6 Super and 12 Performance, as macOS names its core tiers), 128 GiB, macOS 26.5.2, Node v24.18.0; load average 5.93 5.06 7.12 at the start and 6.45 5.15 5.69 at the end; browser rows on the same machine, load average 2.86 5.17 9.30 at their start.\nCircuit build: `circuits/email-recovery/artifacts/recovery.json` (sha256 `eec1e8f70f87c3d3…`), verification key sha256 `a998d03e2069b41c…` (the verifier's circuit id); nargo version = 1.0.0-beta.9, bb v0.87.0; the Gmail fixture's recovery email. Times in seconds: median (minimum to maximum) of 5 runs (browser: 5 warm runs).\n\n| Prover | Threads | Witness (s) | Proving (s) | Total (s) | Peak memory | Runs |\n| --- | --- | --- | --- | --- | --- | --- |\n| Native bb, every core | 18 | 0.74 (0.73 to 0.75) | 0.94 (0.93 to 0.97) | 1.69 (1.66 to 1.72) | 876 MiB (`bb prove` RSS) | 5 |\n| Native bb, one thread | 1 | 0.74 (0.73 to 0.75) | 4.64 (4.61 to 4.72) | 5.38 (5.35 to 5.47) | 870 MiB (`bb prove` RSS) | 5 |\n| Native bb, Performance-tier cores (background QoS), one thread | 1 | 2.39 (2.32 to 2.67) | 16.1 (15.6 to 16.1) | 18.5 (17.9 to 18.7) | 882 MiB (`bb prove` RSS) | 5 |\n| Native bb, Performance-tier cores (background QoS), four threads | 4 | 2.51 (2.39 to 2.63) | 5.60 (5.36 to 5.64) | 8.06 (7.77 to 8.16) | 890 MiB (`bb prove` RSS) | 5 |\n| bb.js in Node, one thread | 1 | 0.73 (0.73 to 0.74) | 13.4 (13.1 to 13.6) | 14.1 (13.9 to 14.3) | 1,386 MiB (process RSS) | 5 |\n| bb.js in Node, 18 threads | 18 | 0.73 (0.73 to 0.74) | 3.24 (3.22 to 3.34) | 3.97 (3.97 to 4.08) | 1,662 MiB (process RSS) | 5 |\n| bb.js in Node, Performance-tier cores (background QoS), one thread | 1 | 2.35 (2.34 to 2.41) | 50.3 (47.1 to 50.8) | 52.8 (49.4 to 53.2) | 1,321 MiB (process RSS) | 5 |\n| bb.js in Node, Performance-tier cores (background QoS), four threads | 4 | 2.39 (2.31 to 2.46) | 19.0 (18.5 to 19.3) | 21.4 (20.9 to 21.7) | 1,416 MiB (process RSS) | 5 |\n| Chrome/151.0.7922.34 (headless), one thread | 1 | 0.78 (0.77 to 0.78) | 8.37 (8.32 to 8.50) | 9.88 (9.81 to 10.00) | 1,432 MiB (renderer RSS); 757 MiB Barretenberg memory | 5 |\n| Chrome/151.0.7922.34 (headless), 18 threads | 18 | 0.73 (0.72 to 0.79) | 1.44 (1.41 to 1.53) | 2.81 (2.76 to 3.06) | 2,586 MiB (renderer RSS); 791 MiB Barretenberg memory | 5 |\n| Chrome/151.0.7922.34 (headless), Performance-tier cores (background QoS), one thread | 1 | 2.49 (2.41 to 2.58) | 32.5 (31.9 to 32.7) | 37.3 (36.7 to 37.6) | 1,398 MiB (renderer RSS); 757 MiB Barretenberg memory | 5 |\n| Chrome/151.0.7922.34 (headless), Performance-tier cores (background QoS), 4 threads | 4 | 2.52 (2.43 to 2.55) | 10.3 (9.58 to 11.0) | 14.9 (14.5 to 15.7) | 2,034 MiB (renderer RSS); 757 MiB Barretenberg memory | 5 |\n| Phone-class device | — | not measured | not measured | not measured | not measured | 0 |\n\nWitness: native `nargo execute`; Node the encoder and noir_js; browser the encoder and noir_js in the prover worker. Total: native and Node witness plus proving; browser from the page's request to the locally verified proof (cached assets, Barretenberg's start and the verification included)."
 }

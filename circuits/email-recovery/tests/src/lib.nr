@@ -12,4 +12,5 @@ mod pack_tests;
 mod registry_parity;
 mod subject_tests;
 mod structure_tests;
+mod display_name_tests;
 mod recovery_tests;

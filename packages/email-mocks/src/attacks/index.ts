@@ -31,6 +31,8 @@ export const SOURCES = {
   zkemailNrIssue57: 'https://github.com/zkemail/zkemail.nr/issues/57',
   rfc6376: 'https://www.rfc-editor.org/rfc/rfc6376',
   rfc8301: 'https://www.rfc-editor.org/rfc/rfc8301',
+  /** Chen, Paxson, Jiang, "Composition Kills", USENIX Security 2020, section 6.2. */
+  compositionKills: 'https://www.usenix.org/system/files/sec20-chen-jianjun.pdf',
 } as const;
 
 export function defaultAttackInput(): AttackInput {
@@ -157,6 +159,7 @@ function fromSpoofing(input: AttackInput): AttackCase[] {
       'From folded after an address-like display name; relaxed canonicalization unfolds it to one line.',
       `From: "${input.victim}"\r\n <${input.attacker}>`,
     ),
+    ...addressListFrom(input),
     {
       id: 'from-folded-simple-canonicalization',
       description: 'c=simple/simple keeps the fold in the signed bytes: the first physical line ends after the victim address.',
@@ -171,6 +174,44 @@ function fromSpoofing(input: AttackInput): AttackCase[] {
     },
   ];
   return cases;
+}
+
+/**
+ * From values that RFC 5322 readers read as an address list, as another
+ * mailbox, or as no mailbox, ending in the victim's angle-addr, sent by the
+ * attacker at the victim's provider. A provider that authenticates only the
+ * first address of a list signs them for the attacker's account; Chen,
+ * Paxson and Jiang report Yahoo and iCloud servers that "accept multiple
+ * addresses and only check the first address".
+ */
+function addressListFrom(input: AttackInput): AttackCase[] {
+  const at = (address: string) => `${localOf(address)}@yahoo.com`;
+  const attacker = at(input.attacker);
+  const victim = at(input.victim);
+  const send = { provider: 'yahoo' as const, from: attacker, subject: input.subject, body: input.body, date: input.date };
+  const valid = (id: string, description: string, from: string): AttackCase => ({
+    id,
+    description,
+    verdict: 'valid-dkim-but-must-be-rejected-by-circuit',
+    email: buildEmail(send, { beforeSign: (m) => replaceHeader(m, 'From', from) }),
+    claim: { from: victim, recoveryValue: input.recoveryValue },
+    dkim: ['pass'],
+    source: SOURCES.compositionKills,
+  });
+  return [
+    valid('from-address-list', 'An address list: the attacker first, the victim as the closing angle-addr.', `From: ${attacker}, x <${victim}>`),
+    valid(
+      'from-address-before-angle-addr',
+      "The attacker's address unquoted before the victim's angle-addr; lenient readers take the first as the mailbox.",
+      `From: ${attacker} <${victim}>`,
+    ),
+    valid(
+      'from-quoted-word-then-address',
+      `A quoted word and the attacker's address before the victim's angle-addr, read as the mailbox "q97 ${localOf(attacker)}"@yahoo.com.`,
+      `From: "q97" ${attacker} <${victim}>`,
+    ),
+    valid('from-unbalanced-quote', "An unclosed quoted string holding the victim's angle-addr: no mailbox at all.", `From: "x <${victim}>`),
+  ];
 }
 
 /** Gmail's format with c=simple/simple, which no launch provider uses. */
