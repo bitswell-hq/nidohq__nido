@@ -33,6 +33,8 @@ import { credentialFor, seedCredential } from '../../support/auth/seed';
 const root = `${process.cwd()}/`;
 const PORT = Number(process.env.E2E_PORT || 4399);
 const INBOX = 'first.last@gmail.com';
+/** Where alerts go: an inbox at another provider than the enrolled one. */
+const ALERTS = 'first.last.alerts@posteo.de';
 // What scripts/email-recovery-e2e.sh deployed and started; read when the test
 // runs, so other tiers can load this file without them.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -171,16 +173,27 @@ test.describe('@local email recovery', () => {
     await owner.page.goto(`http://${host}/security/recovery/email/`, { waitUntil: 'networkidle' });
     const kit = (await owner.page.locator('[data-kit-code]').textContent({ timeout: 60_000 }))!.trim();
     expect(kit.replace(/ /g, '')).toMatch(/^[A-Z2-7]{26}$/);
-    await owner.page.locator('[name="kit-saved"]').check();
+    // Saving is shown by typing two groups of the code back.
+    await expect(owner.page.getByRole('button', { name: 'Continue' })).toBeDisabled();
+    for (const name of ['kit-group-a', 'kit-group-b']) {
+      const input = owner.page.locator(`[name="${name}"]`);
+      await input.fill(kit.split(' ')[Number(await input.getAttribute('data-kit-group'))]!);
+    }
     await owner.page.getByRole('button', { name: 'Continue' }).click();
     const enrollSubject = (await owner.page.locator('[data-subject]').textContent({ timeout: 60_000 }))!.trim();
     expect(enrollSubject).toMatch(/^ENROLL NIDO ACCOUNT RECOVERY [0-9a-f]{64}$/);
     await expect(owner.page.locator('[data-inbound]')).toContainText('Waiting for your email', { timeout: 60_000 });
     await sendEmail(enrollSubject);
     await expect(owner.page.locator('[data-address]')).toHaveText(INBOX, { timeout: 120_000 });
+    // The alert address starts empty; the enrolled inbox itself draws a warning.
+    await expect(owner.page.locator('[name="alert-address"]')).toHaveValue('');
+    await owner.page.locator('[name="alert-address"]').fill(INBOX);
+    await expect(owner.page.locator('[data-alert-same]')).toContainText('can delete the alerts sent to it');
+    await owner.page.locator('[name="alert-address"]').fill(ALERTS);
+    await expect(owner.page.locator('[data-alert-same]')).toBeHidden();
     await owner.page.getByRole('button', { name: 'Turn on alerts on this device' }).click();
     await expect(owner.page.locator('[name="confirm-code"]')).toBeVisible({ timeout: 120_000 });
-    const confirmation = (await emailsTo(INBOX)).map((m) => m.text?.match(/confirmation code for Nido recovery alerts is (\d{6})/)?.[1]).find(Boolean);
+    const confirmation = (await emailsTo(ALERTS)).map((m) => m.text?.match(/confirmation code for Nido recovery alerts is (\d{6})/)?.[1]).find(Boolean);
     expect(confirmation).toMatch(/^\d{6}$/);
     await owner.page.locator('[name="confirm-code"]').fill(confirmation!);
     await owner.page.getByRole('button', { name: 'Confirm' }).click();
@@ -196,6 +209,7 @@ test.describe('@local email recovery', () => {
     expect(await phone.page.evaluate(() => crossOriginIsolated)).toBe(true);
     await phone.page.getByRole('button', { name: 'Create my new passkey' }).click();
     await expect(phone.page.locator('[data-email-step]')).toBeVisible({ timeout: 180_000 });
+    await expect(phone.page.locator('[data-code-warning]')).toContainText('Nobody from Nido will ask for this code');
     await phone.page.locator('[name="kit-code"]').fill(kit);
     await phone.page.locator('[data-use-code]').click();
     const code = (await phone.page.locator('[data-code]').textContent({ timeout: 60_000 }))!.replace(/\s/g, '');
@@ -204,12 +218,18 @@ test.describe('@local email recovery', () => {
     expect(subject).toMatch(/^APPROVE NIDO ACCOUNT RECOVERY [0-9a-f]{64}$/);
     const mailto = await phone.page.locator('[data-mailto]').getAttribute('href');
     expect(decodeURIComponent(new URL(mailto!).searchParams.get('subject')!)).toBe(subject);
+    expect(new URL(mailto!).searchParams.get('body')).toMatch(/^If anyone asked you to send this email, stop\. Nido never asks for this\./);
+    await expect(phone.page.locator('[data-inbound-deadline]')).toContainText('This page picks up the email until');
     await expect(phone.page.locator('[data-inbound]')).toContainText('Waiting for your email', { timeout: 60_000 });
     await sendEmail(subject);
     // The page proves it in the browser and records the guardian's vote.
     await expect(phone.page.locator('[data-prove-stage]')).toHaveAttribute('data-stage', /proving|verifying/, { timeout: 180_000 });
     await expect(phone.page.locator('[data-remaining]')).toContainText('Your email approval is recorded', { timeout: 300_000 });
     await expect(phone.page.locator('[data-remaining]')).toContainText('1 more helper needs to approve');
+    // Perch emits no event for this vote; the alert service reads the attempt and alerts it.
+    await expect
+      .poll(async () => (await emailsTo(ALERTS)).filter((m) => /your email approved a recovery/.test(m.subject)).length, { timeout: 120_000 })
+      .toBe(1);
 
     // The other helper approves from its own account.
     const attemptId = BigInt(
@@ -230,7 +250,7 @@ test.describe('@local email recovery', () => {
 
     // The required alert: email and push, both with the code the page showed.
     await expect
-      .poll(async () => (await emailsTo(INBOX)).filter((m) => m.text?.includes(`${code.slice(0, 3)} ${code.slice(3)}`)).length, { timeout: 120_000 })
+      .poll(async () => (await emailsTo(ALERTS)).filter((m) => /approved and is in its waiting period/.test(m.text ?? '') && m.text?.includes(`${code.slice(0, 3)} ${code.slice(3)}`)).length, { timeout: 120_000 })
       .toBeGreaterThan(0);
     await expect
       .poll(async () => ((await (await fetch(`${services.control}/test/pushes`)).json()) as { code?: string }[]).some((p) => p.code === code), { timeout: 60_000 })

@@ -26,7 +26,6 @@ import {
   latestLedger,
   readRecoveryState,
   recoveryClient,
-  submitAsOwner,
   submitOpen,
   type RecoveryState,
 } from './chain.js';
@@ -46,9 +45,20 @@ import {
 } from './model.js';
 import { NETWORK_PASSPHRASE } from '../network.js';
 import { busy, card, collectCondition, el, errorText, guardianLinks, kitInput, short } from './ui.js';
+import { bytesToBigInt, initHashes, parseRecoveryKitCode, pinTree } from '@nidohq/email-recovery';
+import { alertChannels, deviceChannel, moveNotificationsHere } from './emailAlerts.js';
 import { emailRecoveryDeployment } from './emailConfig.js';
-import { PRIVACY_CLAIM } from './emailModel.js';
-import { findEmailGuardian } from './emailRecovery.js';
+import type { GuardianConfig } from './emailGuardian.js';
+import {
+  PRIVACY_CLAIM,
+  SECOND_CHANNEL_LAPSED,
+  checkCodeAgainstPin,
+  codeCheckText,
+  secondChannel,
+  type SecondChannel,
+} from './emailModel.js';
+import { findEmailGuardian, keyList, vaultKey } from './emailRecovery.js';
+import { liveAttemptsSection } from './liveAttempts.js';
 import { kitFile, newRecoveryKit, proveWithKit } from './zk.js';
 
 /** Timing presets. "Quick" exists for testnet walkthroughs. */
@@ -82,26 +92,131 @@ export async function mountRecoverySettings(root: HTMLElement, account: string |
   }
   root.innerHTML = '';
   root.append(statusCard(state));
-  if (state.gate?.authorized_attempt != null) root.append(attemptCard(account, state));
-  // Nothing reconfigures while an attempt is authorized (Perch spec §10).
-  else if (state.summary) {
+  const live = await liveAttemptsSection(account).catch(() => undefined);
+  if (live) {
+    const c = card('Recovery attempts');
+    (c.querySelector('.card') as HTMLElement).append(live);
+    root.append(c);
+  }
+  if (state.gate?.authorized_attempt != null) {
+    // Under protected only the helpers can cancel; under loss the attempts card above offers it.
+    if (state.summary?.profile === 'protected') root.append(attemptCard(account, state));
+  } else if (state.summary) {
+    // Nothing reconfigures while an attempt is authorized (Perch spec §10).
     const move = moveCard(account, state);
     if (move) root.append(move);
   }
-  root.append(configureCard(account, state));
-  if (emailRecoveryDeployment()) root.append(await emailCard(state));
+  const email = emailRecoveryDeployment() && state.summary ? await findEmailGuardian(state.summary.guardians).catch(() => undefined) : undefined;
+  root.append(configureCard(account, state, email));
+  if (emailRecoveryDeployment()) root.append(emailCard(account, email));
 }
 
-/** Email as one recovery helper: set it up, or say it is one. */
-async function emailCard(state: RecoveryState): Promise<HTMLElement> {
-  const listed = state.summary ? await findEmailGuardian(state.summary.guardians).catch(() => undefined) : undefined;
-  return card(
+/** What this page knows of the email helper's second alert channel (spec §9.3 rule 2 at runtime). */
+let channel: SecondChannel = 'unknown';
+
+/** Email as one recovery helper: set it up, or, once it is one, its alert channels and a check of the recovery code. */
+function emailCard(account: string, listed: { address: string; config: GuardianConfig } | undefined): HTMLElement {
+  if (!listed) {
+    return card(
+      'Email recovery',
+      `<p style="margin:0;font-size:13.5px;">Make your email inbox one of your helpers: if you lose your passkey, one email from it counts as one approval. ${esc(PRIVACY_CLAIM)}</p>
+       <a class="btn soft sm" href="/security/recovery/email/">Set up email recovery</a>`,
+    );
+  }
+  const c = card(
     'Email recovery',
-    listed
-      ? `<p style="margin:0;font-size:13.5px;">Your email inbox is one of your recovery helpers (<code class="mono">${esc(short(listed.address))}</code>).</p>`
-      : `<p style="margin:0;font-size:13.5px;">Make your email inbox one of your helpers: if you lose your passkey, one email from it counts as one approval. ${esc(PRIVACY_CLAIM)}</p>
-         <a class="btn soft sm" href="/security/recovery/email/">Set up email recovery</a>`,
+    `<p style="margin:0;font-size:13.5px;">Your email inbox is one of your recovery helpers (<code class="mono">${esc(short(listed.address))}</code>).</p>`,
   );
+  const body = c.querySelector('.card') as HTMLElement;
+  body.append(channelSection(account), codeCheckSection(listed.config));
+  return c;
+}
+
+/** The second alert channel: this device's subscription at once, the vault's view on request, and moving it here. */
+function channelSection(account: string): HTMLElement {
+  const wrap = el('div', { style: 'display:grid;gap:6px;', 'data-channel': '' });
+  const line = el('div', { style: 'font-size:13px;', role: 'status', 'data-channel-state': '' }, 'Alert notifications: not checked yet.');
+  const lapsed = el('div', { class: 'alert danger', role: 'alert', hidden: '', 'data-channel-lapsed': '' }, esc(SECOND_CHANNEL_LAPSED));
+  const status = el('div', { class: 'mut', style: 'font-size:12.5px;' });
+  const buttons = el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;' });
+  const check = el('button', { class: 'btn soft sm', type: 'button', 'data-check-channels': '' }, 'Check my alert channels') as HTMLButtonElement;
+  const move = el('button', { class: 'btn primary sm', type: 'button', hidden: '', 'data-move-notifications': '' }, 'Turn on notifications on this device') as HTMLButtonElement;
+  let device: 'live' | 'gone' | undefined;
+  let contact: string | undefined;
+  const show = (vault?: 'live' | 'lapsed' | 'none') => {
+    channel = secondChannel({ vault, device });
+    lapsed.hidden = channel !== 'lapsed';
+    move.hidden = channel !== 'lapsed';
+    line.textContent =
+      channel === 'live'
+        ? 'Alert notifications: they reach your device.'
+        : channel === 'lapsed'
+          ? 'Alert notifications: they no longer reach your device.'
+          : 'Alert notifications: checking them needs your passkey.';
+  };
+  void deviceChannel(account).then((d) => {
+    device = d;
+    show();
+  });
+  check.addEventListener('click', () =>
+    busy(check, status, 'Asking the alert service…', async () => {
+      const channels = await alertChannels(account, await vaultKey());
+      const active = channels.filter((x) => x.state === 'active');
+      const push = active.some((x) => x.push === 'live') ? 'live' : active.some((x) => x.push === 'lapsed') ? 'lapsed' : 'none';
+      contact = (active.find((x) => x.push !== 'live') ?? active[0])?.contact;
+      show(push);
+      status.textContent = '';
+    }),
+  );
+  move.addEventListener('click', () =>
+    busy(move, status, 'Turning notifications on…', async () => {
+      const vault = await vaultKey();
+      if (!contact) contact = (await alertChannels(account, vault)).find((x) => x.state === 'active')?.contact;
+      if (!contact) throw new Error('This Nido has no alert contact. Set up email recovery again.');
+      await moveNotificationsHere(account, contact, vault);
+      device = 'live';
+      show('live');
+      status.textContent = '';
+      toast({ msg: 'Notifications are on', icon: 'check' });
+    }),
+  );
+  buttons.append(check, move);
+  wrap.append(line, lapsed, buttons, status);
+  return wrap;
+}
+
+/** "Check my recovery code": the typed code against the guardian's pin root (spec §5.6, §7.4). Nothing is stored or sent. */
+function codeCheckSection(config: GuardianConfig): HTMLElement {
+  const wrap = el(
+    'details',
+    { 'data-code-check': '' },
+    `<summary style="font-size:13px;cursor:pointer;">Check my recovery code</summary>
+     <div style="display:grid;gap:6px;margin-top:6px;">
+       <div class="mut" style="font-size:12.5px;">Type the code from your recovery kit. This page checks it against your email helper; it is not stored or sent anywhere.</div>
+       <input name="check-code" class="input mono" autocomplete="off" spellcheck="false" placeholder="ABCD EFGH IJKL MNOP QRST UVWX YZ">
+     </div>`,
+  );
+  const inner = wrap.querySelector('div') as HTMLElement;
+  const status = el('div', { style: 'font-size:13px;', role: 'status', 'data-code-check-result': '' });
+  const go = el('button', { class: 'btn soft sm', type: 'button' }, 'Check') as HTMLButtonElement;
+  inner.append(go, status);
+  go.addEventListener('click', () =>
+    busy(go, status, 'Checking…', async () => {
+      const code = bytesToBigInt(parseRecoveryKitCode((inner.querySelector('[name="check-code"]') as HTMLInputElement).value));
+      await initHashes();
+      const list = await keyList();
+      if (!list?.keys.length) throw new Error('Nido’s key list could not be read right now. Try again later.');
+      const pin = config.keyPin[0];
+      const result = checkCodeAgainstPin({
+        accountCode: code,
+        pinRoot: pin ? bytesToBigInt(pin.root) : undefined,
+        keys: list.keys.map((k) => ({ domain: k.domain, modulus: BigInt(k.modulus) })),
+        root: (c, k) => pinTree(c, [k]).root,
+      });
+      status.textContent = codeCheckText(result);
+    }),
+  );
+  return wrap;
 }
 
 /** The owner's switch of recovery from an earlier controller (and pool) to
@@ -195,7 +310,7 @@ function statusCard(state: RecoveryState): HTMLElement {
   return card('Recovery', rows.join(''));
 }
 
-/** An authorized attempt: who may cancel it, and how. */
+/** An authorized attempt under `protected`: only the helpers (or the kit) can cancel it. */
 function attemptCard(account: string, state: RecoveryState): HTMLElement {
   const s = state.summary!;
   const attemptId = BigInt(state.gate!.authorized_attempt!);
@@ -207,19 +322,6 @@ function attemptCard(account: string, state: RecoveryState): HTMLElement {
   );
   const body = c.querySelector('.card') as HTMLElement;
   const status = el('div', { class: 'mut', style: 'font-size:12.5px;' });
-  if (s.profile === 'loss') {
-    const btn = el('button', { class: 'btn soft sm', type: 'button' }, 'I didn’t ask for this: cancel it') as HTMLButtonElement;
-    btn.addEventListener('click', () =>
-      busy(btn, status, 'Cancelling…', async () => {
-        const op = await recoveryClient().ownerCancel(account, attemptId);
-        await submitAsOwner(account, op.operations[0]!);
-        status.textContent = 'Cancelled.';
-        toast({ msg: 'Recovery cancelled', icon: 'check' });
-      }),
-    );
-    body.append(btn, status);
-    return c;
-  }
   const need = condition(s);
   body.append(
     el(
@@ -261,7 +363,7 @@ function radio(name: string, value: string, label: string, checked: boolean): st
   return `<label class="pol-radio"><input type="radio" name="${name}" value="${value}"${checked ? ' checked' : ''}> ${esc(label)}</label>`;
 }
 
-function configureCard(account: string, state: RecoveryState): HTMLElement {
+function configureCard(account: string, state: RecoveryState, email?: { address: string; config: GuardianConfig }): HTMLElement {
   const s = state.summary;
   const c = card(
     s ? 'Change recovery' : 'Set up recovery',
@@ -383,11 +485,22 @@ function configureCard(account: string, state: RecoveryState): HTMLElement {
       // compromise recovery with PastValidUntil. Both the on-chain
       // baseline hash and the published baseline doc use this stripped doc.
       const withoutRecovery = baselineWithoutExpiringRules(perch.withRecovery(base, undefined));
+      // The email helper keeps its typed marker, so the wallet's email rules
+      // (spec §9.3) apply to every save; with its notifications known to have
+      // lapsed, rule 2 refuses a configuration that keeps it.
+      const listed = guardians.map((g) =>
+        email && g === email.address ? { kind: 'email' as const, address: g, allowedActions: email.config.allowedActions } : g,
+      );
+      const keepsEmail = listed.some((g) => typeof g !== 'string');
+      if (keepsEmail && channel === 'lapsed') {
+        throw new Error('Your email helper’s alert notifications no longer reach your device (rule 2). Turn them on again below, or remove the email helper.');
+      }
       const spec = perch.recoverySpec(deployment, {
         profile,
         mode,
-        guardians: mode === 'zk-only' ? undefined : guardians,
+        guardians: mode === 'zk-only' ? undefined : listed,
         quorum: mode === 'zk-only' ? undefined : quorum,
+        secondAlertChannel: keepsEmail && channel !== 'lapsed' ? 'web-push' : undefined,
         zk,
         replaceable: adminSignerIds(base),
         baselineDocHash: field('baseline').checked ? docHash(withoutRecovery) : undefined,

@@ -112,6 +112,9 @@ import MyNidoMenu from "../../components/MyNidoMenu.astro";
     <!-- ============================================================= -->
     <div id="home-mode" class="hidden screen-in home-mode">
       <div class="card-grid">
+      <!-- Live recovery attempts, read from the recovery controller each time the
+           wallet opens (lib/recovery/liveAttempts.ts), independent of alerts. -->
+      <div id="recovery-attempts" class="span-all" hidden style="margin:0 22px;"></div>
       <!-- Recovery-backup prompt: enrollment is chain-invisible by design, so
            this shows off a LOCAL advisory flag (recoveryBackupPrompt.ts) —
            hidden once a backup is recorded, snoozed for a week on dismiss. -->
@@ -616,6 +619,16 @@ import MyNidoMenu from "../../components/MyNidoMenu.astro";
     document.getElementById("home-mode")!.classList.remove("hidden");
     if (contractId) markUsed(contractId);
     initBackupBanner();
+    initRecoveryAttempts();
+  }
+
+  // Any live recovery attempt on this Nido, with the owner's cancel: read from
+  // the recovery controller on every open, so it shows even if no alert
+  // arrived.
+  function initRecoveryAttempts() {
+    const box = document.getElementById("recovery-attempts");
+    if (!contractId || !box) return;
+    void import("../../lib/recovery/liveAttempts").then((m) => m.mountLiveAttempts(box, contractId!));
   }
 
   // Show the "set up account recovery" banner unless this account already has a
