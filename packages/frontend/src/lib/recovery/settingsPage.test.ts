@@ -71,6 +71,15 @@ vi.mock('./zk.js', () => ({
   proveWithKit: vi.fn(),
 }));
 vi.mock('../toast.js', () => ({ toast: vi.fn() }));
+vi.mock('./liveAttempts.js', () => ({
+  liveAttemptsSection: vi.fn(async () => {
+    const gate = (page.state as { gate?: { authorized_attempt?: bigint } }).gate;
+    if (gate?.authorized_attempt == null) return undefined;
+    const d = document.createElement('div');
+    d.textContent = `A recovery of this Nido (attempt ${gate.authorized_attempt}) was approved.`;
+    return d;
+  }),
+}));
 vi.mock('../recoveryBackupPrompt.js', () => ({ markBackupSetUp: vi.fn() }));
 
 import { applyDoc, submitOpen } from './chain.js';
@@ -134,11 +143,18 @@ describe('settings page: moving recovery to the current controller', () => {
     expect(root.textContent).not.toMatch(/Move recovery/);
   });
 
-  it('offers no move while an attempt is authorized', async () => {
+  it('offers no move while an attempt is authorized, and shows the attempt first', async () => {
     at(enrolled(EARLIER, {}), { authorized_attempt: 3n });
     const root = await mount();
-    expect(root.textContent).toMatch(/A recovery is under way/);
+    expect(root.textContent).toMatch(/Recovery attempts.*attempt 3\) was approved/s);
     expect(root.textContent).not.toMatch(/Move recovery/);
+  });
+
+  it('under protected, an authorized attempt also names the helpers who can cancel it', async () => {
+    at(enrolled(EARLIER, { profile: 'protected' }), { authorized_attempt: 3n });
+    const root = await mount();
+    expect(root.textContent).toMatch(/A recovery is under way/);
+    expect(root.textContent).toMatch(/Only your helpers can cancel it/);
   });
 
   it('moves a Loss configuration with the owner alone, keeping its settings and restore point', async () => {

@@ -23,8 +23,15 @@ import {
   spkiFromRawPublicKey,
   strkeyFromContractId,
 } from '@nidohq/email-recovery';
-import type { AlertClass, PerchEventName } from '../events.js';
-import { alertText, confirmationText, contactChangeNotice, type AlertText } from './content.js';
+import type { AlertClass, AlertName } from '../events.js';
+import {
+  alertText,
+  confirmationText,
+  contactChangeNotice,
+  pushLapsedNotice,
+  pushMovedNotice,
+  type AlertText,
+} from './content.js';
 import { type CustodianEndpoint, type Nsm, genesis, restore } from './custody.js';
 import { InboundBox, type InboundResult } from './inbound.js';
 import { alertLookup, type VaultKeys } from './keys.js';
@@ -32,6 +39,7 @@ import {
   type AccountRecord,
   type Contact,
   type Deliveries,
+  type WatchedAttempt,
   sealDeliveries,
   sealRecord,
   unsealDeliveries,
@@ -39,7 +47,7 @@ import {
 } from './records.js';
 import { type SendingConfig, sendEmail } from './send.js';
 import { type RelyingParty, checkAuthorization, relyingPartyFor } from './webauthn.js';
-import { pushMessage } from './webpush.js';
+import { type PushOutcome, pushMessage } from './webpush.js';
 
 const { equal, toHex, fromHex, toBase64Url } = bytes;
 
@@ -49,6 +57,17 @@ export const CONFIRMATION_TTL_MS = 72 * 3600_000;
 export const CONFIRMATION_ATTEMPTS = 5;
 export const NONCE_TTL_MS = 10 * 60_000;
 const DELIVERY_LOG_RETENTION_MS = 30 * 24 * 3600_000;
+/**
+ * A push subscription is probed when the push service has accepted nothing
+ * for it this long (spec §10.6): the default of `VaultConfig.probeIntervalMs`.
+ * Each probe shows one quiet notification; a longer interval finds a lapse
+ * later.
+ */
+export const PROBE_INTERVAL_MS = 7 * 24 * 3600_000;
+/** After a probe the push service could not answer, the next one is due this much later. */
+export const PROBE_RETRY_MS = 3600_000;
+/** Open attempts watched per account at once; opening one is permissionless, so the list is bounded. */
+export const WATCH_MAX = 32;
 
 export interface VaultConfig {
   /** `sha256(network passphrase)`. */
@@ -59,6 +78,8 @@ export interface VaultConfig {
   sending: SendingConfig;
   /** VAPID `sub` claim, e.g. `mailto:alerts@nido.fyi`. */
   pushSubject: string;
+  /** How long a subscription may go without an accepted push before it is probed (default [`PROBE_INTERVAL_MS`], a week). */
+  probeIntervalMs?: number;
   /** Accept `http://127.0.0.1` push endpoints (local test push services only). */
   allowLoopbackPush?: boolean;
   custodians: CustodianEndpoint[];
@@ -86,7 +107,7 @@ export interface SealedState {
 
 export interface DispatchRequest {
   eventId: string;
-  name: Exclude<PerchEventName, 'attempt_invalidated'>;
+  name: AlertName;
   class: Exclude<AlertClass, 'none'>;
   controller: Uint8Array;
   account: Uint8Array;
@@ -95,8 +116,23 @@ export interface DispatchRequest {
   suppressed?: number;
 }
 
+/** One contact's channels, as a `status` read answers (no address: the host relays the answer). */
+export interface ChannelStatus {
+  /** The contact id, hex. */
+  contact: string;
+  state: 'unconfirmed' | 'active';
+  /** `lapsed`: the push service answered 404 or 410 for the subscription. */
+  push: 'live' | 'lapsed' | 'none';
+  /** When the push service last accepted a push or probe for it (ms). */
+  pushCheckedAt?: number;
+  lapsedAt?: number;
+  /** A pending replacement or removal of this contact. */
+  change?: { kind: 'replace' | 'remove'; maturesLedger: number };
+}
+
 export type ContactResult =
-  | { ok: true; status: 'pending-confirmation' | 'change-pending' | 'confirmed'; maturesLedger?: number }
+  | { ok: true; status: 'pending-confirmation' | 'change-pending' | 'confirmed' | 'push-updated'; maturesLedger?: number }
+  | { ok: true; status: 'channels'; channels: ChannelStatus[] }
   | { ok: false; error: string };
 
 export class ContactRefused extends Error {}
@@ -206,7 +242,7 @@ export class Vault {
     const writes: Writes = {};
     try {
       const status = await this.contactInner(req, chain, writes);
-      return { result: { ok: true, ...status }, writes };
+      return { result: { ok: true, ...status } as ContactResult, writes };
     } catch (e) {
       if (e instanceof ContactRefused) return { result: { ok: false, error: e.message }, writes: {} };
       throw e;
@@ -217,7 +253,10 @@ export class Vault {
     req: ContactRequest,
     chain: ChainView,
     writes: Writes,
-  ): Promise<{ status: 'pending-confirmation' | 'change-pending' | 'confirmed'; maturesLedger?: number }> {
+  ): Promise<
+    | { status: 'pending-confirmation' | 'change-pending' | 'confirmed' | 'push-updated'; maturesLedger?: number }
+    | { status: 'channels'; channels: ChannelStatus[] }
+  > {
     const account = contractIdFromStrkey(req.account);
     let inner: SealedRequest;
     try {
@@ -232,8 +271,8 @@ export class Vault {
 
     this.takeNonce(req.nonce);
     if (!req.authorization) throw new ContactRefused('an account passkey must authorize the change');
-    const purposes = inner.op === 'remove' ? 0 : inner.purposes;
-    const consentVersion = inner.op === 'remove' ? 0 : inner.consentVersion;
+    const purposes = inner.op === 'register' || inner.op === 'replace' ? inner.purposes : 0;
+    const consentVersion = inner.op === 'register' || inner.op === 'replace' ? inner.consentVersion : 0;
     const challenge = await authorizationChallenge({
       op: inner.op,
       account,
@@ -249,6 +288,9 @@ export class Vault {
       throw new ContactRefused((e as Error).message);
     }
     const authorizer = req.authorization.publicKey;
+
+    if (inner.op === 'status') return { status: 'channels', channels: channelStatus(record) };
+    if (inner.op === 'push') return this.updatePush(record, inner.contact, inner.push, writes);
 
     if (inner.op === 'remove') {
       const target = record?.contacts.find((c) => equal(c.id, inner.contact) && c.state === 'active');
@@ -283,6 +325,8 @@ export class Vault {
       confirm: { codeHash: sha256(code), expiresAt: this.now() + CONFIRMATION_TTL_MS, attempts: 0 },
       authorizer,
       createdLedger: chain.ledger,
+      // The browser created the subscription for this request: it is live now.
+      ...(inner.push ? { pushCheckedAt: this.now() } : {}),
     };
 
     if (inner.op === 'register') {
@@ -359,21 +403,152 @@ export class Vault {
     extra: { kind: string; code: string },
     topicSeed: string,
     required: boolean,
-  ): Promise<'accepted' | 'gone' | 'retry'> {
-    const payload = new TextEncoder().encode(JSON.stringify({ v: 1, kind: extra.kind, title: t.title, body: t.body, code: extra.code }));
+  ): Promise<PushOutcome> {
+    const payload = new TextEncoder().encode(JSON.stringify({ v: 1, kind: extra.kind, title: t.title, body: t.push, code: extra.code }));
+    return this.send(c, payload, {
+      ttl: required ? 7 * 86_400 : 86_400,
+      urgency: required ? 'high' : 'normal',
+      topic: toBase64Url(sha256(topicSeed).subarray(0, 24)),
+    });
+  }
+
+  /** One push to `c`'s subscription; an accepted one records that the subscription is live. */
+  private async send(c: Contact, payload: Uint8Array, o: { ttl: number; urgency: string; topic: string }): Promise<PushOutcome> {
     const r = await pushMessage(
       c.push!,
       payload,
-      {
-        vapid: { privateKey: this.keys.vapidPrivate, publicKey: this.keys.vapidPublic },
-        subject: this.cfg.pushSubject,
-        ttl: required ? 7 * 86_400 : 86_400,
-        urgency: required ? 'high' : 'normal',
-        topic: toBase64Url(sha256(topicSeed).subarray(0, 24)),
-      },
+      { vapid: { privateKey: this.keys.vapidPrivate, publicKey: this.keys.vapidPublic }, subject: this.cfg.pushSubject, ...o },
       this.fetchImpl,
     );
+    if (r.outcome === 'accepted') c.pushCheckedAt = this.now();
     return r.outcome;
+  }
+
+  /**
+   * The liveness probe (spec §10.6): an RFC 8030 push with `TTL: 0` and
+   * `Urgency: very-low`, one `Topic` so a newer probe replaces an
+   * undelivered one. The service worker shows it as a quiet status
+   * notification under one tag (WebKit revokes a subscription whose pushes
+   * show nothing).
+   */
+  private probeOne(c: Contact): Promise<PushOutcome> {
+    const payload = new TextEncoder().encode(JSON.stringify({ v: 1, kind: 'probe' }));
+    return this.send(c, payload, { ttl: 0, urgency: 'very-low', topic: 'probe' });
+  }
+
+  /** The subscription is gone: mark it, and tell the contact's address once. */
+  private async lapse(c: Contact, notify: boolean): Promise<void> {
+    if (c.pushGone) return;
+    c.pushGone = true;
+    c.lapsedAt = this.now();
+    if (!notify) return;
+    const t = pushLapsedNotice(this.cfg.walletOrigin);
+    const key = toHex(sha256(`lapsed|${toHex(c.id)}|${c.push?.endpoint ?? ''}`));
+    await sendEmail(this.cfg.sending, { to: c.address, subject: t.subject, text: t.body, idempotencyKey: key }, this.fetchImpl);
+  }
+
+  /**
+   * `push`: a new subscription for an existing contact. It applies at once
+   * only when the contact has none or the current one is gone, checked by a
+   * probe now; a contact whose notifications still work moves them only by
+   * a replacement, under its 14-day delay. The address is told.
+   */
+  private async updatePush(
+    record: AccountRecord | undefined,
+    id: Uint8Array,
+    push: NonNullable<Contact['push']>,
+    writes: Writes,
+  ): Promise<{ status: 'push-updated' }> {
+    const c = record?.contacts.find((x) => equal(x.id, id));
+    if (!record || !c) throw new ContactRefused('no such contact');
+    const loopback = this.cfg.allowLoopbackPush && push.endpoint.startsWith('http://127.0.0.1:');
+    if (!push.endpoint.startsWith('https://') && !loopback) throw new ContactRefused('push endpoint must be https');
+    if (c.push && !c.pushGone) {
+      const now = await this.probeOne(c);
+      if (now === 'accepted') {
+        await this.write(record.account, record, writes);
+        throw new ContactRefused('the current notifications still reach their device; replace the contact to move them');
+      }
+      if (now === 'retry') throw new ContactRefused('the current notifications could not be checked; try again');
+      await this.lapse(c, false);
+    }
+    c.push = push;
+    delete c.pushGone;
+    delete c.lapsedAt;
+    c.pushCheckedAt = this.now();
+    const t = pushMovedNotice(this.cfg.walletOrigin);
+    await sendEmail(
+      this.cfg.sending,
+      { to: c.address, subject: t.subject, text: t.body, idempotencyKey: toHex(sha256(`moved|${toHex(c.id)}|${push.endpoint}`)) },
+      this.fetchImpl,
+    );
+    await this.write(record.account, record, writes);
+    return { status: 'push-updated' };
+  }
+
+  /**
+   * Probe every active subscription the push service has accepted nothing
+   * for in the probe interval. A 404 or 410 marks it lapsed and emails the
+   * contact (spec §10.6). Counts only: the host learns no account.
+   */
+  async probe(): Promise<{ probed: number; lapsed: number; writes: Writes }> {
+    const writes: Writes = {};
+    let probed = 0;
+    let lapsed = 0;
+    const now = this.now();
+    const interval = this.cfg.probeIntervalMs ?? PROBE_INTERVAL_MS;
+    for (const r of [...this.records.values()]) {
+      let changed = false;
+      for (const c of r.contacts) {
+        if (c.state !== 'active' || !c.push || c.pushGone || now - (c.pushCheckedAt ?? 0) < interval) continue;
+        probed++;
+        changed = true;
+        const outcome = await this.probeOne(c);
+        if (outcome === 'gone') {
+          await this.lapse(c, true);
+          lapsed++;
+        } else if (outcome === 'retry') c.pushCheckedAt = now - interval + PROBE_RETRY_MS;
+      }
+      if (changed) await this.write(r.account, r, writes);
+    }
+    return { probed, lapsed, writes };
+  }
+
+  /** Accounts with an active contact, for the host to reconcile from controller state (spec §10.2). */
+  accounts(): string[] {
+    return [...this.records.values()]
+      .filter((r) => r.contacts.some((c) => c.state === 'active'))
+      .map((r) => strkeyFromContractId(r.account));
+  }
+
+  /** Every watched attempt, for the host to read (spec §10.2). */
+  watched(): { account: string; attemptId: string }[] {
+    return [...this.records.values()].flatMap((r) =>
+      (r.watch ?? []).map((w) => ({ account: strkeyFromContractId(r.account), attemptId: w.attemptId })),
+    );
+  }
+
+  /** Stop watching an attempt: it left `Collecting`, its evidence deadline passed, or its email vote was alerted. */
+  async unwatch(account: string, attemptId: string): Promise<{ writes: Writes }> {
+    const writes: Writes = {};
+    const id = contractIdFromStrkey(account);
+    const r = this.records.get(await this.lookup(id));
+    if (r?.watch?.some((w) => w.attemptId === attemptId)) {
+      r.watch = r.watch.filter((w) => w.attemptId !== attemptId);
+      if (!r.watch.length) delete r.watch;
+      await this.write(r.account, r, writes);
+    }
+    return { writes };
+  }
+
+  /** `attempt_begun` on an account with an email-guardian contact: watch the attempt. */
+  private watch(r: AccountRecord, attemptId: string): boolean {
+    if (!r.contacts.some((c) => c.state === 'active' && c.emailGuardian)) return false;
+    const list = (r.watch ??= []);
+    if (list.some((w: WatchedAttempt) => w.attemptId === attemptId)) return false;
+    list.push({ attemptId, since: this.now() });
+    if (list.length > WATCH_MAX) list.splice(0, list.length - WATCH_MAX);
+    return true;
   }
 
   /**
@@ -385,10 +560,23 @@ export class Vault {
   async dispatch(ev: DispatchRequest): Promise<{ status: 'done' | 'retry'; writes: Writes }> {
     const writes: Writes = {};
     const record = this.records.get(await this.lookup(ev.account));
+    let recordChanged = false;
+    const attemptId = ev.subject.kind === 'attempt' ? ev.subject.attemptId.toString() : undefined;
+    if (record && attemptId !== undefined) {
+      if (ev.name === 'attempt_begun') recordChanged = this.watch(record, attemptId);
+      if (ev.name === 'email_vote_recorded' && record.watch?.some((w) => w.attemptId === attemptId)) {
+        record.watch = record.watch.filter((w) => w.attemptId !== attemptId);
+        if (!record.watch.length) delete record.watch;
+        recordChanged = true;
+      }
+    }
+    if (ev.class === 'watch') {
+      if (recordChanged && record) await this.write(record.account, record, writes);
+      return { status: 'done', writes };
+    }
     const contacts = record?.contacts.filter((c) => c.state === 'active') ?? [];
     let retry = false;
     let logged = false;
-    let recordChanged = false;
     for (const c of contacts) {
       const code = await alertCode({
         key: c.kCode,
@@ -415,8 +603,9 @@ export class Vault {
         if (outcome === 'accepted') {
           this.deliveries[`${base}|push`] = this.now();
           logged = true;
+          recordChanged = true;
         } else if (outcome === 'gone') {
-          c.pushGone = true;
+          await this.lapse(c, true);
           recordChanged = true;
         } else retry = true;
       }
@@ -472,4 +661,18 @@ export class Vault {
     }
     return out;
   }
+}
+
+/** Each contact's channels, without its address. */
+function channelStatus(record: AccountRecord | undefined): ChannelStatus[] {
+  return (record?.contacts ?? []).map((c) => ({
+    contact: toHex(c.id),
+    state: c.state,
+    push: !c.push ? 'none' : c.pushGone ? 'lapsed' : 'live',
+    ...(c.pushCheckedAt !== undefined ? { pushCheckedAt: c.pushCheckedAt } : {}),
+    ...(c.lapsedAt !== undefined ? { lapsedAt: c.lapsedAt } : {}),
+    ...(record?.change && equal(record.change.target, c.id)
+      ? { change: { kind: record.change.kind, maturesLedger: record.change.maturesLedger } }
+      : {}),
+  }));
 }

@@ -23,9 +23,13 @@
  * Opening an attempt is permissionless and several attempts can be open at
  * once, so the page only proves, links, or adopts a passkey for an attempt
  * that declares exactly the replacement set it opened (`ownAttemptProblem`).
+ *
+ * Opened anywhere else (the apex, after losing every device), the page asks
+ * for the Nido's address from the recovery kit, or its name, and goes to
+ * the recovery page on that account's subdomain.
  */
 
-import { buf2hex, parseRegistration, perch, saveCredential, nidoKey } from '@nidohq/passkey-sdk';
+import { accountUrl, buf2hex, parseRegistration, perch, saveCredential, nidoKey } from '@nidohq/passkey-sdk';
 import { scValToNative } from '@stellar/stellar-sdk';
 import { esc } from '../html.js';
 import { toast } from '../toast.js';
@@ -47,7 +51,8 @@ import {
 import { busy, card, el, errorText, guardianLinks, kitInput } from './ui.js';
 import { kitFile, newRecoveryKit, proveWithKit } from './zk.js';
 import { emailRecoveryDeployment } from './emailConfig.js';
-import { delayCountdown, remainingFactors } from './emailModel.js';
+import { accountFromKitInput, delayCountdown, remainingFactors } from './emailModel.js';
+import { resolveAccountFromHostname } from '../resolveAccount.js';
 import { findEmailGuardian } from './emailRecovery.js';
 import { emailApprovalStep } from './emailStep.js';
 
@@ -93,7 +98,7 @@ const fromB64u = (s: string) =>
 
 export async function mountRecover(root: HTMLElement, account: string | null): Promise<void> {
   if (!account) {
-    root.append(el('p', { class: 'mut' }, 'Open this page at your Nido’s address (yourname.nido.fyi) to recover it.'));
+    root.append(findAccountCard());
     return;
   }
   if (!perchDeployment()) {
@@ -126,6 +131,30 @@ export async function mountRecover(root: HTMLElement, account: string | null): P
     root.append(card('Your recovery', `<p style="margin:0;">Couldn’t read your recovery right now (${esc(errorText(e))}). Trying again…</p>`));
     setTimeout(() => location.reload(), 15_000);
   }
+}
+
+/** Where recovery starts without an account in the address bar: the Nido's address from the kit, or its name. */
+function findAccountCard(): HTMLElement {
+  const c = card(
+    'Which Nido?',
+    `<p style="margin:0;font-size:13.5px;">Recovery runs on your Nido’s own address. Paste the Nido address from your recovery kit
+       (it starts with C), the recovery page address from the kit, or your Nido’s name.</p>
+     <input name="find-account" class="input mono" autocomplete="off" spellcheck="false" placeholder="C… or yourname">`,
+  );
+  const body = c.querySelector('.card') as HTMLElement;
+  const status = el('div', { class: 'mut', style: 'font-size:12.5px;', role: 'status' });
+  const go = el('button', { class: 'btn primary', type: 'button', 'data-find-account': '' }, 'Go to its recovery page') as HTMLButtonElement;
+  body.append(go, status);
+  go.addEventListener('click', () =>
+    busy(go, status, 'Looking it up…', async () => {
+      const found = accountFromKitInput((body.querySelector('[name="find-account"]') as HTMLInputElement).value);
+      if (!found) throw new Error('That is not a Nido address or name. The address in your recovery kit starts with C and is 56 characters long.');
+      const account = 'account' in found ? found.account : await resolveAccountFromHostname(`${found.name}.${window.location.hostname}`);
+      if (!account) throw new Error(`No Nido is called ${'name' in found ? found.name : ''}. Try the address from your recovery kit.`);
+      window.location.assign(`${window.location.protocol}${accountUrl(window.location.host, account, '/security/recover/')}`);
+    }),
+  );
+  return c;
 }
 
 /** Step 1-2: new passkey (and kit), then open the attempt. */

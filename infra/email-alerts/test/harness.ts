@@ -32,7 +32,9 @@ import {
   encodeContactRequest,
   prepareConfirmation,
   prepareContactChange,
+  pushUpdateRequest,
   removalRequest,
+  statusRequest,
   type VaultKey,
 } from '@nidohq/email-recovery';
 import { TransactionBuilder } from '@stellar/stellar-sdk';
@@ -214,6 +216,22 @@ export class Wallet {
     const body = encodeContactRequest(prepared.finish({ publicKey: this.passkey.publicKey, ...this.passkey.assert(prepared.challenge) }));
     this.requestBytes = body.length;
     return { id: inner.contact, result: await this.api.contact(body) };
+  }
+
+  /** Read the account's alert channels (a passkey-authorized `status`). */
+  async status(): Promise<ContactResult> {
+    const vault = this.vault ?? (await this.attest());
+    const prepared = await prepareContactChange(vault, statusRequest(this.w.fixture.account) as never, await this.api.nonce());
+    return this.api.contact(encodeContactRequest(prepared.finish({ publicKey: this.passkey.publicKey, ...this.passkey.assert(prepared.challenge) })));
+  }
+
+  /** Give contact `id` a new subscription from `device` (a passkey-authorized `push`). */
+  async pushUpdate(id: Uint8Array, device: PushUserAgentMock): Promise<ContactResult> {
+    const vault = this.vault ?? (await this.attest());
+    const sub = device.subscribe(vault.vapid);
+    const req = pushUpdateRequest(this.w.fixture.account, id, sub, { allowLoopbackPush: true });
+    const prepared = await prepareContactChange(vault, req as never, await this.api.nonce());
+    return this.api.contact(encodeContactRequest(prepared.finish({ publicKey: this.passkey.publicKey, ...this.passkey.assert(prepared.challenge) })));
   }
 
   async remove(id: Uint8Array): Promise<ContactResult> {

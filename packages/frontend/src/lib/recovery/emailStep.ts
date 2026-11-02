@@ -7,6 +7,12 @@
  *
  * `rho` is drawn here and kept in this browser only; `account_code` is held
  * in memory while the page is open and never stored.
+ *
+ * Where the code is typed the page says nobody asks for it and how to check
+ * that the page is the user's own Nido's, against the address in the
+ * recovery kit; the email it prepares opens with a line telling anyone who
+ * was asked to send it to stop. The sealed inbound registration lasts 24
+ * hours; the page shows when it ends and offers a new email afterwards.
  */
 
 import {
@@ -31,6 +37,8 @@ import type { GuardianConfig } from './emailGuardian.js';
 import {
   PRIVACY_CLAIM,
   clock,
+  codeEntryWarning,
+  inboundDeadline,
   mailtoLink,
   newPendingApproval,
   pendingApprovalProblem,
@@ -106,7 +114,8 @@ export function emailApprovalStep(o: EmailStepOptions): HTMLElement {
   const codeBox = el(
     'div',
     { style: 'display:grid;gap:8px;' },
-    `<label class="pol-input-label">Your recovery code (26 letters and digits, from your recovery kit)
+    `<div class="alert warn" role="note" style="font-size:12.5px;" data-code-warning>${esc(codeEntryWarning(window.location.host, o.account))}</div>
+     <label class="pol-input-label">Your recovery code (26 letters and digits, from your recovery kit)
        <input name="kit-code" class="input mono" autocomplete="off" spellcheck="false" placeholder="ABCD EFGH IJKL MNOP QRST UVWX YZ">
      </label>
      <details><summary style="font-size:12.5px;cursor:pointer;">I have the recovery code block from my enrollment email instead</summary>
@@ -141,7 +150,7 @@ export function emailApprovalStep(o: EmailStepOptions): HTMLElement {
           accountCode = await decryptBackup(block, pass, perch.contractId(o.account));
         }
         const code = await attemptAlertCode(accountCode, o.guardian.config.controller, o.account, o.attemptId);
-        alertLine.innerHTML = `Alerts about this recovery show the code <strong class="mono" data-code>${esc(spacedCode(code))}</strong>. If an alert shows another code, it is not about the recovery you started.`;
+        alertLine.innerHTML = `Alerts about this recovery show the code <strong class="mono" data-code>${esc(spacedCode(code))}</strong>. An alert with another code is about another recovery of your Nido, which you did not start here.`;
         codeBox.hidden = true;
         status.textContent = '';
         await showEmail();
@@ -191,16 +200,37 @@ export function emailApprovalStep(o: EmailStepOptions): HTMLElement {
     });
 
     const inboundLine = emailBox.querySelector<HTMLElement>('[data-inbound]')!;
+    const deadlineLine = el('div', { style: 'font-size:12.5px;', 'data-inbound-deadline': '' });
+    inboundLine.after(deadlineLine);
     try {
       let secret: InboxSecret | undefined = pending.inbox ? { id: pending.inbox.id, seed: pending.inbox.seed } : undefined;
       if (!secret) {
-        secret = await registerInbound(subjectValue(email.subject));
+        const r = await registerInbound(subjectValue(email.subject));
+        secret = r.secret;
         pending.inbox = { id: secret.id, seed: secret.seed };
+        pending.inboxExpiresAt = r.expiresAt;
         savePending(o.account, pending);
       }
       inboundLine.textContent = 'Waiting for your email to arrive. This page picks it up by itself, sealed so only this browser can read it.';
+      const expiresAt = pending.inboxExpiresAt;
+      const expired = () => expiresAt !== undefined && inboundDeadline(expiresAt, Date.now()).expired;
+      const showDeadline = () => {
+        if (expiresAt === undefined) return;
+        const d = inboundDeadline(expiresAt, Date.now());
+        deadlineLine.textContent = d.text;
+        if (!d.expired || deadlineLine.querySelector('button')) return;
+        inboundLine.textContent = '';
+        const fresh = el('button', { class: 'btn soft sm', type: 'button', 'data-new-email': '' }, 'Get a new email to send') as HTMLButtonElement;
+        fresh.addEventListener('click', () => {
+          savePending(o.account, undefined);
+          void showEmail();
+        });
+        deadlineLine.append(' ', fresh);
+      };
+      showDeadline();
+      const tick = setInterval(() => (busy || !deadlineLine.isConnected ? clearInterval(tick) : showDeadline()), 30_000);
       const poll = async () => {
-        if (busy) return;
+        if (busy || expired() || !deadlineLine.isConnected) return;
         const messages = await fetchInbound(secret!).catch(() => []);
         if (messages[0]) await prove(messages[0], statement, rho);
         else setTimeout(() => void poll(), 4_000);

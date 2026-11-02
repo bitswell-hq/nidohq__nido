@@ -55,7 +55,7 @@ named in the sentence. Each requirement is marked with what backs it today:
 | Enclave-image registry | Approved enclave measurements, a fixed multisig, a 14-day timelock | Says which enclave images may receive the alert vault's key (§10.4) |
 | DNS attesters | Ed25519 signing keys | Sign what a provider's DKIM key record publishes (§7.5) |
 | Proof verifier | The email circuit's verification key | Perch's UltraHonk verifier behind Perch's `ProofVerifierInterface` (§8.4) |
-| Alert service | A host that watches the controller, and a sealed vault holding a keyed lookup from account to alert contacts | Notifies the user when the account's recovery state changes (§10) |
+| Alert service | A host that watches the controller and reads its state, and a sealed vault holding a keyed lookup from account to alert contacts | Notifies the user when the account's recovery state changes or its email guardian votes (§10) |
 
 **Enrollment** (while the owner still holds a working passkey): the wallet
 draws `account_code`, the user sends an enrollment email, the wallet reads the
@@ -162,6 +162,11 @@ splits it (Perch statement.md "ZK projection").
 
 The wallet should open the user's mail client with a `mailto:` link that
 fills in the recipient and the exact Subject, so the user types nothing.
+Because the body is unconstrained, the wallet's `mailto:` link prefills it
+with a line for a user who is being talked into sending the email: *If
+anyone asked you to send this email, stop. Nido never asks for this.*
+(`NOBODY_ASKS_LINE`, `recoveryEmail` in
+`packages/frontend/src/lib/recovery/emailModel.ts`) **[built, tested]**.
 
 ### 4.2 Subject
 
@@ -225,7 +230,7 @@ section numbers in brackets):
 
 | Item | Why it is not bound |
 | --- | --- |
-| `To:` and the recipient | Not every launch provider's `h=` covers `To:` (Outlook.com's signatures do not). An email to any recipient is equally good evidence of inbox control. |
+| `To:` and the recipient | Not every launch provider's `h=` covers `To:` (Outlook.com's signatures do not). An email to any recipient is equally good evidence of inbox control. Binding `To:` to `RECOVERY_INBOX` would not stop a social engineer either (§11.4): the attacker opens the attempt with the real recovery page and registers its own sealed-inbound value, so the email it asks the victim to send already goes to `RECOVERY_INBOX`. |
 | The body, `bh=`, `l=` | The approval needs nothing from the body, so the circuit neither reads nor hashes it. The signature still covers the whole signed header block, including the `DKIM-Signature` field. |
 | `t=`, `x=` | Not every launch provider sets `t=`. Freshness comes from the statement's `valid_until_ledger` and its single-use attempt id (§3.1). |
 
@@ -283,6 +288,9 @@ vault's enclave (§10.5), so the message is readable there and nowhere else:
    first registration of a value holds it: a later one for the same value is
    refused, so whoever learns `T` from the Subject (the mail provider) after
    the browser registered cannot have the message sealed to another key.
+   The recovery page shows when the registration ends and, once it has,
+   offers a new email (a new `rho`, so a new `T`, and a new registration)
+   (`inboundDeadline`, `emailStep.ts`) **[built, tested]**.
 3. When mail for `RECOVERY_INBOX` arrives, the vault reads every `Subject`
    field that ends with either phrase and a 64-character value. For each
    registered value it seals the raw message (the octets the MX received,
@@ -295,7 +303,15 @@ vault's enclave (§10.5), so the message is readable there and nowhere else:
    (`GET /v1/inbound/<i>`); the browser opens them with its device key.
 
 The host sees `i`, sizes and times, never `T`, `E`, the address or the
-message. In a deployment, SMTP's TLS terminates inside the enclave (not
+message. The vault holds at most `INBOUND_MAX_REGISTRATIONS` = 100,000
+registrations; so that a flood cannot fill them, the host accepts at most 10
+registrations per client per hour (`INBOUND_LIMIT`; a client is an IPv4
+address or an IPv6 /64 prefix) and answers `429` with `Retry-After` beyond
+that. One client then holds at most 240 registrations at once, and filling
+the vault takes at least 417 distinct clients **[built, tested]**
+(`infra/email-alerts/src/service.ts`; `test/inbound.test.ts`, "the
+sealed-inbound rate limit"). A flood from more clients than that still
+fills it; the `.eml` import is unaffected. In a deployment, SMTP's TLS terminates inside the enclave (not
 built, as for the alert vault's own channel, §10.5); a sending MTA that does
 not use STARTTLS would expose the message to the host, which MTA-STS on the
 recovery domain makes a sender refuse. **[built, tested]**: the browser half
@@ -387,13 +403,20 @@ domain outside the allowlist are refused; the grammar cases of §4.5).
 `packages/frontend/src/lib/recovery/emailEnrollPage.ts`), while the owner
 holds the account's passkey **[built, tested]**:
 
-1. Draw `account_code` (§5.1) and save a backup (§5.6).
+1. Draw `account_code` (§5.1) and save a backup (§5.6). Saving is shown,
+   not ticked: the user types back two groups of the recovery kit code,
+   picked at random, before enrollment continues (`kitCheckGroups`,
+   `kitCheckMatches`).
 2. Show the enrollment email (a `mailto:` link and the exact To and
    Subject), receive it back (§4.6), and check it as above, with the key from
    the key list or, after a notice, DNS (§7.7).
 3. Register the alert contact with its Web Push subscription and confirm it
    with the emailed code (§10.3); the wallet's service worker
-   (`packages/frontend/public/sw.js`) shows the pushes.
+   (`packages/frontend/public/sw.js`) shows the pushes. The alert address
+   field starts empty. If the user enters the enrolled inbox itself, the
+   page warns, without blocking, that someone who takes over that inbox can
+   delete the alerts sent to it, and recommends an address at another
+   provider (`alertAddressWarning`).
 4. Deploy the guardian with `C` and the pin (§7.4), paid by the wallet's
    submitter account (§13 question 10), then read back its wasm hash and
    `config()` and compare every field with what it intended (§5.5).
@@ -428,18 +451,27 @@ the user's Sent folder):
 
 ```text
 -----BEGIN NIDO RECOVERY CODE-----
-v1.<base64url-no-padding( salt || nonce || ciphertext )>
+v2.<base64url-no-padding( salt || nonce || ciphertext )>
 -----END NIDO RECOVERY CODE-----
 
 key        = Argon2id(password = passphrase, salt, t = 3, m = 65536 KiB, p = 4, tag = 32 bytes)
-ciphertext = AES-256-GCM(key, nonce, plaintext = account_code, aad = "nido/email-recovery/v1/code-backup" || account contract id)
+ciphertext = AES-256-GCM(key, nonce, plaintext = account_code || account contract id,
+                         aad = "nido/email-recovery/v1/code-backup-v2")
 ```
+
+The account rides inside the ciphertext: once the passphrase opens the
+block, it says which Nido it recovers (§5.7), and the mail provider that
+keeps the Sent copy learns nothing from it. Wallets write version 2 and
+still open version 1 blocks, which carry the code alone with the account as
+associated data (`aad = "nido/email-recovery/v1/code-backup" || account
+contract id`) and so open only given the account.
 
 - `salt` is 16 random bytes and `nonce` 12 random bytes. The Argon2id
   parameters are RFC 9106 §4's second recommended option (64 MiB, 3 passes,
   4 lanes, 128-bit salt, 256-bit tag), sized for phone browsers.
-- `ciphertext` is the 16-byte code plus the 16-byte tag, so the encoded
-  payload is 60 bytes (80 base64url characters).
+- `ciphertext` is the 48 bytes of code and account plus the 16-byte tag, so
+  the encoded payload is 92 bytes (123 base64url characters); a version 1
+  payload is 60 bytes (80 characters), so the two cannot be confused.
 - **Passphrase floor:** the wallet generates the passphrase; it is not
   user-chosen. It is five words drawn uniformly from the EFF large wordlist
   (7,776 words), lowercase, separated by single spaces, at least 64.6 bits.
@@ -449,18 +481,47 @@ ciphertext = AES-256-GCM(key, nonce, plaintext = account_code, aad = "nido/email
   guardian.
 
 **(b) Recovery kit / password manager:** the 16 bytes as 26 characters of
-RFC 4648 base32 without padding, shown in groups of four.
+RFC 4648 base32 without padding, shown in groups of four. The kit file also
+names the Nido it recovers (its `C…` address) and the address of its
+recovery page (§5.7), and the page advises keeping it outside the account
+behind the enrolled inbox (not in that provider's password manager or
+cloud drive), since whoever takes over that account would hold both the
+inbox and the code (`recoveryKitText`, `KIT_STORAGE_ADVICE`).
 
 **[built, tested]**: `packages/email-recovery/src/backup.ts` (the Argon2id
 of `@noble/hashes`, checked against RFC 9106 §5.3's test vector; the EFF
 large wordlist with its published SHA-256 in `src/effWordlist.ts`);
 `test/enrollmentEmail.test.ts` opens a block only with its passphrase
 (case and spacing forgiven) and account, finds it inside a whole email
-body, and round-trips and refuses mistyped kit codes. Which backups a
+body, reads the account out of a version 2 block, still opens a version 1
+block with its account and only with it, and round-trips and refuses
+mistyped kit codes. Which backups a
 wallet offers is open (§13 question 4); the wallet offers both from one
 component (`packages/frontend/src/lib/recovery/emailBackup.ts`), so the
 choice changes there alone. At recovery the user enters the kit code, or the
 block and its passphrase.
+
+**Checking the code before it is needed** **[built, tested]**. Recovery
+settings offer *Check my recovery code*: the user types the kit code and the
+wallet, storing and sending nothing, recomputes the guardian's pin root from
+it (leaf 0 is `P2(DOM_PIN_SALT, account_code)`, §7.4) with each key of the
+key list (§7.7) as leaf 1, and compares the result with the pin root in the
+guardian's `config()`. A match means the code is the guardian's. No match
+means either a wrong code or an enrollment key the key list does not hold;
+the page tells the user to look for another copy and, failing that, to
+enroll again while the passkey still works (`checkCodeAgainstPin`,
+`codeCheckText` in `emailModel.ts`; `settingsPage.ts`).
+
+### 5.7 Finding the account after losing every device
+
+A Nido's recovery page runs on the account's own subdomain, whose name is
+the 56-character `C…` address. The recovery kit names that address and the
+recovery page (§5.6 (b)); the version 2 backup block carries the address
+inside its ciphertext. Opened anywhere else (the wallet's apex), the
+recovery page asks for the address from the kit, the recovery page's
+address, or the Nido's registered name, and goes to the account's recovery
+page (`accountFromKitInput`; `recoverPage.ts`) **[built, tested]**. Nothing
+names the account in plaintext where the mail provider keeps it.
 
 ## 6. Circuit public inputs and obligations
 
@@ -1230,7 +1291,13 @@ exactly what that validator refuses.)
    second vote for it.
 2. **Second alert channel.** A member that lists an email guardian requires
    a second alert channel registered with the alert service (Web Push to a
-   passkey device, §10).
+   passkey device, §10). The rule holds at runtime, not only at enrollment:
+   the recovery settings page checks the channel (this device's own
+   subscription at once; the vault's view, `status` of §10.3, with the
+   passkey) and, once it has lapsed (the push service answered 404 or 410,
+   or this device's subscription is gone), shows it prominently, offers to
+   move the notifications to this device (`push` of §10.3), and refuses to
+   save a configuration that keeps the email guardian until it does.
 3. **Email plus delay.** If the email vote alone authorizes an attempt
    (`guardian-only` mode with `quorum = 1`), the member must use the `loss`
    profile and `delay-ledgers ≥ 120,960` (7 days). In `combined` mode the
@@ -1259,6 +1326,15 @@ email-guardian contact without it (§10.3) **[built, tested]**.
 | `rule 4: refuses narrower allowed actions when the quorum needs the email vote` | A narrower set is refused with two other guardians at quorum 3 and in `combined` with quorum 1, accepted with two other guardians at quorum 2; `ALLOW_ALL` is accepted at quorum 3 |
 | `leaves configurations without an email guardian unaffected` | Without an email guardian, quorum 1, `protected`, a 24-ledger delay, and no second channel are accepted |
 
+Every save on the recovery settings page lists the account's email guardian
+(found by its wasm hash, as at recovery) with its typed marker, so these
+rules apply to later changes as well as to enrollment; the channel's
+runtime state decides `secondAlertChannel` (`secondChannel` in
+`emailModel.ts`, tested in `emailModel.test.ts`, "the second alert channel
+at runtime (rule 2)"; `settingsEmail.test.ts` shows a lapsed channel
+refusing a save that keeps the email helper, and a save keeping it under
+the rules otherwise) **[built, tested]**.
+
 **What each layer guarantees.** On chain, for every configuration: email
 approvals alone never complete a recovery without the delay passing, and
 with `quorum ≥ 2` (or in `combined` mode) they never authorize one. The
@@ -1285,19 +1361,26 @@ registry fed by the DNS attester mock, and a real proof in every approval,
 
 ## 10. Alerts
 
-Alerts are driven by the controller's events, filtered by account. Nothing
-is written on chain for alerts: no tag, no registration, no event from the
-guardian.
+Alerts are driven by the controller's events, filtered by account, and by
+reads of the controller's state (§10.2). Nothing is written on chain for
+alerts: no tag, no registration, no event from the guardian.
 
 | Event (topic 0) | Topic 1 | Alert | Channels |
 | --- | --- | --- | --- |
 | `attempt_authorized` | account | **Required:** the account has entered a recovery window; generic text plus the per-attempt verification code | Every channel |
+| none: the email guardian's vote on a collecting attempt (`email_vote_recorded`) | — | **Required:** the inbox and the account code were used for an attempt that still needs other approvals; found by reading the attempt (§10.2) | Every channel |
 | `recovery_completed` | account | Required: the account's signers changed | Every channel |
 | `epoch_advanced` | account | Required: the recovery configuration (guardians, timing, the email guardian itself) changed | Every channel |
 | `attempt_cancelled` | account | Informational | Email |
 | `change_evidence_recorded` | account | Informational: approvals for a reconfiguration or upgrade are being collected | Email |
-| `attempt_begun` | account | Informational and rate-limited: opening an attempt is permissionless, so these can be spammed | Email, at most one per account per 24 hours of ledger close time; the next one says how many were held back |
+| `attempt_begun` | account | None by default: opening an attempt is permissionless and grants nothing, so alerting each one would teach users to ignore recovery alerts. The vault watches the attempt for an email vote, and the wallet shows open attempts itself (§10.2). A service configured with `emailOnAttemptBegun` emails it, at most one per account per 24 hours of ledger close time | None (configurable: email, rate-limited) |
 | `attempt_invalidated` | account | None | None |
+
+Each alert is delivered under an id naming what it is about
+(`name:account:attempt` or `:epoch`; `alertEventId`), not the RPC event that
+reported it, so the same alert found by the event stream and by
+reconciliation (§10.2) is sent once. `change_evidence_recorded`, emitted for
+each approval of one change, keeps its event id.
 
 Topic 0 is the event struct's name in snake case, topic 1 the account, and
 the data the struct's other fields as a map (`#[contractevent]` with one
@@ -1358,9 +1441,13 @@ topic 1.
   nobody can choose a statement or attempt to produce a given code.
 - **What it is not.** It does not authenticate an alert: alerts carry no
   link to act on, so a forged alert can only make the user open the wallet,
-  which reads the chain. A recovery that does not use the email factor
-  needs `account_code` (the recovery kit or the backup of §5.6) to show the
-  code.
+  which reads the chain. Nor does a matching code show that an attempt is
+  the reader's own: anyone holding `account_code`, including someone who
+  talked the user into reading it out (§11.4), computes the same code for
+  their own attempt. So no alert says that a matching code means nothing
+  needs doing; the push to a passkey device leads with cancelling (§10.6). A
+  recovery that does not use the email factor needs `account_code` (the
+  recovery kit or the backup of §5.6) to show the code.
 - `deriveAlertCodeKey` and `alertCode` in `packages/email-recovery/src/alertCode.ts`
   are the only implementation; the vault imports them **[built, tested]**
   (`test/alertCode.test.ts` checks them against an independent `node:crypto`
@@ -1412,11 +1499,63 @@ host can suppress alerts but cannot read or redirect them. It
   through the RPC mock's `simulateTransaction`; it has not been run against
   a live network.
 - **Matures** contact changes (§10.3) when they are due.
+- **Reads email votes.** Perch emits no event when a guardian's vote is
+  recorded on an attempt below quorum. On `attempt_begun` the vault records
+  the attempt, sealed in the account's record, when the account has an
+  active email-guardian contact (at most 32 per account). Each poll the host
+  asks the vault for the watched attempts and reads each with the
+  controller's `attempt(account, attempt_id)` view (`simulateTransaction`,
+  read-only). When the attempt is still `Collecting` and its `guardians`
+  include the account's email guardian (a guardian whose contract instance
+  runs the email guardian's wasm, read once with `getLedgerEntries`; the
+  wasm cannot change), the vault sends `email_vote_recorded` on every
+  channel and stops watching it. An attempt that left `Collecting` or passed
+  its evidence deadline is dropped. A vote that authorizes the attempt is
+  alerted as `attempt_authorized` instead. **Latency:** the alert follows
+  the vote by at most one polling interval plus the reads; on the mocks of
+  `test/liveness.test.ts` the vault's answer comes within milliseconds of
+  the read, and on the local network the attack suite records it per run
+  (`inbox-email-vote-alerted`). **[built, tested]**
+- **Reconciles from controller state** on its first poll, every 6 hours
+  (`RECONCILE_EVERY_MS`), and after the RPC refuses its cursor. For each
+  account the vault holds an active contact for, it reads the controller's
+  persistent state: the authorized attempt (`activity_gate`) and the latest
+  32 attempts (`next_attempt_id`, `attempt`). An authorized attempt is
+  alerted, and an email vote on a collecting attempt, under the same
+  delivery ids the event stream uses (§10), so nothing is sent twice;
+  collecting attempts are watched from then on. A completed recovery the
+  stream missed is not re-alerted: reconciliation restores the alerts that
+  can still change the outcome. **[built, tested]**
+- **Raises a lag alarm** (the log, an `onAlarm` hook for an operator's pager,
+  and `GET /v1/health`) when its cursor is more than 720 ledgers (an hour)
+  behind the chain, once per episode, and when the RPC refuses its cursor;
+  it then resumes at the oldest ledger the RPC keeps (`getHealth`) and
+  reconciles. A stopped watcher cannot raise an alarm itself:
+  `GET /v1/health` reports its last poll for a monitor outside it (not
+  built). **[built, tested]**
+- **Probes push subscriptions** through the vault each poll (§10.6).
+
+`infra/email-alerts/test/liveness.test.ts` pins the email-vote alert (once,
+on every channel, with the attempt's code; not for another guardian's vote,
+an authorized attempt, or one past its deadline), the restart after the
+events aged out of retention (alarm, resume, one alert from controller
+state), the shared delivery id of a reconciled and a streamed alert, the lag
+alarm, and `chainReads` against the RPC mock in Stellar RPC's encodings.
+
+**The wallet's own read.** Independent of the alert service, the wallet
+reads the account's live attempts from the controller whenever it opens (the
+home page) and on the recovery settings page: the authorized attempt from
+`activity_gate` and collecting ones among the latest 16. A device holding
+the account's passkey is told it does not need a recovery and offered the
+owner's cancellation; a collecting attempt without approvals shows as a
+quiet notice (`liveAttempts.ts`, `liveAttempts.test.ts`) **[built,
+tested]**. A stopped or lagging alert service therefore cannot hide an
+attempt from an owner who opens the wallet within the delay.
 
 Residual: public RPCs keep a bounded history (120,960 ledgers by default,
-confirmed on testnet). A watcher stopped for longer loses events; the RPC
-refuses its cursor and the service logs it. Reconciling from controller
-state after such an outage is not built (§13).
+confirmed on testnet), which equals the email-plus-delay profile's minimum
+delay. Reconciliation recovers authorized attempts and email votes after a
+longer outage; it reads only accounts the vault holds contacts for.
 
 ### 10.3 Alert contacts
 
@@ -1427,8 +1566,8 @@ the vault with HPKE (RFC 9180, base mode, DHKEM(P-256, HKDF-SHA256),
 HKDF-SHA256, AES-128-GCM, `info = "nido/email-recovery/v1/vault-request"`)
 after verifying the vault's attestation (§10.5).
 
-**Owner authorization.** Every registration, replacement, and removal
-carries a WebAuthn assertion (W3C WebAuthn Level 3 §7.2) by one of the
+**Owner authorization.** Every registration, replacement, removal, push
+update, and status read carries a WebAuthn assertion (W3C WebAuthn Level 3 §7.2) by one of the
 account's administrative passkeys over
 
 ```text
@@ -1436,10 +1575,11 @@ challenge = sha256("nido/email-recovery/v1/alert-contact/" || op || account || c
                    || sha256(envelope) || BE32(purposes) || BE32(consent_version) || nonce)
 ```
 
-with `op` one of `register`, `replace`, `remove`; `contact` the 16-byte id
-of the new contact (or of the one to remove); `nonce` 32 bytes the vault
-issued, single use, valid 10 minutes (`remove` signs purposes and consent
-version 0). The vault checks the assertion as the WebAuthn verifier of Perch
+with `op` one of `register`, `replace`, `remove`, `push`, `status`;
+`contact` the 16-byte id of the new contact (or of the one to remove or give
+a new subscription; 16 zero bytes for `status`); `nonce` 32 bytes the vault
+issued, single use, valid 10 minutes (`remove`, `push` and `status` sign
+purposes and consent version 0). The vault checks the assertion as the WebAuthn verifier of Perch
 accounts does on chain (type `webauthn.get`, the challenge, UP and UV set,
 BS only with BE, P-256 over `authenticatorData || SHA-256(clientDataJSON)`,
 low-S) plus the relying party (`rpIdHash = SHA-256(rpId)`, an allowed
@@ -1467,8 +1607,24 @@ so the check defends against third parties, not against the host.
 6. A contact whose account has an email guardian must include a Web Push
    subscription (§9.3 rule 2). Both the wallet helper and the vault refuse
    one without.
+7. `status` answers each contact's id, state, and push channel (`live`,
+   `lapsed` with when, or `none`) and any pending change, never the
+   address; the host relays the answer, so it learns whether that
+   account's channel lapsed.
+8. `push` gives an existing contact a new subscription at once only when
+   its current one is gone: the vault probes the current one first (§10.6)
+   and refuses when the push service still accepts it, since moving working
+   notifications is a replacement under rule 3. The contact's address is
+   told at once (*notifications moved*).
 
-The wallet helpers are `packages/email-recovery/src/enrollment.ts`.
+Rules 7 and 8 are tested in `test/liveness.test.ts` ("status reads the
+channels; push moves notifications at once only from a gone subscription,
+and tells the address"). The wallet helpers are
+`packages/email-recovery/src/enrollment.ts` (`statusRequest`,
+`pushUpdateRequest`; round trips in `test/enrollment.test.ts`) and
+`packages/frontend/src/lib/recovery/emailAlerts.ts` (`alertChannels`,
+`moveNotificationsHere`, and `deviceChannel`, which compares this device's
+current subscription with the one it registered).
 `recoverySpec` refuses an email guardian without a declared second channel
 (§9.3 rule 2). The wallet's enrollment flow (§5.4) registers the contact
 with a Web Push subscription for the vault's attested VAPID key, confirms it
@@ -1599,24 +1755,54 @@ copy), RFC 8291 message encryption (one `aes128gcm` record; the
 implementation reproduces RFC 8291's example byte for byte), and RFC 8292
 VAPID (an ES256 JWT for the push service's origin, valid 12 hours, `sub` a
 `mailto:` URI) **[built, tested]** (`src/vault/webpush.ts`). A 404 or 410
-marks the subscription gone; email continues.
+marks the subscription gone (lapsed); email continues, and the contact's
+address is told once (*notifications stopped*), with what to do.
+
+**Liveness probe** **[built, tested]**. A subscription the push service has
+accepted nothing for in a week (`VaultConfig.probeIntervalMs`, default
+`PROBE_INTERVAL_MS`; one value) is probed: an RFC 8030 push with `TTL: 0`,
+`Urgency: very-low`, `Topic: probe`, payload `{v, kind: "probe"}`. RFC 8030
+§7.3 has the push service answer a push to an expired subscription with
+404; the vault reads 404 and 410 as gone. The service worker shows each
+probe as a quiet status notification (*Nido notifications are on*, silent,
+one tag so each replaces the last), worded so it never looks like a recovery
+alert. The trade-off: WebKit revokes a Safari or iOS subscription whose
+pushes show no notification ("Meet Web Push",
+https://webkit.org/blog/12945/meet-web-push/), so a silent probe would
+itself end the channel it checks; a visible probe costs one quiet
+notification per interval; a longer interval finds a lapse later. A probe
+the push service cannot answer is tried again an hour later. The probe
+counts are all the host learns (`test/liveness.test.ts`, "probes a
+subscription weekly…", "the probe interval is one configuration value").
 
 **Content.** Generic text that never names the account, the address, or the
 attempt; the code of §10.1; the wallet's canonical origin as plain text;
 no link to act on (`src/vault/content.ts`). The push payload is
-`{v, kind, title, body, code}`.
+`{v, kind, title, body, code}`. A push goes only to the device registered
+with the account's passkey, so the push for `attempt_authorized` and for an
+email vote leads with cancelling: *This device has your passkey, so you do
+not need a recovery. Cancel it unless you are deliberately replacing this
+passkey.* The email says that a matching code does not make the attempt the
+reader's own, and every email ends by saying that Nido never asks anyone to
+send a recovery email, approve a recovery, or read out a code, and that the
+recovery code is typed only into the user's own Nido's recovery page, by the
+user, after losing every device with the passkey: the one page that asks
+for it (`NEVER_ASKS`, `PASSKEY_DEVICE_LEAD`; `test/alerts.test.ts`,
+"attempt_authorized: the push leads with cancelling…") **[built, tested]**.
+A click on a recovery alert opens the wallet's recovery page, where the
+cancel is.
 
 ### 10.7 Who sees what
 
 | Party | Sees |
 | --- | --- |
 | The vault (attested enclave) | Addresses, push subscriptions, `k_code`, codes, `K` |
-| The host | Which accounts register or change contacts and when (it relays their chain state), events, sealed blobs and their sizes, the timing of outbound traffic |
+| The host | Which accounts register or change contacts and when (it relays their chain state), in memory which accounts have contacts and which of their attempts are watched (it reads them; its stored state holds only sealed records), whether an account's push channel lapsed when the owner reads its status, events, sealed blobs and their sizes, the timing of outbound traffic |
 | Custodians | One share each; the vault id; the enclave's measurement |
 | Sending service | The address and the alert text, including the code |
 | The user's mail provider | The alert text, including the code |
 | Push service | The subscription endpoint and an encrypted payload |
-| Stellar RPC | Bulk `getEvents` queries by contract, and `installed_rules` reads of accounts that change contacts |
+| Stellar RPC | Bulk `getEvents` queries by contract; `installed_rules` reads of accounts that change contacts; `attempt`, `activity_gate`, and `next_attempt_id` reads of accounts with contacts (watched attempts and reconciliation, §10.2); `getLedgerEntries` of guardians that voted |
 | Anyone | The registry's approvals and activations |
 | The vault, for inbound mail (§4.6) | The recovery or enrollment email in transit, so the address; the Subject value it routes by |
 | The host, for inbound mail | Registration envelopes, inbox ids, sealed messages, their sizes and times, and the IP addresses that register and fetch them |
@@ -1744,6 +1930,75 @@ How the assumptions enter the theorems:
 | 3 Replay | C5 binds `d` | Checks 1, 2, 5, 6, 8, 12 | One vote per guardian per attempt and domain, or per change digest (Perch §6.3 T2, §5); attempt ids never reused (T1); epochs only grow (§3.3) | A2, A3, A4 | Proven with A2's break named on the two statements' encodings (`EmailRecovery.Perch.email_vote_replay`); tested (unit and integration) |
 | 4 One-factor safety | — | The guardian is one address | Quorum (T4), delay (T5), cancellation (T6, T7) | — | Proven over all controller traces (`EmailRecovery.Perch.one_factor_safety`) and for the wallet policy (`one_factor_under_wallet_policy`); on-chain part tested; wallet policy tested (§9.3) |
 
+### 11.4 Adversaries beyond the protocol, and residual risks
+
+The four properties are about the chain and the proof. Under the
+email-plus-delay profile (§9.3 rule 3) email alone authorizes an attempt,
+and what stops a wrongful one is the owner's cancellation within the delay,
+which needs the owner to learn of it. The adversaries below act on that.
+Each row of the attack suite named here runs on a local network
+(`research/email-recovery/eval/README.md`).
+
+**The inbox thief with the account code.** It authorizes an attempt under
+email plus delay, cannot complete it within the delay, and deletes
+everything sent to the inbox it holds. The owner learns of the attempt from
+the push to the passkey device, from an alert address at another provider
+(enrollment recommends one, §5.4), or by opening the wallet (§10.2). The
+attack suite's worst case sends alerts to the stolen inbox itself: the push
+alone reaches the owner, and a cancellation by the owner's passkey within
+the delay succeeds (`inbox-email-plus-delay`). Under a quorum of two or
+more, the email vote itself is alerted on every channel
+(`inbox-email-vote-alerted`).
+
+**The social engineer.** It can get the user to send an email with a chosen
+Subject to a chosen address, and to read out or type the recovery code (for
+example posing as support). It needs no fake page: on its own device the
+real recovery page opens a lost-key attempt that installs its key (opening
+is permissionless), registers its own sealed-inbound value, and shows the
+Subject, an opaque value the user cannot check. The user's email is then a
+valid approval: property 1 binds the email to the statement, not to the
+sender's informed consent. The six-digit code is no defence, since the
+attacker holding `account_code` sees the same code (§10.1). Binding `To:` to
+`RECOVERY_INBOX` would not stop it either: the email the attacker asks for
+already goes there, and the attacker's own registration seals it to the
+attacker (§4.6). What remains:
+
+- the delay, and the owner's cancellation: a user who still holds the
+  passkey is told by the push, and by the wallet when opened, that a device
+  with the passkey needs no recovery and to cancel
+  (`social-phished-holds-passkey`);
+- other guardians: with a second helper required, the phished vote leaves
+  the attempt collecting (`social-lost-devices-second-helper`);
+- the prefilled body line (§4.1), the warning where the code is typed with
+  how to check the page's origin against the kit (`codeEntryWarning`), and
+  every alert saying that Nido never asks for an email or a code (§10.6);
+- a reply to a phishing message is unprovable, because nothing may precede
+  the Subject's phrase (§4.2).
+
+**Residual risk:** a phished user who has lost every device cannot cancel,
+so under email plus delay the attempt completes once the delay passes
+(`social-lost-devices-email-plus-delay`, run with the delay shortened
+outside the wallet's policy so it elapses). A second helper, or the
+`combined` mode, closes this. A code keyed by the owner passkey's PRF, which
+a page holding only `account_code` cannot reproduce, is open (§13 question
+8).
+
+**Alert suppression.** A watcher stopped for longer than the RPC's event
+history misses the events; reconciliation from controller state alerts the
+authorized attempt after the restart (`alerts-watcher-outage`), and the lag
+alarm reports the gap (§10.2). A lapsed push subscription is found by the
+weekly probe, the contact's address is told, and the wallet treats the email
+helper as breaking rule 2 until notifications are back (§9.3). **Residual
+risk:** with alerts going to the stolen inbox and the push lapsed, no alert
+reaches the owner; only opening the wallet within the delay shows the
+attempt (`alerts-lapsed-push`). A lying or stopped host can suppress every
+alert (§10.2); the wallet's own read does not depend on it.
+
+**Repeated attempts.** Anyone may open attempts at the cost of a
+transaction fee. By default they alert nothing: the wallet lists them, each
+granting nothing, and the vault watches each (at most 32 per account) for an
+email vote (`griefing-repeated-attempts`).
+
 ## 12. Measurements
 
 All figures were read from runs in this repository, on the test host
@@ -1765,9 +2020,9 @@ network's.
 | The same on the desktop's efficiency cores | Chrome under macOS background QoS (`taskpolicy -c background`): one thread 36.4 s proving, 41.3 s total; four threads 12.0 s and 17.5 s; peak renderer resident memory 1,428 / 2,015 MiB. A desktop's slower cores, not a phone | same **[measured]** |
 | What a first proof downloads | 18,790,270 octets (the artifact, the key, and the CRS prefix), then nothing on a retry; the prover's code is part of the page's build | `browser-prover.md` (the cold runs), `test/prover.test.ts` **[measured]** |
 | Phones | **Not measured.** No phone was available. `/security/recover/bench/` runs the same benchmark on any device, with no account, and prints copyable JSON; `just email-recovery-bench-phone` builds it as a self-contained directory (the page, its assets, the circuit and key, and the CRS prefix checked against the prover's pinned digests, read by the page through `?crs=`) and serves it over HTTPS on this machine's network addresses with the recovery routes' headers. `research/email-recovery/eval/phone/check.mjs` runs that build in headless Chrome (cross-origin isolated, the CRS from the build, both proofs verified); that is a check of the build, not a phone figure | — |
-| Enrollment and recovery end to end on a local network | Passes in 1.7 minutes: in Chromium, the owner's Nido turns on recovery, enrolls an inbox (the Gmail mock signs the enrollment email; the vault seals it back; the page checks it, registers the alert contact with Web Push, deploys the guardian with its pin, and lists it with a quorum of two); a new device opens a lost-key attempt, the vault seals the recovery email back, the page proves it in the browser and submits `submit_guardian`, the other helper approves, the alert email and push carry the code the page showed, and after the delay the page completes the recovery | `tests/e2e/local/email-recovery.local.spec.ts` (`just test-e2e-email-local`) on `stellar/quickstart --local` (core and RPC v29, protocol 28) with Perch's stack built for that network and Nido's contracts from source. Mocked (TEST-ONLY): the mail provider and MX, DNS, the sending services, the push service, the Nitro enclave and its custodians, and the enclave-image registry (a stand-in answering `is_active`, since its 14-day timelock cannot elapse locally); the test's passkeys are the repository's test authenticator. Not in CI **[built, tested]** |
-| Attack suite on a local network | 53 scenario rows in eight classes (forged emails, replayed emails and proofs, a wrong account or new key in the statement, stale or malicious registry keys, a compromised inbox, provider header quirks, front-running, privacy on chain), each outcome as expected and each refusal named by its layer (circuit assertion, guardian check number, registry rule, Perch controller error, alert path); the three registry scenarios that need an elapsed timelock or grace period on the test host with the registry's real timelocks | `research/email-recovery/eval/README.md` (`just email-recovery-attacks`; `network/attacks.mjs` on `stellar/quickstart --local`, every approval a real proof by bb.js in Node; `email_guardian.rs::registry_*`). Mocked (TEST-ONLY): the mail providers, DNS, the sending services, the push service, the enclave and its custodians, and the enclave-image registry (the end-to-end test's stand-in). In CI (`email-recovery-attacks.yml`) **[built, tested]** |
-| One `submit_guardian` with an email approval on a local network | metered: 120.0 million instructions (119,970,963 to 120,088,289 across 18 votes), 12 entries read, 2 entries and 1,208 bytes written; 125 million instructions declared after simulation; 18,080-byte transaction around a 16,784-byte authorization entry; 176,230 stroops charged (median), 2,604 of them rent. The vote that authorizes an attempt with a 7-day delay also writes the authorized attempt: 120.9 million instructions, 4 entries and 1,488 bytes written, 3,734,680 stroops charged, 3,550,194 of them rent | `research/email-recovery/eval/results/attacks-local.json`, read from each transaction's result and the host's `core_metrics` events; the approvals use the guardian's pin, so the registry is not called (spec §7.4) **[measured]** |
+| Enrollment and recovery end to end on a local network | Passes in 1.7 minutes: in Chromium, the owner's Nido turns on recovery, enrolls an inbox (two groups of the recovery code typed back; the Gmail mock signs the enrollment email; the vault seals it back; the page checks it, warns when the alert address is the enrolled inbox, registers an alert contact at another address with Web Push, deploys the guardian with its pin, and lists it with a quorum of two); a new device opens a lost-key attempt, the page warns where the code is typed, prefills the warning line in the email's body and shows the pickup deadline, the vault seals the recovery email back, the page proves it in the browser and submits `submit_guardian`, the alert service alerts the email vote, the other helper approves, the alert email and push carry the code the page showed, and after the delay the page completes the recovery | `tests/e2e/local/email-recovery.local.spec.ts` (`just test-e2e-email-local`) on `stellar/quickstart --local` (core and RPC v29, protocol 28) with Perch's stack built for that network and Nido's contracts from source. Mocked (TEST-ONLY): the mail provider and MX, DNS, the sending services, the push service, the Nitro enclave and its custodians, and the enclave-image registry (a stand-in answering `is_active`, since its 14-day timelock cannot elapse locally); the test's passkeys are the repository's test authenticator. Not in CI **[built, tested]** |
+| Attack suite on a local network | 65 scenario rows in eleven classes (forged emails, replayed emails and proofs, a wrong account or new key in the statement, stale or malicious registry keys, a compromised inbox, the alert path, phishing and social engineering, repeated attempts, provider header quirks, front-running, privacy on chain), each outcome as expected and each refusal named by its layer (circuit assertion, guardian check number, registry rule, Perch controller error, alert path); the three registry scenarios that need an elapsed timelock or grace period on the test host with the registry's real timelocks | `research/email-recovery/eval/README.md` (`just email-recovery-attacks`; `network/attacks.mjs` on `stellar/quickstart --local`, every approval a real proof by bb.js in Node; `email_guardian.rs::registry_*`). Mocked (TEST-ONLY): the mail providers, DNS, the sending services, the push service, the enclave and its custodians, and the enclave-image registry (the end-to-end test's stand-in). In CI (`email-recovery-attacks.yml`) **[built, tested]** |
+| One `submit_guardian` with an email approval on a local network | metered: 120.0 million instructions (119,948,955 to 120,081,003 across 20 votes), 12 entries read, 2 entries and 1,208 bytes written; 125 million instructions declared after simulation; 18,080-byte transaction around a 16,784-byte authorization entry; 176,219 stroops charged (median), 2,604 of them rent. The vote that authorizes an attempt with a 7-day delay also writes the authorized attempt: 120.9 million instructions, 4 entries and 1,488 bytes written, 3,734,691 stroops charged, 3,550,194 of them rent | `research/email-recovery/eval/results/attacks-local.json`, read from each transaction's result and the host's `core_metrics` events; the approvals use the guardian's pin, so the registry is not called (spec §7.4) **[measured]** |
 | One `submit_guardian` with an email approval on testnet | metered: 121,639,784 instructions, 12 entries read, 2 entries and 1,208 bytes written; 126,548,373 instructions declared; 18,080-byte transaction; 82,428 stroops charged, 1,333 of them rent; 1,715 ms from simulation to confirmation | `research/email-recovery/eval/results/testnet.json` (`testnet/run.sh`): transaction `08cdc915727c…`, read back from Stellar RPC 30.0.0 (protocol 29); the approval uses the guardian's pin **[measured]** |
 | One complete email-factor recovery on testnet | every step succeeded: mint, guardian deployment, the recovery document, `begin_lost_key`, the email vote, the helper's vote (which authorizes the attempt and pays its record's rent: 3,664,628 stroops charged, 3,653,812 rent), a 12-ledger delay (57,575 ms), and completion; 13,384,714 stroops charged over those 7 transactions; the account's document then holds the new passkey and not the lost one. Perch's doc compiler and recovery controller were archived on testnet and were restored first, one transaction per entry | same; deployment in `DEPLOYED.md`, "Email recovery (evaluation, TEST-ONLY)". Mocked (TEST-ONLY): the mail provider, DNS **[measured]** |
 | One `submit_guardian` with an email approval and a real proof, whole invocation on the test host | 121,801,947 to 121,916,929 instructions (30.5% of 400,000,000); 5.6 MB of memory; 14 entries read; 2 entries and 1,208 bytes written; resource fee without rent 94,421 to 94,501 stroops, across the 12 fixtures | `email_proofs.rs` (every launch domain and the 124-byte address), `cost_estimate()`; table in `research/email-recovery/eval/onchain.md` (`measure-onchain.py`) **[measured]** |
@@ -1779,14 +2034,14 @@ network's.
 | `execute` of an addition (the leaf and the 16-level root recomputation) | 22,772,568 instructions; 1,067,600 bytes of memory; 37 entries read; 20 entries and 4,384 bytes written; 348 event bytes; fee without rent 102,648 stroops | same test **[measured]** |
 | The approval that executes a revocation (removal, root recomputation, refusals) | 20,044,810 instructions; 880,286 bytes of memory; 39 entries read; 21 entries and 1,944 bytes written; 516 event bytes; fee without rent 103,537 stroops | same test **[measured]** |
 | Enclave-image registry wasm, optimized | 10,152 bytes | `just build-contracts` output for `nido_enclave_image_registry.wasm` **[measured]** |
-| `attempt_authorized` to the email accepted by the sending mock | 22 to 28 ms, median 26 (10 runs) | `infra/email-alerts/test/e2e.test.ts`, from the start of the watcher's poll to the Lettermint mock's receipt; Node 24.18.0, darwin arm64 **[measured on mocks]** |
-| `attempt_authorized` to the push accepted by the push mock | 29 to 35 ms, median 33 (10 runs) | same **[measured on mocks]** |
-| Reading the event to the vault's answer (email and push sent) | 27.7 to 34.2 ms, median 31.4 (10 runs) | same, `PollReport.latencyMs` **[measured on mocks]** |
-| Vault restart: process start, shares from two custodians, reconstruction, unsealing | 244 to 339 ms, median 302 (10 runs) | same **[measured on mocks]** |
+| `attempt_authorized` to the email accepted by the sending mock | 11 to 62 ms, median 16.5 (10 runs) | `infra/email-alerts/test/e2e.test.ts` (`NIDO_ALERT_MEASUREMENTS`), from the start of the watcher's poll to the Lettermint mock's receipt; Node 24.18.0, darwin arm64, a shared machine (load average about 45) **[measured on mocks]** |
+| `attempt_authorized` to the push accepted by the push mock | 13 to 66 ms, median 19 (10 runs) | same **[measured on mocks]** |
+| Reading the event to the vault's answer (email and push sent) | 13.7 to 27.7 ms, median 17.3 (10 runs) | same, `PollReport.latencyMs` **[measured on mocks]** |
+| Vault restart: process start, shares from two custodians, reconstruction, unsealing | 147 to 238 ms, median 152 (10 runs) | same **[measured on mocks]** |
 | Vault attestation document (16 PCRs, 3-certificate bundle) | 3,775 bytes | same **[measured on mocks]** |
 | Contact registration request as the wallet posts it | 1,284 bytes of JSON | same **[measured on mocks]** |
-| Web Push body (RFC 8291, one record) | 661 bytes | same **[measured on mocks]** |
-| Lettermint request body of an alert | 685 bytes | same **[measured on mocks]** |
+| Web Push body (RFC 8291, one record) | 353 bytes | same **[measured on mocks]** |
+| Lettermint request body of an alert | 1,076 bytes | same **[measured on mocks]** |
 
 The `submit_guardian` figures include the proof verification: Perch's
 controller and account, the guardian, the registry, and the verifier all
@@ -1837,7 +2092,8 @@ providers' own delivery to these figures.
 2. **Pin lifetime.** The cap is 365 days (`MAX_PIN_LIFETIME_LEDGERS`).
    The wallet deploys guardians with a 30-day pin (518,400 ledgers,
    `PIN_LIFETIME_LEDGERS` in `packages/frontend/src/lib/recovery/emailConfig.ts`,
-   one constant). Alternatives: 30 days, which covers the registry's 7-day
+   one constant, applied by `pinValidUntil`) **[built, tested]**
+   (`emailModel.test.ts`, "the key pin the wallet deploys"). Alternatives: 30 days, which covers the registry's 7-day
    timelock with margin and keeps the revocation window of §7.4 short; 365
    days, the cap, which keeps the enrolled key usable through the pin longest
    if the registry drops or delays it and leaves a revoked key usable through
@@ -1903,8 +2159,11 @@ providers' own delivery to these figures.
     tested (§9.3 lists the tests). They bind Nido's wallet only: the chain
     accepts any configuration the owner applies. The wallet sets the second
     alert channel only after the alert service has confirmed the contact
-    with its Web Push subscription (§5.4, §10.3); the alert service does not
-    tell the wallet later if that subscription lapses.
+    with its Web Push subscription (§5.4, §10.3), and checks it again at
+    runtime (§9.3 rule 2): this device's subscription without a prompt, the
+    vault's view with the passkey. The vault's view is as fresh as its last
+    probe (a week by default, §10.6). Open: whether the wallet should read
+    it on every open, at the cost of a passkey prompt.
 12. **Address and domain bounds.** `ADDR_MAX = 124` and the 62-byte leaf
     domain cover the launch providers. Custom domains would need larger
     bounds, which change `C`'s packing and the leaf format (a new version).
@@ -1916,9 +2175,11 @@ providers' own delivery to these figures.
     with TLS terminating inside the enclave, and a reproducible image build
     that publishes PCR0 to PCR2 are not built.
 15. **Outages longer than RPC retention.** A watcher stopped for longer than
-    the RPC's history (120,960 ledgers by default) loses events.
-    Reconciling from controller state, and an operator alarm when the
-    watcher falls behind, are not built.
+    the RPC's history (120,960 ledgers by default) loses events;
+    reconciliation from controller state and the lag alarm are built
+    (§10.2). Not built: a monitor outside the watcher that alarms when it
+    stops polling (it reads `GET /v1/health`), and a choice of whether the
+    email-plus-delay floor should exceed the longest tolerated outage.
 16. **Accounts without an email guardian.** `k_code` comes from
     `account_code`, which such accounts do not have. Their alerts would need
     another key for the code, for example one kept in the recovery kit.
@@ -1934,3 +2195,13 @@ providers' own delivery to these figures.
     a signer outside Nido must be among the approvers, and how the signer
     set changes (today: deploying a new registry and pointing the
     custodians at it).
+20. **Push probe visibility.** Each probe shows a quiet status notification
+    (§10.6), because WebKit revokes subscriptions whose pushes show nothing.
+    How long subscriptions survive on Android Chrome and in an iOS home-screen
+    web app, and whether users dismiss the weekly status notification, are
+    not measured.
+21. **Email votes to cancel.** Only an email vote on an attempt's initiation
+    is alerted. Under a guardian-only quorum of one, an inbox thief with the
+    code can also approve cancellations of the owner's own attempts
+    (`cancel_guardians`); alerting those, and the default allowed actions
+    (question 3), are open.

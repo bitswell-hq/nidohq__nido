@@ -17,6 +17,12 @@
  * caught up; and a page that ends before `limit` events carries the cursor
  * `TOID(next ledger to scan) - 1` with event index `4294967295`.
  *
+ * `getHealth` reports the retention window it keeps (`status`,
+ * `latestLedger`, `oldestLedger`, `ledgerRetentionWindow`). Its
+ * `getLedgerEntries` answers with entries the test supplies (the
+ * result shape: `entries: [{key, xdr, lastModifiedLedgerSeq}]`,
+ * `latestLedger`; a key without an entry is left out).
+ *
  * The mock serves a fixed list of events (for example those recorded from
  * Nido's integration-test host), keeps a retention window like the real
  * service's `history-retention-window`, and can be told to fail. Its
@@ -83,6 +89,8 @@ export class StellarRpcMock {
    * the base64 `ScVal` the invoked function returns. Unset: method not found.
    */
   onSimulate?: (transaction: string) => string;
+  /** Answers `getLedgerEntries`: given one base64 `LedgerKey`, its base64 `LedgerEntryData`, or `undefined`. */
+  onLedgerEntry?: (key: string) => string | undefined;
   url = '';
 
   constructor(
@@ -210,6 +218,19 @@ export class StellarRpcMock {
               results: [{ auth: [], xdr: value }],
               transactionData: '',
             },
+          });
+        }
+        if (msg.method === 'getLedgerEntries' && this.onLedgerEntry) {
+          const keys = (msg.params?.keys ?? []) as string[];
+          const entries = keys.flatMap((key) => {
+            const xdr = this.onLedgerEntry!(key);
+            return xdr ? [{ key, xdr, lastModifiedLedgerSeq: this.latestLedger }] : [];
+          });
+          return reply({ result: { entries, latestLedger: this.latestLedger } });
+        }
+        if (msg.method === 'getHealth') {
+          return reply({
+            result: { status: 'healthy', latestLedger: this.latestLedger, oldestLedger: this.oldestLedger, ledgerRetentionWindow: this.retention },
           });
         }
         if (msg.method === 'getLatestLedger') {

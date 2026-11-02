@@ -224,8 +224,15 @@ export async function vaultKey(d: EmailRecoveryDeployment = requireEmailRecovery
   });
 }
 
-/** Ask the vault to seal the email whose Subject ends with `valueHex` to this browser. */
-export async function registerInbound(valueHex: string, d: EmailRecoveryDeployment = requireEmailRecovery()): Promise<InboxSecret> {
+/**
+ * Ask the vault to seal the email whose Subject ends with `valueHex` to this
+ * browser; `expiresAt` is when the registration stops accepting mail (24
+ * hours, spec §4.6).
+ */
+export async function registerInbound(
+  valueHex: string,
+  d: EmailRecoveryDeployment = requireEmailRecovery(),
+): Promise<{ secret: InboxSecret; expiresAt: number }> {
   const vault = await vaultKey(d);
   const { envelope, secret } = await inboundRegistration(vault.publicKey, valueHex);
   const res = await fetch(`${d.alertService}/v1/inbound`, {
@@ -234,8 +241,10 @@ export async function registerInbound(valueHex: string, d: EmailRecoveryDeployme
     body: JSON.stringify({ envelope: toBase64Url(envelope) }),
     credentials: 'omit',
   });
-  if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? 'The alert service refused the registration.');
-  return secret;
+  const body = (await res.json().catch(() => ({}))) as { error?: string; expiresAt?: number };
+  if (res.status === 429) throw new Error('Too many emails were set up from this network in the last hour. Try again later, or import the email instead.');
+  if (!res.ok) throw new Error(body.error ?? 'The alert service refused the registration.');
+  return { secret, expiresAt: body.expiresAt ?? Date.now() + 24 * 3600_000 };
 }
 
 /** The emails the vault sealed to this browser so far, opened. */

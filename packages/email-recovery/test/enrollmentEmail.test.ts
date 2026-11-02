@@ -13,8 +13,10 @@ import {
   FIELD_MODULUS,
   addressCommitment,
   checkEnrollmentEmail,
+  backupPayload,
   decryptBackup,
   encryptBackup,
+  openBackup,
   enrollmentSubject,
   fromGrammarOk,
   generatePassphrase,
@@ -154,11 +156,43 @@ describe('account_code backups (spec §5.6)', () => {
       const block = await encryptBackup(code, passphrase, ACCOUNT);
       expect(block.startsWith(BACKUP_BEGIN)).toBe(true);
       const payload = block.split('\n')[1]!;
-      expect(payload).toMatch(/^v1\.[A-Za-z0-9_-]{80}$/);
+      // salt (16) || nonce (12) || AES-GCM(account_code (16) || account (32)) with its tag (16): 92 octets.
+      expect(payload).toMatch(/^v2\.[A-Za-z0-9_-]{123}$/);
       // Found inside a whole email body; the passphrase as a user might retype it.
       expect(await decryptBackup(`Keep this.\r\n\r\n${block}\r\n-- \r\n`, ' Abacus  ZOOM tidal unpack sphere ', ACCOUNT)).toEqual(code);
       await expect(decryptBackup(block, 'abacus zoom tidal unpack spheres', ACCOUNT)).rejects.toThrow(BackupError);
       await expect(decryptBackup(block, passphrase, OTHER_ACCOUNT)).rejects.toThrow(BackupError);
+    },
+    60_000,
+  );
+
+  test(
+    'a version 2 block names its account once opened; the account is nowhere in the block itself',
+    async () => {
+      const passphrase = 'abacus zoom tidal unpack sphere';
+      const block = await encryptBackup(code, passphrase, ACCOUNT);
+      const opened = await openBackup(block, passphrase);
+      expect(opened).toEqual({ accountCode: code, accountId: ACCOUNT, version: 2 });
+      const { payload } = backupPayload(block);
+      expect(Buffer.from(payload).includes(Buffer.from(ACCOUNT))).toBe(false);
+      await expect(openBackup(block, 'abacus zoom tidal unpack spheres')).rejects.toThrow(BackupError);
+    },
+    60_000,
+  );
+
+  test(
+    'a version 1 block still opens with its account, and only with it',
+    async () => {
+      const passphrase = 'abacus zoom tidal unpack sphere';
+      const v1 = await encryptBackup(code, passphrase, ACCOUNT, { version: 1 });
+      expect(v1.split('\n')[1]).toMatch(/^v1\.[A-Za-z0-9_-]{80}$/);
+      expect(backupPayload(v1).version).toBe(1);
+      expect(await decryptBackup(v1, passphrase, ACCOUNT)).toEqual(code);
+      expect(await openBackup(v1, passphrase, ACCOUNT)).toEqual({ accountCode: code, accountId: ACCOUNT, version: 1 });
+      await expect(openBackup(v1, passphrase)).rejects.toThrow(/older recovery code block/);
+      await expect(decryptBackup(v1, passphrase, OTHER_ACCOUNT)).rejects.toThrow(BackupError);
+      // The layouts cannot be confused: a v1 payload relabelled as v2 is refused for its length.
+      expect(() => backupPayload(v1.replace('\nv1.', '\nv2.'))).toThrow(/damaged/);
     },
     60_000,
   );

@@ -9,7 +9,9 @@
  *    here (sealed by the alert vault, or imported).
  * 3. Check it locally (§5.4): the signature, the From address, the Subject.
  * 4. Register the alert contact with the Web Push channel that email
- *    recovery requires (§9.3 rule 2, §10.3), and confirm it.
+ *    recovery requires (§9.3 rule 2, §10.3), and confirm it. The address
+ *    field starts empty, with a warning (not a block) when it is the
+ *    enrolled inbox itself, whose thief could delete the alerts.
  * 5. Deploy the account's email guardian with `C` and the key pin (§7.4,
  *    §8.2), and check what was deployed (§5.5).
  * 6. Apply the document that lists it among the recovery helpers, built by
@@ -31,7 +33,7 @@ import {
   randomRho,
   type InboxSecret,
 } from '@nidohq/email-recovery';
-import { perch } from '@nidohq/passkey-sdk';
+import { accountUrl, perch } from '@nidohq/passkey-sdk';
 import { esc } from '../html.js';
 import { submitPermissionlessOp } from '../recoverySubmit.js';
 import { getSubmitter } from '../primaryPasskeySigner.js';
@@ -40,9 +42,18 @@ import { currentOrFirstDoc, latestLedger, readRecoveryState } from './chain.js';
 import { perchDeployment, requireDeployment } from './deployment.js';
 import { backupPanel } from './emailBackup.js';
 import { CONSENT_TEXT, confirmAlertContact, pushSubscription, registerAlertContact } from './emailAlerts.js';
-import { PIN_LIFETIME_LEDGERS, emailRecoveryDeployment } from './emailConfig.js';
+import { emailRecoveryDeployment } from './emailConfig.js';
 import { ALLOW_ALL, contractWasmHash, deployGuardianOperation, deployedAddress, readGuardianConfig, type GuardianConfig } from './emailGuardian.js';
-import { PRIVACY_CLAIM, mailtoLink, nextEnrollStep, subjectValue, type EmailToSend, type EnrollStep } from './emailModel.js';
+import {
+  PRIVACY_CLAIM,
+  alertAddressWarning,
+  mailtoLink,
+  nextEnrollStep,
+  pinValidUntil,
+  subjectValue,
+  type EmailToSend,
+  type EnrollStep,
+} from './emailModel.js';
 import { fetchInbound, registerInbound, resolveEnrollmentKey, vaultKey } from './emailRecovery.js';
 import { confirmDnsLookup } from './emailStep.js';
 import { adminSignerIds, ledgersToText } from './model.js';
@@ -89,7 +100,7 @@ export async function mountEmailEnroll(root: HTMLElement, accountOrNull: string 
     card(
       'How email recovery works',
       `<p style="margin:0;font-size:13.5px;line-height:1.5;">If you lose your passkey, you send one email from your inbox and this browser proves your mail provider signed it.
-        It counts as <strong>one</strong> of your recovery helpers: your other helpers and the waiting period still apply, and you are alerted when a recovery starts.
+        It counts as <strong>one</strong> of your recovery helpers: your other helpers and the waiting period still apply, and you are alerted when your email approves a recovery and when a recovery is approved.
         ${esc(PRIVACY_CLAIM)} Your provider learns only that you sent a Nido recovery email.</p>`,
     ),
   );
@@ -124,8 +135,9 @@ export async function mountEmailEnroll(root: HTMLElement, accountOrNull: string 
         const c = card('1. Your recovery code');
         const body = c.querySelector('.card') as HTMLElement;
         const go = el('button', { class: 'btn primary', type: 'button', disabled: '' }, 'Continue') as HTMLButtonElement;
+        const recoverUrl = `${window.location.protocol}${accountUrl(window.location.host, account, '/security/recover/')}`;
         body.append(
-          backupPanel(accountCode, accountId, (s) => {
+          backupPanel(accountCode, { address: account, id: accountId, recoverUrl }, (s) => {
             go.disabled = !s.saved;
             progress.emailBlock = s.emailBlock;
             save(account, progress);
@@ -181,7 +193,7 @@ export async function mountEmailEnroll(root: HTMLElement, accountOrNull: string 
         const line = body.querySelector<HTMLElement>('[data-inbound]')!;
         void (async () => {
           try {
-            progress.inbox ??= await registerInbound(subjectValue(email.subject));
+            progress.inbox ??= (await registerInbound(subjectValue(email.subject))).secret;
             save(account, progress);
             line.textContent = 'Waiting for your email to arrive. This page picks it up by itself, sealed so only this browser can read it.';
             const poll = async () => {
@@ -203,10 +215,19 @@ export async function mountEmailEnroll(root: HTMLElement, accountOrNull: string 
           `<div style="font-size:13.5px;">Enrolled address, exactly as your provider writes it: <code class="mono" data-address>${esc(progress.checked!.address)}</code>. It never leaves this browser except sealed to the alert vault.</div>
            <div style="font-size:13px;">${esc(CONSENT_TEXT)} Because email can help recover your Nido, alerts also go to this device as notifications.</div>
            <label class="pol-input-label">Send alerts to
-             <input name="alert-address" class="input" value="${esc(progress.checked!.address)}">
-           </label>`,
+             <input name="alert-address" class="input" type="email" autocomplete="email" placeholder="An address at another provider">
+           </label>
+           <div class="mut" style="font-size:12.5px;">Pick an inbox other than the one you just enrolled: if someone takes over that inbox, alerts sent elsewhere still reach you.</div>
+           <div class="alert warn" role="alert" data-alert-same hidden></div>`,
         );
         const body = c.querySelector('.card') as HTMLElement;
+        const addressInput = body.querySelector<HTMLInputElement>('[name="alert-address"]');
+        const same = body.querySelector<HTMLElement>('[data-alert-same]');
+        addressInput?.addEventListener('input', () => {
+          const warning = alertAddressWarning(addressInput.value, progress.checked!.address);
+          same!.hidden = !warning;
+          same!.textContent = warning ?? '';
+        });
         if (!progress.contact) {
           const go = el('button', { class: 'btn primary', type: 'button' }, 'Turn on alerts on this device') as HTMLButtonElement;
           body.append(go, status);
@@ -215,9 +236,11 @@ export async function mountEmailEnroll(root: HTMLElement, accountOrNull: string 
               const vault = await vaultKey();
               const push = await pushSubscription(vault.vapid);
               status.textContent = 'Confirm with your passkey…';
+              const address = addressInput!.value.trim();
+              if (!address) throw new Error('Enter the address alerts should go to.');
               const contact = await registerAlertContact({
                 account,
-                address: (body.querySelector('[name="alert-address"]') as HTMLInputElement).value.trim(),
+                address,
                 accountCode,
                 push,
                 vault,
@@ -269,7 +292,7 @@ export async function mountEmailEnroll(root: HTMLElement, accountOrNull: string 
               controller: perchD.recoveryController,
               commitment: fromHex(chk.commitment),
               registry: d!.registry,
-              keyPin: [{ root: bigIntToBytes(pin.root, 32), validUntilLedger: ledger + PIN_LIFETIME_LEDGERS }],
+              keyPin: [{ root: bigIntToBytes(pin.root, 32), validUntilLedger: pinValidUntil(ledger) }],
               allowedActions: ALLOW_ALL,
               verifier: d!.verifier,
               circuitId: fromHex(d!.circuitId),
@@ -307,7 +330,8 @@ export async function mountEmailEnroll(root: HTMLElement, accountOrNull: string 
         return card(
           'Email recovery is on',
           `<p style="margin:0;font-size:13.5px;">Your inbox now counts as one recovery helper. If you lose your passkey, open
-            <strong>Get back in</strong> on your Nido and follow the email step. Keep your recovery code safe.</p>
+            <strong>Get back in</strong> on your Nido and follow the email step. Keep your recovery kit safe; you can check the code any time
+            in recovery settings.</p>
            <a class="btn primary" href="/security/recovery/">Back to recovery settings</a>`,
         );
       }

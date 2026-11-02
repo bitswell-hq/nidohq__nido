@@ -38,6 +38,13 @@ export interface VaultApi {
   mature(views: Record<string, ChainView>): Promise<{ applied: string[]; dropped: string[]; postponed: string[]; writes: Writes }>;
   /** A browser's sealed inbound registration (spec §4.6). */
   inbound(envelope: Uint8Array): Promise<InboundResult>;
+  /** Accounts with an active contact, to reconcile from controller state (spec §10.2). */
+  accounts(): Promise<string[]>;
+  /** The attempts to read for an email vote (spec §10.2). */
+  watched(): Promise<{ account: string; attemptId: string }[]>;
+  unwatch(account: string, attemptId: string): Promise<{ writes: Writes }>;
+  /** Probe the push subscriptions that are due (spec §10.6). */
+  probe(): Promise<{ probed: number; lapsed: number; writes: Writes }>;
   close(): Promise<void>;
 }
 
@@ -63,6 +70,18 @@ export class InProcessVault implements VaultApi {
   }
   inbound(envelope: Uint8Array) {
     return this.vault.inbound(envelope);
+  }
+  async accounts() {
+    return this.vault.accounts();
+  }
+  async watched() {
+    return this.vault.watched();
+  }
+  unwatch(account: string, attemptId: string) {
+    return this.vault.unwatch(account, attemptId);
+  }
+  probe() {
+    return this.vault.probe();
   }
   async close() {}
 }
@@ -141,6 +160,18 @@ export class ProcessVault implements VaultApi {
   }
   inbound(envelope: Uint8Array) {
     return this.request('inbound', { envelope }) as Promise<InboundResult>;
+  }
+  accounts() {
+    return this.request('accounts', {}) as Promise<string[]>;
+  }
+  watched() {
+    return this.request('watched', {}) as Promise<{ account: string; attemptId: string }[]>;
+  }
+  unwatch(account: string, attemptId: string) {
+    return this.request('unwatch', { account, attemptId }) as Promise<{ writes: Writes }>;
+  }
+  probe() {
+    return this.request('probe', {}) as Promise<{ probed: number; lapsed: number; writes: Writes }>;
   }
   /**
    * Mail for `RECOVERY_INBOX`, handed to the vault's MX. In a deployment the

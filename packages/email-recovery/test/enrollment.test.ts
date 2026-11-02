@@ -17,8 +17,10 @@ import {
   encodeSealedRequest,
   openRequest,
   prepareContactChange,
+  pushUpdateRequest,
   rawLowS,
   removalRequest,
+  statusRequest,
 } from '../src/enrollment.js';
 import { hpkeSuite } from '../src/hpke.js';
 import { strkeyFromContractId } from '../src/strkey.js';
@@ -91,6 +93,29 @@ describe('alert contact requests', () => {
     ];
     for (const r of reqs) expect(decodeSealedRequest(encodeSealedRequest(r))).toEqual(r);
     expect(reqs[0]!.op).toBe('replace');
+  });
+
+  it('round-trips push updates and status reads, which sign purposes and consent version 0', async () => {
+    const id = new Uint8Array(16).fill(4);
+    const update = pushUpdateRequest(account, id, push);
+    const status = statusRequest(account);
+    for (const r of [update, status]) expect(decodeSealedRequest(encodeSealedRequest(r))).toEqual(r);
+    expect(status.contact).toEqual(new Uint8Array(16));
+    expect(() => pushUpdateRequest(account, id, { ...push, endpoint: 'http://push.example/x' })).toThrow(/https/);
+    expect(() => pushUpdateRequest(account, new Uint8Array(15), push)).toThrow(/16 octets/);
+    // A status read names no contact.
+    const named = encodeSealedRequest({ ...status, contact: id });
+    expect(() => decodeSealedRequest(named)).toThrow(/names no contact/);
+    const v = await vault();
+    const nonce = new Uint8Array(32).fill(9);
+    for (const r of [update, status] as Extract<SealedRequest, { op: 'push' | 'status' }>[]) {
+      const prepared = await prepareContactChange(v.key, r, nonce);
+      const req = prepared.finish({ publicKey: new Uint8Array(65), authenticatorData: new Uint8Array(37), clientDataJSON: new Uint8Array(1), signature: Uint8Array.of(0x30, 6, 2, 1, 1, 2, 1, 1) });
+      expect(prepared.challenge).toEqual(
+        await authorizationChallenge({ op: r.op, account: r.account, contact: r.contact, envelope: req.envelope, purposes: 0, consentVersion: 0, nonce }),
+      );
+      expect(decodeContactRequest(encodeContactRequest(req)).op).toBe(r.op);
+    }
   });
 
   it('refuses bad inputs', async () => {

@@ -37,7 +37,7 @@ import {
   launchDns,
   nitroTestRoot,
 } from '@nidohq/email-mocks';
-import { AlertService, ProcessVault, StellarRpc, accountSigners } from '@nidohq/email-alerts';
+import { AlertService, ProcessVault, StellarRpc, accountSigners, chainReads } from '@nidohq/email-alerts';
 import { xdr } from '@stellar/stellar-sdk';
 
 const stack = JSON.parse(readFileSync(new URL('../../target/email-e2e/stack.json', import.meta.url), 'utf8'));
@@ -105,6 +105,7 @@ const svc = new AlertService(
     statePath: join(dir, 'host.json'),
     startLedger: latest,
     signers: (account) => accountSigners(rpc, account, PASSPHRASE),
+    reads: chainReads(rpc, stack.deployment.recoveryController, PASSPHRASE, stack.email.guardianWasmHash),
     allowOrigin: (o) => /^http:\/\/([a-z0-9]+\.)?localhost:\d+$/.test(o),
     log: (l) => console.error(`[alerts] ${l}`),
     pageLimit: 100,

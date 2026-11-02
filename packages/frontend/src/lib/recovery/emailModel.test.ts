@@ -2,8 +2,23 @@ import { describe, expect, it } from 'vitest';
 import { Address, StrKey, xdr } from '@stellar/stellar-sdk';
 import { initHashes, recoverySubject } from '@nidohq/email-recovery';
 import {
+  KIT_STORAGE_ADVICE,
+  NOBODY_ASKS_LINE,
+  PASSKEY_DEVICE_CANCEL,
   PRIVACY_CLAIM,
+  SECOND_CHANNEL_LAPSED,
+  accountFromKitInput,
+  alertAddressWarning,
+  checkCodeAgainstPin,
   chooseKeyPath,
+  codeCheckText,
+  codeEntryWarning,
+  inboundDeadline,
+  kitCheckGroups,
+  kitCheckMatches,
+  pinValidUntil,
+  recoveryKitText,
+  secondChannel,
   clock,
   delayCountdown,
   mailtoLink,
@@ -24,7 +39,7 @@ import {
   guardianConfigScVal,
   submitGuardianOperation,
 } from './emailGuardian';
-import { parseEmailRecoveryDeployment } from './emailConfig';
+import { PIN_LIFETIME_LEDGERS, parseEmailRecoveryDeployment } from './emailConfig';
 import { EMAIL_CIRCUIT_ID } from './emailProver';
 
 const contract = (n: number) => StrKey.encodeContract(Buffer.alloc(32, n));
@@ -50,6 +65,15 @@ describe('the email to send', () => {
     expect(pendingApprovalProblem(p, 5n, digest)).toMatch(/earlier recovery attempt/);
     expect(pendingApprovalProblem(p, 4n, new Uint8Array(32).fill(2))).toMatch(/changed/);
     expect(JSON.stringify(p)).not.toMatch(/account_?code/i);
+  });
+
+  it('the body opens by telling a talked-into sender to stop', async () => {
+    await initHashes();
+    const email = recoveryEmail('recover@recovery.test', new Uint8Array(32).fill(3), 9n);
+    expect(email.body.startsWith('If anyone asked you to send this email, stop. Nido never asks for this.')).toBe(true);
+    expect(email.body.startsWith(NOBODY_ASKS_LINE)).toBe(true);
+    const body = new URL(mailtoLink(email)).searchParams.get('body')!;
+    expect(body.startsWith(NOBODY_ASKS_LINE)).toBe(true);
   });
 
   it('the privacy claim is the scoped one', () => {
@@ -192,5 +216,101 @@ describe('the email recovery deployment', () => {
     expect(() => parseEmailRecoveryDeployment({ ...ok, circuitId: 'cd'.repeat(32) })).toThrow(/another circuit/);
     expect(() => parseEmailRecoveryDeployment({ ...ok, registry: 'G' })).toThrow(/registry/);
     expect(() => parseEmailRecoveryDeployment({ ...ok, attestationRoots: [] })).toThrow(/attestationRoots/);
+  });
+});
+
+describe('phishing and the recovery code', () => {
+  const account = contract(7);
+  it('the code entry says nobody asks for it and how to check the origin against the kit', () => {
+    const w = codeEntryWarning(`${account.toLowerCase()}.nido.test`, account);
+    expect(w).toMatch(/^Nobody from Nido will ask for this code/);
+    expect(w).toContain(`it must show ${account.toLowerCase()}.nido.test`);
+    expect(w).toContain(account.toLowerCase().slice(0, 6));
+    expect(w).toContain(account.toLowerCase().slice(-6));
+    expect(PASSKEY_DEVICE_CANCEL).toBe('This device has your passkey, so you do not need a recovery. Cancel it unless you are deliberately replacing this passkey.');
+  });
+
+  it('enrollment warns, without blocking, when alerts would go to the enrolled inbox', () => {
+    expect(alertAddressWarning(' Ada.Lovelace@proton.me ', 'ada.lovelace@proton.me')).toMatch(/can delete the alerts sent to it/);
+    expect(alertAddressWarning('ada@posteo.de', 'ada.lovelace@proton.me')).toBeUndefined();
+    expect(alertAddressWarning('', 'ada.lovelace@proton.me')).toBeUndefined();
+  });
+
+  it('enrollment asks for two distinct groups of the kit back, and only they pass', () => {
+    const kit = 'ABCD EFGH IJKL MNOP QRST UVWX YZ';
+    for (const r of [0, 0.3, 0.5, 0.99]) {
+      const [a, b] = kitCheckGroups(() => r);
+      expect(a).toBeLessThan(b);
+      expect(b).toBeLessThan(7);
+    }
+    expect(kitCheckMatches(kit, [1, 6], ['efgh', ' Y Z '])).toBe(true);
+    expect(kitCheckMatches(kit, [1, 6], ['EFGH', 'YX'])).toBe(false);
+    expect(kitCheckMatches(kit, [1, 6], ['EFGH'])).toBe(false);
+  });
+
+  it('the kit names its Nido and where recovery starts, and advises keeping it away from the inbox’s account', () => {
+    const text = recoveryKitText({ kit: 'ABCD EFGH', account, recoverUrl: `https://${account.toLowerCase()}.nido.test/security/recover/` });
+    expect(text).toContain('Recovery code: ABCD EFGH');
+    expect(text).toContain(`Nido: ${account}`);
+    expect(text).toContain(`Recovery page: https://${account.toLowerCase()}.nido.test/security/recover/`);
+    expect(text).toContain(KIT_STORAGE_ADVICE);
+    expect(KIT_STORAGE_ADVICE).toMatch(/Google Password Manager/);
+  });
+
+  it('the apex recovery page starts from the Nido address in a kit, its URL, or a name', () => {
+    expect(accountFromKitInput(`  Nido: ${account}  `)).toEqual({ account });
+    expect(accountFromKitInput(`https://${account.toLowerCase()}.nido.test/security/recover/`)).toEqual({ account });
+    expect(accountFromKitInput('alice')).toEqual({ name: 'alice' });
+    expect(accountFromKitInput('https://alice.nido.fyi/')).toEqual({ name: 'alice' });
+    expect(accountFromKitInput(account.slice(0, -1) + (account.endsWith('A') ? 'B' : 'A'))).toBeUndefined();
+    expect(accountFromKitInput('not an address!')).toBeUndefined();
+  });
+
+  it('the sealed inbound deadline is shown, and its end offers a new email', () => {
+    const now = Date.UTC(2026, 10, 1, 12);
+    const open = inboundDeadline(now + 23 * 3600_000 + 5 * 60_000, now);
+    expect(open.expired).toBe(false);
+    expect(open.text).toContain('(23 h 5 min left)');
+    const over = inboundDeadline(now - 1, now);
+    expect(over).toEqual({ expired: true, text: expect.stringMatching(/Get a new email to send/) });
+  });
+});
+
+describe('the second alert channel at runtime (rule 2)', () => {
+  it('lapses on the vault word or on this device subscription; is live only on the vault word', () => {
+    expect(secondChannel({ vault: 'live' })).toBe('live');
+    expect(secondChannel({ vault: 'lapsed' })).toBe('lapsed');
+    expect(secondChannel({ vault: 'none' })).toBe('lapsed');
+    expect(secondChannel({ vault: 'live', device: 'gone' })).toBe('lapsed');
+    expect(secondChannel({ device: 'live' })).toBe('unknown');
+    expect(secondChannel({})).toBe('unknown');
+    expect(SECOND_CHANNEL_LAPSED).toMatch(/rule 2/);
+  });
+});
+
+describe('checking a recovery code against the pin', () => {
+  it('matches only the code whose salted leaf, with a known key, rebuilds the pin root', async () => {
+    await initHashes();
+    const { pinTree } = await import('@nidohq/email-recovery');
+    const keys = [
+      { domain: 'gmail.com', modulus: (1n << 2047n) + 12345n },
+      { domain: 'proton.me', modulus: (1n << 2047n) + 999n },
+    ];
+    const root = (code: bigint, k: { domain: string; modulus: bigint }) => pinTree(code, [k]).root;
+    const pinRoot = root(42n, keys[1]!);
+    expect(checkCodeAgainstPin({ accountCode: 42n, pinRoot, keys, root })).toBe('match');
+    expect(checkCodeAgainstPin({ accountCode: 43n, pinRoot, keys, root })).toBe('mismatch');
+    expect(checkCodeAgainstPin({ accountCode: 42n, pinRoot, keys: [keys[0]!], root })).toBe('mismatch');
+    expect(checkCodeAgainstPin({ accountCode: 42n, pinRoot: undefined, keys, root })).toBe('no-pin');
+    expect(codeCheckText('mismatch')).toMatch(/set up email recovery again now/);
+  });
+});
+
+describe('the key pin the wallet deploys', () => {
+  it('lasts 30 days (518,400 ledgers): past the registry 7-day timelock, within the guardian 365-day cap', () => {
+    expect(PIN_LIFETIME_LEDGERS).toBe(30 * 17_280);
+    expect(pinValidUntil(1_000)).toBe(1_000 + 518_400);
+    expect(PIN_LIFETIME_LEDGERS).toBeGreaterThan(120_960);
+    expect(PIN_LIFETIME_LEDGERS).toBeLessThanOrEqual(6_307_200);
   });
 });

@@ -46,6 +46,14 @@ async function handle(method: string, p: Record<string, unknown>): Promise<unkno
       return vault.inbound(p.envelope as Uint8Array);
     case 'mail':
       return vault.mail(p.raw as Uint8Array);
+    case 'accounts':
+      return vault.accounts();
+    case 'watched':
+      return vault.watched();
+    case 'unwatch':
+      return vault.unwatch(p.account as string, p.attemptId as string);
+    case 'probe':
+      return vault.probe();
     default:
       throw new Error(`unknown method ${method}`);
   }

@@ -112,11 +112,23 @@ claims:
   - id: wallet-second-alert-channel
     statement: >-
       The wallet lists an email guardian in a recovery configuration only
-      when a second alert channel is registered for the account.
+      when a second alert channel is registered for the account; the vault
+      probes that channel weekly and marks it lapsed when the push service
+      no longer accepts it, and the wallet then refuses configurations that
+      keep the email guardian until notifications are moved to a device
+      again.
     status: tested
     evidence:
-      test: "rule 2: an email guardian needs a second alert channel"
-      file: packages/passkey-sdk/src/perch/recoverySpec.test.ts
+      - test: "rule 2: an email guardian needs a second alert channel"
+        file: packages/passkey-sdk/src/perch/recoverySpec.test.ts
+      - test: lapses on the vault word or on this device subscription; is live only on the vault word
+        file: packages/frontend/src/lib/recovery/emailModel.test.ts
+      - test: a lapsed channel is shown, and a save that keeps the email helper is refused
+        file: packages/frontend/src/lib/recovery/settingsEmail.test.ts
+      - test: probes a subscription weekly; a gone one is marked lapsed, the address is told, and alerts go by email only
+        file: infra/email-alerts/test/liveness.test.ts
+      - test: status reads the channels; push moves notifications at once only from a gone subscription, and tells the address
+        file: infra/email-alerts/test/liveness.test.ts
 
   - id: wallet-email-plus-delay
     statement: >-
@@ -244,12 +256,13 @@ claims:
     statement: >-
       On a local Stellar network, with Perch's controller and account and
       Nido's guardian, verifier and key registry deployed from their
-      WebAssembly, the real circuit and real proofs, each of the 53 scenario
+      WebAssembly, the real circuit and real proofs, each of the 65 scenario
       rows of the evaluation has its expected outcome, and each refusal comes
       from a named layer: forged and replayed emails and proofs, a wrong
       account or new key in the statement, planted keys and expired pins, a
-      compromised inbox, provider header variants, front-running, and the
-      chain's view.
+      compromised inbox, the alert path (an email vote below quorum, a
+      watcher outage, a lapsed push), phishing, repeated attempts, provider
+      header variants, front-running, and the chain's view.
     status: tested
     evidence:
       - test: forged-emails-circuit
@@ -267,6 +280,14 @@ claims:
       - test: registry-pin-expiry
         file: research/email-recovery/eval/network/attacks.mjs
       - test: quirks-each-provider
+        file: research/email-recovery/eval/network/attacks.mjs
+      - test: alerts-lapsed-push
+        file: research/email-recovery/eval/network/attacks.mjs
+      - test: social-phished-holds-passkey
+        file: research/email-recovery/eval/network/attacks.mjs
+      - test: social-phished-lost-devices
+        file: research/email-recovery/eval/network/attacks.mjs
+      - test: griefing-repeated-attempts
         file: research/email-recovery/eval/network/attacks.mjs
 
   - id: registry-timelock-attacks
@@ -291,12 +312,20 @@ claims:
       With the email guardian as the only guardian, under the lost-key
       profile and a seven-day delay, an attacker who holds the inbox and the
       account code can authorize a recovery attempt but cannot complete it
-      within the delay; the owner receives the attempt's verification code by
-      email and by Web Push, and cancels it.
+      within the delay; a cancellation by the owner's passkey within the
+      delay succeeds; the owner is alerted by Web Push to the passkey device,
+      which reaches the owner when the attacker deletes every email sent to
+      the inbox; an email vote that leaves an attempt below quorum is alerted
+      on every channel; and a watcher that missed the events alerts the
+      authorized attempt from controller state after it restarts.
     status: tested
     evidence:
-      test: inbox-email-plus-delay
-      file: research/email-recovery/eval/network/attacks.mjs
+      - test: inbox-email-plus-delay
+        file: research/email-recovery/eval/network/attacks.mjs
+      - test: inbox-email-vote-alerted
+        file: research/email-recovery/eval/network/attacks.mjs
+      - test: alerts-watcher-outage
+        file: research/email-recovery/eval/network/attacks.mjs
 
   - id: front-running-one-vote
     statement: >-
@@ -325,12 +354,12 @@ claims:
 
   - id: network-verification-cost
     statement: >-
-      On a local Stellar network, the 18 email votes with a real proof that
+      On a local Stellar network, the 20 email votes with a real proof that
       leave their attempt collecting, each proven against its guardian's key
-      pin, are metered at 119,970,963 to 120,088,289
-      instructions (median 120,047,601) and declare about 124.9 million; each
+      pin, are metered at 119,948,955 to 120,081,003
+      instructions (median 120,033,543) and declare about 124.9 million; each
       reads 12 ledger entries and writes 2 (1,208 bytes) in an 18,080-byte
-      transaction, and is charged a median of 176,230 stroops, 2,604 of them
+      transaction, and is charged a median of 176,219 stroops, 2,604 of them
       rent.
     status: measured
     evidence:
@@ -728,7 +757,10 @@ claims:
     statement: >-
       The wallet deploys each guardian with a key pin valid for 30 days
       (518,400 ledgers).
-    status: unproven
+    status: tested
+    evidence:
+      test: "lasts 30 days (518,400 ledgers): past the registry 7-day timelock, within the guardian 365-day cap"
+      file: packages/frontend/src/lib/recovery/emailModel.test.ts
 
   - id: registry-revocation
     statement: >-
@@ -819,11 +851,16 @@ claims:
   - id: account-code-backup
     statement: >-
       The account code's backup in the enrollment email opens only with its
-      wallet-generated five-word passphrase and its account; the recovery kit
-      holds the code as 26 base32 characters.
+      wallet-generated five-word passphrase and its account, which it carries
+      inside its ciphertext; the recovery kit holds the code as 26 base32
+      characters and names its account.
     status: tested
     evidence:
       - test: the passphrase-encrypted block opens only with its passphrase and account
+        file: packages/email-recovery/test/enrollmentEmail.test.ts
+      - test: a version 2 block names its account once opened; the account is nowhere in the block itself
+        file: packages/email-recovery/test/enrollmentEmail.test.ts
+      - test: a version 1 block still opens with its account, and only with it
         file: packages/email-recovery/test/enrollmentEmail.test.ts
       - test: a passphrase is five words of the EFF large wordlist
         file: packages/email-recovery/test/enrollmentEmail.test.ts
@@ -834,9 +871,12 @@ claims:
     statement: >-
       The vault seals an arriving recovery email to the browser that first
       registered its Subject value, refuses a second registration of the same
-      value, and the host stores and serves only sealed copies.
+      value, and the host stores and serves only sealed copies and accepts at
+      most ten registrations per client an hour.
     status: tested
     evidence:
+      - test: limits registrations per client, says when to retry, and counts each client apart
+        file: infra/email-alerts/test/inbound.test.ts
       - test: the vault seals a recovery email to the device that registered its Subject value, and only it opens it
         file: infra/email-alerts/test/inbound.test.ts
       - test: relays registrations, stores and serves only sealed copies, with CORS for wallet origins
@@ -876,10 +916,13 @@ claims:
       Every alert carries a six-digit verification code keyed by the account
       code, which the wallet computes for the attempt it shows; alerts on
       attempt_authorized go to every channel once, with generic text, as do
-      the rest of a recovery's required alerts; opening an attempt alerts by
-      email at most once a day per account.
+      the rest of a recovery's required alerts; opening an attempt alerts
+      nothing by default, and at most one email a day per account when the
+      service is configured to send it.
     status: tested
     evidence:
+      - test: "attempt_begun sends nothing by default: anyone can open an attempt, and the wallet shows open ones"
+        file: infra/email-alerts/test/alerts.test.ts
       - test: matches an independent computation for every subject kind
         file: packages/email-recovery/test/alertCode.test.ts
       - test: "attempt_authorized: one email and one push, generic text, the code the wallet computes"
@@ -986,8 +1029,11 @@ claims:
   # Further evaluation figures.
   - id: privacy-no-address-on-chain
     statement: >-
-      No envelope or result of the 165 transactions of the local attack run
-      contains any of its 17 inboxes' addresses or account codes.
+      None of the 213 transactions of the local attack run (envelope, result
+      and metadata, decoded and as base64) contains any of its 24 inboxes'
+      addresses (raw, in either case, hex, base64, or as packed limbs),
+      account codes or pin salt leaves: a sanity check, not evidence of
+      hiding.
     status: tested
     evidence:
       test: privacy-no-address-on-chain
@@ -1012,7 +1058,7 @@ claims:
     statement: >-
       On the local network, the email vote that authorizes an attempt with a
       seven-day delay also writes the authorized attempt: about 121 million
-      instructions, 1,488 bytes written, and 3,734,680 stroops charged, of
+      instructions, 1,488 bytes written, and 3,734,691 stroops charged, of
       which 3,550,194 are rent.
     status: measured
     evidence:
@@ -1079,9 +1125,9 @@ claims:
   - id: alert-latency
     statement: >-
       With every service a loopback mock, attempt_authorized reaches the
-      sending mock in 22 to 28 ms (median 26) and the push mock in 29 to 35
-      ms (median 33), and a restarted vault restores its key from two
-      custodians in 244 to 339 ms (median 302), over 10 runs each.
+      sending mock in 11 to 62 ms (median 16.5) and the push mock in 13 to 66
+      ms (median 19), and a restarted vault restores its key from two
+      custodians in 147 to 238 ms (median 152), over 10 runs each.
     status: measured
     evidence:
       - file: docs/email-recovery/spec.md

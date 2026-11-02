@@ -213,7 +213,8 @@ describe('replacement and removal', () => {
     expect(alertsTo(w, 'new@proton.me')).toEqual([]);
     expect(await owner.confirm(r.id, 'new@proton.me')).toEqual({ ok: true, status: 'confirmed' });
     await upTo('attempt_authorized');
-    expect(alertsTo(w, 'old@proton.me')).toHaveLength(3);
+    // The notice and attempt_authorized (attempt_begun sends nothing by default).
+    expect(alertsTo(w, 'old@proton.me')).toHaveLength(2);
     expect(alertsTo(w, 'new@proton.me')).toHaveLength(1);
 
     expect((await advanceTo(requestedAt + CONTACT_CHANGE_DELAY_LEDGERS - 1)).matured.applied).toEqual([]);
@@ -221,7 +222,7 @@ describe('replacement and removal', () => {
     expect((await advanceTo(maturity)).matured.applied).toEqual([w.fixture.account]);
     w.rpcMock.add([attemptAuthorized(w.fixture.controller, w.fixture.account, maturity + 1, 8, maturity + 200)]);
     await service.drain();
-    expect(alertsTo(w, 'old@proton.me')).toHaveLength(3);
+    expect(alertsTo(w, 'old@proton.me')).toHaveLength(2);
     expect(alertsTo(w, 'new@proton.me')).toHaveLength(2);
   });
 

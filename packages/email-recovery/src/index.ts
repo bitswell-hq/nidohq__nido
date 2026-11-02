@@ -31,6 +31,7 @@ export {
 } from './attestation.js';
 export {
   BACKUP_AAD_LABEL,
+  BACKUP_AAD_LABEL_V2,
   BACKUP_ARGON2,
   BACKUP_BEGIN,
   BACKUP_END,
@@ -41,6 +42,7 @@ export {
   encryptBackup,
   generatePassphrase,
   normalizePassphrase,
+  openBackup,
   parseRecoveryKitCode,
   recoveryKitCode,
 } from './backup.js';
@@ -116,7 +118,9 @@ export {
   prepareConfirmation,
   prepareContactChange,
   rawLowS,
+  pushUpdateRequest,
   removalRequest,
+  statusRequest,
   sealRequest,
 } from './enrollment.js';
 export {
