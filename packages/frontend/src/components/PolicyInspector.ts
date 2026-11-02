@@ -6,12 +6,15 @@
 // models in lib/policy/{policyView,docView}; the page fetches the data.
 
 import type { ChainRule } from '@nidohq/passkey-sdk';
-import { esc } from '../lib/html.js';
+import { esc, fnCallHtml } from '../lib/html.js';
 import { summarizeRule, type RuleView, type SignerView, type PolicyView } from '../lib/policy/policyView.js';
-import type { DocRuleView, DocSignerView, DocViewModel } from '../lib/policy/docView.js';
+import type { DocRuleView, DocSignerView, DocViewModel, PermissionPart } from '../lib/policy/docView.js';
 import type { DocJsonSource } from '../lib/policy/docPolicyFetch.js';
 import type { DocDiff } from '../lib/policy/docDiff.js';
 import { describeDocRule } from '../lib/policy/docView.js';
+import { NO_CAP_NO_TOKEN_FUNCTIONS, NO_SPENDING_CAP, canMoveTokens } from '../lib/policy/tokenFunctions.js';
+import { canTransfer, capText } from '../lib/policy/reviewText.js';
+import { shortAddr } from '../lib/address.js';
 
 export interface InspectorContext {
   /** policy contract address → registry label. */
@@ -118,7 +121,7 @@ function docRuleCard(rule: DocRuleView, currentLedger: number | null): string {
   const capRow = rule.cap
     ? `<div class="pol-field">
         <span class="pol-field-label">Spending cap</span>
-        <span class="pol-field-val">${esc(formatStroops(rule.cap.limit))} XLM per ${rule.cap.periodLedgers.toLocaleString()} ledgers (rolling)</span>
+        <span class="pol-field-val">${esc(capText(rule.cap.limit, rule.cap.periodLedgers))} (rolling)</span>
       </div>`
     : '';
   const argsBadge = rule.hasArgConstraints
@@ -133,7 +136,7 @@ function docRuleCard(rule: DocRuleView, currentLedger: number | null): string {
       </div>
       <div class="pol-badges">${argsBadge}${docExpiryBadge(rule, currentLedger)}</div>
     </header>
-    <p class="pol-perm">${esc(rule.permission)}</p>
+    <p class="pol-perm">${permissionHtml(rule.permissionParts)}</p>
     <div class="pol-grid">
       ${
         rule.contract
@@ -154,19 +157,6 @@ function docRuleCard(rule: DocRuleView, currentLedger: number | null): string {
       ${capRow}
     </div>
   </article>`;
-}
-
-/** Render `limit` stroops as a short XLM amount (display only). */
-function formatStroops(stroops: string): string {
-  try {
-    const v = BigInt(stroops);
-    const whole = v / 10_000_000n;
-    const frac = v % 10_000_000n;
-    if (frac === 0n) return whole.toString();
-    return `${whole}.${frac.toString().padStart(7, '0').replace(/0+$/, '')}`;
-  } catch {
-    return stroops;
-  }
 }
 
 export interface DocRenderContext {
@@ -316,12 +306,24 @@ export function renderDocPreviewHtml(model: DocViewModel, canonical: string): st
     const facts: string[] = [];
     if (r.functions !== null) {
       facts.push(
-        `<span class="pol-preview-fact">Functions: ${r.functions.map((f) => `<code class="pol-mono">${esc(f)}</code>`).join(', ')}</span>`,
+        `<span class="pol-preview-fact">Functions: ${r.functions.map(fnCallHtml).join(', ')}</span>`,
       );
     }
     if (r.cap !== null) {
+      facts.push(`<span class="pol-preview-fact">${esc(capText(r.cap.limit, r.cap.periodLedgers))}</span>`);
+    } else if (r.contract !== null) {
+      // An uncapped contract rule: a warning only where it allows a token function.
       facts.push(
-        `<span class="pol-preview-fact">Cap: ${esc(r.cap.limit)} stroops / ${r.cap.periodLedgers.toLocaleString()} ledgers</span>`,
+        canMoveTokens(r.functions)
+          ? `<span class="pol-preview-fact tone-warn">${NO_SPENDING_CAP}</span>`
+          : `<span class="pol-preview-fact">${esc(NO_CAP_NO_TOKEN_FUNCTIONS)}</span>`,
+      );
+    }
+    if (r.contract !== null && canTransfer(r.functions)) {
+      facts.push(
+        r.recipient !== null
+          ? `<span class="pol-preview-fact" title="${esc(r.recipient)}">Pays only to <code class="pol-mono">${esc(shortAddr(r.recipient))}</code></span>`
+          : `<span class="pol-preview-fact">Pays any address</span>`,
       );
     }
     facts.push(
@@ -332,7 +334,7 @@ export function renderDocPreviewHtml(model: DocViewModel, canonical: string): st
         <strong>${esc(r.name)}</strong>
         <span class="pol-badge">${esc(r.scopeLabel)}</span>
       </div>
-      <p class="pol-preview-perm">${esc(r.permission)}</p>
+      <p class="pol-preview-perm">${permissionHtml(r.permissionParts)}</p>
       <div class="pol-preview-facts">${facts.join('')}</div>
     </article>`;
   };
@@ -345,6 +347,11 @@ export function renderDocPreviewHtml(model: DocViewModel, canonical: string): st
       <pre class="pol-mono">${esc(canonical)}</pre>
     </details>
   </div>`;
+}
+
+/** A rule's permission sentence, its function names shown as methods. */
+function permissionHtml(parts: readonly PermissionPart[]): string {
+  return parts.map((p) => (typeof p === 'string' ? esc(p) : fnCallHtml(p.fn))).join('');
 }
 
 // --- Document-update diff --------------------------------------------------
@@ -375,14 +382,14 @@ export function renderDocDiffHtml(diff: DocDiff): string {
     const v = describeDocRule(r);
     parts.push(`<div class="pol-diff-row">
       <span class="pol-badge primary">+ added</span>
-      <div><strong>${esc(r.name)}</strong><div class="mut" style="font-size:12px;">${esc(v.permission)}</div></div>
+      <div><strong>${esc(r.name)}</strong><div class="mut" style="font-size:12px;">${permissionHtml(v.permissionParts)}</div></div>
     </div>`);
   }
   for (const r of diff.rulesRemoved) {
     const v = describeDocRule(r);
     parts.push(`<div class="pol-diff-row">
       <span class="pol-badge danger">− removed</span>
-      <div><strong>${esc(r.name)}</strong><div class="mut" style="font-size:12px;">${esc(v.permission)}</div></div>
+      <div><strong>${esc(r.name)}</strong><div class="mut" style="font-size:12px;">${permissionHtml(v.permissionParts)}</div></div>
     </div>`);
   }
   for (const m of diff.rulesModified) {

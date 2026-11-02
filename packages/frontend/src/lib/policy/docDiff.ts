@@ -10,6 +10,7 @@
 // identity is the declaration id.
 
 import type { PolicyDoc, Rule, SignerDecl } from '@nidohq/passkey-sdk';
+import { canTransfer, capText, ruleRecipient } from './reviewText.js';
 import { truncate } from './policyView.js';
 
 export interface RuleModification {
@@ -75,7 +76,8 @@ export function diffRuleFields(before: Rule, after: Rule): string[] {
   }
 
   if (!sameStringArray(before.functions, after.functions)) {
-    const show = (f: readonly string[] | undefined) => (f === undefined ? 'any function' : f.join(', '));
+    const show = (f: readonly string[] | undefined) =>
+      f === undefined ? 'any function' : f.map((fn) => `${fn}()`).join(', ');
     changes.push(`functions: ${show(before.functions)} → ${show(after.functions)}`);
   }
 
@@ -87,14 +89,27 @@ export function diffRuleFields(before: Rule, after: Rule): string[] {
   }
 
   const capOf = (r: Rule) =>
-    r.cap === undefined ? 'no cap' : `${r.cap.limit} stroops per ${r.cap['period-ledgers']} ledgers`;
+    r.cap === undefined ? 'no cap' : capText(r.cap.limit, r.cap['period-ledgers']).replace(/^Up to/, 'up to');
   if (capOf(before) !== capOf(after)) {
     changes.push(`cap: ${capOf(before)} → ${capOf(after)}`);
   }
 
   const argsOf = (r: Rule) => JSON.stringify(r.args ?? null);
   if (argsOf(before) !== argsOf(after)) {
-    changes.push('argument conditions changed');
+    // A transfer recipient, in words, on a rule that may call transfer; any
+    // other argument condition (e.g. approve's spender) generically.
+    const payee = (r: Rule) => {
+      if (!canTransfer(r.functions)) return null;
+      const to = ruleRecipient(r);
+      return to !== null ? `only ${truncate(to)}` : r.args === undefined ? 'any address' : null;
+    };
+    const [pb2, pa2] = [payee(before), payee(after)];
+    const otherArgs = (r: Rule) => JSON.stringify((r.args ?? []).filter((a) => a.index !== 1));
+    if (pb2 !== null && pa2 !== null && otherArgs(before) === otherArgs(after)) {
+      changes.push(`pays: ${pb2} → ${pa2}`);
+    } else {
+      changes.push('argument conditions changed');
+    }
   }
 
   return changes;

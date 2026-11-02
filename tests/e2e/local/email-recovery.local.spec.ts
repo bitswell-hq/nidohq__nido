@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import type { Browser, BrowserContext, Page } from '@playwright/test';
-import { Address, Contract, Keypair, TransactionBuilder, rpc, scValToNative, xdr } from '@stellar/stellar-sdk';
+import { Address, Contract, Keypair, StrKey, TransactionBuilder, hash, rpc, scValToNative, xdr } from '@stellar/stellar-sdk';
 import { test, expect, SEED_HEX, useIdentity } from '../../support/fixtures';
 import { getInitScript } from '../../support/auth/bundle';
 import { credentialFor, seedCredential } from '../../support/auth/seed';
@@ -74,12 +74,25 @@ async function createNido(page: Page, label: string): Promise<{ account: string;
   const { publicKeyHex } = await credentialFor(SEED_HEX, label);
   const payer = Keypair.random();
   await friendbot(payer);
+  // A one-time setup key fixes the address and binds the passkey to it:
+  // its signature over sha256("nido/bind/v1" || network_id || factory_id || key).
+  const setup = Keypair.random();
+  const key = Buffer.from(publicKeyHex, 'hex');
+  const binding = hash(
+    Buffer.concat([
+      Buffer.from('nido/bind/v1'),
+      hash(Buffer.from(stack.deployment.network)),
+      StrKey.decodeContract(stack.deployment.factory),
+      key,
+    ]),
+  );
   const ret = await send(
     payer,
     new Contract(stack.deployment.factory).call(
       'create_account',
-      xdr.ScVal.scvBytes(Buffer.from(crypto.getRandomValues(new Uint8Array(32)))),
-      xdr.ScVal.scvBytes(Buffer.from(publicKeyHex, 'hex')),
+      xdr.ScVal.scvBytes(setup.rawPublicKey()),
+      xdr.ScVal.scvBytes(key),
+      xdr.ScVal.scvBytes(setup.sign(binding)),
     ),
   );
   const account = scValToNative(ret!) as string;
@@ -200,7 +213,7 @@ test.describe('@local email recovery', () => {
 
     // The other helper approves from its own account.
     const attemptId = BigInt(
-      await phone.page.evaluate((a) => JSON.parse(localStorage.getItem(`nido:recover:${a}`)!).attemptId, account),
+      await phone.page.evaluate((a) => JSON.parse(localStorage.getItem(`nido:testnet:recover:${a}`)!).attemptId, account),
     );
     await send(
       friend,

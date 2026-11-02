@@ -1207,13 +1207,32 @@ fn host_function(args: &InvokeContractArgs) -> soroban_sdk::xdr::HostFunction {
     soroban_sdk::xdr::HostFunction::InvokeContract(args.clone())
 }
 
-/// Mint an account on the network through its factory: salt
-/// `sha256("nido-it/salt/<label>")` with this run's tag, admin passkey `owner`.
+/// Mint an account on the network through its factory: a setup key seeded
+/// from `sha256("nido-it/salt/<label>")` with this run's tag (its public key
+/// fixes the address), admin passkey `owner`, bound to the factory by the
+/// setup key's signature over `sha256("nido/bind/v1" || network_id ||
+/// factory_id || key)`.
 fn mint(net: &Net, env: &Env, label: &str, owner: Passkey) -> Account {
-    let salt = net.salt(&format!("nido-it/salt/{label}"));
+    use sha2::{Digest as _, Sha256};
+    let setup = SigningKey::from_bytes(&net.salt(&format!("nido-it/salt/{label}")));
+    let key = owner.pubkey();
+    let factory_id = stellar_strkey::Contract::from_string(&net.factory)
+        .expect("the factory is a contract strkey")
+        .0;
+    let mut binding = Sha256::new();
+    binding.update(b"nido/bind/v1");
+    binding.update(Sha256::digest(crate::local_stack::PASSPHRASE.as_bytes()));
+    binding.update(factory_id);
+    binding.update(key);
+    let digest: [u8; 32] = binding.finalize().into();
+    let setup_pk = setup.verifying_key().to_bytes();
     let args = std::vec![
-        sc(env, BytesN::from_array(env, &salt)),
-        sc(env, BytesN::from_array(env, &owner.pubkey())),
+        sc(env, BytesN::from_array(env, &setup_pk)),
+        sc(env, BytesN::from_array(env, &key)),
+        sc(
+            env,
+            BytesN::from_array(env, &setup.sign(&digest).to_bytes())
+        ),
     ];
     net.setup(
         &crate::network::invoke(&net.factory, "create_account", args.clone()),

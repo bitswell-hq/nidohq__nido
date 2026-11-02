@@ -231,9 +231,10 @@ theorem extracted_allows (g : Slice grant_eval.chain.Caveat)
     Change the account's rules & no agent rule; calls on the account refused\claim{signer-account} \\
     Delegate from another grant & parent must be the signing grant\claim{signer-delegate-other} \\
     Widen by delegating & parent's caveats kept\claim{signer-narrows} \\
-    Deploy a contract & creation fails every caveat\claim{signer-deploy} \\
+    Deploy a contract & the grant signer refuses every creation\claim{signer-deploy} \\
     \code{approve} or \code{burn} the budget asset & only metered transfers\claim{signer-metered} \\
     Overspend through siblings & every ancestor charged\claim{signer-oversubscribed}\ \claim{signer-all-charged} \\
+    Catch a refusal and go on & the failed call rolls back; no charge\claim{host-frame-rollback} \\
     After revocation or rotation & lineage and key checked\claim{signer-revocation}\ \claim{signer-rotation} \\
     \bottomrule
   \end{tabularx}
@@ -243,7 +244,8 @@ theorem extracted_allows (g : Slice grant_eval.chain.Caveat)
   Budget safety holds for the signer's lineage path\claim{lineage-ledger}\
   \claim{budget-batch-as-run}\ \claim{signer-budget-total}. Gaps: the
   holder's signature does not cover the grant id; under an empty grant the
-  signer's address can authorize calls on other contracts.
+  signer's address can authorize what any contract asking for it does, moving
+  anything sent to it.
 \end{frame}
 
 \begin{frame}{The agent host}
@@ -265,7 +267,8 @@ theorem extracted_allows (g : Slice grant_eval.chain.Caveat)
     \item \textbf{Signing}: key, network and payload kind, then every
       context a transaction or authorization entry authorizes against the
       chain grant\claim{host-signing-chain}, before the
-      keeper\claim{host-signing-before-keeper}; fee bumps and other operations
+      keeper\claim{host-signing-before-keeper}; fee bumps, other operations
+      and every contract deployment, under any grant,
       refused\claim{host-signing-refuses}; the bytes signed are the bytes
       checked\claim{host-signs-checked}.
   \end{itemize}
@@ -311,8 +314,9 @@ theorem extracted_allows (g : Slice grant_eval.chain.Caveat)
         relay & delegation & 17/17 & 5 \\
          & oversubscription & 3/3 & 2 \\
         \midrule
-        Agent & self-escalation & 10/10 & 0 \\
-        host & delegation & 21/21 & 3 \\
+        Agent & self-escalation & 11/11 & 0 \\
+        host & nested calls & 5/5 & 1 \\
+         & delegation & 29/29 & 5 \\
         \bottomrule
       \end{tabular}
     \end{column}
@@ -376,7 +380,7 @@ theorem extracted_allows (g : Slice grant_eval.chain.Caveat)
   \end{columns}
 \end{frame}
 
-\begin{frame}{Cost: the evaluator follows the model's steps}
+\begin{frame}{Cost: the evaluator's work against the model's steps}
   \small
   \begin{columns}[T]
     \begin{column}{0.5\linewidth}
@@ -391,8 +395,10 @@ theorem extracted_allows (g : Slice grant_eval.chain.Caveat)
         64 & 4.00M & 2,748 \\
         \bottomrule
       \end{tabular}\\[4pt]
-      Evaluator work: 99.4 instructions per Lean step, $R^2 = 0.986$, 28
-      pairs\claim{deployed-cost}; the bound is loose\claim{bound-looseness}.
+      Evaluator work: 96 to 164 instructions per Lean step on 27 of 28
+      pairs, 99.4 by least squares, $R^2 = 0.986$; on the 28th the two
+      disagree in sign by 9 steps\claim{deployed-cost}; the bound is
+      loose\claim{bound-looseness}.
       Whole transactions: 2.2M to 5.0M of 400M\claim{soroban-tx-cost}.
     \end{column}
     \begin{column}{0.48\linewidth}
@@ -478,9 +484,9 @@ theorem extracted_allows (g : Slice grant_eval.chain.Caveat)
     \item CAP-0071 delegated signing gives the evaluator every context of the
       account's authorization: no hidden call that needs the account's
       authorization.
-    \item 76 escalation attempts refused, state unchanged, and the Soroban
+    \item 90 escalation attempts refused, state unchanged, and the Soroban
       ones again on a local network through the relay; metered work follows
-      the model's step count.
+      the model's step count on 27 of 28 measured pairs.
     \item Each claim tagged: proven, tested, measured, assumed or unproven.
   \end{itemize}
 \end{frame}

@@ -12,6 +12,7 @@ import {
   recoveryEditProblem,
   removeAdminRule,
   upsertSessionRule,
+  upsertSessionRules,
   validateAdminKeyDraft,
   validateSessionDocDraft,
   type AdminKeyDraft,
@@ -420,5 +421,91 @@ describe('upsertSessionRule — label cannot replace a core rule', () => {
     const draft2 = { ...sessionDraft('status-session'), signer: { kind: 'passkey' as const, verifier: VERIFIER, publicKeyHex: NEW_KEY } };
     const twice = upsertSessionRule(once, draft2, Networks.TESTNET).doc;
     expect(twice.rules.filter((r) => r.name === 'status-session')).toHaveLength(1);
+  });
+});
+
+describe('upsertSessionRules — several grants, one document', () => {
+  const SESSION_KEY = '04' + 'b0'.repeat(64);
+  const signer = { kind: 'passkey' as const, verifier: VERIFIER, publicKeyHex: SESSION_KEY };
+  const baseline = () => adminBaseline({ verifier: VERIFIER, publicKeyHex: OWNER_KEY }, Networks.TESTNET);
+
+  it('adds every rule, in order, over one shared signer declaration', () => {
+    const doc = upsertSessionRules(
+      baseline(),
+      [draft({ name: 'guess', signer, cap: null }), draft({ name: 'guess-xlm', signer })],
+      Networks.TESTNET,
+    );
+    expect(doc.rules.map((r) => r.name)).toEqual(['admin', 'guess', 'guess-xlm']);
+    expect(doc.signers.map((s) => s.id)).toEqual(['admin', 'session']);
+  });
+
+  // One rebuild for all the grants gives the same document as rebuilding
+  // after each one (signer reuse, pruning and the owner → admin rename).
+  it.each([
+    ['a first grant pair', () => baseline()],
+    [
+      'a re-delegation to a new key, the old one pruned',
+      () => upsertSessionRules(baseline(), [draft({ name: 'guess', signer })], Networks.TESTNET),
+    ],
+    [
+      'a legacy owner document',
+      () =>
+        buildPolicyDoc({
+          network: Networks.TESTNET,
+          signers: [{ id: 'owner', kind: 'passkey', verifier: VERIFIER, publicKey: OWNER_KEY }],
+          permissions: [{ name: 'admin', on: 'self-admin', by: ['owner'] }],
+        }),
+    ],
+  ])('matches upsertSessionRule draft by draft on %s', (_case, base) => {
+    const NEW_KEY = '04' + 'c1'.repeat(64);
+    const newSigner = { kind: 'passkey' as const, verifier: VERIFIER, publicKeyHex: NEW_KEY };
+    const drafts = [draft({ name: 'guess', signer: newSigner, cap: null }), draft({ name: 'guess-xlm', signer: newSigner })];
+    const stepwise = drafts.reduce((doc, d) => upsertSessionRule(doc, d, Networks.TESTNET).doc, base());
+    expect(upsertSessionRules(base(), drafts, Networks.TESTNET)).toEqual(stepwise);
+  });
+
+  it('is upsertSessionRule for one draft', () => {
+    const one = draft({ signer });
+    expect(upsertSessionRules(baseline(), [one], Networks.TESTNET)).toEqual(
+      upsertSessionRule(baseline(), one, Networks.TESTNET).doc,
+    );
+  });
+
+  it('refuses two drafts naming the same rule rather than dropping one', () => {
+    expect(() =>
+      upsertSessionRules(baseline(), [draft({ name: 'dup' }), draft({ name: 'dup', targetContract: G2 })], Networks.TESTNET),
+    ).toThrow(/two session grants name the rule "dup"/);
+  });
+
+  it('still refuses a label that would replace a core rule', () => {
+    expect(() =>
+      upsertSessionRules(baseline(), [draft({ name: 'guess', signer }), draft({ name: 'admin', signer })], Networks.TESTNET),
+    ).toThrow(/core account rule named "admin"/);
+  });
+});
+
+describe('a session grant restricted to one recipient', () => {
+  const GAME = 'CCA7QAA6OD6LQJTU2MKN6EAS5I52QIFPAYMMQYSU7KHWTGT26AN6N2AL';
+  const pay = (overrides: Partial<SessionDocDraft> = {}) =>
+    draft({ name: 'guess-xlm', functionsInput: 'transfer', recipient: GAME, ...overrides });
+
+  it("writes an address-eq on transfer's argument 1", () => {
+    const rule = draftToDoc(pay(), Networks.TESTNET).rules[0]!;
+    expect(rule.functions).toEqual(['transfer']);
+    expect(rule.args).toEqual([{ index: 1, pred: { type: 'address-eq', address: GAME } }]);
+  });
+
+  it('leaves a grant without a recipient unrestricted, as before', () => {
+    expect(draftToDoc(draft(), Networks.TESTNET).rules[0]!.args).toBeUndefined();
+  });
+
+  it('accepts it only on a transfer-only grant, to a valid address', () => {
+    expect(validateSessionDocDraft(pay(), LIMITS).ok).toBe(true);
+    expect(validateSessionDocDraft(pay({ functionsInput: 'transfer, approve' }), LIMITS).errors).toContain(
+      'A recipient restriction needs the functions to be exactly transfer.',
+    );
+    expect(validateSessionDocDraft(pay({ recipient: 'nope' }), LIMITS).errors).toContain(
+      'Recipient is not a valid C- or G-address.',
+    );
   });
 });

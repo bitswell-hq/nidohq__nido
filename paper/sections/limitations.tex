@@ -10,8 +10,9 @@ tool calls~\cite{camel,fides} address a different question.
 
 \paragraph{What the proofs cover.} The proofs are \translationtrust. The step
 bound is proven for a counted model and is loose (\S\ref{sec:proofs}); the
-measured cost follows the model's step count on the measured points, not
-provably on every input\claim{deployed-cost-general}. The run-level budget
+measured cost follows the model's step count on 27 of the 28 measured pairs,
+not on a pair whose two checks differ by a few steps, and not provably on
+every input\claim{deployed-cost-general}. The run-level budget
 bound is proven for the grant signer's calls as \file{Signer.lean} models
 them; that the contract's code is that model is
 trusted\claim{wiring-budget-calls}.
@@ -23,7 +24,8 @@ context\claim{trees-cover} are tested or argued, not proven. The host's path
 resolution, URL parsing, redirect handling and payload decoding, and the
 operating system calls beneath them, are tested only. Table~\ref{tab:gaps}
 lists the gaps the paper states: under an empty grant the grant signer's own
-address can authorize any call on another contract; a holder's signature
+address can authorize whatever a contract that calls \code{require\_auth} on
+it does, which can move anything sent to that published address; a holder's signature
 does not cover the grant id, so a key should hold one grant; no caveat binds
 a signed transaction's fee, sequence number, time bounds or memo; network
 caveats bind names, not the addresses they resolve to, and not the HTTP

@@ -143,12 +143,17 @@ request never reaches the keeper.
   payment, a new account, a new signer, a trustline, …), a second operation
   beside the contract call, and an `UploadContractWasm` host function. An
   authorization preimage of any other type is refused.
+- **A contract deployment is never signed.** A transaction or authorization
+  entry whose host function, or any context of whose trees, creates a
+  contract is refused under every grant, an empty chain list included.
+  Deploying a contract is a way to escape a grant's limits, and the grant
+  signer refuses every creation context the same way.
 - **The mapping is the relay's.** Host functions and authorization contexts
   become chain actions through `grant_relay::actions`, the code `grant-relay`
   checks with: a contract by its strkey, a function by its symbol, arguments
   as `I128`, `U64`, `Bool`, `Bytes`, `Address`, `Symbol` or `Other` (the
-  full `ScVal` XDR), and a deployment as `CreateContract`, which every chain
-  caveat denies.
+  full `ScVal` XDR), and a deployment as `CreateContract`, which the host
+  refuses before the chain check.
 - **Every authorization entry is checked.** That includes entries with
   `Address` credentials, which other addresses sign: the transaction carries
   them, and its execution runs the calls they authorize. Under enforcing
@@ -261,11 +266,13 @@ is called, and that a transaction or authorization entry is denied, with
 nothing reaching the keeper, when it calls a contract or function the chain
 grant does not allow, exceeds an amount bound, hides a disallowed call
 inside an authorization tree (of a source-account entry, another entry, or a
-preimage), deploys a contract, or comes from a sub-agent whose inherited
-caveats exclude it. It also checks that fee-bump envelopes, classic
-operations (a new signer, a new account, a payment), a second operation and
-code uploads are refused, and that the keeper signs exactly the envelope that
-was checked. `tests/delegation.rs` checks that delegation narrows, that a
+preimage), or comes from a sub-agent whose inherited caveats exclude it. It
+also checks that fee-bump envelopes, classic operations (a new signer, a new
+account, a payment), a second operation and code uploads are refused, that
+a contract deployment (as the host function, or nested in a transaction's
+entry, a preimage or a delegated signer's preimage) is refused under the
+fixture's chain grant and under an empty one, and that the keeper signs
+exactly the envelope that was checked. `tests/delegation.rs` checks that delegation narrows, that a
 sub-agent asking for more gets nothing more, that every child allows a
 subset of its parent over every pair of caveat lists from a small universe,
 that revocation reaches sub-agents, and that no tool call reads or edits a

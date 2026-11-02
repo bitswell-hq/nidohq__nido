@@ -47,7 +47,9 @@ of the account's authorization, so no caveat or budget sees them. The account's
 document routes holder keys only through the grant signer and names its own
 instance\claim{document-requirements}. The key keeper signs only what the host
 or relay passes it\claim{keeper-trusted}. The Soroban host behaves as
-specified, ed25519 signatures cannot be forged, and SHA-256 is collision
+specified, including that a failed call's storage writes and authorization
+state are rolled back whether or not a caller catches the failure, which the
+grant signer's budget relies on (\S\ref{sec:soroban}); ed25519 signatures cannot be forged, and SHA-256 is collision
 resistant. The compilers, translators and runtimes in \S\ref{sec:tcb} are
 trusted.
 

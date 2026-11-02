@@ -10,6 +10,7 @@
 import type { PolicyDoc, Rule, SignerDecl } from '@nidohq/passkey-sdk';
 import { renameLegacyOwner } from './docDraft.js';
 import { truncate } from './policyView.js';
+import { ruleRecipient } from './reviewText.js';
 
 /** One declared signer, displayed with the doc's own id as the label. */
 export interface DocSignerView {
@@ -61,13 +62,23 @@ export interface DocRuleView {
   /** True when the rule constrains args (rendered as a badge only — arg
    *  predicates have no compact prose form yet). */
   hasArgConstraints: boolean;
+  /** The one address the rule's `transfer` may pay (an `address-eq` on
+   *  argument 1), or null. */
+  recipient: string | null;
   /** True for the ADMIN shape: policy-free cap-free self-admin authority
    *  (bare `all` principals, no functions/args/cap/expiry). The inspector
    *  folds these into one "Admin keys" list — any admin may act. */
   isAdmin: boolean;
-  /** Plain-language sentence of what this rule permits. */
+  /** Plain-language sentence of what this rule permits; function names
+   *  read as calls (`guess()`). */
   permission: string;
+  /** The same sentence in parts, each function name its own part, so a
+   *  renderer can show functions as methods. */
+  permissionParts: PermissionPart[];
 }
+
+/** A run of sentence text, or a contract function name. */
+export type PermissionPart = string | { fn: string };
 
 export function describeDocRule(rule: Rule): DocRuleView {
   const contract = rule.scope.type === 'contract' ? rule.scope.address : null;
@@ -86,6 +97,7 @@ export function describeDocRule(rule: Rule): DocRuleView {
       ? { limit: rule.cap.limit, periodLedgers: rule.cap['period-ledgers'] }
       : null;
 
+  const parts = docPermissionParts({ rule, contract, signerIds, functions });
   const isAdmin =
     rule.scope.type === 'self-admin' &&
     rule.principals.type === 'all' &&
@@ -104,8 +116,10 @@ export function describeDocRule(rule: Rule): DocRuleView {
     notAfterLedger,
     cap,
     hasArgConstraints: rule.args !== undefined,
+    recipient: ruleRecipient(rule),
     isAdmin,
-    permission: docPermissionSentence({ rule, contract, signerIds, functions }),
+    permission: parts.map((p) => (typeof p === 'string' ? p : `${p.fn}()`)).join(''),
+    permissionParts: parts,
   };
 }
 
@@ -119,21 +133,19 @@ function signerPhrase(rule: Rule, signerIds: string[]): string {
   return `${names} together`;
 }
 
-function docPermissionSentence(args: {
+function docPermissionParts(args: {
   rule: Rule;
   contract: string | null;
   signerIds: string[];
   functions: string[] | null;
-}): string {
+}): PermissionPart[] {
   const who = signerPhrase(args.rule, args.signerIds);
-  const what =
+  const what: PermissionPart[] =
     args.functions === null
-      ? 'call any function'
-      : args.functions.length === 1
-        ? `call ${args.functions[0]}`
-        : `call ${args.functions.join(', ')}`;
+      ? ['call any function']
+      : ['call ', ...args.functions.flatMap((fn, i): PermissionPart[] => (i === 0 ? [{ fn }] : [', ', { fn }]))];
   const where = args.contract === null ? 'on this account' : `on ${truncate(args.contract)}`;
-  return `${who} can ${what} ${where}.`;
+  return [`${who} can `, ...what, ` ${where}.`];
 }
 
 export interface DocViewModel {

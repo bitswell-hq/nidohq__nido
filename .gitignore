@@ -13,17 +13,24 @@ target
 # Contains mutation testing data
 **/mutants.out*/
 
+# macOS Finder cruft
+.DS_Store
+
 # Node / npm
 node_modules/
 
 # Generated TypeScript build output (regenerated via `npm run build:packages`)
 packages/frontend/dist/
+packages/frontend/dist-perch/
 packages/passkey-sdk/dist/
 packages/stellar-wallets-kit-module/dist/
 packages/email-mocks/dist/
 packages/email-recovery/dist/
 infra/email-alerts/dist/
 packages/contract-bindings/*/dist/
+infra/invite/dist/
+infra/demo-service/dist/
+infra/demo-service/print-jobs/
 
 # Astro build cache
 packages/frontend/.astro/
@@ -74,3 +81,8 @@ research/email-recovery/build/
 
 # Attenuating-grants paper and slides build output (make -C paper)
 paper/build/
+
+# Soroban test snapshots: soroban-sdk writes one per test Env on drop and
+# never reads it back. They carry random test keys and the bytes of the
+# locally built contract wasm, so every run rewrites them.
+test_snapshots/

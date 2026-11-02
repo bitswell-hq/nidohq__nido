@@ -191,8 +191,9 @@ impl Net {
         };
 
         // Perch's infra at the addresses the local account derives: the
-        // stateless deployer from its fixed key and salt, then each pinned
-        // contract deployed through it.
+        // registry chain of `fixtures/local-registry.path` (the root from its
+        // fixed deployer key and salt, then each named deploy below it), then
+        // each pinned contract deployed through the last registry.
         let deployer_seed: [u8; 32] = Sha256::digest(local_stack::DEPLOYER.as_bytes()).into();
         let deployer_key = SigningKey::from_bytes(&deployer_seed);
         let deployer_account = stellar::account_strkey(&pk(&deployer_key));
@@ -200,13 +201,27 @@ impl Net {
             local::sequence(&rpc, &pk(&deployer_key))?;
         }
         let stateless = upload(&wasm.stateless_deployer)?;
-        let registry = create(&deployer_key, local_stack::SALT, stateless, vec![])?;
-        if registry != local_stack::registry() {
-            return Err(format!(
-                "the stateless deployer is at {registry}, not {}",
-                local_stack::registry()
-            ));
+        let chain = local_stack::chain();
+        let root = create(&deployer_key, local_stack::root_salt(), stateless, vec![])?;
+        if root != chain[0] {
+            return Err(format!("the registry root is at {root}, not {}", chain[0]));
         }
+        for (name, pair) in local_stack::segments().into_iter().zip(chain.windows(2)) {
+            let func = invoke(
+                &pair[0],
+                "deploy_named",
+                vec![
+                    bytes32(stateless),
+                    ScVal::Bytes(name.as_bytes().to_vec().try_into().expect("a short name")),
+                ],
+            );
+            match local::invoke(&rpc, &operator, &func, None) {
+                Ok(_) => {}
+                Err(e) if e.contains("ExistingValue") => {}
+                Err(e) => return Err(format!("deploying registry {name} at {}: {e}", pair[1])),
+            }
+        }
+        let registry = local_stack::registry();
         for (name, code) in [
             (
                 "doc compiler",
@@ -236,23 +251,17 @@ impl Net {
             vec![],
         )?;
         upload(&wasm.account)?;
+        // Admin, the pinned WebAuthn verifier, no manager.
         let factory = create(
             &operator,
             [2; 32],
             upload(&wasm.factory)?,
-            vec![account_val(&pk(&operator))],
+            vec![
+                account_val(&pk(&operator)),
+                contract_val(&verifier)?,
+                ScVal::Void,
+            ],
         )?;
-        local::invoke(
-            &rpc,
-            &operator,
-            &invoke(
-                &factory,
-                "set_registry_pins",
-                vec![contract_val(&verifier)?],
-            ),
-            None,
-        )
-        .map_err(|e| format!("pinning the verifier: {e}"))?;
         let grant_signer_hash = upload(nido_integration_tests::GRANT_SIGNER_WASM)?;
         let dapp_hash = upload(&wasm.dapp)?;
         let deployer_hash = upload(&wasm.deployer)?;

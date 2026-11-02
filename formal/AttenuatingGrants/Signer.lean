@@ -40,8 +40,14 @@ contract:
   its allowance.
 
 An authorization's batch is all or nothing: on any failure the contract
-returns before writing, and a refused authorization fails its transaction, so
-either every spend is stored or none is (`Signer.Step.refused`).
+returns before writing. A refused authorization fails the call that asked for
+it, which a caller can catch and survive; Soroban rolls back that call's
+storage writes. The contract writes a successful batch in the `require_auth`
+of the authorization's root, inside the call enclosing every call it allows,
+so if that call fails, caught or not, the batch is rolled back with it.
+Either every spend is stored or none is (`Signer.Step.refused`). That host
+behaviour is a premise, tested by
+`a_caught_refusal_or_failure_leaves_the_budget_as_if_the_call_never_ran`.
 -/
 
 namespace AttenuatingGrants.Budget
@@ -620,8 +626,8 @@ open Ledger
 `k` is grant `k`'s `parent`, `allowance` and `spent`) and the transfers it
 charges, each as `(grant, amount)`. -/
 inductive Signer.Step : Ledger → Ledger → List (Nat × Nat) → Prop where
-  /-- A refused call changes nothing, and neither does any call whose
-  transaction fails. -/
+  /-- A refused call changes nothing, and neither does any call that fails,
+  whether its transaction fails or a caller catches the failure. -/
   | refused (l : Ledger) : Step l l []
   /-- `issue`: a root grant at the next id. -/
   | issue (l : Ledger) (allowance : Nat) : Step l (l.append none allowance).2 []

@@ -74,6 +74,8 @@ fn approval_counts_one_vote(label: &str, address: &str, display_name: Option<&st
     let recovery = Recovery {
         profile: Profile::Loss,
         mode: Mode::Guardian,
+        controller: w.controller.clone(),
+        pool: w.pool.clone(),
         guardians,
         quorum: 2,
         enrollment: None,

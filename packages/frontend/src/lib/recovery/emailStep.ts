@@ -22,7 +22,7 @@ import {
   type InboxSecret,
   type ProofResult,
 } from '@nidohq/email-recovery';
-import { perch } from '@nidohq/passkey-sdk';
+import { nidoKey, perch } from '@nidohq/passkey-sdk';
 import { esc } from '../html.js';
 import { toast } from '../toast.js';
 import { recoveryClient } from './chain.js';
@@ -51,7 +51,7 @@ import {
 } from './emailRecovery.js';
 import { el, errorText } from './ui.js';
 
-const pendingKey = (account: string) => `nido:email-approval:${account}`;
+const pendingKey = (account: string) => nidoKey(`email-approval:${account}`);
 
 function loadPending(account: string): PendingEmailApproval | undefined {
   try {

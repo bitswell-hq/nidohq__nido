@@ -345,7 +345,7 @@ call everywhere; three things differ, and only the first is attributed.
   Gmail fixture, read from what `nido_integration_tests::transaction::measure`
   records, lists the registry's instance and code among its 12 read-only
   entries, the two the local footprints (10 + 2) do not have, and the
-  registry's `is_accepted_root` costs 565,446 instructions there (spec §12).
+  registry's `is_accepted_root` costs about 564,000 instructions there (spec §12).
 - *Metering.* The local network's metered count is below the test host's
   invocation count by more than the registry call. The rest is not
   attributed here: each host meters with its own cost parameters (the SDK's

@@ -1,0 +1,41 @@
+# Mainnet Redis for the `nido-mainnet` relayer. Sibling config to fly.toml
+# (testnet, app "nido-redis") — a separate instance, not shared, so a
+# testnet incident can't touch mainnet relayer job state. Deploy with:
+#   flyctl deploy infra/relayer-redis --config fly.mainnet.toml
+# --config resolves relative to the positional working-directory arg
+# (infra/relayer-redis), so it must be the bare filename here, NOT prefixed
+# with infra/relayer-redis/ again — that form fails with "config file not
+# found" (confirmed directly). Equivalently, run from inside
+# infra/relayer-redis/ with `fly deploy . --config fly.mainnet.toml`.
+#
+# The app must exist before the first deploy:
+#   fly apps create nido-mainnet-redis
+#
+# Unlike testnet's fly.toml, this one requires a password (`REDIS_PASSWORD`
+# Fly secret) on top of the private-6PN-only trust boundary — decided
+# deliberately for mainnet since 6PN is shared across the whole Fly org
+# (other unrelated projects live there too), and this instance holds a
+# mainnet relayer's signer/transaction state. `[experimental].cmd` has no
+# shell substitution on its own, so it's wrapped in `sh -c` to read
+# $REDIS_PASSWORD at container start. The matching relayer side must pass
+# the same password in its own `REDIS_URL` secret (see fly.mainnet.toml's
+# own comment in infra/relayer/).
+app = "nido-mainnet-redis"
+primary_region = "iad"
+
+[build]
+  image = "redis:7-alpine"
+
+[experimental]
+  cmd = [
+    "sh", "-c",
+    "exec redis-server --dir /data --appendonly yes --save '' --bind :: --protected-mode no --maxmemory 200mb --maxmemory-policy noeviction --requirepass \"$REDIS_PASSWORD\""
+  ]
+
+[[mounts]]
+  source = "nido_mainnet_redis_data"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

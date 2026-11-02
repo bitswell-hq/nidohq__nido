@@ -151,7 +151,8 @@ the caveat, an argument index bounded by the action, or a comparison bounded
 by the shorter operand, so a sum of the form
 $O(\sum|c| + |cs|\,(|a|+1))$ should bound it; that is stated, not proven. On
 the measured points the bound exceeds the model's actual steps by up to a
-factor of 33,000\claim{bound-looseness}, and priced at the measured 99.4
+factor of 33,000 on passing checks, and of about $9\times10^7$ on failing
+ones, which stop after a few steps\claim{bound-looseness}, and priced at the measured 99.4
 instructions per step it exceeds Soroban's per-transaction limit, so it says
 the check terminates in polynomial time, not that it fits in a transaction.
 \S\ref{sec:eval} measures what the deployed code does\claim{deployed-cost};
