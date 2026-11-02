@@ -129,9 +129,9 @@
 \DeclareRobustCommand\fig[1]{\fig@get{fig}{#1}}
 \DeclareRobustCommand\figM[2][2]{\fig@get{figM#1}{#2}}
 
-\InputIfFileExists{figures.tex}{}{%
-  \PackageError{claims}{figures.tex not found}{Build with research/email-recovery/build.sh,
-    which generates it from eval/results/figures.json.}}
+% A document without run-dependent figures has no figures.tex; \fig and \figM
+% then report each name they are given as missing.
+\InputIfFileExists{figures.tex}{}{}
 
 \InputIfFileExists{claims.tex}{}{%
   \PackageError{claims}{claims.tex not found}{Build with research/email-recovery/build.sh,
