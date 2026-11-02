@@ -1678,15 +1678,17 @@ Let `G` be an email guardian with configuration
    an allowed action, and a `valid_until_ledger ≥ L`. Through `S` the email
    binds the account, the new key (replacements and target, or new
    configuration, or Wasm hash), the nonce (attempt id or request id, and
-   the epoch), and the expiry (§3.1).
+   the epoch), and the expiry (§3.1). With A5 and A7, the `From` address is
+   the enrolled address and `n` itself (not only its leaf) is a key that the
+   leaf domain's operator controls.
 2. **Privacy.** For any two addresses at allowlisted providers, a guardian's
    on-chain state and every approval it accepts (`C`, the pin root, the
    statements, the roots, the proofs) are computationally indistinguishable
    between the two addresses when `account_code` is uniform and unknown.
    What is revealed: that the account has an email guardian, its allowed
    actions, the time of each approval, and whether an approval used the pin
-   or a registry root. Off chain, the provider sees `T` (§4.2), which hides
-   `d`.
+   or a registry root, and which one. Off chain, the provider sees `T`
+   (§4.2), which hides `d`.
 3. **Replay and front-running resistance.** An approval accepted for digest
    `d` is accepted only in a context naming `d`; `d` fixes one account, one
    network, one controller, one action, and one attempt (or request) id at
@@ -1706,15 +1708,40 @@ Let `G` be an email guardian with configuration
 Status: **proven** (formal proof), **tested** (this repository's tests),
 **specified** (normative, not built), **assumed**. The proofs are Lean
 theorems in `research/email-recovery/formal` about a model of the guardian's
-checks (§8.3), the circuit relation (C1 to C6), and Perch's controller; the
-model's agreement with the contracts is tested, not proven
-(`research/email-recovery/formal/README.md`).
+checks (§8.3), the circuit relation (C1 to C6), Perch's controller and, for
+privacy, the honest wallet; the model's agreement with the contracts is
+tested, not proven (`research/email-recovery/formal/README.md`).
+
+How the assumptions enter the theorems:
+
+- **Hash breaks are explicit.** Where a theorem relies on A2 or A3's
+  collision resistance, its conclusion is the property or a collision on two
+  inputs the theorem computes from its data (for soundness: the extracted
+  witness, the enrollment, and the tree of the accepted root; for replay: the
+  encodings of the two statements the controller built), or, for A3's empty
+  leaf, the extracted key's leaf input mapping to `0`. A break that only
+  asserted some collision exists would be true of any hash function.
+- **Knowledge soundness is per proof.** Theorem 1 holds for every extractor,
+  as a function of the accepted approval's public inputs and proof: the email
+  facts hold of the extracted witness, or the extractor fails on that accepted
+  proof. A4 is that an efficient extractor exists for which an efficient
+  prover gets a failing proof accepted only with negligible probability. No
+  hypothesis asks for an extractor that succeeds on every accepted proof.
+- **Privacy is proven in an ideal model.** The Lean statement is a simulation
+  theorem: when the commitment and the pin root are handles independent of
+  the secret and every honest proof is a simulator's output on its public
+  inputs, the view of an adaptive adversary (the configuration, every
+  approval the wallet hands out with its proof, every transaction, the
+  guardian's verdicts, the controller's states and events) is computed from
+  the handles and the public statements alone, for every private state of
+  the wallet. The step from that ideal model to Poseidon2 and UltraHonk (A3's
+  random-function model with A6, and A4's zero knowledge) is assumed.
 
 | Property | Circuit obligations | Contract obligations (guardian) | Perch obligations | Assumptions | Status |
 | --- | --- | --- | --- | --- | --- |
-| 1 Soundness | C1, C2, C3, C4, C5, C6 | §8.3 checks 1 to 12; §8.2 wiring check; registry: §7.3 rules 1 to 5 and the same tree hashing as C6 (§7.2, §7.6 cross-check) | Statement construction from controller state (Perch §4) | A1, A2, A3 (collision), A4 (soundness), A5, A7 | Proven from the circuit relation with A4, A5, A7 as hypotheses and A3's breaks named (`EmailRecovery.soundness`); A1 assumed; guardian checks and registry rules tested; registry hashing tested against Noir; circuit built, C1 to C6 tested (§6.2, §6.4), not proven; real proofs verified on chain (§8.6) |
-| 2 Privacy | Public inputs are exactly §6.1; nothing else is exposed | Stores `C` and a salted pin root, never an address or key hash; emits nothing | — | A3 (random function), A4 (zero-knowledge), A6 | Noninterference proven (`EmailRecovery.privacy_noninterference`); indistinguishability rests on A3, A4, A6, assumed; guardian storage tested; the circuit's public inputs are exactly §6.1 (built, tested) |
-| 3 Replay | C5 binds `d` | Checks 1, 2, 5, 6, 8, 12 | One vote per guardian per attempt and domain, or per change digest (Perch §6.3 T2, §5); attempt ids never reused (T1); epochs only grow (§3.3) | A2, A3, A4 | Proven with A2's break named (`EmailRecovery.Perch.email_vote_replay`); tested (unit and integration) |
+| 1 Soundness | C1, C2, C3, C4, C5, C6 | §8.3 checks 1 to 12; §8.2 wiring check; registry: §7.3 rules 1 to 5 and the same tree hashing as C6 (§7.2, §7.6 cross-check) | Statement construction from controller state (Perch §4) | A1, A2, A3 (collision), A4 (soundness), A5, A7 | Proven with A5 and A7 as hypotheses, A4's break named per accepted proof, and A3's breaks named on computed inputs (`EmailRecovery.soundness`); the conclusion fixes the `From` address, the account code and the key `(domain, modulus)`; A1 assumed; guardian checks and registry rules tested; registry hashing tested against Noir; circuit built, C1 to C6 tested (§6.2, §6.4), not proven; real proofs verified on chain (§8.6) |
+| 2 Privacy | Public inputs are exactly §6.1; nothing else is exposed | Stores `C` and a salted pin root, never an address or key hash; emits nothing | — | A3 (random function), A4 (zero-knowledge), A6 | Proven in the ideal model: an adaptive adversary's view, proofs included, equals a simulator's computed from the handles and the public statements, so any two addresses give the same view (`EmailRecovery.privacy_simulation`, `privacy_two_runs`); the step from the ideal model to Poseidon2 and UltraHonk rests on A3, A4, A6, assumed; structural lemma proven (the contracts store and emit nothing about the address beyond `C` and the pin root, `EmailRecovery.structural_noninterference`); guardian storage tested; the circuit's public inputs are exactly §6.1 (built, tested) |
+| 3 Replay | C5 binds `d` | Checks 1, 2, 5, 6, 8, 12 | One vote per guardian per attempt and domain, or per change digest (Perch §6.3 T2, §5); attempt ids never reused (T1); epochs only grow (§3.3) | A2, A3, A4 | Proven with A2's break named on the two statements' encodings (`EmailRecovery.Perch.email_vote_replay`); tested (unit and integration) |
 | 4 One-factor safety | — | The guardian is one address | Quorum (T4), delay (T5), cancellation (T6, T7) | — | Proven over all controller traces (`EmailRecovery.Perch.one_factor_safety`) and for the wallet policy (`one_factor_under_wallet_policy`); on-chain part tested; wallet policy tested (§9.3) |
 
 ## 12. Measurements

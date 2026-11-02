@@ -110,9 +110,10 @@ structure Encoding.Facts (E : Encoding) : Prop where
 /-- `digest = sha256(encoding)` (Perch §4, D13). -/
 def digest (H : Hashes) (E : Encoding) (s : Statement) : Nat := H.sha256 (E.encode s)
 
-/-- A digest fixes the whole statement, unless SHA-256 collides. -/
+/-- A digest fixes the whole statement, unless the two statements' encodings
+are a SHA-256 collision. -/
 theorem digest_binds {H : Hashes} {E : Encoding} (hE : E.Facts) {s t : Statement}
-    (h : digest H E s = digest H E t) : s = t ∨ H.Sha256Collision := by
+    (h : digest H E s = digest H E t) : s = t ∨ H.Sha256Collides (E.encode s, E.encode t) := by
   rcases H.sha256_eq h with h | h
   · exact Or.inl (hE.encode_injective s t h)
   · exact Or.inr h

@@ -39,17 +39,21 @@ and code assumptions are hypotheses of the theorems, never axioms.
 #guard_msgs in
 #print axioms EmailRecovery.check_payload_irrelevant
 
-/-- info: 'EmailRecovery.privacy_noninterference' depends on axioms: [propext, Quot.sound] -/
+/-- info: 'EmailRecovery.structural_noninterference' depends on axioms: [propext, Quot.sound] -/
 #guard_msgs in
-#print axioms EmailRecovery.privacy_noninterference
+#print axioms EmailRecovery.structural_noninterference
+
+/-- info: 'EmailRecovery.privacy_simulation' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms EmailRecovery.privacy_simulation
 
 /-- info: 'EmailRecovery.privacy_two_runs' depends on axioms: [propext, Quot.sound] -/
 #guard_msgs in
 #print axioms EmailRecovery.privacy_two_runs
 
-/-- info: 'EmailRecovery.check_noninterference' depends on axioms: [propext] -/
+/-- info: 'EmailRecovery.enroll_factors' depends on axioms: [propext] -/
 #guard_msgs in
-#print axioms EmailRecovery.check_noninterference
+#print axioms EmailRecovery.enroll_factors
 
 /-- info: 'EmailRecovery.publicInputs_enroll' depends on axioms: [propext] -/
 #guard_msgs in
@@ -67,11 +71,11 @@ and code assumptions are hypotheses of the theorems, never axioms.
 #guard_msgs in
 #print axioms EmailRecovery.accepted_account_unique
 
-/-- info: 'EmailRecovery.digest_fixes' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'EmailRecovery.digest_fixes' does not depend on any axioms -/
 #guard_msgs in
 #print axioms EmailRecovery.digest_fixes
 
-/-- info: 'EmailRecovery.Perch.email_vote_replay' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'EmailRecovery.Perch.email_vote_replay' depends on axioms: [propext, Quot.sound] -/
 #guard_msgs in
 #print axioms EmailRecovery.Perch.email_vote_replay
 
@@ -139,7 +143,7 @@ info: 'EmailRecovery.Perch.email_only_authorizes_only_at_quorum_one' depends on 
 #guard_msgs in
 #print axioms EmailRecovery.Perch.wallet_policy_needed_email_allows_every_action
 
-/-- info: 'EmailRecovery.path_binds' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'EmailRecovery.path_binds' depends on axioms: [propext, Quot.sound] -/
 #guard_msgs in
 #print axioms EmailRecovery.path_binds
 
@@ -147,11 +151,31 @@ info: 'EmailRecovery.Perch.email_only_authorizes_only_at_quorum_one' depends on 
 #guard_msgs in
 #print axioms EmailRecovery.commit_binds
 
+/-- info: 'EmailRecovery.keyHash_binds' depends on axioms: [propext] -/
+#guard_msgs in
+#print axioms EmailRecovery.keyHash_binds
+
+/-- info: 'EmailRecovery.keyLeaf_binds' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms EmailRecovery.keyLeaf_binds
+
+/-- info: 'EmailRecovery.slot_binds' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms EmailRecovery.slot_binds
+
+/-- info: 'EmailRecovery.modulusLimbs_injective' depends on axioms: [propext] -/
+#guard_msgs in
+#print axioms EmailRecovery.modulusLimbs_injective
+
+/-- info: 'EmailRecovery.modulusLimbs_spec' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms EmailRecovery.modulusLimbs_spec
+
 /-- info: 'EmailRecovery.pack_injective' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms EmailRecovery.pack_injective
 
-/-- info: 'EmailRecovery.digest_binds' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'EmailRecovery.digest_binds' does not depend on any axioms -/
 #guard_msgs in
 #print axioms EmailRecovery.digest_binds
 
@@ -166,3 +190,15 @@ info: 'EmailRecovery.Perch.email_only_authorizes_only_at_quorum_one' depends on 
 /-- info: 'EmailRecovery.Examples.check₀' depends on axioms: [propext] -/
 #guard_msgs in
 #print axioms EmailRecovery.Examples.check₀
+
+/-- info: 'EmailRecovery.Examples.extraction₀' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms EmailRecovery.Examples.extraction₀
+
+/-- info: 'EmailRecovery.Examples.privacy₀' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms EmailRecovery.Examples.privacy₀
+
+/-- info: 'EmailRecovery.Examples.leaky_prover_distinguishes' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms EmailRecovery.Examples.leaky_prover_distinguishes

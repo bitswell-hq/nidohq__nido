@@ -13,19 +13,23 @@
 #   unproven  (none)
 
 claims:
-  # The four properties of the email factor, proven in Lean
-  # (research/email-recovery/formal/README.md).
+  # The four properties of the email factor, proven in Lean, privacy in its
+  # ideal model (research/email-recovery/formal/README.md).
   - id: email-factor-soundness
     statement: >-
-      If the email guardian accepts an approval and the proof system is
-      knowledge sound, there is an email whose signed header carries a valid RSA-2048 DKIM signature under a key whose leaf for
-      the From domain is in the tree of the unexpired pin or of a root the
-      registry accepts; whose From address, with the account code, opens the
-      account's commitment; and whose Subject opens to the digest of a recovery
-      statement naming this account, controller and network, an allowed action
-      and an unexpired bound. With an honest registry and enrollment, the From
-      address is the enrolled one and the key is a listed key, unless Poseidon2
-      collides or maps an input to zero.
+      If the email guardian accepts an approval, then for every extractor,
+      unless the extractor fails on that accepted proof, the extracted witness
+      is an email whose signed header carries a valid RSA-2048 DKIM signature
+      under a key whose leaf for the From domain is in the tree of the
+      unexpired pin or of a root the registry accepts; whose From address,
+      with the account code, opens the account's commitment; and whose Subject
+      opens to the digest of a recovery statement naming this account,
+      controller and network, an allowed action and an unexpired bound. With
+      an honest registry and enrollment, the From address and account code are
+      the enrolled ones and the signing modulus is a listed key of the From
+      domain, unless Poseidon2 collides on a pair of inputs, or maps an input
+      to zero, that the theorem computes from the email, the enrollment and
+      the key tree.
     status: proven
     evidence:
       lean: EmailRecovery.soundness
@@ -33,22 +37,32 @@ claims:
 
   - id: address-privacy
     statement: >-
-      Everything the chain holds or computes about an email guardian (its
-      configuration, its verdict on every approval, and the controller's state
-      and events over every run) depends on the enrolled address only through
+      In an ideal model where the commitment and the pin root are handles
+      drawn independently of the secret and every honest proof is a
+      simulator's output on its public inputs, an adversary that chooses every
+      transaction and asks the wallet for approvals of statements of its
+      choice sees a view (the guardian's configuration, every approval with
+      its proof, every transaction, verdict, state and event) that a simulator
+      computes from the handles and the public statements alone, so two
+      wallets with different addresses and account codes give the same view.
+      Without the ideal model, for any fixed sequence of transactions, the
+      contracts' state, verdicts and events depend on the address only through
       the salted commitment and the salted pin root.
     status: proven
     evidence:
-      lean: EmailRecovery.privacy_noninterference
-      file: research/email-recovery/formal/EmailRecovery/Privacy.lean
+      - lean: EmailRecovery.privacy_simulation
+        file: research/email-recovery/formal/EmailRecovery/Privacy.lean
+      - lean: EmailRecovery.structural_noninterference
+        file: research/email-recovery/formal/EmailRecovery/Privacy.lean
 
   - id: replay-resistance
     statement: >-
       An approval is accepted only in a context naming its own statement
       digest, which fixes one account, network, controller, action, attempt or
-      request id and epoch unless SHA-256 collides; the controller counts the
-      email guardian at most once per attempt and domain or per change digest,
-      so a copy submitted by anyone records the same single vote.
+      request id and epoch unless the two statements' encodings are a SHA-256
+      collision; the controller counts the email guardian at most once per
+      attempt and domain or per change digest, so a copy submitted by anyone
+      records the same single vote.
     status: proven
     evidence:
       lean: EmailRecovery.Perch.email_vote_replay
@@ -154,8 +168,34 @@ claims:
       value that links the email to them, makes the proof fail.
     status: tested
     evidence:
-      test: a_commitment_under_another_account_code_is_refused
-      file: circuits/email-recovery/tests/src/recovery_tests.nr
+      - test: a_commitment_to_another_address_is_refused
+        file: circuits/email-recovery/tests/src/recovery_tests.nr
+      - test: a_commitment_to_a_case_variant_of_the_address_is_refused
+        file: circuits/email-recovery/tests/src/recovery_tests.nr
+      - test: a_commitment_under_another_account_code_is_refused
+        file: circuits/email-recovery/tests/src/recovery_tests.nr
+      - test: the_wrong_account_code_for_the_commitment_is_refused
+        file: circuits/email-recovery/tests/src/recovery_tests.nr
+      - test: another_digest_hi_is_refused
+        file: circuits/email-recovery/tests/src/recovery_tests.nr
+      - test: another_digest_lo_is_refused
+        file: circuits/email-recovery/tests/src/recovery_tests.nr
+      - test: swapped_digest_limbs_are_refused
+        file: circuits/email-recovery/tests/src/recovery_tests.nr
+      - test: another_rho_is_refused
+        file: circuits/email-recovery/tests/src/recovery_tests.nr
+      - test: a_root_without_the_key_is_refused
+        file: circuits/email-recovery/tests/src/recovery_tests.nr
+      - test: the_key_registered_under_another_domain_is_refused
+        file: circuits/email-recovery/tests/src/recovery_tests.nr
+      - test: a_tree_with_another_key_for_the_domain_is_refused
+        file: circuits/email-recovery/tests/src/recovery_tests.nr
+      - test: the_wrong_leaf_index_is_refused
+        file: circuits/email-recovery/tests/src/recovery_tests.nr
+      - test: a_leaf_index_of_16_or_more_bits_is_refused
+        file: circuits/email-recovery/tests/src/recovery_tests.nr
+      - test: the_leaf_as_key_root_is_refused
+        file: circuits/email-recovery/tests/src/recovery_tests.nr
 
   - id: onchain-email-vote
     statement: >-
@@ -323,7 +363,8 @@ claims:
   - id: digest-fixes-statement
     statement: >-
       A statement digest fixes one account, network, controller, action,
-      attempt or request id and epoch, unless SHA-256 collides.
+      attempt or request id and epoch, unless the two statements' encodings
+      are a SHA-256 collision.
     status: proven
     evidence:
       lean: EmailRecovery.digest_fixes
@@ -347,15 +388,6 @@ claims:
     evidence:
       lean: EmailRecovery.Perch.owner_can_cancel
       file: research/email-recovery/formal/EmailRecovery/OneFactor.lean
-
-  - id: enrollment-subject-distinct
-    statement: >-
-      An enrollment email's Subject never satisfies the recovery circuit's
-      Subject obligation.
-    status: proven
-    evidence:
-      lean: EmailRecovery.enroll_subject_ne_recovery_subject
-      file: research/email-recovery/formal/EmailRecovery/Circuit.lean
 
   - id: check-iff-accepted
     statement: >-
@@ -506,6 +538,16 @@ claims:
         file: circuits/email-recovery/tests/src/subject_tests.nr
       - test: the blinded digest is the Subject value the circuit vectors open
         file: packages/email-recovery/test/recoveryInputs.test.ts
+
+  - id: enrollment-subject-distinct
+    statement: >-
+      A lemma about two constants: the enrollment phrase and the recovery
+      phrase differ in their first byte, so an enrollment email's Subject
+      never satisfies the recovery circuit's Subject obligation.
+    status: proven
+    evidence:
+      lean: EmailRecovery.enroll_subject_ne_recovery_subject
+      file: research/email-recovery/formal/EmailRecovery/Circuit.lean
 
   - id: registry-hash-parity
     statement: >-
@@ -1089,17 +1131,24 @@ claims:
       assumption: >-
         Knowledge soundness and zero knowledge of UltraHonk in the random
         oracle model, with Keccak as the transcript hash, as implemented by
-        Perch's pinned Barretenberg and its Soroban verifier.
+        Perch's pinned Barretenberg and its Soroban verifier: an efficient
+        extractor exists for which an efficient prover gets a proof accepted
+        that the extractor fails on only with negligible probability, and an
+        honest proof of a valid witness is indistinguishable from a
+        simulator's output on its public inputs.
 
   - id: commitment-hiding
     statement: >-
-      The commitment Poseidon2(address, account code) hides the address
-      from anyone who does not hold the account code.
+      The commitment Poseidon2(address, account code) and the salted pin root
+      hide the address and the pinned keys from anyone who does not hold the
+      account code.
     status: assumed
     evidence:
       assumption: >-
         Poseidon2 behaves as a random oracle on its inputs, and the account
-        code carries at least 128 bits of entropy that only the user holds.
+        code carries at least 128 bits of entropy that only the user holds, so
+        the commitment and the pin root are indistinguishable from two handles
+        drawn independently of the address and the keys.
 
   - id: hash-collision-resistance
     statement: >-
@@ -1111,7 +1160,8 @@ claims:
         SHA-256 and Poseidon2 (noir-lang/poseidon v0.2.0 over the BN254 scalar
         field) are collision resistant, and Poseidon2 behaves as a random
         function, so no input is known that it maps to zero, the empty leaf of
-        the key trees.
+        the key trees. The theorems reduce to this assumption by naming the
+        colliding inputs, computed from their own data.
 
   - id: honest-enrollment
     statement: >-

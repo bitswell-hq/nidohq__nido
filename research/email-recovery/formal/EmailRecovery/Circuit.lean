@@ -12,7 +12,12 @@ the circuit proves between its four public inputs (§6.1) and its private inputs
 The header-level functions (which bytes are the `From` address, the Subject
 value, the `d=` value, and so on) are abstract (`Format`): the relation is stated
 in their terms, and computing them as §4.3 and §4.5 say is the circuit's
-obligation, outside this model.
+obligation, outside this model. The modulus limbs, the packing and every
+Poseidon2 input are the spec's formulas.
+
+Each binding lemma (`commit_binds`, `keyHash_binds`, `keyLeaf_binds`,
+`slot_binds`) concludes that the hashed values are equal, or names a Poseidon2
+break on inputs it computes from its arguments.
 -/
 
 namespace EmailRecovery
@@ -35,35 +40,123 @@ structure Format where
   lower : Bytes → Bytes
   /-- `hex(x)` (spec §2). -/
   hex : Nat → Bytes
-  /-- The 18 little-endian 120-bit limbs of an RSA-2048 modulus (§7.1). -/
-  limbs : Nat → List Nat
   /-- The EMSA-PKCS1-v1_5 encoding of a SHA-256 digest, as a 2048-bit integer. -/
   emsa : Nat → Nat
 
+/-! ## Modulus limbs (§7.1) -/
+
+/-- `k + 1` little-endian limbs of 120 bits; the last holds every remaining
+bit. -/
+def limbs : Nat → Nat → List Nat
+  | 0, n => [n]
+  | k + 1, n => n % 2 ^ 120 :: limbs k (n / 2 ^ 120)
+
+/-- §7.1: the 18 limbs `n_0, ..., n_17` of an RSA-2048 modulus. -/
+def modulusLimbs (n : Nat) : List Nat := limbs 17 n
+
+/-- `sum_i n_i * 2^(120 i)`. -/
+def unlimbs : List Nat → Nat
+  | [] => 0
+  | l :: ls => l + 2 ^ 120 * unlimbs ls
+
+theorem unlimbs_limbs : ∀ (k n : Nat), unlimbs (limbs k n) = n
+  | 0, n => by simp [limbs, unlimbs]
+  | k + 1, n => by simp only [limbs, unlimbs, unlimbs_limbs k]; exact Nat.mod_add_div n _
+
+theorem limbs_length : ∀ (k n : Nat), (limbs k n).length = k + 1
+  | 0, _ => rfl
+  | k + 1, n => by simp [limbs, limbs_length k]
+
+/-- Every limb of a number below `2 ^ (120 (k + 1))` is below `2 ^ 120`. -/
+theorem limbs_lt : ∀ (k n : Nat), n < 2 ^ (120 * (k + 1)) → ∀ l ∈ limbs k n, l < 2 ^ 120
+  | 0, n, hn, l, hl => by
+    simp only [limbs, List.mem_singleton] at hl
+    subst hl
+    simpa using hn
+  | k + 1, n, hn, l, hl => by
+    simp only [limbs, List.mem_cons] at hl
+    rcases hl with rfl | hl
+    · exact Nat.mod_lt _ (Nat.pow_pos (by decide))
+    · refine limbs_lt k (n / 2 ^ 120) ?_ l hl
+      rw [Nat.div_lt_iff_lt_mul (Nat.pow_pos (by decide)), ← Nat.pow_add]
+      have : 120 * (k + 1) + 120 = 120 * (k + 1 + 1) := by omega
+      rw [this]
+      exact hn
+
+set_option exponentiation.threshold 2200 in
+/-- The limbs are the spec's: 18 of them, each below `2 ^ 120`, recomposing to
+the modulus. -/
+theorem modulusLimbs_spec {n : Nat} (hn : n < 2 ^ 2048) :
+    (modulusLimbs n).length = 18 ∧ (∀ l ∈ modulusLimbs n, l < 2 ^ 120) ∧
+      unlimbs (modulusLimbs n) = n := by
+  have hle : 2 ^ 2048 ≤ 2 ^ (120 * (17 + 1)) := Nat.pow_le_pow_right (by decide) (by decide)
+  exact ⟨limbs_length 17 n, limbs_lt 17 n (Nat.lt_of_lt_of_le hn hle), unlimbs_limbs 17 n⟩
+
+/-- Different moduli have different limbs. -/
+theorem modulusLimbs_injective {n m : Nat} (h : modulusLimbs n = modulusLimbs m) : n = m := by
+  rw [← unlimbs_limbs 17 n, ← unlimbs_limbs 17 m]
+  exact congrArg unlimbs h
+
+/-! ## Poseidon2 inputs and values -/
+
+/-- The input of the commitment, spec §5.3:
+`(DOM_COMMIT, len, a_0, a_1, a_2, a_3, account_code)`. -/
+def commitInput (address : Bytes) (code : Nat) : List Nat :=
+  [domCommit, address.length] ++ pack address 124 ++ [code]
+
+/-- The input of the key hash, spec §7.1: `(DOM_KEY, n_0, ..., n_17)`. -/
+def keyHashInput (n : Nat) : List Nat := domKey :: modulusLimbs n
+
+/-- The input of a registry leaf, spec §7.2: `(DOM_LEAF, len(domain), d_0, d_1, key_hash)`. -/
+def leafInput (domain : Bytes) (kh : Nat) : List Nat :=
+  [domLeaf, domain.length] ++ pack domain 62 ++ [kh]
+
+/-- The input of the pin tree's leaf 0, spec §7.4: `(DOM_PIN_SALT, account_code)`. -/
+def saltInput (code : Nat) : List Nat := [domPinSalt, code]
+
 variable (H : Hashes) (F : Format)
 
-/-- Spec §5.3: `C = P2(DOM_COMMIT, len, a_0, a_1, a_2, a_3, account_code)`. -/
-def commit (address : Bytes) (code : Nat) : Nat :=
-  H.p2 ([domCommit, address.length] ++ pack address 124 ++ [code])
+/-- `C`. -/
+def commit (address : Bytes) (code : Nat) : Nat := H.p2 (commitInput address code)
 
-/-- Spec §7.1: `key_hash = P2(DOM_KEY, n_0, ..., n_17)`. -/
-def keyHash (n : Nat) : Nat := H.p2 (domKey :: F.limbs n)
+/-- `key_hash`. -/
+def keyHash (n : Nat) : Nat := H.p2 (keyHashInput n)
 
-/-- Spec §7.2: `leaf = P2(DOM_LEAF, len(domain), d_0, d_1, key_hash)`. -/
-def keyLeaf (domain : Bytes) (kh : Nat) : Nat :=
-  H.p2 ([domLeaf, domain.length] ++ pack domain 62 ++ [kh])
+/-- A registry-format leaf. -/
+def keyLeaf (domain : Bytes) (kh : Nat) : Nat := H.p2 (leafInput domain kh)
 
-/-- Spec §7.4: the pin tree's leaf 0, `P2(DOM_PIN_SALT, account_code)`. -/
-def saltLeaf (code : Nat) : Nat := H.p2 [domPinSalt, code]
+/-- The pin tree's salt leaf. -/
+def saltLeaf (code : Nat) : Nat := H.p2 (saltInput code)
 
-/-- The pin tree's leaves: the salt leaf at 0, the pinned key leaves at
-`1 .. k`, empty leaves after them (§7.4). -/
-def pinLeaf (code : Nat) (keys : List Nat) : Nat → Nat
-  | 0 => saltLeaf H code
-  | i + 1 => keys.getD i 0
+/-! ## Key-tree slots -/
 
-/-- The pin root the enrolling wallet computes. -/
-def pinRoot (code : Nat) (keys : List Nat) : Nat := treeRoot H treeDepth (pinLeaf H code keys)
+/-- What a leaf of a key tree holds: a key `(domain, modulus)`, the pin's salt,
+or nothing. -/
+inductive Slot
+  | key (domain : Bytes) (modulus : Nat)
+  | salt (code : Nat)
+  | empty
+  deriving DecidableEq, Repr
+
+/-- The leaf value of a slot (§7.2, §7.4): empty slots are `0`. -/
+def Slot.leaf : Slot → Nat
+  | .key domain n => keyLeaf H domain (keyHash H n)
+  | .salt code => saltLeaf H code
+  | .empty => 0
+
+/-- The pin tree's slots (§7.4): the salt at 0, the pinned keys at `1 .. k`,
+empty slots after them. -/
+def pinSlot (code : Nat) (keys : List (Bytes × Nat)) : Nat → Slot
+  | 0 => .salt code
+  | i + 1 =>
+    match keys[i]? with
+    | some k => .key k.1 k.2
+    | none => .empty
+
+/-- The pin root the enrolling wallet computes from its account code and the
+pinned keys. -/
+def pinRoot (code : Nat) (keys : List (Bytes × Nat)) : Nat :=
+  treeRoot H treeDepth fun i => (pinSlot code keys i).leaf H
 
 /-- Spec §4.2: `T = P2(DOM_BLIND, digest_hi, digest_lo, rho)`. -/
 def blind (d rho : Nat) : Nat := H.p2 [domBlind, hi d, lo d, rho]
@@ -79,8 +172,9 @@ def enrollPhrase : Bytes := ascii "ENROLL NIDO ACCOUNT RECOVERY "
 
 theorem recoveryPhrase_length : recoveryPhrase.length = 30 := by decide
 
-/-- An enrollment Subject never satisfies C5: the two phrases differ in their
-first byte, whatever follows them. -/
+/-- Lemma: the enrollment and recovery phrases differ in their first byte, so a
+Subject that starts with the enrollment phrase never satisfies C5. A fact about
+two constants, not a security property of its own. -/
 theorem enroll_subject_ne_recovery_subject (x y : Bytes) :
     enrollPhrase ++ x ≠ recoveryPhrase ++ y := by
   intro h
@@ -146,20 +240,76 @@ structure Relation (x : PublicInputs) (w : Witness) : Prop where
   /-- C6: the leaf domain fits its two limbs -/
   leafDomainLength : 1 ≤ w.leafDomain.length ∧ w.leafDomain.length ≤ 62
   /-- C6: the path from the key's leaf reaches `key_root` -/
-  path : pathRoot H (keyLeaf H w.leafDomain (keyHash H F w.modulus)) w.leafIndex w.siblings =
+  path : pathRoot H (keyLeaf H w.leafDomain (keyHash H w.modulus)) w.leafIndex w.siblings =
     x.keyRoot
 
-/-- The commitment binds the address and `account_code`, unless Poseidon2
-collides. -/
+/-! ## Binding -/
+
+variable {H}
+
+/-- The commitment binds the address and `account_code`, unless the two
+commitment inputs are a Poseidon2 collision. -/
 theorem commit_binds {a b : Bytes} {c d : Nat} (ha : a.length ≤ 124)
-    (h : commit H a c = commit H b d) : (a = b ∧ c = d) ∨ H.P2Collision := by
+    (h : commit H a c = commit H b d) :
+    (a = b ∧ c = d) ∨ H.P2Collides (commitInput a c, commitInput b d) := by
   rcases H.p2_eq h with h | h
-  · simp only [List.cons_append, List.cons.injEq, true_and] at h
+  · simp only [commitInput, List.cons_append, List.cons.injEq, true_and] at h
     obtain ⟨hlen, h⟩ := h
     have hpack : pack a (31 * 4) = pack b (31 * 4) := List.append_inj_left h (by simp [pack_length])
     have hcode : [c] = [d] := List.append_inj_right h (by simp [pack_length])
     simp only [List.cons.injEq, and_true] at hcode
     exact Or.inl ⟨pack_injective hlen (by omega) hpack, hcode⟩
   · exact Or.inr h
+
+/-- The key hash binds the modulus, unless the two key-hash inputs are a
+Poseidon2 collision. -/
+theorem keyHash_binds {n m : Nat} (h : keyHash H n = keyHash H m) :
+    n = m ∨ H.P2Collides (keyHashInput n, keyHashInput m) := by
+  rcases H.p2_eq h with h | h
+  · simp only [keyHashInput, List.cons.injEq, true_and] at h
+    exact Or.inl (modulusLimbs_injective h)
+  · exact Or.inr h
+
+/-- A registry leaf binds its domain and key hash, unless the two leaf inputs
+are a Poseidon2 collision. -/
+theorem keyLeaf_binds {a b : Bytes} {k l : Nat} (ha : a.length ≤ 62)
+    (h : keyLeaf H a k = keyLeaf H b l) :
+    (a = b ∧ k = l) ∨ H.P2Collides (leafInput a k, leafInput b l) := by
+  rcases H.p2_eq h with h | h
+  · simp only [leafInput, List.cons_append, List.cons.injEq, true_and] at h
+    obtain ⟨hlen, h⟩ := h
+    have hpack : pack a (31 * 2) = pack b (31 * 2) := List.append_inj_left h (by simp [pack_length])
+    have hkh : [k] = [l] := List.append_inj_right h (by simp [pack_length])
+    simp only [List.cons.injEq, and_true] at hkh
+    exact Or.inl ⟨pack_injective hlen (by omega) hpack, hkh⟩
+  · exact Or.inr h
+
+/-- The break a key leaf equal to the leaf of `slot` names: a collision of the
+key's leaf input with the slot's leaf input (or, for a key, of the two
+key-hash inputs), or, for an empty slot, the key's leaf input mapping to `0`. -/
+def SlotBreak (H : Hashes) (domain : Bytes) (n : Nat) : Slot → Prop
+  | .key d m => H.P2Collides (leafInput domain (keyHash H n), leafInput d (keyHash H m)) ∨
+      H.P2Collides (keyHashInput n, keyHashInput m)
+  | .salt code => H.P2Collides (leafInput domain (keyHash H n), saltInput code)
+  | .empty => H.P2Zero (leafInput domain (keyHash H n))
+
+/-- A slot whose leaf is the leaf of key `(domain, n)` holds that key, unless
+`SlotBreak` holds. -/
+theorem slot_binds {slot : Slot} {domain : Bytes} {n : Nat} (hd : domain.length ≤ 62)
+    (h : slot.leaf H = keyLeaf H domain (keyHash H n)) :
+    slot = .key domain n ∨ SlotBreak H domain n slot := by
+  cases slot with
+  | key d m =>
+    rcases keyLeaf_binds hd h.symm with ⟨rfl, hk⟩ | hc
+    · rcases keyHash_binds hk with rfl | hc
+      · exact Or.inl rfl
+      · exact Or.inr (Or.inr hc)
+    · exact Or.inr (Or.inl hc)
+  | salt code =>
+    refine Or.inr ⟨?_, h.symm⟩
+    intro heq
+    have := congrArg List.length heq
+    simp [leafInput, saltInput, pack_length] at this
+  | empty => exact Or.inr h.symm
 
 end EmailRecovery

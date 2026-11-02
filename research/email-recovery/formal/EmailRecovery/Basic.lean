@@ -7,11 +7,16 @@ uses (SHA-256 and Poseidon2), as abstract functions.
 
 No property of either hash function is assumed anywhere in this package.
 Where a theorem needs collision resistance (assumptions A2 and A3 of spec
-§11.1), its conclusion names the break as an alternative: the theorem holds for
-every function, and the assumption is that nobody can compute the break it
-names. Identifiers (contract ids, digests, roots, field elements) are natural
-numbers; the model compares them and, for digests, splits them, and does no
-other arithmetic on them.
+§11.1), its conclusion names the break as an alternative, with the inputs that
+collide given as terms built from the theorem's data: the theorem holds for
+every function, and the assumption is that nobody can compute those inputs.
+That is the reading of collision resistance for a fixed, unkeyed function: a
+theorem of this form is a reduction that turns any violation of its main
+conclusion into an explicit collision.
+
+Identifiers (contract ids, digests, roots, field elements) are natural numbers;
+the model compares them and, for digests, splits them, and does no other
+arithmetic on them.
 -/
 
 namespace EmailRecovery
@@ -78,23 +83,25 @@ namespace Hashes
 
 variable (H : Hashes)
 
-/-- Two different byte strings with the same SHA-256 digest (the break of A2). -/
-def Sha256Collision : Prop := ∃ a b : Bytes, a ≠ b ∧ H.sha256 a = H.sha256 b
+/-- The pair is a SHA-256 collision: two different byte strings with one digest
+(a break of A2). -/
+def Sha256Collides (p : Bytes × Bytes) : Prop := p.1 ≠ p.2 ∧ H.sha256 p.1 = H.sha256 p.2
 
-/-- Two different input lists with the same Poseidon2 hash (the break of A3's
-collision resistance). -/
-def P2Collision : Prop := ∃ x y : List Nat, x ≠ y ∧ H.p2 x = H.p2 y
+/-- The pair is a Poseidon2 collision: two different input lists with one hash
+(a break of A3's collision resistance). -/
+def P2Collides (p : List Nat × List Nat) : Prop := p.1 ≠ p.2 ∧ H.p2 p.1 = H.p2 p.2
 
-/-- An input Poseidon2 maps to `0`, the empty leaf of the key trees (spec §7.2).
+/-- Poseidon2 maps `x` to `0`, the empty leaf of the key trees (spec §7.2).
 Collision resistance alone does not exclude it; A3's random-function model makes
 finding one as hard as hitting a fixed value. -/
-def P2HitsZero : Prop := ∃ x : List Nat, H.p2 x = 0
+def P2Zero (x : List Nat) : Prop := H.p2 x = 0
 
-theorem sha256_eq {a b : Bytes} (h : H.sha256 a = H.sha256 b) : a = b ∨ H.Sha256Collision :=
-  Classical.byCases (p := a = b) Or.inl fun hne => Or.inr ⟨a, b, hne, h⟩
+theorem sha256_eq {a b : Bytes} (h : H.sha256 a = H.sha256 b) :
+    a = b ∨ H.Sha256Collides (a, b) :=
+  if hab : a = b then Or.inl hab else Or.inr ⟨hab, h⟩
 
-theorem p2_eq {x y : List Nat} (h : H.p2 x = H.p2 y) : x = y ∨ H.P2Collision :=
-  Classical.byCases (p := x = y) Or.inl fun hne => Or.inr ⟨x, y, hne, h⟩
+theorem p2_eq {x y : List Nat} (h : H.p2 x = H.p2 y) : x = y ∨ H.P2Collides (x, y) :=
+  if hxy : x = y then Or.inl hxy else Or.inr ⟨hxy, h⟩
 
 end Hashes
 
