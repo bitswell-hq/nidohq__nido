@@ -7,8 +7,9 @@ email-factor recovery and votes on both key paths, the on-chain cost of an
 email vote on the test host, on the local network and on testnet, with each
 fee attributed to the network settings that produce it, what recovery
 costs when the contracts it reads have been archived and what keeping them
-live costs, and the time and memory of proving a recovery email natively,
-in Node and in a browser. The circuit's reading of real and fuzzed headers,
+live costs, what the alert host's scan of every transaction costs at
+mainnet volume, and the time and memory of proving a recovery email
+natively, in Node and in a browser. The circuit's reading of real and fuzzed headers,
 and the per-provider review of sender authentication, are in
 [`parser/`](parser/README.md). Every table below is generated from a file in
 `results/` (or from `browser-prover.json` and `onchain.md`), and every file
@@ -82,7 +83,7 @@ state size; all three are at the 1,000-stroop floor per KB.
 <!-- BEGIN GENERATED settings by report.mjs; do not edit -->
 - **mainnet**: `Public Global Stellar Network ; September 2015`, protocol 29, stellar-core 29.0.0 (4eb83337380a29ad0907f4e32196ce97b8dc7649), Stellar RPC 29.0.1; read from https://mainnet.sorobanrpc.com at ledger 65,261,654, 2026-11-02 04:34 UTC.
 - **testnet**: `Test SDF Network ; September 2015`, protocol 29, stellar-core 30.0.0 (0e49751aa9ddf892302cca02cea7f3f5d97df9f1), Stellar RPC 30.0.0; read from https://soroban-testnet.stellar.org at ledger 5,514,083, 2026-11-02 04:34 UTC.
-- **local**: `Standalone Network ; February 2017`, protocol 29, v30.0.0, Stellar RPC 30.0.0; read from http://127.0.0.1:62076/rpc at ledger 17, 2026-11-02 13:50 UTC.
+- **local**: `Standalone Network ; February 2017`, protocol 29, v30.0.0, Stellar RPC 30.0.0; read from http://127.0.0.1:51648/rpc at ledger 17, 2026-11-02 17:44 UTC.
 
 | Setting | mainnet | testnet | local | SDK snapshot (test host) |
 | --- | --- | --- | --- | --- |
@@ -192,8 +193,13 @@ behaviour:
   120,960 ledgers; the chain accepts any configuration).
 - *Repeated attempts.* A funded stranger opens ten attempts on one account;
   the row counts what reaches the owner and what the wallet's own
-  `readLiveAttempts` lists. In `griefing-then-vote` the stranger opens 32
-  attempts after the target one before the email vote on the target.
+  `readLiveAttempts` lists. In `griefing-sustained` it opens thirty more,
+  one at a time with the alert service draining after each, as one opening
+  a day would arrive; nothing in the alert path depends on the time between
+  openings, and `infra/email-alerts/test/liveness.test.ts` ("sustained
+  griefing") runs the same with the service's clock advanced a day each
+  time. In `griefing-then-vote` the stranger opens 32 attempts after the
+  target one before the email vote on the target.
 
 **The chain's view.** `privacy-no-address-on-chain` is a sanity check behind
 the privacy property, not evidence of hiding: it searches every
@@ -221,7 +227,7 @@ and that workflow re-proves their fixtures.
 ### Results
 
 <!-- BEGIN GENERATED attacks by report.mjs; do not edit -->
-Local network: `stellar/quickstart --local` (stellar/quickstart@sha256:e05d68bb3b2629a829310dc3434fc0ee3f801854bdfa1a7c8c362d2f1c9060f8), protocol 29, mainnet's settings, Stellar RPC 30.0.0 with captive core v30.0.0; run of 2026-11-02 13:59 UTC, 10 minutes, 263 transactions.
+Local network: `stellar/quickstart --local` (stellar/quickstart@sha256:e05d68bb3b2629a829310dc3434fc0ee3f801854bdfa1a7c8c362d2f1c9060f8), protocol 29, mainnet's settings, Stellar RPC 30.0.0 with captive core v30.0.0; run of 2026-11-02 17:55 UTC, 10 minutes, 293 transactions.
 Test host: 3 rows from `crates/integration-tests/tests/it/email_guardian.rs` (`registry_*`).
 
 | Class | Scenario | Expected | Observed | Refusing layer | Test | Property | Where |
@@ -247,17 +253,17 @@ Test host: 3 rows from `crates/integration-tests/tests/it/email_guardian.rs` (`r
 | Replayed emails and proofs | replay-another-network: an approval of the statement with the testnet network id | refused: DigestMismatch | refused: DigestMismatch | guardian check 2 | `attacks.mjs` replay-another-network | 3 | local |
 | Replayed emails and proofs | replay-another-network-spliced: this network's statement with that proof | refused: ProofRejected | refused: ProofRejected | guardian check 12 | `attacks.mjs` replay-another-network | 3 | local |
 | Replayed emails and proofs | replay-another-controller: A's approval, asked for by a contract that is not A's controller | refused: UnexpectedContext | refused: UnexpectedContext | guardian check 1 | `attacks.mjs` replay-another-controller | 3 | local |
-| Replayed emails and proofs | replay-expired-statement: proved before, submitted after the evidence deadline (ledger 196, the statement's valid_until_ledger) | refused: AttemptNotLive | refused: AttemptNotLive | Perch controller | `attacks.mjs` replay-expired-statement | 3 | local |
+| Replayed emails and proofs | replay-expired-statement: proved before, submitted after the evidence deadline (ledger 211, the statement's valid_until_ledger) | refused: AttemptNotLive | refused: AttemptNotLive | Perch controller | `attacks.mjs` replay-expired-statement | 3 | local |
 | Replayed emails and proofs | replay-email-circuit: an honest email presented for another statement of A, and for B | refused: 2 of 2 | refused: 2 of 2 | circuit | `attacks.mjs` forged-emails-circuit | 1 | local |
 | Wrong account or new key in the statement | statement-other-new-key: the owner's approval (owner's new key) presented for the attacker's attempt (attacker's key) | refused: DigestMismatch | refused: DigestMismatch | guardian check 2 | `attacks.mjs` statement-other-new-key | 1 | local |
 | Wrong account or new key in the statement | statement-other-new-key-spliced: the attacker's statement with the owner's proof | refused: ProofRejected | refused: ProofRejected | guardian check 12 | `attacks.mjs` statement-other-new-key | 1 | local |
 | Wrong account or new key in the statement | statement-other-account: B's approval presented to A's guardian for A's attempt | refused: DigestMismatch | refused: DigestMismatch | guardian check 2 | `attacks.mjs` statement-other-account | 1 | local |
 | Wrong account or new key in the statement | statement-other-account-spliced: A's statement with B's proof and key root: B's salted pin root, which A's guardian does not accept | refused: UnknownRoot | refused: UnknownRoot | guardian check 11 | `attacks.mjs` statement-other-account | 1 | local |
 | Wrong account or new key in the statement | statement-other-account-rooted: A's statement and A's pin root with B's proof (another commitment) | refused: ProofRejected | refused: ProofRejected | guardian check 12 | `attacks.mjs` statement-other-account | 1 | local |
-| Stale or malicious registry keys | registry-planted-key-timelock: not seen in DNS: the 72-hour path is closed, eligible at close time 1794232438 (approved at 1793627638, +604,800 s) | refused: TimelockActive | refused: TimelockActive | registry | `attacks.mjs` registry-planted-key-in-timelock | 1 | local |
+| Stale or malicious registry keys | registry-planted-key-timelock: not seen in DNS: the 72-hour path is closed, eligible at close time 1794246513 (approved at 1793641713, +604,800 s) | refused: TimelockActive | refused: TimelockActive | registry | `attacks.mjs` registry-planted-key-in-timelock | 1 | local |
 | Stale or malicious registry keys | registry-planted-key-proof: a real proof against the root the planted addition would produce, during its timelock | refused: UnknownRoot | refused: UnknownRoot | guardian check 11 | `attacks.mjs` registry-planted-key-in-timelock | 1 | local |
 | Stale or malicious registry keys | registry-planted-key-revoked: revoke_threshold (2) members stop the pending addition | refused: KeyRevoked | refused: KeyRevoked | registry | `attacks.mjs` registry-planted-key-in-timelock | 1 | local |
-| Stale or malicious registry keys | registry-pin-live: pin valid until close time 1793627738 | accepted | accepted | — | `attacks.mjs` registry-pin-expiry | 1 | local |
+| Stale or malicious registry keys | registry-pin-live: pin valid until close time 1793641813 | accepted | accepted | — | `attacks.mjs` registry-pin-expiry | 1 | local |
 | Stale or malicious registry keys | registry-pin-expiry: proved inside the pin window, submitted after it; the registry still holds the key only as a pending addition | refused: UnknownRoot | refused: UnknownRoot | guardian check 11 | `attacks.mjs` registry-pin-expiry | 1 | local |
 | Stale or malicious registry keys | registry-grace-expiry: accepted at the last second of the 24-hour grace; refused one second later | refused: UnknownRoot | refused: UnknownRoot | guardian check 11 (registry: grace) | `email_guardian.rs` registry_grace_expiry | 1 | test host |
 | Stale or malicious registry keys | registry-planted-key-after-activation: a planted key active after its 7-day timelock; the attacker's proof opens another commitment | refused: ProofRejected | refused: ProofRejected | guardian check 12 | `email_guardian.rs` registry_planted_key_after_activation_without_account_code | 1 | test host |
@@ -266,13 +272,13 @@ Test host: 3 rows from `crates/integration-tests/tests/it/email_guardian.rs` (`r
 | Compromised inbox | inbox-without-account-code-proof: the attacker's real proof for its own guess; without the code it cannot build the salted pin's path, and the registry has no accepted root yet | refused: UnknownRoot | refused: UnknownRoot | guardian check 11 | `attacks.mjs` inbox-without-account-code | 4 | local |
 | Compromised inbox | inbox-backup-without-passphrase: the backup block in the Sent folder, opened with another passphrase | refused: BackupError | refused: BackupError | account code backup (Argon2id, AES-256-GCM) | `attacks.mjs` inbox-without-account-code | 4 | local |
 | Compromised inbox | inbox-with-code-quorum: the email vote counted (attempt still Collecting, 1 of 2 votes); completion refused: no authorized attempt | refused: AttemptNotLive | refused: AttemptNotLive | Perch controller | `attacks.mjs` inbox-with-account-code-quorum | 4 | local |
-| Compromised inbox | inbox-email-plus-delay-authorizes: quorum 1, delay 120,960 ledgers: the attempt is Authorized, executable after ledger 121319 | accepted | accepted | — | `attacks.mjs` inbox-email-plus-delay | 4 | local |
+| Compromised inbox | inbox-email-plus-delay-authorizes: quorum 1, delay 120,960 ledgers: the attempt is Authorized, executable after ledger 121335 | accepted | accepted | — | `attacks.mjs` inbox-email-plus-delay | 4 | local |
 | Compromised inbox | inbox-email-plus-delay-completion: completion inside the delay | refused: NotExecutableYet | refused: NotExecutableYet | Perch controller | `attacks.mjs` inbox-email-plus-delay | 4 | local |
-| Compromised inbox | inbox-email-plus-delay-alerts: attempt_authorized: 1 email to the enrolled inbox, deleted by the thief; the push carries the code 396 071 and leads with cancelling | owner alerted: push only | owner alerted: push only | alert path | `attacks.mjs` inbox-email-plus-delay | 4 | local |
+| Compromised inbox | inbox-email-plus-delay-alerts: attempt_authorized: 1 email to the enrolled inbox, deleted by the thief; the push carries the code 757 458 and leads with cancelling | owner alerted: push only | owner alerted: push only | alert path | `attacks.mjs` inbox-email-plus-delay | 4 | local |
 | Compromised inbox | inbox-email-plus-delay-owner-cancels: the owner's passkey cancels within the delay | accepted | accepted | — | `attacks.mjs` inbox-email-plus-delay | 4 | local |
 | Compromised inbox | inbox-email-plus-delay-cancelled: completion of the cancelled attempt | refused: AttemptNotLive | refused: AttemptNotLive | Perch controller | `attacks.mjs` inbox-email-plus-delay | 4 | local |
 | Compromised inbox | inbox-email-plus-delay-new-attempt: a new attempt needs a new email | refused: DigestMismatch | refused: DigestMismatch | guardian check 2 | `attacks.mjs` inbox-email-plus-delay | 4 | local |
-| Compromised inbox | inbox-email-vote-alerted: the email vote recorded below quorum (attempt Collecting, 1 of 2): found in the transaction that carried it, alerted in 15 ms after the read | alerted: email and push | alerted: email and push | alert path | `attacks.mjs` inbox-email-vote-alerted | 4 | local |
+| Compromised inbox | inbox-email-vote-alerted: the email vote recorded below quorum (attempt Collecting, 1 of 2): found in the transaction that carried it, alerted in 14 ms after the read | alerted: email and push | alerted: email and push | alert path | `attacks.mjs` inbox-email-vote-alerted | 4 | local |
 | Compromised inbox | inbox-email-vote-owner-cancels: the owner's passkey cancels the collecting attempt | accepted | accepted | — | `attacks.mjs` inbox-email-vote-alerted | 4 | local |
 | Compromised inbox | inbox-email-cancel-alerted: the email guardian's vote to cancel attempt 0 (1 cancel vote, attempt Collecting): found in the transaction that carried it | alerted: email and push | alerted: email and push | alert path | `attacks.mjs` inbox-email-cancel-alerted | 4 | local |
 | Alert path | alerts-watcher-outage: attempt_authorized never read from the event stream; reconciliation from the controller's state found it (4 accounts read, 1 alert found) | alerted after the restart: email and push | alerted after the restart: email and push | alert path (reconciliation) | `attacks.mjs` alerts-watcher-outage | 4 | local |
@@ -287,8 +293,9 @@ Test host: 3 rows from `crates/integration-tests/tests/it/email_guardian.rs` (`r
 | Phishing and social engineering | social-phished-cancelled: the phisher's completion of the cancelled attempt | refused: AttemptNotLive | refused: AttemptNotLive | Perch controller | `attacks.mjs` social-phished-holds-passkey | 4 | local |
 | Phishing and social engineering | social-lost-devices-email-plus-delay: residual risk: email plus delay with nobody to cancel completes after the delay, installing the phisher's key (the delay is 20 ledgers here, outside the wallet's policy, so it elapses within the run; the wallet requires 120,960) | accepted | accepted | — | `attacks.mjs` social-phished-lost-devices | 4 | local |
 | Phishing and social engineering | social-lost-devices-second-helper: with a second helper required, the phished email vote leaves the attempt collecting and it cannot complete | refused: AttemptNotLive | refused: AttemptNotLive | Perch controller | `attacks.mjs` social-phished-lost-devices | 4 | local |
-| Repeated attempts | griefing-repeated-attempts: attempt_begun alerts nothing itself; the vault counts open attempts and alerts once a day while more than 8 are open; the wallet reads every live attempt from the controller, each granting nothing | owner receives: 1 email and 1 push, both the many-attempts alert; the wallet lists 10 open attempts | owner receives: 1 email and 1 push, both the many-attempts alert; the wallet lists 10 open attempts | alert path | `attacks.mjs` griefing-repeated-attempts | 4 | local |
-| Repeated attempts | griefing-then-vote: 32 attempts opened after the target, then the email vote on it: the host found the vote in its transaction (26 ms after the read); the many-attempts alert went out once; the wallet's readLiveAttempts paged through every live attempt | alerted: email and push; the wallet lists the voted attempt among 33 open | alerted: email and push; the wallet lists the voted attempt among 33 open | alert path | `attacks.mjs` griefing-then-vote | 4 | local |
+| Repeated attempts | griefing-repeated-attempts: openings notify nobody, however many are open: anyone can open one, so any notice of them is one a stranger could trigger; the wallet reads every live attempt from the controller, each granting nothing | owner receives: 0 email and 0 push; the wallet lists 10 open attempts | owner receives: 0 email and 0 push; the wallet lists 10 open attempts | alert path | `attacks.mjs` griefing-repeated-attempts | 4 | local |
+| Repeated attempts | griefing-sustained: 30 more openings one at a time, the alert service draining after each, as a griefer opening one a day for 30 days would make them: no notice on any channel (nothing in the alert path depends on the time between openings; infra/email-alerts' unit test 'sustained griefing' advances its clock a day per opening) | owner receives: 0 email and 0 push; the wallet lists 40 open attempts | owner receives: 0 email and 0 push; the wallet lists 40 open attempts | alert path | `attacks.mjs` griefing-repeated-attempts | 4 | local |
+| Repeated attempts | griefing-then-vote: 32 attempts opened after the target, then the email vote on it: the host found the vote in its transaction (15 ms after the read); the openings sent nothing; the wallet's readLiveAttempts paged through every live attempt | alerted: email and push; the wallet lists the voted attempt among 33 open | alerted: email and push; the wallet lists the voted attempt among 33 open | alert path | `attacks.mjs` griefing-then-vote | 4 | local |
 | Provider header quirks | quirks-encoded-word-subject: RFC 2047 B and Q encoded-word Subjects, and the iCloud web form | refused: 3 of 3 | refused: 3 of 3 | circuit | `attacks.mjs` forged-emails-circuit | 1 | local |
 | Provider header quirks | quirks-split-subject: a fold inside the value, whitespace inside the phrase | refused: 2 of 2 | refused: 2 of 2 | circuit | `attacks.mjs` forged-emails-circuit | 1 | local |
 | Provider header quirks | quirks-each-provider: each launch domain's recovery email in its provider's format counts one vote | accepted: 11 of 11 | accepted: 11 of 11 | — | `attacks.mjs` quirks-each-provider | 1 | local |
@@ -298,9 +305,9 @@ Test host: 3 rows from `crates/integration-tests/tests/it/email_guardian.rs` (`r
 | Front-running | front-running-redirect-cancel: the copy as a cancellation of the same attempt | refused: DigestMismatch | refused: DigestMismatch | guardian check 2 | `attacks.mjs` front-running-redirect | 3 | local |
 | Front-running | front-running-redirect-attempt: the copy for an attacker's new attempt on the same account | refused: DigestMismatch | refused: DigestMismatch | guardian check 2 | `attacks.mjs` front-running-redirect | 3 | local |
 | Front-running | front-running-redirect-account: the copy for a new attempt on another account with the same address | refused: DigestMismatch | refused: DigestMismatch | guardian check 2 | `attacks.mjs` front-running-redirect | 3 | local |
-| Privacy on chain | privacy-no-address-on-chain: a sanity check, not evidence of hiding: envelopes, results and metadata of every transaction of the run, decoded and as base64, searched for each of 27 inboxes' address (raw, lower and upper case, hex, base64), its packed 31-byte limbs as field words, its account code and its pin's salt leaf | none of 263 | none of 263 | — | `attacks.mjs` privacy-no-address-on-chain | 2 | local |
+| Privacy on chain | privacy-no-address-on-chain: a sanity check, not evidence of hiding: envelopes, results and metadata of every transaction of the run, decoded and as base64, searched for each of 27 inboxes' address (raw, lower and upper case, hex, base64), its packed 31-byte limbs as field words, its account code and its pin's salt leaf | none of 293 | none of 293 | — | `attacks.mjs` privacy-no-address-on-chain | 2 | local |
 
-Every row's observed outcome is its expected one (73 rows).
+Every row's observed outcome is its expected one (74 rows).
 
 <details><summary>The circuit's verdict on each adversarial email of the mocks, built for a live attempt (forged-emails-circuit)</summary>
 
@@ -482,15 +489,15 @@ bytes, its size), not on what the host meters, so the tables give both.
 each fee below is attributed to its components.
 
 <!-- BEGIN GENERATED cost by report.mjs; do not edit -->
-Fees: fees/model.mjs reproduces every fee charged in these runs from the network's archived settings, to the stroop: 277 transactions on the local network, 59 transactions on testnet (non-refundable and refundable resource fee as each transaction's fee split records them; the rest is the inclusion fee).
+Fees: fees/model.mjs reproduces every fee charged in these runs from the network's archived settings, to the stroop: 307 transactions on the local network, 59 transactions on testnet (non-refundable and refundable resource fee as each transaction's fee split records them; the rest is the inclusion fee).
 
 Local network, pin path: every accepted email vote of the attack run, each `submit_guardian` with a real proof, simulated with its authorization entry enforced and sent; figures read from each transaction's result and the host's `core_metrics` events. 20 votes leave their attempt collecting (a 2-of-n quorum); 1 authorizes its attempt (the email-plus-delay account, quorum 1, delay 120,960 ledgers), which also writes the authorized attempt.
 
 | Figure | Vote, attempt still collecting: median (range), 20 | Vote that authorizes the attempt |
 | --- | --- | --- |
-| Instructions (metered) | 121,641,679 (121,576,077 to 121,664,431) | 122,471,030 |
-| Instructions (declared in the transaction) | 126,551,768 (126,485,435 to 126,577,531) | 127,443,767 |
-| Memory bytes (metered) | 5,568,323 (5,566,496 to 5,568,932) | 5,649,416 |
+| Instructions (metered) | 121,635,203 (121,597,527 to 121,671,913) | 122,450,021 |
+| Instructions (declared in the transaction) | 126,545,033 (126,505,850 to 126,585,104) | 127,426,825 |
+| Memory bytes (metered) | 5,568,222 (5,567,105 to 5,569,135) | 5,648,807 |
 | Ledger entries read (metered) | 12 (12 to 12) | 16 |
 | Ledger entries written (metered) | 2 (2 to 2) | 4 |
 | Ledger bytes read from disk (metered) | 0 (0 to 0) | 0 |
@@ -498,10 +505,10 @@ Local network, pin path: every accepted email vote of the attack run, each `subm
 | Footprint entries (read-only + read-write) | 12 (12 to 12) | 16 |
 | Signed envelope bytes | 18,080 (18,080 to 18,080) | 18,396 |
 | Authorization entry bytes | 16,784 (16,784 to 16,784) | 16,784 |
-| Fee charged (stroops) | 83,145 (83,125 to 83,153) | 3,632,052 |
+| Fee charged (stroops) | 83,143 (83,131 to 83,155) | 3,632,047 |
 | of which rent (stroops) | 2,049 (2,047 to 2,049) | 3,545,582 |
-| Resource fee declared (stroops) | 91,379 (91,359 to 91,387) | 4,171,968 |
-| Wall clock, simulation to confirmation (ms) | 1,067 (809 to 1,579) | 1,071 |
+| Resource fee declared (stroops) | 91,377 (91,365 to 91,389) | 4,171,963 |
+| Wall clock, simulation to confirmation (ms) | 1,089 (811 to 1,627) | 841 |
 
 Local network, registry root beside the pin: not yet recorded. `network/run-registry-root.sh` enrolls the accounts and then waits out the additions' attested timelock, 72 hours of ledger close time, before its votes.
 
@@ -522,34 +529,34 @@ The same call, the email vote with a real proof, in each environment (instructio
 
 | Domain | Test host invocation | Test host transaction | Test host footprint | Local network, metered | Local network, declared | Local footprint | Testnet, metered |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| fastmail.com | 121,817,281 | 131,187,649 | 12 + 2 | 121,641,367 | 126,551,444 | 10 + 2 |  |
-| gmail.com | 121,799,565 | 131,172,469 | 12 + 2 | 121,649,471 | 126,561,973 | 10 + 2 | 121,609,311 |
-| gmx.de | 121,833,003 | 131,202,621 | 12 + 2 | 121,664,431 | 126,577,531 | 10 + 2 |  |
-| gmx.net | 121,838,107 | 131,210,211 | 12 + 2 | 121,641,575 | 126,551,660 | 10 + 2 |  |
-| hotmail.com | 121,846,645 | 131,210,419 | 12 + 2 | 121,642,043 | 126,554,248 | 10 + 2 |  |
-| icloud.com | 121,883,583 | 131,248,057 | 12 + 2 | 121,576,077 | 126,485,435 | 10 + 2 |  |
-| outlook.com | 121,831,845 | 131,198,534 | 12 + 2 | 121,604,747 | 126,513,359 | 10 + 2 |  |
-| proton.me | 121,837,819 | 131,210,023 | 12 + 2 | 121,649,575 | 126,562,081 | 10 + 2 |  |
-| protonmail.com | 121,846,245 | 131,210,419 | 12 + 2 | 121,664,119 | 126,577,207 | 10 + 2 |  |
-| web.de | 121,806,747 | 131,179,851 | 12 + 2 | 121,620,279 | 126,531,613 | 10 + 2 |  |
-| yahoo.com | 121,879,777 | 131,240,675 | 12 + 2 | 121,657,003 | 126,569,806 | 10 + 2 |  |
+| fastmail.com | 121,817,281 | 131,187,649 | 12 + 2 | 121,612,851 | 126,523,888 | 10 + 2 |  |
+| gmail.com | 121,799,565 | 131,172,469 | 12 + 2 | 121,657,003 | 126,569,806 | 10 + 2 | 121,609,311 |
+| gmx.de | 121,833,003 | 131,202,621 | 12 + 2 | 121,671,913 | 126,585,104 | 10 + 2 |  |
+| gmx.net | 121,838,107 | 131,210,211 | 12 + 2 | 121,642,563 | 126,554,788 | 10 + 2 |  |
+| hotmail.com | 121,846,645 | 131,210,419 | 12 + 2 | 121,642,355 | 126,554,572 | 10 + 2 |  |
+| icloud.com | 121,883,583 | 131,248,057 | 12 + 2 | 121,605,059 | 126,513,683 | 10 + 2 |  |
+| outlook.com | 121,831,845 | 131,198,534 | 12 + 2 | 121,597,527 | 126,505,850 | 10 + 2 |  |
+| proton.me | 121,837,819 | 131,210,023 | 12 + 2 | 121,627,499 | 126,539,122 | 10 + 2 |  |
+| protonmail.com | 121,846,245 | 131,210,419 | 12 + 2 | 121,641,263 | 126,551,336 | 10 + 2 |  |
+| web.de | 121,806,747 | 131,179,851 | 12 + 2 | 121,634,459 | 126,544,259 | 10 + 2 |  |
+| yahoo.com | 121,879,777 | 131,240,675 | 12 + 2 | 121,633,939 | 126,543,719 | 10 + 2 |  |
 
 One email vote (Gmail's) by fee component, in stroops: each column computes the components from the transaction's declared resources (instructions, entries, bytes written, envelope size, event bytes) under one schedule. The network columns' components add up to the fee each network charged, rent and inclusion fee included; the last columns price the local votes under mainnet's archived settings, with the rent the local network charged (it runs mainnet's settings, entry lifetimes included, and charges the same rent rate) and the 100-stroop inclusion fee every vote here paid. The test host's columns leave rent out.
 
 | Component | Test host transaction, SDK snapshot | Test host transaction, mainnet's settings | Local network, pin: charged | Testnet, pin: charged | Mainnet's settings, pin |
 | --- | --- | --- | --- | --- | --- |
-| Compute (instructions) | 91,821 | 39,352 | 37,969 | 37,956 | 37,969 |
+| Compute (instructions) | 91,821 | 39,352 | 37,971 | 37,956 | 37,971 |
 | Entries read from disk | 0 | 0 | 0 | 0 | 0 |
 | Entries written | 5,000 | 2,500 | 2,500 | 2,500 | 2,500 |
 | Bytes read from disk | 0 | 0 | 0 | 0 | 0 |
 | Bytes written | 1,033 | 516 | 516 | 516 | 516 |
 | History (envelope + 300 bytes) | 73,126 | 36,554 | 36,419 | 36,419 | 36,419 |
 | Transaction size | 7,196 | 3,598 | 3,585 | 3,585 | 3,585 |
-| Non-refundable total | 178,176 | 82,520 | 80,989 | 80,976 | 80,989 |
+| Non-refundable total | 178,176 | 82,520 | 80,991 | 80,976 | 80,991 |
 | Events | 20 | 10 | 10 | 10 | 10 |
 | Rent | — | — | 2,049 | 1,333 | 2,049 |
 | Inclusion fee | — | — | 100 | 100 | 100 |
-| **Total** | 178,196 | 82,530 | 83,148 | 82,419 | 83,148 |
+| **Total** | 178,196 | 82,530 | 83,150 | 82,419 | 83,150 |
 
 Instructions of the same email vote by host and cost model. The test host's transaction readings re-execute the vote in recording mode, the mode RPC simulation runs, with the host the Soroban SDK links; the networks' metered counts are the host's own metering as the network applied the transaction.
 
@@ -558,17 +565,17 @@ Instructions of the same email vote by host and cost model. The test host's tran
 | Test host, transaction (Gmail) | soroban-env-host 27.0.1 | the host's built-in | 131,172,469 |
 | Test host, transaction (Gmail) | soroban-env-host 27.0.1 | mainnet's | 130,031,418 |
 | Test host, transaction (Gmail) | soroban-env-host 27.0.1 | testnet's | 130,065,594 |
-| Local network, applied: 20 pin votes | soroban-env-host 29.0.2 (stellar-core 30.0.0, protocol 29) | mainnet's | 121,641,679 (121,576,077 to 121,664,431) |
-| Local network, declared after simulation | Stellar RPC 30.0.0 | mainnet's | 126,551,768 (126,485,435 to 126,577,531) |
+| Local network, applied: 20 pin votes | soroban-env-host 29.0.2 (stellar-core 30.0.0, protocol 29) | mainnet's | 121,635,203 (121,597,527 to 121,671,913) |
+| Local network, declared after simulation | Stellar RPC 30.0.0 | mainnet's | 126,545,033 (126,505,850 to 126,585,104) |
 | Local network, applied: 20 pin votes, the email contracts' release-profile build (`release-build-votes-local.json`) | soroban-env-host 29.0.2 (stellar-core 30.0.0, protocol 29) | mainnet's | 120,067,339 (119,993,979 to 120,119,471) |
 | Testnet, applied: 6 pin votes | soroban-env-host 29.0.2 (stellar-core 30.0.0, protocol 29) | testnet's | 121,665,115 (121,609,311 to 121,696,841) |
 | Testnet, declared after simulation | Stellar RPC 30.0.0 | testnet's | 126,573,456 (126,516,681 to 126,607,608) |
 
-So testnet's cost model adds 34,176 instructions to mainnet's on the test host; between the networks, with the same wasm, the medians differ by 23,436 (0.02%); the release-profile build meters 1,574,340 fewer per vote than `just build-contracts`' wasm (the medians).
+So testnet's cost model adds 34,176 instructions to mainnet's on the test host; between the networks, with the same wasm, the medians differ by 29,913 (0.02%); the release-profile build meters 1,567,864 fewer per vote than `just build-contracts`' wasm (the medians).
 
-Capacity (mainnet's settings, CAP-0063): a ledger's Soroban transactions run in stages of at most 3 clusters with no conflicting footprints, and the sum over stages of each stage's largest cluster, counted in declared instructions, must stay within 580,000,000. At 126,577,531 declared instructions, a cluster holds 4 email votes, so one ledger holds at most 12 votes on different attempts and 4 that conflict; the ledger's other limits allow 47 votes by transaction size (18,080 bytes each), 245 by bytes written and 2,000 by count. That is 2.4 votes a second at 5-second ledgers. Beyond that, transactions bid inclusion fees for the space (surge pricing); the resource fee stays what the settings fix, so a burst of recoveries raises only the inclusion fee.
+Capacity (mainnet's settings, CAP-0063): a ledger's Soroban transactions run in stages of at most 3 clusters with no conflicting footprints, and the sum over stages of each stage's largest cluster, counted in declared instructions, must stay within 580,000,000. At 126,585,104 declared instructions, a cluster holds 4 email votes, so one ledger holds at most 12 votes on different attempts and 4 that conflict; the ledger's other limits allow 47 votes by transaction size (18,080 bytes each), 245 by bytes written and 2,000 by count. That is 2.4 votes a second at 5-second ledgers. Beyond that, transactions bid inclusion fees for the space (surge pricing); the resource fee stays what the settings fix, so a burst of recoveries raises only the inclusion fee.
 
-Enrollment at mainnet's settings (the local network, which runs them, entry lifetimes included): minting the account 2,876,016 stroops, deploying its email guardian 1,609,367, and the document that lists it with one helper 6,949,238 (medians over the attack run's 11 launch-domain accounts; 2,863,021, 1,603,056 and 6,918,605 of them rent: new entries live at least mainnet's 2,073,600-ledger minimum, and the guardian and the account extend theirs to the maximum on any network): 11,434,621 stroops (1.1 XLM). The testnet recovery run's enrollment: 1,344,343, 1,997,088 and 5,711,756 stroops.
+Enrollment at mainnet's settings (the local network, which runs them, entry lifetimes included): minting the account 2,876,016 stroops, deploying its email guardian 1,609,281, and the document that lists it with one helper 6,949,238 (medians over the attack run's 11 launch-domain accounts; 2,863,021, 1,602,970 and 6,918,605 of them rent: new entries live at least mainnet's 2,073,600-ledger minimum, and the guardian and the account extend theirs to the maximum on any network): 11,434,535 stroops (1.1 XLM). The testnet recovery run's enrollment: 1,344,343, 1,997,088 and 5,711,756 stroops.
 
 Testnet (`Test SDF Network ; September 2015`, https://soroban-testnet.stellar.org, Stellar RPC 30.0.0-13e53516633c3ce1281c7edbacb607107d3a4e55), run of 2026-11-02 13:02 UTC: one complete email-factor recovery, 19 transactions. Proving (bb.js in Node, on the machine of the proving table): 0.7 s witness, 3.2 s proving.
 
@@ -873,6 +880,41 @@ certificate once, the page proves with one thread and with every core and
 prints the JSON to copy. The phone rows of the table stay "not measured"
 until that is done.
 
+## The alert host's scan at mainnet volume
+
+The alert host finds email votes by reading every transaction on the
+network (spec §10.2). `mainnet/scan.mjs` reads, read-only, every
+transaction of 720 consecutive mainnet ledgers (an hour at 5-second
+ledgers) exactly as the host does: `getTransactions` with
+`xdrFormat: "json"`, pages of 200, each from the previous page's cursor,
+one request at a time, the vote walk being the host's own `guardianVotes`.
+It ran on 2026-11-02 against `https://mainnet.sorobanrpc.com` (Stellar RPC
+29.0.1, protocol 29) from this machine; `results/mainnet-scan.json` holds
+the totals and one row per page.
+
+| Ledgers 65,270,019 to 65,270,738 | Per ledger | Per day (17,280 ledgers) |
+| --- | --- | --- |
+| Transactions: 189,094 (24% Soroban) | 263 on average; median 237, 95th percentile 475, at most 1,011 | about 4.5 million |
+| `getTransactions` pages of 200: 946 | 1.31 | about 22,600 requests |
+| Bytes on the wire (gzip): 205 MB | 285,059 | about 4.9 GB |
+| Bytes decoded (JSON): 2.95 GB | 4,095,557 (15,594 a transaction) | about 71 GB |
+| Time to the last byte: 1,098 ms a page on average (95th percentile 1,353) | 1,443 ms | — |
+| Host's own work: JSON parse 11.5 ms and vote walk 1.1 ms a page | 17 ms | — |
+
+The first 60 ledgers read again in base64 decode to 55% of the JSON's bytes
+but take 8% more on the wire, so the JSON the host reads (which survives
+XDR newer than its SDK) costs no extra bandwidth.
+
+**The drain policy that keeps up.** One request at a time, the scan reads
+a ledger in about 1.46 s, so it reads about 3.4 ledgers while the chain
+closes one; the host's poll driver (`infra/email-alerts/src/driver.ts`)
+therefore reads the next pages at once while behind, up to 4 pages a poll
+(about three ledgers), and polls every 5 s once caught up. A backlog of an
+hour drains in about 25 minutes. A lag of more than 720 ledgers on either
+cursor raises the alarm (spec §10.2). These are one client's figures on a
+shared machine against one public RPC; a slower RPC, or a mainnet busier
+than this hour, lowers the margin, which the lag alarm reports.
+
 ## What was run and what was read
 
 Run, in this repository, on the machine of the proving table:
@@ -892,7 +934,8 @@ Run, in this repository, on the machine of the proving table:
   addition is eligible;
 - read-only reads of mainnet's and testnet's settings, of testnet's code
   entries and of every testnet transaction's XDR (`fees/settings.mjs`,
-  `fees/code-entries.mjs`, `testnet/evidence.mjs`);
+  `fees/code-entries.mjs`, `testnet/evidence.mjs`), and of every mainnet
+  transaction of 720 ledgers (`mainnet/scan.mjs`);
 - the proving measurements (`proving/measure.sh`, `measure-browser.mjs`) and
   a first proof's whole transfer (`first-load.mjs`);
 - the self-contained benchmark build and its server, on this machine only.
@@ -977,6 +1020,6 @@ clusters.
 - Real provider mail, real DNS, a production enclave, and real sending and
   push services.
 - Mainnet: its costs are computed from its archived settings, not
-  measured.
+  measured; only the alert host's scan was read from mainnet.
 - Alerts on testnet: the alert path runs on the local network only.
 - Archival on a network: the archived recovery runs on the test host.

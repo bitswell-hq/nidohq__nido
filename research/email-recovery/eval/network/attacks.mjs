@@ -21,7 +21,7 @@ import { after, before, describe, test } from 'node:test';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { buildAttacks, gmailSigner, testKey } from '@nidohq/email-mocks';
 import { NEVER_ASKS, PASSKEY_DEVICE_LEAD, PREEMPT } from '@nidohq/email-alerts';
-import { MANY_OPEN_ATTEMPTS, blindedDigest, decryptBackup, encryptBackup, fieldHex, generatePassphrase, keyHash, merkleRoot, registryLeaf } from '@nidohq/email-recovery';
+import { blindedDigest, decryptBackup, encryptBackup, fieldHex, generatePassphrase, keyHash, merkleRoot, registryLeaf } from '@nidohq/email-recovery';
 import { perch } from '@nidohq/passkey-sdk';
 import { Address, Keypair, Operation, xdr } from '@stellar/stellar-sdk';
 import { Passkey } from './lib/account.mjs';
@@ -742,8 +742,9 @@ describe('phishing and social engineering', () => {
 
 describe('repeated attempts', () => {
   scenario('griefing-repeated-attempts', async () => {
-    // Anyone may open attempts, at a transaction fee each. What the owner receives for ten of them, and what the
-    // wallet's own read of live attempts (`readLiveAttempts`) lists.
+    // Anyone may open attempts, at a transaction fee each. What the owner receives for ten at once, then for thirty
+    // more opened one at a time with the alert service draining after each, as a griefer opening one a day would; and
+    // what the wallet's own read of live attempts (`readLiveAttempts`) lists.
     const contact = 'g.alerts@posteo.de';
     const reg = await alerts.register(G, contact);
     await alerts.drain();
@@ -752,13 +753,22 @@ describe('repeated attempts', () => {
     const griefer = await chain.funded(Keypair.random());
     for (let i = 0; i < 10; i++) await G.beginLostKey(griefer, newOwner(`G-grief-${i}`), `begin_lost_key (griefing ${i + 1})`);
     await alerts.drain();
-    const mail = alerts.reaching(contact).slice(before);
-    const pushed = Alerts.pushes(reg.device).filter((p) => p.kind !== 'probe');
-    const many = mail.every((m) => /many recovery attempts opened/.test(m.subject)) && pushed.every((p) => p.kind === 'attempts_many');
-    const live = await perch.readLiveAttempts(G.client, G.account.address);
-    const want = 'owner receives: 1 email and 1 push, both the many-attempts alert; the wallet lists 10 open attempts';
-    record('griefing', 'griefing-repeated-attempts', 4, want, `owner receives: ${mail.length} email and ${pushed.length} push, ${many ? 'both the many-attempts alert' : 'other alerts'}; the wallet lists ${live.length} open attempts`, 'alert path', {
-      note: `attempt_begun alerts nothing itself; the vault counts open attempts and alerts once a day while more than ${MANY_OPEN_ATTEMPTS} are open; the wallet reads every live attempt from the controller, each granting nothing`,
+    const notices = () => {
+      const mail = alerts.reaching(contact).slice(before);
+      const pushed = Alerts.pushes(reg.device).filter((p) => p.kind !== 'probe');
+      return `owner receives: ${mail.length} email and ${pushed.length} push`;
+    };
+    let live = await perch.readLiveAttempts(G.client, G.account.address);
+    record('griefing', 'griefing-repeated-attempts', 4, 'owner receives: 0 email and 0 push; the wallet lists 10 open attempts', `${notices()}; the wallet lists ${live.length} open attempts`, 'alert path', {
+      note: 'openings notify nobody, however many are open: anyone can open one, so any notice of them is one a stranger could trigger; the wallet reads every live attempt from the controller, each granting nothing',
+    });
+    for (let i = 10; i < 40; i++) {
+      await G.beginLostKey(griefer, newOwner(`G-grief-${i}`), `begin_lost_key (griefing ${i + 1})`);
+      await alerts.drain();
+    }
+    live = await perch.readLiveAttempts(G.client, G.account.address);
+    record('griefing', 'griefing-sustained', 4, 'owner receives: 0 email and 0 push; the wallet lists 40 open attempts', `${notices()}; the wallet lists ${live.length} open attempts`, 'alert path', {
+      note: "30 more openings one at a time, the alert service draining after each, as a griefer opening one a day for 30 days would make them: no notice on any channel (nothing in the alert path depends on the time between openings; infra/email-alerts' unit test 'sustained griefing' advances its clock a day per opening)",
     });
   });
 
@@ -780,13 +790,12 @@ describe('repeated attempts', () => {
     const code = await alerts.attemptCode(GV, reg.accountCode, target.attemptId);
     const emails = alerts.reaching(contact).filter((m) => /your email approved a recovery/.test(m.subject) && m.text?.includes(spaced(code))).length;
     const pushed = Alerts.pushes(reg.device).filter((p) => p.kind === 'email_vote_recorded' && p.code === code).length;
-    const many = alerts.reaching(contact).filter((m) => /many recovery attempts opened/.test(m.subject)).length;
     const live = await perch.readLiveAttempts(GV.client, GV.account.address);
     const shown = live.find((a) => a.attemptId === target.attemptId)?.approvals.includes(GV.guardian);
     const latency = reports.map((r) => r.latencyMs[`email_vote_recorded:${GV.account.address}:${target.attemptId}`]).find((x) => x !== undefined);
     const want = 'alerted: email and push; the wallet lists the voted attempt among 33 open';
     record('griefing', 'griefing-then-vote', 4, want, `${emails && pushed ? 'alerted: email and push' : `alerted: ${emails} email, ${pushed} push`}; ${shown ? 'the wallet lists the voted attempt' : 'the wallet does not list the voted attempt'} among ${live.length} open`, 'alert path', {
-      note: `32 attempts opened after the target, then the email vote on it: the host found the vote in its transaction (${latency?.toFixed(0)} ms after the read); the many-attempts alert went out ${many === 1 ? 'once' : `${many} times`}; the wallet's readLiveAttempts paged through every live attempt`,
+      note: `32 attempts opened after the target, then the email vote on it: the host found the vote in its transaction (${latency?.toFixed(0)} ms after the read); the openings sent nothing; the wallet's readLiveAttempts paged through every live attempt`,
       latencyMs: latency,
     });
     await GV.ownerCancel(GV.payer, target.attemptId);
