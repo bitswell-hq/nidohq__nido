@@ -1,12 +1,13 @@
 // The recovery kit step of enrollment (docs/email-recovery/spec.md §5.6): the
 // code leaves the screen before two groups of it are typed back, so the
 // check cannot be passed by reading the page; on an iPhone, printing comes
-// first and the page says where a download goes.
+// first and the page says where a download goes; next to Copy it says where
+// the clipboard sends the code.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../toast.js', () => ({ toast: vi.fn() }));
 
-import { backupPanel, type BackupState } from './emailBackup';
+import { backupPanel, codeCheckedAt, type BackupState } from './emailBackup';
 
 const ACCOUNT = 'C'.padEnd(56, 'A');
 const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1';
@@ -39,6 +40,8 @@ describe('the recovery kit step', () => {
       input.dispatchEvent(new Event('input'));
     }
     expect(states.at(-1)!.saved).toBe(true);
+    // Typing it back is a check of the code: the twice-yearly reminder counts from here.
+    expect(codeCheckedAt(ACCOUNT)).toBeGreaterThan(Date.now() - 60_000);
 
     el.querySelector<HTMLButtonElement>('[data-kit-show-again]')!.click();
     expect(el.querySelector('[data-kit-code]')!.textContent).toBe(code);
@@ -54,5 +57,13 @@ describe('the recovery kit step', () => {
     const desktop = panel(DESKTOP).el;
     expect(desktop.querySelector('[data-download-kit]')!.classList.contains('primary')).toBe(true);
     expect(desktop.querySelector('[data-kit-device-note]')).toBeNull();
+  });
+
+  it('says next to Copy that the clipboard syncs and is read by keyboard apps', () => {
+    const { el } = panel();
+    const note = el.querySelector('[data-copy-kit]')!.parentElement!.nextElementSibling!;
+    expect(note.matches('[data-kit-copy-note]')).toBe(true);
+    expect(note.textContent).toMatch(/clipboard, which can sync it to your other devices .* keyboard apps can read/);
+    expect(note.textContent).toMatch(/password manager outside your inbox’s provider/);
   });
 });

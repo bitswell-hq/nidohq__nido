@@ -29,11 +29,11 @@ export const ENROLLED_ADDRESS_NOTE =
   `the email services that deliver alerts, ${SENDING_SERVICES}, then see it with every alert.`;
 
 /** The version of the consent text below; the vault records which one the user saw. */
-export const CONSENT_VERSION = 3;
+export const CONSENT_VERSION = 4;
 export const CONSENT_TEXT =
   'Nido will email this address and send a notification to this device whenever your Nido’s recovery needs your attention: ' +
   'when a recovery is approved or completes, when your recovery email approves a recovery, its cancellation or a settings change, ' +
-  'when many recovery attempts are open at once, or when the recovery settings change. ' +
+  'or when the recovery settings change. ' +
   'Alerts carry a six-digit code and never name your Nido or contain a link. Recovery attempts that are only opened, ' +
   `which anyone can do, show in your wallet instead. Alert emails are sent through ${SENDING_SERVICES}, which see this address and each alert. ` +
   'About once a month this device asks you to tap a notification, to confirm that alerts still reach you.';
@@ -103,6 +103,29 @@ export const KIT_STORAGE_ADVICE =
   'Whoever takes over that account would then have both your inbox and this code.';
 
 /**
+ * What an iPhone or iPad must do before this page can ask for
+ * notifications, or `undefined` when nothing is needed: there Web Push works
+ * only in a web app added to the Home Screen ("Web Push for Web Apps on iOS
+ * and iPadOS", https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/),
+ * and each Nido is its own subdomain, so the icon must be added from this
+ * Nido's own address (`host`). An iPad's Safari reports a Mac user agent;
+ * its touch points tell it apart.
+ */
+export function homeScreenNeeded(o: { userAgent: string; standalone: boolean; maxTouchPoints: number; host: string }): string | undefined {
+  const ios = /iPhone|iPad|iPod/.test(o.userAgent) || (/Macintosh/.test(o.userAgent) && o.maxTouchPoints > 1);
+  if (!ios || o.standalone) return undefined;
+  return (
+    'On an iPhone or iPad, notifications reach only Nido opened from your Home Screen, added from this Nido’s own address. ' +
+    `In Safari, with this page open at ${o.host}, tap Share, then Add to Home Screen. Then open Nido from that icon and come back here.`
+  );
+}
+
+/** What the page says next to Copy: the clipboard is another place the code goes. */
+export const COPY_KIT_NOTE =
+  'Copy puts the code on this device’s clipboard, which can sync it to your other devices (Universal Clipboard on Apple devices, clipboard sync on Windows) ' +
+  'and which keyboard apps can read. Paste it at once into a password manager outside your inbox’s provider, then copy something else.';
+
+/**
  * How the kit is best saved on this device (spec §5.6). On an iPhone or iPad
  * a download goes to iCloud Drive unless Safari's download location was
  * changed, the place to avoid for an iCloud Mail inbox: there printing
@@ -119,25 +142,71 @@ export function kitActions(userAgent: string): { primary: 'print' | 'download'; 
 }
 
 /**
- * The note enrollment shows when the inbox's provider is the platform that
- * likely syncs this device's passkey (spec §5.4): losing that one account
- * would lose the passkey and the inbox together. Inferred from the inbox's
- * domain and this browser's user agent; `undefined` otherwise.
+ * A passkey's backup state as its authenticator data states it (W3C
+ * WebAuthn Level 3 §6.1): flag BE (0x08) backup eligible, BS (0x10) backed
+ * up, that is synced; with attested credential data (AT, 0x40, present when
+ * the passkey is created), the AAGUID of the credential manager.
  */
-export function syncedPasskeyNote(domain: string, userAgent: string): string | undefined {
+export interface PasskeyBackup {
+  eligible: boolean;
+  synced: boolean;
+  aaguid?: string;
+}
+
+export function passkeyBackup(authenticatorData: Uint8Array): PasskeyBackup | undefined {
+  if (authenticatorData.length < 37) return undefined;
+  const flags = authenticatorData[32]!;
+  const out: PasskeyBackup = { eligible: (flags & 0x08) !== 0, synced: (flags & 0x10) !== 0 };
+  if (flags & 0x40 && authenticatorData.length >= 53) {
+    const h = bytes.toHex(authenticatorData.subarray(37, 53));
+    if (/[^0]/.test(h)) out.aaguid = `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+  }
+  return out;
+}
+
+/** The syncing platforms named by the AAGUID they report (passkeydeveloper/passkey-authenticator-aaguids, `aaguid.json`, read 2026-11-02). */
+const PLATFORM_AAGUIDS: Record<string, 'google' | 'apple'> = {
+  'ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4': 'google', // Google Password Manager
+  'fbfc3007-154e-4ecc-8c0b-6e020557d7bd': 'apple', // Apple Passwords
+  'dd4ec289-e01d-41c9-bb89-70fa845d4bf2': 'apple', // iCloud Keychain (Managed)
+};
+
+const PLATFORMS = {
+  google: { name: 'Google', keychain: 'Google Password Manager', domains: ['gmail.com', 'googlemail.com'] },
+  apple: { name: 'Apple', keychain: 'iCloud Keychain', domains: ['icloud.com', 'me.com', 'mac.com'] },
+} as const;
+
+/**
+ * The note enrollment shows when the inbox's provider is the platform that
+ * syncs this device's passkey (spec §5.4): losing that one account would
+ * lose the passkey and the inbox together. From the passkey's own flags
+ * when an assertion gave them (`backup`): none for a passkey that is not
+ * synced, the platform from its AAGUID where one is known, and none for
+ * another credential manager's. The user agent stands in for what they do
+ * not say. `undefined` when the two accounts differ or nothing suggests
+ * they match.
+ */
+export function syncedPasskeyNote(domain: string, userAgent: string, backup?: PasskeyBackup): string | undefined {
   const d = domain.trim().toLowerCase();
-  const apple = /iPhone|iPad|iPod|Macintosh/.test(userAgent);
-  const google = /Android|Chrome\/|CriOS\//.test(userAgent);
-  const platform =
-    ['gmail.com', 'googlemail.com'].includes(d) && google
-      ? { name: 'Google', keychain: 'Google Password Manager' }
-      : ['icloud.com', 'me.com', 'mac.com'].includes(d) && apple
-        ? { name: 'Apple', keychain: 'iCloud Keychain' }
+  if (backup && !backup.synced) return undefined;
+  const named = backup?.aaguid ? (PLATFORM_AAGUIDS[backup.aaguid] ?? 'other') : undefined;
+  if (named === 'other') return undefined;
+  const guess =
+    /iPhone|iPad|iPod|Macintosh/.test(userAgent)
+      ? 'apple'
+      : /Android/.test(userAgent) || (/Chrome\/|CriOS\//.test(userAgent) && !/Edg\/|EdgA\/|OPR\/|SamsungBrowser\//.test(userAgent))
+        ? 'google'
         : undefined;
-  if (!platform) return undefined;
+  const key = named ?? guess;
+  if (!key || !(PLATFORMS[key].domains as readonly string[]).includes(d)) return undefined;
+  const p = PLATFORMS[key];
+  const lead = named
+    ? `The passkey on this device is saved in your ${p.name} account (${p.keychain}), which syncs it to your other devices.`
+    : backup?.synced
+      ? `The passkey on this device is synced to your other devices, probably by your ${p.name} account (${p.keychain}).`
+      : `The passkey on this device is probably saved in your ${p.name} account (${p.keychain}), which syncs it to your other devices.`;
   return (
-    `The passkey on this device is probably saved in your ${platform.name} account (${platform.keychain}), which syncs it to your other devices. ` +
-    `If ${d} is that same account, losing it loses your passkey and this inbox together, and email recovery would not help. ` +
+    `${lead} If ${d} is that same account, losing it loses your passkey and this inbox together, and email recovery would not help. ` +
     'Use an inbox at another provider, or add another helper.'
   );
 }
@@ -238,51 +307,99 @@ export interface ChannelView {
   text: string;
   /** Offer "Add this device". */
   offerAdd: boolean;
+  /** Offer "Add another helper": the channel is broken and the email vote alone authorizes. */
+  offerHelper: boolean;
 }
 
-/** What the wallet says when no device receives the notifications any more. */
-export const SECOND_CHANNEL_LAPSED =
-  'Notifications for your recovery alerts no longer reach any of your devices. Email can help recover this Nido only while a second alert channel works, ' +
-  'so until a device receives them again Nido treats your email helper as not allowed (rule 2) and will not save recovery settings that keep it. ' +
-  'Add this device.';
+/**
+ * Whether the email vote alone authorizes an attempt under a recovery
+ * member: guardian-only mode with a quorum of one and the email helper
+ * listed (spec §9.3 rule 3, email plus delay). In combined mode the
+ * recovery kit is always needed as well.
+ */
+export function emailAloneAuthorizes(o: { mode: string; quorum: number; emailListed: boolean }): boolean {
+  return o.emailListed && o.mode === 'guardian-only' && o.quorum <= 1;
+}
 
-/** What the wallet says when no device confirmed the last two probes. */
-export const SECOND_CHANNEL_UNACKNOWLEDGED =
-  'Nido could not confirm that your recovery notifications reach you: no device has confirmed the last two checks, which ask you to tap a notification. ' +
-  'Email can help recover this Nido only while a second alert channel works, so until a device confirms, Nido treats your email helper as not allowed (rule 2) ' +
-  'and will not save recovery settings that keep it. Add this device, or tap the next check on the device that has them.';
+/**
+ * What the wallet says while no device is known to receive and confirm the
+ * notifications (spec §9.3 rule 2): nothing on chain changed, so the email
+ * helper still counts, and under email plus delay (`emailAlone`) it still
+ * approves a recovery alone.
+ */
+export function secondChannelWarning(state: 'lapsed' | 'unacknowledged', emailAlone: boolean): string {
+  const cause =
+    state === 'lapsed'
+      ? 'Notifications for your recovery alerts no longer reach any of your devices.'
+      : 'Nido could not confirm that your recovery notifications reach you: no device has confirmed the last two checks, which ask you to tap a notification.';
+  return emailAlone
+    ? 'Your email helper can still approve a recovery alone, and your second alert channel is not working: fix the channel now, or add another helper. ' +
+        `${cause} A recovery your email approves finishes after its waiting period unless you cancel it, and you may hear of it only by email. ` +
+        'Until a device receives them again, Nido will not save settings in which your email helper can approve alone (rule 2).'
+    : `Your second alert channel is not working: fix it now. ${cause} Your email helper still counts as one approval, and you would hear of its approvals only by email (rule 2).`;
+}
+
+/** Why the settings page refuses a save while the channel is broken (spec §9.3 rule 2). */
+export const EMAIL_ALONE_REFUSED =
+  'Your second alert channel is not working, so Nido will not save settings in which your email helper can approve a recovery alone (rule 2). ' +
+  'Add this device, require another helper’s approval as well (2 or more must approve), or remove the email helper.';
 
 /**
  * The channel as this page sees it: the vault's devices once the owner
  * asked (`vault`), else this device's own registration; `now` and `date`
- * for the copy. "They reach this device" is said only on a device the vault
- * lists as live, or that confirmed a probe within [`RECENT_ACK_MS`].
+ * for the copy; `emailAlone` when the applied member lets the email vote
+ * authorize alone. "They reach this device" is said only on a device the
+ * vault lists as live, or that confirmed a probe within [`RECENT_ACK_MS`].
  */
-export function channelView(o: { vault?: DeviceChannel[]; device?: ThisDevice; now: number; date?: (ms: number) => string }): ChannelView {
+export function channelView(o: {
+  vault?: DeviceChannel[];
+  device?: ThisDevice;
+  now: number;
+  date?: (ms: number) => string;
+  emailAlone?: boolean;
+}): ChannelView {
   const date = o.date ?? ((ms: number) => new Date(ms).toLocaleDateString());
-  const broken = (state: SecondChannel, text: string): ChannelView => ({ state, rule2: 'broken', text, offerAdd: true });
+  const alone = o.emailAlone ?? false;
+  const broken = (state: 'lapsed' | 'unacknowledged'): ChannelView => ({
+    state,
+    rule2: 'broken',
+    text: secondChannelWarning(state, alone),
+    offerAdd: true,
+    offerHelper: alone,
+  });
+  const ok = (state: SecondChannel, text: string, offerAdd: boolean): ChannelView => ({ state, rule2: 'ok', text, offerAdd, offerHelper: false });
   if (o.vault) {
     const live = o.vault.filter((d) => d.state === 'live');
-    if (!live.length) {
-      return o.vault.some((d) => d.state === 'unacknowledged')
-        ? broken('unacknowledged', SECOND_CHANNEL_UNACKNOWLEDGED)
-        : broken('lapsed', SECOND_CHANNEL_LAPSED);
-    }
+    if (!live.length) return broken(o.vault.some((d) => d.state === 'unacknowledged') ? 'unacknowledged' : 'lapsed');
     const mine = o.device?.state === 'live' ? live.find((d) => d.id === o.device!.id) : undefined;
     if (mine) {
       const confirmed = Math.max(mine.ackedAt, o.device?.ackedAt ?? 0);
-      return { state: 'here', rule2: 'ok', offerAdd: false, text: `Alert notifications: they reach this device (last confirmed ${date(confirmed)}).` };
+      return ok('here', `Alert notifications: they reach this device (last confirmed ${date(confirmed)}).`, false);
     }
     const first = live.reduce((a, b) => (b.addedAt < a.addedAt ? b : a));
-    return { state: 'elsewhere', rule2: 'ok', offerAdd: true, text: `Recovery notifications go to another device (set up on ${date(first.addedAt)}). Add this device too.` };
+    return ok('elsewhere', `Recovery notifications go to another device (set up on ${date(first.addedAt)}). Add this device too.`, true);
   }
-  if (o.device?.state === 'gone') return broken('lapsed', SECOND_CHANNEL_LAPSED);
+  if (o.device?.state === 'gone') return broken('lapsed');
   if (o.device?.ackedAt !== undefined && o.now - o.device.ackedAt <= RECENT_ACK_MS) {
-    return { state: 'here', rule2: 'ok', offerAdd: false, text: `Alert notifications: they reach this device (you last confirmed ${date(o.device.ackedAt)}).` };
+    return ok('here', `Alert notifications: they reach this device (you last confirmed ${date(o.device.ackedAt)}).`, false);
   }
   return o.device
-    ? { state: 'unknown', rule2: 'ok', offerAdd: false, text: 'Alert notifications: this device is set up for them. Checking that they reach you needs your passkey.' }
-    : { state: 'unknown', rule2: 'ok', offerAdd: true, text: 'Alert notifications: this device does not receive them. Check your alert channels to see which device does, or add this one.' };
+    ? ok('unknown', 'Alert notifications: this device is set up for them. Checking that they reach you needs your passkey.', false)
+    : ok('unknown', 'Alert notifications: this device does not receive them. Check your alert channels to see which device does, or add this one.', true);
+}
+
+/** How often the wallet asks the owner to check the recovery code: about twice a year, in the wallet only, never as a notification. */
+export const CODE_CHECK_EVERY_MS = 182 * 24 * 3600_000;
+
+/**
+ * The reminder the email card shows when the recovery code was last checked
+ * on this device more than [`CODE_CHECK_EVERY_MS`] ago, or never here
+ * (`lastCheckedAt` undefined); `undefined` otherwise.
+ */
+export function codeCheckReminder(lastCheckedAt: number | undefined, now: number): string | undefined {
+  if (lastCheckedAt !== undefined && now - lastCheckedAt < CODE_CHECK_EVERY_MS) return undefined;
+  const when = lastCheckedAt === undefined ? 'You have not checked your recovery code on this device yet.' : 'It is six months since you last checked your recovery code here.';
+  return `${when} Check that you can still find it: recovering by email needs it, and Nido never has it.`;
 }
 
 /** The result of the recovery-code check (spec §5.6): the code against the guardian's pin root. */

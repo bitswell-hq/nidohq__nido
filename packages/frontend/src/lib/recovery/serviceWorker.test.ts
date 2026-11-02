@@ -110,7 +110,15 @@ describe('the service worker', () => {
     await sw.dispatch('push', push({ v: 1, kind: 'attempt_authorized', title: 'Account recovery approved', body: 'Lead.', code: '169328' }));
     const alert = sw.shown[1]!;
     expect(alert.title).toBe('Security alert: Account recovery approved');
-    expect(alert.options).toMatchObject({ body: 'Lead. Code 169 328.', icon: '/alert.svg', requireInteraction: true, tag: 'attempt_authorized' });
+    expect(alert.options).toMatchObject({ body: 'Lead. Code 169 328.', icon: '/alert.svg', requireInteraction: true, tag: 'attempt_authorized:169328' });
+  });
+
+  it('alerts of one kind for different attempts are separate notifications, and each one sounds', async () => {
+    await sw.dispatch('push', push({ v: 1, kind: 'email_vote_recorded', title: 'Your email approved a recovery', body: 'Lead.', code: '111111' }));
+    await sw.dispatch('push', push({ v: 1, kind: 'email_vote_recorded', title: 'Your email approved a recovery', body: 'Lead.', code: '222222' }));
+    const [a, b] = sw.shown;
+    expect(a!.options.tag).not.toBe(b!.options.tag);
+    expect([a!.options.renotify, b!.options.renotify]).toEqual([true, true]);
   });
 
   it('a tap on the probe signs its id with the device key, posts it, and records when', async () => {

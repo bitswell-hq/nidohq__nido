@@ -83,10 +83,12 @@ export function liveAttemptView(
       text: `Your recovery email has approved cancelling recovery attempt ${a.attemptId}. That takes your inbox and your recovery code: if you did not send it yourself, someone has both, or talked you into sending it.`,
     };
   }
+  // Alerts go out for the email helper's votes and for an approved recovery, not for another helper's vote.
+  const alerted = o.emailGuardian !== undefined ? ' You are alerted if your email approves it, or once a recovery is approved.' : '';
   return {
     tone: 'note',
     cancel,
-    text: `Recovery attempt ${a.attemptId} was opened for this Nido. Anyone can open one, and it grants nothing until your helpers approve it; you are alerted if it gathers an approval.`,
+    text: `Recovery attempt ${a.attemptId} was opened for this Nido. Anyone can open one, and it grants nothing until your helpers approve it.${alerted}`,
   };
 }
 

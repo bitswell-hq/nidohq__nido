@@ -78,6 +78,10 @@ describe('live attempts', () => {
     const opened = liveAttemptView({ attemptId: 4n, state: 'Collecting', approvals: [HELPER], cancelApprovals: [], executableAfter: 0 }, { holdsPasskey: true, profile: 'loss', emailGuardian: EMAIL });
     expect(opened).toMatchObject({ tone: 'note', cancel: true });
     expect(opened.text).toMatch(/Anyone can open one, and it grants nothing/);
+    // It promises only the alerts the service sends: the email helper's votes and an approved recovery, not another helper's vote.
+    expect(opened.text).toMatch(/ You are alerted if your email approves it, or once a recovery is approved\.$/);
+    expect(opened.text).not.toMatch(/gathers an approval/);
+    expect(liveAttemptView({ attemptId: 6n, state: 'Collecting', approvals: [], cancelApprovals: [], executableAfter: 0 }, { holdsPasskey: false, profile: 'loss' }).text).not.toMatch(/alerted/);
     const cancelled = liveAttemptView({ attemptId: 5n, state: 'Collecting', approvals: [], cancelApprovals: [EMAIL], executableAfter: 0 }, { holdsPasskey: true, profile: 'loss', emailGuardian: EMAIL });
     expect(cancelled).toMatchObject({ tone: 'danger' });
     expect(cancelled.text).toMatch(/Your recovery email has approved cancelling recovery attempt 5/);

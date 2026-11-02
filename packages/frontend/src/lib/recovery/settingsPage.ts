@@ -47,19 +47,23 @@ import {
 import { NETWORK_PASSPHRASE } from '../network.js';
 import { busy, card, collectCondition, el, errorText, guardianLinks, kitInput, short } from './ui.js';
 import { bytesToBigInt, initHashes, parseRecoveryKitCode, pinTree } from '@nidohq/email-recovery';
-import { addThisDevice, alertChannels, deviceChannel } from './emailAlerts.js';
+import { addThisDevice, alertChannels, deviceChannel, homeScreenStep } from './emailAlerts.js';
 import { emailRecoveryDeployment } from './emailConfig.js';
 import type { GuardianConfig } from './emailGuardian.js';
 import {
+  EMAIL_ALONE_REFUSED,
   PRIVACY_CLAIM,
   channelView,
   checkCodeAgainstPin,
+  codeCheckReminder,
   codeCheckText,
+  emailAloneAuthorizes,
   type ChannelView,
   type DeviceChannel,
   type ThisDevice,
 } from './emailModel.js';
 import { findEmailGuardian, keyList, vaultKey } from './emailRecovery.js';
+import { codeCheckedAt, rememberCodeChecked } from './emailBackup.js';
 import { liveAttemptsSection } from './liveAttempts.js';
 import { kitFile, newRecoveryKit, proveWithKit } from './zk.js';
 
@@ -109,15 +113,46 @@ export async function mountRecoverySettings(root: HTMLElement, account: string |
     if (move) root.append(move);
   }
   const email = emailRecoveryDeployment() && state.summary ? await findEmailGuardian(state.summary.guardians).catch(() => undefined) : undefined;
-  root.append(configureCard(account, state, email));
-  if (emailRecoveryDeployment()) root.append(emailCard(account, email));
+  const configure = configureCard(account, state, email);
+  root.append(configure);
+  if (emailRecoveryDeployment()) {
+    const s = state.summary;
+    const emailAlone = Boolean(email && s && emailAloneAuthorizes({ mode: s.mode, quorum: s.quorum, emailListed: true }));
+    root.append(emailCard(account, email, emailAlone, () => startAddingHelper(configure)));
+  }
+}
+
+/**
+ * "Add another helper", the remedy for an email helper that approves alone
+ * while its second alert channel is broken: the settings below, set to
+ * need two approvals, with the helpers' field focused. The owner adds the
+ * helper and saves.
+ */
+function startAddingHelper(configure: HTMLElement): void {
+  (configure.querySelector('[name="mode"][value="guardian-only"]') as HTMLInputElement).checked = true;
+  configure.querySelector('[name="mode"]')!.dispatchEvent(new Event('change'));
+  const quorum = configure.querySelector('[name="quorum"]') as HTMLInputElement;
+  quorum.value = String(Math.max(2, Number(quorum.value) || 0));
+  const field = configure.querySelector('[name="guardians"]') as HTMLTextAreaElement;
+  let hint = configure.querySelector<HTMLElement>('[data-add-helper-hint]');
+  if (!hint) {
+    hint = el('div', { class: 'alert', role: 'status', 'data-add-helper-hint': '' }, 'Add your helper’s Nido or Stellar address on a new line, then save: a recovery then needs their approval as well as your email’s.');
+    field.closest('label')!.before(hint);
+  }
+  field.scrollIntoView?.({ block: 'center' });
+  field.focus();
 }
 
 /** What this page knows of the email helper's second alert channel (spec §9.3 rule 2 at runtime). */
 let channel: ChannelView | undefined;
 
 /** Email as one recovery helper: set it up, or, once it is one, its alert channels and a check of the recovery code. */
-function emailCard(account: string, listed: { address: string; config: GuardianConfig } | undefined): HTMLElement {
+function emailCard(
+  account: string,
+  listed: { address: string; config: GuardianConfig } | undefined,
+  emailAlone: boolean,
+  addHelper: () => void,
+): HTMLElement {
   if (!listed) {
     return card(
       'Email recovery',
@@ -130,7 +165,7 @@ function emailCard(account: string, listed: { address: string; config: GuardianC
     `<p style="margin:0;font-size:13.5px;">Your email inbox is one of your recovery helpers (<code class="mono">${esc(short(listed.address))}</code>).</p>`,
   );
   const body = c.querySelector('.card') as HTMLElement;
-  body.append(channelSection(account), codeCheckSection(listed.config));
+  body.append(channelSection(account, emailAlone, addHelper), codeCheckSection(account, listed.config));
   return c;
 }
 
@@ -139,8 +174,11 @@ function emailCard(account: string, listed: { address: string; config: GuardianC
  * vault's devices on request (with the passkey), and adding this device,
  * which applies at once. "They reach this device" only on a device the
  * vault lists as live, or that confirmed a probe recently (`channelView`).
+ * While it is broken the warning says what still holds on chain, and under
+ * email plus delay (`emailAlone`) "Add another helper" starts the other
+ * remedy.
  */
-function channelSection(account: string): HTMLElement {
+function channelSection(account: string, emailAlone: boolean, addHelper: () => void): HTMLElement {
   const wrap = el('div', { style: 'display:grid;gap:6px;', 'data-channel': '' });
   const line = el('div', { style: 'font-size:13px;', role: 'status', 'data-channel-state': '' }, 'Alert notifications: not checked yet.');
   const broken = el('div', { class: 'alert danger', role: 'alert', hidden: '', 'data-channel-lapsed': '' });
@@ -148,11 +186,13 @@ function channelSection(account: string): HTMLElement {
   const buttons = el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;' });
   const check = el('button', { class: 'btn soft sm', type: 'button', 'data-check-channels': '' }, 'Check my alert channels') as HTMLButtonElement;
   const add = el('button', { class: 'btn primary sm', type: 'button', hidden: '', 'data-add-device': '' }, 'Add this device') as HTMLButtonElement;
+  const helper = el('button', { class: 'btn soft sm', type: 'button', hidden: '', 'data-add-helper': '' }, 'Add another helper') as HTMLButtonElement;
+  helper.addEventListener('click', addHelper);
   let device: ThisDevice | undefined;
   let devices: DeviceChannel[] | undefined;
   let contact: string | undefined;
   const show = () => {
-    const v = channelView({ vault: devices, device, now: Date.now() });
+    const v = channelView({ vault: devices, device, now: Date.now(), emailAlone });
     channel = v;
     broken.hidden = v.rule2 !== 'broken';
     broken.textContent = v.rule2 === 'broken' ? v.text : '';
@@ -163,6 +203,7 @@ function channelSection(account: string): HTMLElement {
           ? 'Alert notifications: no device confirmed them lately.'
           : 'Alert notifications: they no longer reach any device.';
     add.hidden = !v.offerAdd;
+    helper.hidden = !v.offerHelper;
   };
   void deviceChannel(account).then((d) => {
     device = d;
@@ -182,6 +223,9 @@ function channelSection(account: string): HTMLElement {
   );
   add.addEventListener('click', () =>
     busy(add, status, 'Adding this device…', async () => {
+      // An iPhone or iPad outside its Home Screen app cannot subscribe: say so before asking.
+      const homeScreen = homeScreenStep();
+      if (homeScreen) throw new Error(homeScreen);
       if (!contact) await readChannels();
       if (!contact) throw new Error('This Nido has no alert contact. Set up email recovery again.');
       await addThisDevice(account, contact, await vaultKey());
@@ -193,16 +237,22 @@ function channelSection(account: string): HTMLElement {
       toast({ msg: 'This device now gets your recovery alerts', icon: 'check' });
     }),
   );
-  buttons.append(check, add);
+  buttons.append(check, add, helper);
   wrap.append(line, broken, buttons, status);
   return wrap;
 }
 
-/** "Check my recovery code": the typed code against the guardian's pin root (spec §5.6, §7.4). Nothing is stored or sent. */
-function codeCheckSection(config: GuardianConfig): HTMLElement {
+/**
+ * "Check my recovery code": the typed code against the guardian's pin root
+ * (spec §5.6, §7.4). Nothing about the code is stored or sent; this device
+ * remembers when the check last matched, and opens the check with a
+ * reminder about twice a year (`codeCheckReminder`).
+ */
+function codeCheckSection(account: string, config: GuardianConfig): HTMLElement {
+  const reminder = codeCheckReminder(codeCheckedAt(account), Date.now());
   const wrap = el(
     'details',
-    { 'data-code-check': '' },
+    { 'data-code-check': '', ...(reminder ? { open: '' } : {}) },
     `<summary style="font-size:13px;cursor:pointer;">Check my recovery code</summary>
      <div style="display:grid;gap:6px;margin-top:6px;">
        <div class="mut" style="font-size:12.5px;">Type the code from your recovery kit. This page checks it against your email helper; it is not stored or sent anywhere.</div>
@@ -210,6 +260,7 @@ function codeCheckSection(config: GuardianConfig): HTMLElement {
      </div>`,
   );
   const inner = wrap.querySelector('div') as HTMLElement;
+  if (reminder) inner.prepend(el('div', { class: 'alert', role: 'note', 'data-code-check-due': '' }, esc(reminder)));
   const status = el('div', { style: 'font-size:13px;', role: 'status', 'data-code-check-result': '' });
   const go = el('button', { class: 'btn soft sm', type: 'button' }, 'Check') as HTMLButtonElement;
   inner.append(go, status);
@@ -227,6 +278,10 @@ function codeCheckSection(config: GuardianConfig): HTMLElement {
         root: (c, k) => pinTree(c, [k]).root,
       });
       status.textContent = codeCheckText(result);
+      if (result === 'match') {
+        rememberCodeChecked(account);
+        wrap.querySelector('[data-code-check-due]')?.remove();
+      }
     }),
   );
   return wrap;
@@ -499,21 +554,23 @@ function configureCard(account: string, state: RecoveryState, email?: { address:
       // baseline hash and the published baseline doc use this stripped doc.
       const withoutRecovery = baselineWithoutExpiringRules(perch.withRecovery(base, undefined));
       // The email helper keeps its typed marker, so the wallet's email rules
-      // (spec §9.3) apply to every save; with its notifications known to have
-      // lapsed, rule 2 refuses a configuration that keeps it.
+      // (spec §9.3) apply to every save. Its alert contact holds the second
+      // channel; while no device is known to receive it, rule 2 refuses a
+      // configuration in which the email vote alone authorizes, and accepts
+      // one that needs another approval too, which is a remedy.
       const listed = guardians.map((g) =>
         email && g === email.address ? { kind: 'email' as const, address: g, allowedActions: email.config.allowedActions } : g,
       );
-      const keepsEmail = listed.some((g) => typeof g !== 'string');
-      if (keepsEmail && channel?.rule2 === 'broken') {
-        throw new Error('No device is known to receive and confirm your email helper’s alert notifications (rule 2). Add this device below, or remove the email helper.');
+      const keepsEmail = mode !== 'zk-only' && listed.some((g) => typeof g !== 'string');
+      if (keepsEmail && channel?.rule2 === 'broken' && emailAloneAuthorizes({ mode, quorum, emailListed: true })) {
+        throw new Error(EMAIL_ALONE_REFUSED);
       }
       const spec = perch.recoverySpec(deployment, {
         profile,
         mode,
         guardians: mode === 'zk-only' ? undefined : listed,
         quorum: mode === 'zk-only' ? undefined : quorum,
-        secondAlertChannel: keepsEmail && channel?.rule2 !== 'broken' ? 'web-push' : undefined,
+        secondAlertChannel: keepsEmail ? 'web-push' : undefined,
         zk,
         replaceable: adminSignerIds(base),
         baselineDocHash: field('baseline').checked ? docHash(withoutRecovery) : undefined,
