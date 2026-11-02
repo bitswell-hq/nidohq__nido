@@ -683,6 +683,20 @@ Perch's verifier accepts. The tests:
 | `packages/email-recovery/test/attacks.test.ts` (60 cases) | Every adversarial email of `packages/email-mocks` with the strongest witness for its claim: each case a standard DKIM verifier passes but whose claim must not be provable is refused at a named assertion (§6.4) |
 | `crates/integration-tests/tests/it/email_proofs.rs` | A real proof of each launch domain's recovery email verifies on chain and counts as one vote (§8.6) |
 
+The positions the header checks read (the `From` address's start, length
+and `@`, the DKIM-Signature tag starts, the `h=` entries) are hints the
+prover supplies, checked by the constraints, never trusted. Hint mutation
+(`research/email-recovery/eval/parser/README.md`) runs each of the 490
+signatures the circuit accepts in the first 1,000 fuzz cases again with
+each hint changed: of 39,256 mutated hints, every one that moves a `From`
+or tag position is refused, and the 980 that change only the `t=` length,
+which the recovery circuit does not read, bind the same address, domain and
+key hash **[tested]**. `nargo compile` prints two `bug:`
+diagnostics on this circuit ("Brillig function call isn't properly covered
+by a manual constraint", at `lib/src/dkim.nr:85` and noir-bignum's
+`expressions.nr:258`); both are expected, and
+`circuits/email-recovery/SECURITY.md` §3 says why.
+
 ### 6.3 Header bound
 
 `HEADER_MAX` = 1536 bytes. Measured on the provider mocks' formats
@@ -1211,7 +1225,9 @@ carries it.
 
 `contracts/email-guardian` (crate `nido-email-guardian`, soroban-sdk as the
 workspace pins it). One instance per account. No admin, no upgrade entry
-point, no setter: every field is fixed at construction **[built, tested]**.
+point, no setter: every field is fixed at construction **[built, tested]**,
+the verifier and its circuit included, so a fix of the circuit reaches an
+account only through a new guardian (§8.7).
 
 ### 8.1 Types
 
@@ -1334,7 +1350,14 @@ inputs that are not 128 bytes (`ProofParseError`), and links a 128 KiB wasm
 stack, as Perch's adapter does. Its tests (`src/test.rs`) verify every
 committed proof, including one made by bb.js, and refuse each public input
 changed, a non-canonical input, changed proof bytes, a real proof of
-Perch's own circuit, and wrong lengths.
+Perch's own circuit, and wrong lengths. `mauled_proofs_are_refused` refuses
+67 proofs that anyone who sees an approval can compute from it, each
+well-formed (it parses): every one of the proof's 41 G1 points negated in
+turn, and the bb CLI's and bb.js's independent proofs of one statement
+spliced at each section boundary where the result differs from both, each
+with the honest public inputs and with another statement's digest under the
+same `C` and root **[built, tested]**. These are evidence about simple
+mauls, not a proof of A4 (§11.1).
 
 ### 8.5 Other entry points, storage, and errors
 
@@ -1377,6 +1400,73 @@ the mock DNS's records (`fixtures/email/keys.json`) **[built, tested]**:
 | `email_proofs.rs::long_address_at_web_de_counts_one_vote` | The same for a 124-byte address with a 299-byte display name at WEB.DE |
 | `email_proofs.rs::the_fixture_keys_and_hashing_match_the_circuit` | The provider keys cover the registry's allowlist, and the harness's native `C` is the circuit's and the encoder's (one vector pinned in all three) |
 | `contracts/email-verifier/src/test.rs` | As §8.4 |
+
+### 8.7 A fix of the circuit
+
+A guardian's `verifier` and `circuit_id` are fixed for its lifetime (§8.2),
+and the verifier embeds one circuit's key (§8.4). A guardian therefore
+accepts proofs of the relation it was built with for as long as it exists,
+including a relation later found to admit an email it should not, as a
+parsing gap in C2 to C5 would. Nothing on chain moves a guardian to another
+circuit, and the registry revokes keys, not circuits. A fixed circuit
+reaches an account only through redeployment: the fixed circuit's verifier
+(a new wasm with its own key, deployed once for every account), then, for
+each account, a new guardian naming it, listed by a recovery document in
+place of the old guardian through Perch's reconfiguration gate (§5.5). The
+new guardian keeps the account's commitment, which the old guardian's
+`config()` holds, so the user sends no new enrollment email. A pin needs
+`account_code` for its salt leaf (§7.4), which the wallet does not keep
+after enrollment (§5.4), so a pinned new guardian needs the user's backup
+of it (§5.6); without one, the new guardian has no pin.
+
+**Incident response.** When a gap in a deployed circuit is found:
+
+1. The registry's members revoke the keys of the providers whose mail the
+   gap lets an attacker get signed, with the emergency threshold (§7.6).
+   From the ledger the revocation executes in, the registry refuses every
+   root that holds those keys, grace included (§7.3 rule 3), so an old
+   guardian accepts no approval signed by them through the registry.
+2. Revocation does not reach pins (§7.4): an old guardian whose pin holds a
+   revoked key accepts it through the pin until the pin's `valid_until`, at
+   most 30 days after deployment for a guardian the wallet built
+   (`PIN_LIFETIME_SECONDS`, §13 question 2) and up to 365 days for one built
+   otherwise (`MAX_PIN_LIFETIME_SECONDS`).
+3. The wallet prompts each owner to move to a guardian on the fixed
+   circuit, which needs the owner's passkey, and under `Protected` the
+   current recovery condition too (§5.5).
+
+**What it cannot reach.**
+
+- An account that cannot reconfigure keeps its old guardian: a `Loss`
+  account whose owner has lost the passkey; a `Protected` account whose
+  condition cannot be met without the old guardian's own vote, or at all; an
+  owner who does not act. Such an account's email factor stays on the old
+  relation.
+- The registry is shared by old and new guardians: an old guardian accepts
+  every root the registry accepts. The revoked keys can return only
+  through a new full-threshold addition on the 7-day path (§7.3 rule 3), and
+  when they do, or when a provider's next key is added, every old guardian
+  that names this registry accepts approvals signed by them again, with the
+  gap. Until no old guardian remains, the email factor at those providers
+  works only through pins, or through a registry the old guardians do not
+  name (§13 question 24).
+- During the exposure, an approval that exploits a parsing gap still opens
+  `C` only with the victim's address and `account_code`, unless the gap is
+  in the commitment itself, and it is one vote under the quorum, the delay
+  and the alerts (§9).
+
+**The move, measured.** `crates/integration-tests/tests/it/email_migration.rs`
+moves an account with an email guardian and two helpers at quorum 2 to a
+new guardian with a 30-day pin on a second verifier, and checks that the
+controller then lists the new guardian and not the old one. At mainnet's settings
+(`research/email-recovery/eval/README.md`, "Moving an account to a new
+guardian"): under `Loss`, 2 transactions (the deployment and the owner's
+`apply_doc`), 2,631,221 stroops (0.26 XLM); under `Protected`, 4 (the
+deployment, the two helpers' `approve_change` votes and the owner's
+`apply_doc`), 3,159,077 stroops (0.32 XLM); in both, the deployment's
+1,601,271 stroops of rent prepay the new instance for mainnet's maximum
+lifetime **[measured]**. The new verifier's deployment is shared and not
+counted.
 
 ## 9. One-factor safety and policy rules
 
@@ -2111,11 +2201,50 @@ Every one is emitted **[built, tested]**; the announcements are
 | A1b | Each launch provider DKIM-signs a `from` field naming one of its mailboxes only when that mailbox's holder submitted the message. For the circuit's reading (§4.3, §4.5) this needs: (1) a submission with two `From` fields is refused or rewritten, or the provider authenticates the instance it signs (the bottom-most when `h=` names `from` once), and for a `From` with a display name the provider authenticates the angle-addr the circuit binds (a `From` that RFC 5322 readers read as several addresses, a group, another mailbox or none does not reach a proof: the circuit refuses it, §4.5); (2) sending as another address of the provider's domain requires proof of control of that mailbox; (3) an address is not reassigned, or a new holder cannot use it against an existing enrollment, which `account_code` provides (§5.1). The per-provider evidence, with a source for each cell or what would establish it, is `research/email-recovery/eval/parser/sender-authentication.md`; its unknowns are §13 question 23. |
 | A2 | SHA-256 is collision resistant. |
 | A3 | `P2` is collision resistant, and no input is known that it maps to `0` (the empty leaf); for the hiding claims (privacy, the blinded Subject, the salted pin) it is modelled as a random function. |
-| A4 | The UltraHonk proof system with Perch's zero-knowledge flavor is knowledge sound and zero-knowledge, and the verifier contract embeds the email circuit's key. |
+| A4 | **Proof system.** UltraHonk in Perch's zero-knowledge flavor (Barretenberg 0.87.0's Keccak ZK flavor), Fiat–Shamir-compiled with Keccak, is zero-knowledge and simulation-extractable, in the random-oracle model (or that model with the algebraic group model): for every efficient adversary with oracle access to honest proofs, there is an efficient extractor for that adversary, which may read its code, coins and random-oracle queries, such that whenever the adversary outputs a proof the verifier accepts for public inputs `x` that no proof it was given has, the extractor returns a witness for `x`, except with negligible probability. The verifier contract embeds the email circuit's key. |
 | A5 | The registry holds a leaf `(domain, key_hash)` only for a key that domain's operator controls. The registry contract reduces this to its governance (§7.6): a key enters only with `threshold` member approvals, after a public timelock of ledger close time (72 hours if `attest_threshold` attesters vouched it live in DNS, 7 days otherwise; wall-clock time under A9 (a)) during which `revoke_threshold` members can stop it; revocation is applied when a compromise is known. |
 | A6 | `account_code` and `rho` come from a secure generator and stay with the user and the user's browser. |
 | A7 | The enrolling wallet is honest at enrollment (it computes `C` and the pin from the real enrollment email). |
 | A9 | **Timing.** (a) *Close time.* A ledger's close time tracks wall-clock time: stellar-core accepts a ledger only if its close time is later than the previous ledger's and at most 60 seconds past the validating node's clock (§7.6 "Clock"), and a quorum of validators keeps an honest clock. The registry's timelocks, grace, and proposal lifetime, the key pin, the enclave-image registry's timelock, and the vault's contact-change delay rest on (a) only, whatever the target close time. (b) *Ledger counts.* Perch's recovery delay, evidence window, and statement expiry are ledger counts, and Perch is used unchanged. Where one carries a security floor (the 7-day email-plus-delay delay, §9.3 rule 3), the wallet sizes it from the network's target ledger close time, `scp_timing.ledger_target_close_time_milliseconds` (CAP-0070; 5,000 ms on testnet and mainnet, read from both; at least 4,000 ms in protocol 23, a bound a later protocol may lower), and assumes ledgers close on average no faster than that target over the delay, since validators schedule each ledger that target after the previous one. A target lowered after a member was built shortens that member's delay in wall-clock time in proportion until it is rebuilt (§13 item 22); a core that closes faster than its target breaks (b): the local `stellar/quickstart --local` network reports 5,000 ms and closes about one ledger a second (measured: 30 ledgers in 30 seconds of close time), so there a 120,960-ledger delay lasts about 34 hours. |
+
+**A4 and what is known.** A4 is stated, not established: we know of no
+published proof that UltraHonk is simulation-extractable. UltraHonk proves
+its relation with a sumcheck over multilinear polynomials, whose evaluation
+claims Gemini reduces to univariate KZG openings that Shplonk batches (the
+verifier's `zk.rs` and `shplemini.rs`). The nearest published results cover
+other compilations:
+
+- C. Ganesh, H. Khoshakhlagh, M. Kohlweiss, A. Nitulescu, M. Zając, "What
+  Makes Fiat–Shamir zkSNARKs (Updatable SRS) Simulation Extractable?", SCN
+  2022 (<https://eprint.iacr.org/2021/511>): Plonk, Sonic and Marlin, in the
+  random-oracle model;
+- M. Kohlweiss, M. Pancholi, A. Takahashi, "How to Compile Polynomial IOP
+  into Simulation-Extractable SNARKs: A Modular Approach", TCC 2023
+  (<https://eprint.iacr.org/2023/1067>): SNARKs compiled from polynomial IOPs
+  with polynomial commitments are simulation-extractable when knowledge sound,
+  with weak unique responses and trapdoor-less zero knowledge;
+- A. Faonio, D. Fiore, L. Russo, "Real-World Universal zkSNARKs are
+  Non-Malleable", ACM CCS 2024 (<https://eprint.iacr.org/2024/721>): Plonk
+  and Marlin with the optimizations deployed implementations use;
+- A. Faonio, L. Russo, "Sumcheck-based zkSNARKs are Non-Malleable", CRYPTO
+  2026 (<https://eprint.iacr.org/2026/335>): sumcheck-based zkSNARKs
+  (HyperPlonk, Spartan, Libra) with the PST multivariate commitment, in the
+  algebraic group model; they note that with unmodified PST evaluation
+  proofs, which are not unique, such zkSNARKs reach at best the weak form of
+  simulation extractability below.
+
+A4 is that weak form: it extracts only for public inputs that no proof the
+adversary was given has. The strong form, which also extracts from a new
+proof for the public inputs of a given one, implies it and is not needed: such
+a proof approves the digest the user approved, which the controller counts
+once (§11.2 item 3). A4 is stated for honest proofs, the setting on chain,
+where every approval and its proof are public; the published definitions hand
+the adversary simulated proofs. Two facts of the verifier are necessary for
+A4, not sufficient: its Keccak transcript absorbs every public input before
+the first challenge (`generate_eta_challenge` in the vendored verifier's
+`transcript.rs`), and it refuses a non-canonical encoding of any scalar or
+point coordinate, so each accepted proof has one encoding. §8.4 lists the
+mauled proofs the verifier is tested to refuse.
 
 ### 11.2 Statements
 
@@ -2135,9 +2264,15 @@ Let `G` be an email guardian with configuration
    an allowed action, and a `valid_until_ledger ≥ L`. Through `S` the email
    binds the account, the new key (replacements and target, or new
    configuration, or Wasm hash), the nonce (attempt id or request id, and
-   the epoch), and the expiry (§3.1). With A5 and A7, the `From` address is
-   the enrolled address and `n` itself (not only its leaf) is a key that the
-   leaf domain's operator controls.
+   the epoch), and the expiry (§3.1). The email binds one statement: two
+   accepted approvals, at the same guardian or not, whose emails share a
+   header carry the same statement, unless their blinding inputs collide
+   under `P2` or their statements under SHA-256 (`hex` is injective on field
+   elements, so the Subject determines `T`); an old recovery email therefore
+   approves nothing new. With A5 and A7, the `From` address is the enrolled
+   address and `n` itself (not only its leaf) is a key that the leaf domain's
+   operator controls. All of this holds against an adversary that has seen
+   every honest approval with its proof, under A4.
 2. **Privacy.** For any two addresses at allowlisted providers, a guardian's
    on-chain state and every approval it accepts (`C`, the pin root, the
    statements, the roots, the proofs) are computationally indistinguishable
@@ -2181,11 +2316,17 @@ How the assumptions enter the theorems:
   encodings of the two statements the controller built), or, for A3's empty
   leaf, the extracted key's leaf input mapping to `0`. A break that only
   asserted some collision exists would be true of any hash function.
-- **Knowledge soundness is per proof.** Theorem 1 holds for every extractor,
-  as a function of the accepted approval's public inputs and proof: the email
-  facts hold of the extracted witness, or the extractor fails on that accepted
-  proof. A4 is that an efficient extractor exists for which an efficient
-  prover gets a failing proof accepted only with negligible probability. No
+- **Extraction is A4's bad event on the accepted proof.** Theorem 1 holds
+  for every function `X` from an accepted approval's public inputs and proof
+  to a witness: the email facts hold of `X`'s witness, or `X` fails on that
+  accepted proof. The failure is the complement of the circuit relation on
+  `X`'s witness, so the disjunction holds by excluded middle: unlike a
+  collision break, it names no input computed from the theorem's data, and
+  the content is in A4. `X` is the output, in one run, of the extractor A4
+  gives for that run's adversary (with the user's own witness for public
+  inputs the user proved), not one function of public data, which applied to
+  an honest approval would compute the user's address from the chain. A4 then
+  bounds the probability of the failure on any accepted approval. No
   hypothesis asks for an extractor that succeeds on every accepted proof.
 - **Privacy is proven in an ideal model.** The Lean statement is a simulation
   theorem: when the commitment and the pin root are handles independent of
@@ -2199,7 +2340,7 @@ How the assumptions enter the theorems:
 
 | Property | Circuit obligations | Contract obligations (guardian) | Perch obligations | Assumptions | Status |
 | --- | --- | --- | --- | --- | --- |
-| 1 Soundness | C1, C2, C3, C4, C5, C6 | §8.3 checks 1 to 12; §8.2 wiring check; registry: §7.3 rules 1 to 5 and the same tree hashing as C6 (§7.2, §7.6 cross-check) | Statement construction from controller state (Perch §4) | A1a, A1b, A2, A3 (collision), A4 (soundness), A5, A7 | Proven with A5 and A7 as hypotheses, A4's break named per accepted proof, and A3's breaks named on computed inputs (`EmailRecovery.soundness`), for any reading of the header (the model's `Format` is a parameter); the conclusion fixes the `From` address, the account code and the key `(domain, modulus)`; A1a and A1b assumed, A1b reviewed per provider; guardian checks and registry rules tested; registry hashing tested against Noir; circuit built, C1 to C6 tested (§6.2, §6.4), not proven; the circuit's reading of headers tested against reference implementations on real mail and fuzzed headers (§12); real proofs verified on chain (§8.6) |
+| 1 Soundness | C1, C2, C3, C4, C5, C6 | §8.3 checks 1 to 12; §8.2 wiring check; registry: §7.3 rules 1 to 5 and the same tree hashing as C6 (§7.2, §7.6 cross-check) | Statement construction from controller state (Perch §4) | A1a, A1b, A2, A3 (collision), A4 (simulation extractability), A5, A7 | Proven with A5 and A7 as hypotheses, A4's bad event named per accepted proof, and A3's breaks named on computed inputs (`EmailRecovery.soundness`), for any reading of the header (the model's `Format` is a parameter); the conclusion fixes the `From` address, the account code and the key `(domain, modulus)`; the email binds one statement, with A2's and A3's breaks named on the two statements and blinding inputs (`EmailRecovery.email_binds_statement`; `hex` is §2's formula, injective on field elements, `hex_injective`); A1a and A1b assumed, A1b reviewed per provider; guardian checks and registry rules tested; registry hashing tested against Noir; circuit built, C1 to C6 tested (§6.2, §6.4), not proven; the circuit's reading of headers tested against reference implementations on real mail and fuzzed headers (§12); real proofs verified on chain (§8.6) |
 | 2 Privacy | Public inputs are exactly §6.1; nothing else is exposed | Stores `C` and a salted pin root, never an address or key hash; emits nothing | — | A3 (random function), A4 (zero-knowledge), A6 | Proven in the ideal model: an adaptive adversary's view, proofs included, equals a simulator's computed from the handles and the public statements, so any two addresses give the same view (`EmailRecovery.privacy_simulation`, `privacy_two_runs`); the step from the ideal model to Poseidon2 and UltraHonk rests on A3, A4, A6, assumed; structural lemma proven (the contracts store and emit nothing about the address beyond `C` and the pin root, `EmailRecovery.structural_noninterference`); guardian storage tested; the circuit's public inputs are exactly §6.1 (built, tested) |
 | 3 Replay | C5 binds `d` | Checks 1, 2, 5, 6, 8, 12 | One vote per guardian per attempt and domain, or per change digest (Perch §6.3 T2, §5); attempt ids never reused (T1); epochs only grow (§3.3) | A2, A3, A4 | Proven with A2's break named on the two statements' encodings (`EmailRecovery.Perch.email_vote_replay`); tested (unit and integration) |
 | 4 One-factor safety | — | The guardian is one address | Quorum (T4), delay (T5), cancellation (T6, T7) | A9 (b), for the wallet's delay floor in wall-clock time | Proven over all controller traces (`EmailRecovery.Perch.one_factor_safety`) and for the wallet policy (`one_factor_under_wallet_policy`, with the floor lasting 7 days at the target close time, `emailOnlyFloor_lasts`); on-chain part tested; wallet policy tested (§9.3); A9 assumed |
@@ -2326,6 +2467,7 @@ network's.
 | One complete email-factor recovery on testnet | every step succeeded: mint, guardian deployment, the recovery document, `begin_lost_key`, the email vote, the helper's vote (which authorizes the attempt and pays its record's rent: 3,664,629 stroops charged, 3,653,812 rent), a 12-ledger delay (57,099 ms), and completion; 13,758,804 stroops charged over those 7 transactions; the account's document then holds the new passkey and not the lost one. An earlier run on the same Perch deployment found Perch's doc compiler and recovery controller archived and restored them first, one transaction per entry: 112,447,907 stroops over 4 transactions, 8.4 times that run's recovery (13,384,714); this run found them live | same, and `testnet-restorations.json` for the earlier run; deployment in `DEPLOYED.md`, "Email recovery (evaluation, TEST-ONLY)". Mocked (TEST-ONLY): the mail provider, DNS **[measured]** |
 | A recovery with every entry it reads archived, at mainnet's settings | 7 transactions and 3,959,831,748 stroops (396 XLM), almost all of it rent to restore 28 entries for mainnet's minimum persistent lifetime (2,073,600 ledgers): the code of Perch's doc compiler, account, controller and WebAuthn verifier and of the email verifier, guardian and registry dominate, and three code entries exceed one transaction's limits (200,000 bytes read, 132,096 written), so they restore in RestoreFootprint transactions of their own. The same 4 steps with nothing archived: 5,237,377 stroops. Rent is priced at mainnet's rate today, the 1,000-stroop-per-KB floor, which holds while the average Soroban state stays at most 2.0 GB (1.718 GB when the settings were read); the rate grows with the average, to 5.5 times at 2.5 GB (21,776,595,086 stroops) and ten times at 3.0 GB (39,593,358,424). Whoever submits pays it, and a recovering user's new device holds no XLM: the wallet submits through the relayer, whose mainnet configuration spends at most 100 XLM a day (`infra/relayer/fly.mainnet.toml`), and it has no RestoreFootprint path; who pays an archived recovery on mainnet is open | `crates/integration-tests/tests/it/email_archival.rs` (`eval/archival.sh`): each step re-executed by the test host with every entry not yet restored archived, under mainnet's cost model and entry lifetimes, priced by `eval/fees/archival.mjs`; code entries sized for rent as the network sizes them (`eval/results/code-entries.json`). Not a network: no network here archives within a run **[measured]** |
 | Keeping the contracts live, a year of rent at mainnet's settings | 3,304,297,283 stroops (330.4 XLM) for the email verifier (instance and code), the key registry (instance and code) and the guardian's code, shared by every account; 3,245,716 (0.32 XLM) for each account's guardian instance; Perch's controller, doc compiler, WebAuthn verifier and account code, which Perch's operator keeps, 8,677,150,521 (867.7 XLM). A code entry is sized for rent by its in-memory module, 9 to 26 times its entry here (the guardian's 33,672-byte entry rents as 320,239 bytes, Perch's doc compiler's 110,040-byte one as 2,431,469). Each keeper transaction pays about 1,240 stroops besides rent. At 5.5 and 10 times today's rent rate (an average state of 2.5 and 3.0 GB) the shared entries cost 18,173,606,450 and 33,042,915,617 a year, an account's guardian instance 17,845,716 and 32,445,716 | `research/email-recovery/eval/results/keeper-local.json` (`eval/network/run-keeper.sh`: the keeper, `eval/network/keeper.mjs`, run once on a local network with mainnet's settings, every extension's rent reproduced from the entry's size for rent); a year is 6,307,200 ledgers at 5 seconds **[measured]** |
+| Moving an account to a new email guardian at mainnet's settings (§8.7) | under `Loss` 2 transactions, 2,631,221 stroops: the deployment 1,608,348 (1,601,271 of it rent for the new instance), the owner's `apply_doc` 1,022,873; under `Protected` 4 transactions, 3,159,077 stroops, the two helpers' `approve_change` votes adding 481,576 and 45,817 | `crates/integration-tests/tests/it/email_migration.rs` (`eval/migration.sh`): each transaction re-executed by the test host under mainnet's cost model and entry lifetimes, priced by `eval/fees/model.mjs` at mainnet's archived settings; `research/email-recovery/eval/results/migration-test-host.json`. Not a network **[measured]** |
 | One `submit_guardian` with an email approval and a real proof, whole invocation on the test host | 121,799,565 to 121,883,583 instructions (30.4 to 30.5% of 400,000,000); 5.6 MB of memory; 14 entries read; 2 entries and 1,208 bytes written; resource fee without rent 94,419 to 94,478 stroops at the SDK's 2026-07-10 fee snapshot, across the 12 fixtures | `email_proofs.rs` (every launch domain and the 124-byte address), `cost_estimate()`; table in `research/email-recovery/eval/onchain.md` (`measure-onchain.py`) **[measured]** |
 | The same call as a signed transaction | 131,172,469 to 131,248,057 instructions; footprint 12 read-only and 2 read-write entries; 18,148-byte envelope with a 16,784-byte authorization entry around the 16,224-byte proof; resource fee without rent 178,196 to 178,249 stroops at the SDK's 2026-07-10 fee snapshot; 82,530 at mainnet's archived settings (Gmail) | `nido_integration_tests::transaction::measure` in the same tests **[measured]** |
 | `is_accepted_root`, accepted or refused | 565,410 / 568,054 instructions; 286,542 bytes of memory; 2 entries read; nothing written; no events; fee without rent 396 / 398 stroops | `dkim_registry_costs` **[measured]** |
@@ -2445,7 +2587,11 @@ providers' own delivery to these figures.
    received copy keeps its `DKIM-Signature`. The circuit reads 5,327 real
    launch-provider signatures from public list archives as reference
    implementations do (§12); those are list copies of ordinary posts, so the
-   points above remain open.
+   points above remain open. Before mainnet, each launch provider's
+   outbound recovery mail must be checked against the circuit from a real
+   account, Fastmail first: none of its archived signatures verifies under
+   any key the DNS or zkEmail's archive holds, so the circuit's accepting
+   side at Fastmail rests on its mock alone.
 7. **`RECOVERY_INBOX`.** How its mail reaches the browser is §4.6 (sealed
    inbound by default, `.eml` import as the alternative). Open: the address
    itself (a deployment parameter; the tests use `recover@recovery.test`),
@@ -2545,6 +2691,19 @@ providers' own delivery to these figures.
     accounts would settle the first; it sends real mail through the
     providers, which this repository's mocks do not
     (`research/email-recovery/eval/parser/sender-authentication.md`).
+24. **Circuit fixes.** A guardian's circuit is fixed for its lifetime, so a
+    fix reaches an account only by redeployment, and an account that cannot
+    reconfigure keeps the old relation (§8.7). Open, with no alternative
+    adopted: a circuit registry the guardian consults, immutable and
+    timelocked like the key registry, that allows and revokes verifier ids
+    (a guardian built against it would follow a fix without redeployment,
+    and the registry's members would gain the power to change which circuit
+    every account's email factor runs); an emergency revocation flag for a
+    circuit, which every guardian checks (it would stop an old relation at
+    every account at once, including the accounts that cannot move, which
+    then lose the email factor until they do); a separate key registry for
+    the guardians of each circuit, so keys restored for the fixed circuit's
+    guardians do not reach the old ones; or redeployment alone, as built.
 25. **Keeping the contracts live.** The operator's keeper
     (`research/email-recovery/eval/network/keeper.mjs`) extends the email
     verifier, the key registry, the guardian's code and every enrolled

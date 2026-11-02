@@ -5,7 +5,8 @@ Byte strings, BN254 field elements, Perch's digest split, the domain tags of
 `docs/email-recovery/spec.md` §2, and the two hash functions the email factor
 uses (SHA-256 and Poseidon2), as abstract functions.
 
-No property of either hash function is assumed anywhere in this package.
+No property of either hash function is assumed anywhere in this package,
+beyond Poseidon2's type: its outputs are field elements (`p2_canonical`).
 Where a theorem needs collision resistance (assumptions A2 and A3 of spec
 §11.1), its conclusion names the break as an alternative, with the inputs that
 collide given as terms built from the theorem's data: the theorem holds for
@@ -33,6 +34,10 @@ def Canonical (x : Nat) : Prop := x < fieldModulus
 
 instance (x : Nat) : Decidable (Canonical x) :=
   inferInstanceAs (Decidable (x < fieldModulus))
+
+/-- A field element fits 32 bytes. -/
+theorem Canonical.lt_two_pow {x : Nat} (h : Canonical x) : x < 2 ^ 256 :=
+  Nat.lt_trans h (by decide)
 
 /-- The high limb of Perch's `split_hi_lo` (spec §2, §3.2): the first 16 bytes
 of a 32-byte big-endian value. -/
@@ -74,10 +79,12 @@ def domPinSalt : Nat := 0x03d73ecb3a706d8271405c0c77fb8020c22717b7db10c5eb91f480
 /-- SHA-256 and Poseidon2 as abstract functions. `p2 xs` is Noir's
 `Poseidon2::hash(xs, xs.len())`; its initial state depends on the input count
 (`noir-lang/poseidon` v0.2.0), so it is modelled as one function on lists and
-hashes of different input counts are different inputs. -/
+hashes of different input counts are different inputs. It returns a `Field`,
+so its outputs are canonical field elements. -/
 structure Hashes where
   sha256 : Bytes → Nat
   p2 : List Nat → Nat
+  p2_canonical : ∀ xs, Canonical (p2 xs)
 
 namespace Hashes
 

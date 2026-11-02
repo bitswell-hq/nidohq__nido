@@ -31,16 +31,15 @@ assumptions are about; consistency of the hypotheses needs none.
 namespace EmailRecovery.Examples
 
 /-- SHA-256 as the constant 0 and Poseidon2 as the constant 1. -/
-def H₀ : Hashes := ⟨fun _ => 0, fun _ => 1⟩
+def H₀ : Hashes := ⟨fun _ => 0, fun _ => 1, fun _ => by decide⟩
 
 def F₀ : Format where
   wellFormed := fun _ => True
   fromAddr := fun _ => some [1]
-  subject := fun _ => some recoveryPhrase
+  subject := fun _ => some (recoveryPhrase ++ hex 1)
   dkimDomain := fun _ => some [1]
   domainOf := fun _ => [1]
   lower := id
-  hex := fun _ => []
   emsa := fun _ => 0
 
 def E₀ : Encoding := ⟨fun _ => [], fun _ => some ⟨.lostKey, 1, 2, 3, 100⟩⟩
@@ -89,7 +88,7 @@ theorem relation₀ : Relation H₀ F₀ x₀ w₀ where
   dkimDomain := rfl
   aligned := rfl
   leafDomain := rfl
-  subject := by simp [F₀]
+  subject := rfl
   leafIndex := by decide
   siblings := by simp [w₀]
   leafDomainLength := by decide
@@ -119,6 +118,9 @@ theorem extraction₀ :
 
 /-- Theorem 1 applies to these values. -/
 example := soundness (F := F₀) extractor₀ assumptions₀ check₀
+
+/-- So does `email_binds_statement`, for one approval accepted twice. -/
+example := email_binds_statement (F := F₀) extractor₀ check₀ check₀ rfl
 
 /-! ## A completed recovery with one email vote -/
 

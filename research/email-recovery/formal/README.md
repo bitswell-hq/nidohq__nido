@@ -31,13 +31,13 @@ with `#guard_msgs`: every theorem depends on at most Lean's built-in `propext`,
 
 | Module | Contents |
 | --- | --- |
-| `Basic` | Byte strings, the BN254 modulus and canonical field elements, Perch's `split_hi_lo`, the domain tags, SHA-256 and Poseidon2 as abstract functions, and their breaks on given inputs (`Sha256Collides`, `P2Collides`, `P2Zero`) |
+| `Basic` | Byte strings, the BN254 modulus and canonical field elements, Perch's `split_hi_lo`, the domain tags, SHA-256 and Poseidon2 as abstract functions (Poseidon2's outputs field elements), and their breaks on given inputs (`Sha256Collides`, `P2Collides`, `P2Zero`) |
 | `Statement` | Perch's `RecoveryStatement` (Perch §4), the fields the guardian reads (`View`), the encoding and its code facts (`Encoding.Facts`), the digest, entry points and authorization contexts |
 | `Merkle` | The depth-16 key trees (§7.2), membership paths, `pathBreak` (the pairs a path collides on), and `path_binds` |
 | `Pack` | `pack` (§2) and `pack_injective` |
-| `Circuit` | The modulus limbs (§7.1); the Poseidon2 inputs and values of the commitment (§5.3), key hash and leaf (§7.1, §7.2), salt leaf and pin tree (§7.4); key-tree slots; the blinded Subject (§4.2); `Relation`, one field per obligation C1 to C6 (§6.2); and the binding lemmas |
+| `Circuit` | The modulus limbs (§7.1); `hex` (§2); the Poseidon2 inputs and values of the commitment (§5.3), key hash and leaf (§7.1, §7.2), salt leaf and pin tree (§7.4); key-tree slots; the blinded Subject (§4.2); `Relation`, one field per obligation C1 to C6 (§6.2); and the binding lemmas |
 | `Guardian` | `GuardianConfig` (§8.1), `construct` (§8.2), `check` (§8.3), and `check_eq_ok_iff` |
-| `Soundness` | Theorem 1 |
+| `Soundness` | Theorem 1, and the email binding one statement |
 | `Controller` | Perch's controller as a state machine (T1 to T9) with its event log |
 | `Invariants` | `Inv`, the invariant of every reachable controller state |
 | `OneFactor` | Theorem 4 |
@@ -59,11 +59,15 @@ returns `ok` exactly when the facts of `Accepted` hold, one per check.
 C6 for the public inputs `x = (C, digest_hi, digest_lo, key_root)`. C1 is
 arithmetic: `s < n`, `2^2047 ≤ n < 2^2048`, `s^65537 mod n` equals the PKCS#1
 v1.5 encoding of `SHA-256(H)`. The header-level functions (which bytes are the
-`From` address, the Subject value, the `d=` value; lowercasing; `hex`; the
-PKCS#1 encoding) are abstract (`Format`): computing them as §4.3 and §4.5 say is
-the circuit's obligation, outside this model. The modulus limbs, the packing,
+`From` address, the Subject value, the `d=` value; lowercasing; the PKCS#1
+encoding) are abstract (`Format`): computing them as §4.3 and §4.5 say is the
+circuit's obligation, outside this model. The modulus limbs, the packing, `hex`,
 the commitment, key hash, key leaf, salt leaf, pin tree and blinded token are
-the spec's formulas. `modulusLimbs` is §7.1's 18 little-endian 120-bit limbs
+the spec's formulas. `hex` is §2's 64 lowercase hexadecimal characters of the
+32-byte big-endian encoding (the circuit's `hex_of_field`), and it is injective
+below `2^256` (`hex_injective`); Poseidon2's outputs are field elements
+(`Hashes.p2_canonical`, the type Noir gives them), so the Subject's 64
+characters determine the token `T`. `modulusLimbs` is §7.1's 18 little-endian 120-bit limbs
 (`modulusLimbs_spec`: for `n < 2^2048` there are 18, each below `2^120`,
 recomposing to `n`), and different moduli have different limbs
 (`modulusLimbs_injective`), so the key hash binds the modulus itself.
@@ -105,6 +109,7 @@ in its ideal model (see "The privacy model").
 | --- | --- | --- |
 | 1 Soundness | `EmailRecovery.email_of_check` | If `check` accepts an approval, its twelve checks hold (`Accepted`), and for every extractor `X` either `X`'s witness for the approval's proof is an email (`SignedEmail`) or `X` fails on that accepted proof (`ExtractionFails`). The email: its header carries a valid RSA-2048 DKIM signature under `n`; the leaf `leaf(domain, key_hash(n))` has a path to the accepted root, which is the unexpired pin or a root the registry accepts; its `From` address and an account code open `C`; the address's domain is `d=` and the leaf domain; its Subject opens to `d`; and the statement bytes hash to `d` and name the guardian's account, controller and network, an allowed action through its entry point, and an unexpired bound |
 | | `EmailRecovery.soundness` | Adds the registry (A5) and the honest enrollment (A7): the email's `From` address and account code are the enrolled ones and `(leaf domain, n)` is a trusted key, unless a Poseidon2 break on inputs computed from the extracted witness, the enrollment and the accepted root's tree holds (`SoundnessAssumptions.Break`) |
+| | `EmailRecovery.email_binds_statement`, `signedEmail_binds_statement` | The email binds one statement: if two guardians accept two approvals and `X`'s witnesses for their proofs carry one header, the two approvals carry the same statement bytes, unless the two blinding inputs `(DOM_BLIND, digest_hi, digest_lo, rho)` collide under Poseidon2, the two statements collide under SHA-256, or `X` fails on one of the two accepted proofs. So an email accepted once approves no other statement, and an old recovery email approves nothing new |
 | 2 Privacy | `EmailRecovery.privacy_simulation` | In the ideal model (`Functionalities.Ideal`), for every private state of the wallet and every adaptive adversary, the adversary's view (the deployed configuration, every approval the wallet hands out with its proof, every transaction, the guardian's verdict on its approval in every context, the controller's results, states and events) equals a simulator's view computed from the public deployment, two handles, the proof system's simulator and the adversary's own moves |
 | | `EmailRecovery.privacy_two_runs` | So two wallets with any two private states, including different addresses and account codes, give every adversary the same view |
 | | `EmailRecovery.structural_noninterference`, `enroll_factors`, `publicInputs_enroll` | Structural: for any fixed sequence of transactions, the guardian's configuration and verdicts and the controller's results, states and events are a function of the public values, the transactions, `C` and the pin root; the proof's public inputs are `C`, the digest limbs and the root. The contracts store and emit nothing about the address beyond `C` and the pin root |
@@ -127,9 +132,11 @@ tree holds the leaf at that index, unless the pairs `pathBreak` computes
 collide), `commit_binds` (the commitment binds the address and account code),
 `keyHash_binds` (the key hash binds the modulus), `keyLeaf_binds` (a leaf binds
 its domain and key hash), `slot_binds` (a slot whose leaf is a key's leaf holds
-that key, unless `SlotBreak` holds) and `digest_binds` (a digest binds the
-statement, unless the two encodings collide under SHA-256). The injectivity
-lemmas are `pack_injective`, `modulusLimbs_injective` and `split_injective`.
+that key, unless `SlotBreak` holds), `subject_binds_digest` (a header whose
+Subject opens to two digests (C5) opens to one, unless the two blinding inputs
+collide) and `digest_binds` (a digest binds the statement, unless the two
+encodings collide under SHA-256). The injectivity lemmas are `pack_injective`,
+`modulusLimbs_injective`, `split_injective` and `hex_injective`.
 `enroll_subject_ne_recovery_subject` is a lemma about two constants (the
 enrollment and recovery phrases differ in their first byte, so an enrollment
 Subject never satisfies C5), not a security property of its own.
@@ -155,7 +162,7 @@ proposition about specific inputs, built from the theorem's data: the commitment
 inputs of the extracted address and code and of the enrolled ones; the pair of
 children `pathBreak` finds along the extracted path; the extracted key's leaf
 input and the input of the slot it sits in; the two moduli's key-hash inputs;
-the two statements' encodings. Each theorem is then a reduction: anyone who
+the blinding inputs of two Subjects; the two statements' encodings. Each theorem is then a reduction: anyone who
 violates `P` hands over a collision computed from the data. That is the reading
 of collision resistance for a fixed, unkeyed hash function (P. Rogaway,
 "Formalizing Human Ignorance: Collision-Resistant Hashing without the Keys",
@@ -163,15 +170,41 @@ VIETCRYPT 2006, <https://eprint.iacr.org/2006/281>). Existentially quantified
 values in a conclusion are pinned to the theorem's data by equations
 (`s.attempts id = some a`).
 
-Knowledge soundness is handled the same way. A deterministic extractor that
-succeeds on every accepted proof would be perfect soundness, which a succinct
-argument does not have: accepting proofs of false statements exist. Theorem 1
-instead takes any function `X` from public inputs and proof to witness and
-concludes, for the one approval the guardian accepted, the email facts about
-`X`'s witness or `ExtractionFails` on that approval's public inputs and proof.
-A4 is the computational claim that an efficient `X` exists (it may use the
-prover's code) for which an efficient prover makes the guardian accept a proof
-on which `ExtractionFails` holds only with negligible probability.
+Extraction is isolated as A4's bad event on the accepted proof, which is not
+a reduction in the sense above. A collision break names inputs computed from
+the theorem's data; `ExtractionFails` is the complement of the circuit relation
+on `X`'s witness, so the disjunction in Theorem 1 holds by excluded middle and
+says only where A4 enters. An extractor that succeeds on every accepted proof
+would be perfect soundness, which a succinct argument does not have: accepting
+proofs of false statements exist. So Theorem 1 takes any function `X` from
+public inputs and proof to witness and concludes, for the one approval the
+guardian accepted, the email facts about `X`'s witness or `ExtractionFails` on
+that approval's public inputs and proof.
+
+`X` is not "a function of the public inputs and the proof" in the sense of one
+extractor that works from public data: such an extractor, applied to an honest
+approval, would compute the user's address from the chain, against A3, A6 and
+A4's zero knowledge. It is the per-run output of A4's extractor. A4 (spec
+§11.1) is simulation extractability with zero knowledge: for every efficient
+adversary with access to honest proofs (an adversary that reads the chain sees
+every honest approval with its proof), there is an efficient extractor for that
+adversary, which may read its code, coins and random-oracle queries, such that
+whenever the adversary outputs an accepted proof for public inputs that no proof
+it was given has, the extractor returns a witness for them except with
+negligible probability. In one run, take `X` to be that extractor's output on
+each such proof, and the wallet's own witness on a proof for public inputs the
+wallet proved, which satisfies the relation. `ExtractionFails` then holds on an
+accepted approval only with negligible probability, so Theorem 1 holds against
+adversaries who have seen honest approvals.
+
+This is the weak form of simulation extractability: it extracts only for public
+inputs no given proof has. The strong form, which also extracts from a new proof
+for the public inputs of a given one, implies it and is not needed: such a proof
+approves the digest the wallet approved, which the controller counts once
+(Theorem 3). We know of no published proof of either form for UltraHonk, so A4 is
+stated, not established. The nearest published results are for Plonk-family
+and sumcheck-based arguments with other commitment schemes; spec §11.1 lists
+them.
 
 ## The privacy model
 
@@ -219,10 +252,10 @@ chain (`T`, and the timing of the email) is outside this view.
 | --- | --- | --- |
 | A1a RSA-2048 PKCS#1 v1.5 is unforgeable; providers keep keys secret | Not stated. Theorem 1 concludes that a valid signature under the key exists; A1a is the step from there to "the provider signed this header", a computational claim | The argument after Theorem 1 |
 | A1b providers sign a `from` naming one of their mailboxes only for its holder | Not stated. The model's `Format` reads the From address from the signed header; A1b is the step from "the provider signed this From" to "the mailbox's holder sent it", a property of each provider (`research/email-recovery/eval/parser/sender-authentication.md`) | The argument after Theorem 1 |
-| A2 SHA-256 collision resistance | `Sha256Collides` on the encodings of the two statements, an alternative in the conclusion | Theorem 3 (`digest_fixes`, `email_vote_replay`) |
-| A3 Poseidon2 collision resistance | `P2Collides` on the commitment inputs, the path pairs, the leaf and slot inputs, or the key-hash inputs, and `P2Zero` on the key's leaf input, alternatives in the conclusion (`SoundnessAssumptions.Break`) | Theorem 1 (`soundness`, `from_is_enrolled`, `key_is_trusted`) |
+| A2 SHA-256 collision resistance | `Sha256Collides` on the encodings of the two statements, an alternative in the conclusion | Theorem 3 (`digest_fixes`, `email_vote_replay`); `email_binds_statement` |
+| A3 Poseidon2 collision resistance | `P2Collides` on the commitment inputs, the path pairs, the leaf and slot inputs, the key-hash inputs, or the two blinding inputs, and `P2Zero` on the key's leaf input, alternatives in the conclusion (`SoundnessAssumptions.Break`, `email_binds_statement`) | Theorem 1 (`soundness`, `from_is_enrolled`, `key_is_trusted`, `email_binds_statement`) |
 | A3 Poseidon2 as a random function | The ideal model's handles: with A6, `(C, pin root)` is indistinguishable from two uniform handles (computational, assumed) | The step from Theorem 2's ideal model to the real tools |
-| A4 knowledge soundness | `ExtractionFails` on the accepted approval's public inputs and proof, an alternative in the conclusion, for every extractor | Theorem 1 |
+| A4 simulation extractability | `ExtractionFails` on the accepted approval's public inputs and proof, an alternative in the conclusion, for every extractor; A4 is that, for the per-run extractor above, it holds only with negligible probability | Theorem 1 (`soundness`, `email_binds_statement`) |
 | A4 zero knowledge | The ideal model's prover: an honest proof is `sim` of its public inputs (computational, assumed) | The step from Theorem 2's ideal model to the real tools |
 | A5 the registry holds only real keys | Hypothesis `RegistryTrees`: for every accepted root, the keys at the leaves of its depth-16 tree (`keyAt`), each `Trusted`. The tree's shape is the registry contract's (tested); that its keys are trusted is the registry's governance (§7.6) | `soundness`, `key_is_trusted` |
 | A6 `account_code` and `rho` secret and uniform | Not stated: with A3 it makes `C` and the pin root hide the address and pinned keys | The step from Theorem 2's ideal model to the real tools |
@@ -348,5 +381,7 @@ Run: `lake build` on Lean `v4.35.0` (all modules, including the `#guard_msgs`
 axiom checks and the examples), `#print axioms` for every theorem, and the
 CI workflow's scan for unchecked declarations.
 Read: the spec, Perch's recovery spec and statement layout, the guardian's
-`contract.rs` and `statement.rs`, Perch's controller `contract.rs`, and the
-wallet's `chooseKeyPath`, against which the model was written.
+`contract.rs` and `statement.rs`, Perch's controller `contract.rs`, the
+circuit's `hex_of_field` (`circuits/email-recovery/lib/src/subject.nr`), and
+the wallet's `chooseKeyPath`, against which the model was written; and the
+publications A4's literature paragraph (spec §11.1) cites.

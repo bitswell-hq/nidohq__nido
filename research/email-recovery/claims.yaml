@@ -29,11 +29,16 @@ claims:
       the enrolled ones and the signing modulus is a listed key of the From
       domain, unless Poseidon2 collides on a pair of inputs, or maps an input
       to zero, that the theorem computes from the email, the enrollment and
-      the key tree.
+      the key tree. The email binds one statement: two accepted approvals
+      whose extracted emails share a header carry the same statement, unless
+      extraction fails on one of them, their blinding inputs collide under
+      Poseidon2 or their statements collide under SHA-256.
     status: proven
     evidence:
-      lean: EmailRecovery.soundness
-      file: research/email-recovery/formal/EmailRecovery/Soundness.lean
+      - lean: EmailRecovery.soundness
+        file: research/email-recovery/formal/EmailRecovery/Soundness.lean
+      - lean: EmailRecovery.email_binds_statement
+        file: research/email-recovery/formal/EmailRecovery/Soundness.lean
 
   - id: address-privacy
     statement: >-
@@ -1477,18 +1482,25 @@ claims:
   - id: proof-system-security
     statement: >-
       UltraHonk proofs in the zero-knowledge flavor that Perch's verifier
-      accepts are knowledge-sound and reveal nothing beyond the public
-      inputs.
+      accepts are simulation-extractable, even for an adversary that has seen
+      every honest proof, and reveal nothing beyond the public inputs.
     status: assumed
     evidence:
       assumption: >-
-        Knowledge soundness and zero knowledge of UltraHonk in the random
-        oracle model, with Keccak as the transcript hash, as implemented by
-        Perch's pinned Barretenberg and its Soroban verifier: an efficient
-        extractor exists for which an efficient prover gets a proof accepted
-        that the extractor fails on only with negligible probability, and an
-        honest proof of a valid witness is indistinguishable from a
-        simulator's output on its public inputs.
+        UltraHonk in Perch's zero-knowledge flavor, Fiat-Shamir-compiled with
+        Keccak, as implemented by Perch's pinned Barretenberg and its Soroban
+        verifier, is simulation-extractable and zero-knowledge in the random
+        oracle model (or that model with the algebraic group model): for every
+        efficient adversary with oracle access to honest proofs there is an
+        efficient extractor for that adversary such that, whenever the
+        adversary outputs an accepted proof for public inputs that no proof it
+        was given has, the extractor returns a witness for them except with
+        negligible probability; and an honest proof of a valid witness is
+        indistinguishable from a simulator's output on its public inputs. No
+        published proof of simulation extractability for UltraHonk is known;
+        the nearest published results cover Plonk-family and sumcheck-based
+        arguments with other commitment schemes. In Theorem 1, extraction
+        failing on the accepted proof is this assumption's bad event.
 
   - id: commitment-hiding
     statement: >-
