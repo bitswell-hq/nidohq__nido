@@ -27,7 +27,7 @@ extractor (which may use the prover's code) for which an efficient prover
 makes the guardian accept a proof on which `ExtractionFails` holds only with
 negligible probability.
 
-What is not in these statements, and why: A1 (DKIM unforgeability) is the step
+What is not in these statements, and why: A1a (DKIM unforgeability) is the step
 from "a valid signature under the provider's key exists" to "the provider signed
 this header", a computational claim with no meaningful statement here; it
 starts where the conclusion ends.

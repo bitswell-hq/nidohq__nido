@@ -25,6 +25,15 @@ email-recovery-attacks:
 email-recovery-proving:
     research/email-recovery/eval/proving/measure.sh
 
+# Real DKIM-signed posts from the manifest's public archives (fetched politely
+# and cached under target/) and 50,000 seeded grammar-based cases, each
+# compared with a reference DKIM verifier and RFC 5322 reader. About an hour
+# on 18 cores, longer on a first run while the archives download;
+# `research/email-recovery/eval/parser/check.sh --ci` is the CI subset.
+# Check the circuit's header parsing against real mail and fuzzed headers
+email-recovery-parser-check:
+    research/email-recovery/eval/parser/check.sh
+
 # Build the prover benchmark page as a self-contained directory and serve it
 # over HTTPS on this machine's network, to open on a phone.
 email-recovery-bench-phone:

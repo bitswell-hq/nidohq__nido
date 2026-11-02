@@ -217,7 +217,8 @@ chain (`T`, and the timing of the email) is outside this view.
 
 | Id (§11.1) | In the model | Used by |
 | --- | --- | --- |
-| A1 RSA-2048 PKCS#1 v1.5 is unforgeable; providers keep keys secret | Not stated. Theorem 1 concludes that a valid signature under the key exists; A1 is the step from there to "the provider signed this header", a computational claim | The argument after Theorem 1 |
+| A1a RSA-2048 PKCS#1 v1.5 is unforgeable; providers keep keys secret | Not stated. Theorem 1 concludes that a valid signature under the key exists; A1a is the step from there to "the provider signed this header", a computational claim | The argument after Theorem 1 |
+| A1b providers sign a `from` naming one of their mailboxes only for its holder | Not stated. The model's `Format` reads the From address from the signed header; A1b is the step from "the provider signed this From" to "the mailbox's holder sent it", a property of each provider (`research/email-recovery/eval/parser/sender-authentication.md`) | The argument after Theorem 1 |
 | A2 SHA-256 collision resistance | `Sha256Collides` on the encodings of the two statements, an alternative in the conclusion | Theorem 3 (`digest_fixes`, `email_vote_replay`) |
 | A3 Poseidon2 collision resistance | `P2Collides` on the commitment inputs, the path pairs, the leaf and slot inputs, or the key-hash inputs, and `P2Zero` on the key's leaf input, alternatives in the conclusion (`SoundnessAssumptions.Break`) | Theorem 1 (`soundness`, `from_is_enrolled`, `key_is_trusted`) |
 | A3 Poseidon2 as a random function | The ideal model's handles: with A6, `(C, pin root)` is indistinguishable from two uniform handles (computational, assumed) | The step from Theorem 2's ideal model to the real tools |

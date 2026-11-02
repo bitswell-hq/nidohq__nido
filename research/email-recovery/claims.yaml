@@ -516,6 +516,10 @@ claims:
         file: circuits/email-recovery/tests/src/soundness.nr
       - test: signature_plus_modulus_is_refused
         file: circuits/email-recovery/tests/src/soundness.nr
+      - test: differential.mjs
+        file: research/email-recovery/eval/parser/check.sh
+      - test: fuzz.mjs
+        file: research/email-recovery/eval/parser/check.sh
 
   - id: circuit-from-grammar
     statement: >-
@@ -533,6 +537,10 @@ claims:
         file: circuits/email-recovery/tests/src/soundness.nr
       - test: from_value_cannot_span_into_the_next_field
         file: circuits/email-recovery/tests/src/soundness.nr
+      - test: differential.mjs
+        file: research/email-recovery/eval/parser/check.sh
+      - test: fuzz.mjs
+        file: research/email-recovery/eval/parser/check.sh
 
   - id: circuit-issue-classes
     statement: >-
@@ -1146,7 +1154,7 @@ claims:
   # The assumptions the properties rest on.
   - id: dkim-unforgeability
     statement: >-
-      Without a provider's private DKIM key, nobody can produce a valid
+      (A1a) Without a provider's private DKIM key, nobody can produce a valid
       rsa-sha256 signature under that key.
     status: assumed
     evidence:
@@ -1157,14 +1165,24 @@ claims:
 
   - id: provider-authenticates-sender
     statement: >-
-      A launch provider DKIM-signs a message whose From address is one of
-      its mailboxes only when the holder of that mailbox submitted it.
+      (A1b) A launch provider DKIM-signs a message whose From address is one
+      of its mailboxes only when the holder of that mailbox submitted it: it
+      refuses or rewrites a submission with two From fields or several
+      addresses, or authenticates the address the circuit binds; sending as
+      another address of its domain needs proof of control of that mailbox;
+      and an address it assigns again cannot be used against an existing
+      enrollment.
     status: assumed
     evidence:
       assumption: >-
         Each allowlisted provider authenticates the submitting user and
         refuses to sign a From address in its domain that the user does not
-        control.
+        control. Reviewed per provider from public documentation and
+        measurements in research/email-recovery/eval/parser/sender-authentication.md:
+        how each submission path handles two From fields or several
+        addresses is unknown today for every provider, and was not met by
+        Yahoo, iCloud and Fastmail in 2020; Fastmail and GMX/WEB.DE assign
+        deleted or inactive addresses again, which the account code covers.
 
   - id: registry-correctness
     statement: >-

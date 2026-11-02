@@ -210,6 +210,14 @@ except a body swapped after signing, which the header-only proof does not
 bind (spec §4.4). Real proofs of each launch domain's email verify on chain
 (`crates/integration-tests/tests/it/email_proofs.rs`).
 
-**Open:** no external audit; no fuzzing; `HEADER_MAX` is confirmed against
-the provider mocks' formats, not against real provider mail (spec §13 item
-6, `README.md` "Header bound").
+The parsing is also checked against reference implementations on real
+launch-provider mail from public archives and on grammar-based fuzzed
+headers (`research/email-recovery/eval/parser/`, spec §12). That found one
+open issue: the display name of spec §4.5 admits unquoted `,` `;` `:` `@`
+`\` and an unbalanced `"`, so the circuit binds the angle-addr of values
+RFC 5322 readers read as an address list, a group, another mailbox, or none
+(spec §4.5, §13 item 23).
+
+**Open:** no external audit; the display-name issue above; `HEADER_MAX` is
+confirmed against the provider mocks' formats, not against the providers'
+own recovery mail (spec §13 item 6, `README.md` "Header bound").

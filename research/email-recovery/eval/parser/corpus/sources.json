@@ -1,0 +1,26 @@
+{
+  "about": "The public archives the real-mail corpus is drawn from. build-corpus.mjs downloads each list's mbox for each month and keeps every post whose From domain is a launch domain and that carries a DKIM-Signature field.",
+  "archive": "https://lists.gnu.org/archive/mbox",
+  "lists": [
+    "emacs-devel",
+    "emacs-orgmode",
+    "help-gnu-emacs",
+    "emacs-tangents",
+    "auctex",
+    "bug-bash",
+    "help-bash",
+    "guix-devel",
+    "help-guix",
+    "lilypond-user",
+    "lilypond-devel",
+    "bug-lilypond",
+    "coreutils",
+    "bug-coreutils",
+    "bug-gnulib",
+    "grub-devel",
+    "help-make",
+    "bug-tar"
+  ],
+  "months": ["2025-10", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10"],
+  "launchDomains": ["gmail.com", "outlook.com", "hotmail.com", "icloud.com", "yahoo.com", "proton.me", "protonmail.com", "fastmail.com", "gmx.net", "gmx.de", "web.de"]
+}

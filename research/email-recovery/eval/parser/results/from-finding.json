@@ -1,0 +1,103 @@
+{
+ "key": "TEST-ONLY-yahoo",
+ "artifact": "circuits/email-recovery/artifacts/recovery.json",
+ "rows": [
+  {
+   "from": "Ann Lee <t5w6.i9otz@yahoo.com>",
+   "python": [
+    "t5w6.i9otz@yahoo.com"
+   ],
+   "pythonDefects": [],
+   "mailauth": {
+    "addresses": [
+     "t5w6.i9otz@yahoo.com"
+    ],
+    "syntax": "valid"
+   },
+   "circuit": {
+    "accepts": true,
+    "opensCommitmentWith": "t5w6.i9otz@yahoo.com"
+   }
+  },
+  {
+   "from": "b4ionwm6.ajw@yahoo.com, x <t5w6.i9otz@yahoo.com>",
+   "python": [
+    "b4ionwm6.ajw@yahoo.com",
+    "t5w6.i9otz@yahoo.com"
+   ],
+   "pythonDefects": [],
+   "mailauth": {
+    "addresses": [
+     "b4ionwm6.ajw@yahoo.com",
+     "t5w6.i9otz@yahoo.com"
+    ],
+    "syntax": "valid"
+   },
+   "circuit": {
+    "accepts": true,
+    "opensCommitmentWith": "t5w6.i9otz@yahoo.com"
+   }
+  },
+  {
+   "from": "b4ionwm6.ajw@yahoo.com <t5w6.i9otz@yahoo.com>",
+   "python": [
+    "b4ionwm6.ajw@yahoo.com"
+   ],
+   "pythonDefects": [
+    "InvalidHeaderDefect: invalid address in address-list",
+    "ObsoleteHeaderDefect: period in 'phrase'",
+    "ObsoleteHeaderDefect: period in 'phrase'"
+   ],
+   "mailauth": {
+    "addresses": [
+     "b4ionwm6.ajw@yahoo.com",
+     "t5w6.i9otz@yahoo.com"
+    ],
+    "syntax": "lax"
+   },
+   "circuit": {
+    "accepts": true,
+    "opensCommitmentWith": "t5w6.i9otz@yahoo.com"
+   }
+  },
+  {
+   "from": "\"q97\" b4ionwm6.ajw@yahoo.com <t5w6.i9otz@yahoo.com>",
+   "python": [
+    "\"q97 b4ionwm6.ajw\"@yahoo.com"
+   ],
+   "pythonDefects": [
+    "InvalidHeaderDefect: invalid address in address-list",
+    "InvalidHeaderDefect: local-part is not dot-atom, quoted-string, or obs-local-part",
+    "InvalidHeaderDefect: missing '.' between words",
+    "ObsoleteHeaderDefect: period in 'phrase'",
+    "ObsoleteHeaderDefect: period in 'phrase'"
+   ],
+   "mailauth": {
+    "addresses": [],
+    "syntax": "invalid"
+   },
+   "circuit": {
+    "accepts": true,
+    "opensCommitmentWith": "t5w6.i9otz@yahoo.com"
+   }
+  },
+  {
+   "from": "\"x <t5w6.i9otz@yahoo.com>",
+   "python": [
+    "\"x <t5w6.i9otz@yahoo.com>\""
+   ],
+   "pythonDefects": [
+    "InvalidHeaderDefect: addr-spec local part with no domain",
+    "InvalidHeaderDefect: end of header inside quoted string"
+   ],
+   "mailauth": {
+    "addresses": [],
+    "syntax": "invalid"
+   },
+   "circuit": {
+    "accepts": true,
+    "opensCommitmentWith": "t5w6.i9otz@yahoo.com"
+   }
+  }
+ ]
+}

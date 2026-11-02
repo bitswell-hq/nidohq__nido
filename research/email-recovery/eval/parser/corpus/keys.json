@@ -1,0 +1,1158 @@
+{
+ "checked": "2026-11-02",
+ "keys": [
+  {
+   "name": "1a1hai._domainkey.icloud.com",
+   "d": "icloud.com",
+   "s": "1a1hai",
+   "dns": "published",
+   "candidates": [
+    {
+     "id": "83ef8c0921df3a17",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1ZEfbkf4TbO2TDZI67WhJ6G8Dwk3SJyAbBlE/QKdyXFZB4HfEU7AcuZBzcXSJFE03DlmyOkUAmaaR8yFlwooHyaKRLIaT3epGlL5YGowyfItLly2k0Jj0IOICRxWrB378b7qMeimE8KlH1UNaVpRTTi0XIYjIKAOpTlBmkM9a/3Rl4NWy8pLYApXD+WCkYxPcxoAAgaN8osqGTCJ5r+VHFU7Wm9xqq3MZmnfo0bzInF4UajCKjJAQa+HNuh95DWIYP/wV77/PxkEakOtzkbJMlFJiK/hMJ+HQUvTbtKW2s+t4uDK8DI16Rotsn6e0hS8xuXPmVte9ZzplD0fQgm2qwIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "dns",
+       "name": "1a1hai._domainkey.icloud.com",
+       "checked": "2026-11-02"
+      },
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=icloud.com",
+       "recordId": 2208,
+       "firstSeenAt": "2024-02-16T06:17:39.415Z",
+       "lastSeenAt": "2026-07-05T15:45:31.506Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "20230601._domainkey.gmail.com",
+   "d": "gmail.com",
+   "s": "20230601",
+   "dns": "revoked (empty p=)",
+   "candidates": [
+    {
+     "id": "1239f367f9073fa3",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAntvSKT1hkqhKe0xcaZ0x+QbouDsJuBfby/S82jxsoC/SodmfmVs2D1KAH3mi1AqdMdU12h2VfETeOJkgGYq5ljd996AJ7ud2SyOLQmlhaNHH7Lx+Mdab8/zDN1SdxPARDgcM7AsRECHwQ15R20FaKUABGu4NTbR2fDKnYwiq5jQyBkLWP+LgGOgfUF4T4HZb2PY2bQtEP6QeqOtcW4rrsH24L7XhD+HSZb1hsitrE0VPbhJzxDwI4JF815XMnSVjZgYUXP8CxI1Y0FONlqtQYgsorZ9apoW1KPQe8brSSlRsi9sXB/tu56LmG7tEDNmrZ5XUwQYUUADBOu7t1niwXwIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=gmail.com",
+       "recordId": 146,
+       "firstSeenAt": "2024-01-31T18:13:13.375Z",
+       "lastSeenAt": "2026-06-19T09:54:01.249Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "20251104._domainkey.gmail.com",
+   "d": "gmail.com",
+   "s": "20251104",
+   "dns": "published",
+   "candidates": [
+    {
+     "id": "c8760d7cb8f765f3",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtOzIjTYVUYZDbm03lsL4MGxSUVJWALTSueNRnCvCdM5d0i26EVUH7jprqIFdBSnMXQDHCkwcH1bFjtbfHCzFfWlpzOWducPPU0E+ut0rRqIy4NKY8CJlW39Q+AHJ70h+k2VadmQt0A1Yijg/Dk73NuJAz8KDNgz2x14nDVkINRlynAU7EosarRRhVGKqlNrYdp/os6QYaetfYNdQRJDecOARNObGRET/sW0m5Ya5SBGsaw8VSGluCwSZh+zShTXaOyA1WnpHNtAoCQClFPn9vmm6Cb0Z2gYF0g/+qZ1FCnaj1+aaJGzhqVOXGtHGWM3dLpwC7Rul6STfFD521JeqpQIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "dns",
+       "name": "20251104._domainkey.gmail.com",
+       "checked": "2026-11-02"
+      },
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=gmail.com",
+       "recordId": 1428710,
+       "firstSeenAt": "2026-03-25T16:30:56.769Z",
+       "lastSeenAt": "2026-10-13T19:17:02.926Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "20260707._domainkey.gmail.com",
+   "d": "gmail.com",
+   "s": "20260707",
+   "dns": "published",
+   "candidates": [
+    {
+     "id": "9efc1f131577408a",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA061G9pLPCQuYim/y++0CCA6U87HzN60s8RKshaWEyTARno2qg3icHult2JsUvs+BgvXsmf1w2I5TWPtfR+fZzjh6f7MZ4ClQFdedi3xJMwikE2iDN7AZLfLAsUEG+a8zw8frHi0sT2nQLV/1s5zg6OF9/ICTq9Rj7IdSq9y+grRcPyaLFcozip/LH5xMlDS1tZhLojJ80PjmOuzjr6OMMyuQ5LuiYM9CnCjV5lvB4V9rM5KjSY/xobTxR9Y9gLzHZLMboJEz4GleOWjBbpT9jJ/9CQoIyEVAGBfA1BppR/+3WNAVjJRWwr1RxvOobdvOkIfNx6u3jP1BmbH+MxQfYQIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "dns",
+       "name": "20260707._domainkey.gmail.com",
+       "checked": "2026-11-02"
+      },
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=gmail.com",
+       "recordId": 1490009,
+       "firstSeenAt": "2026-10-28T15:59:37.008Z",
+       "lastSeenAt": "2026-10-28T15:59:37.008Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "3f2ia4zv45hf5k6vqphdg2evzq.protonmail._domainkey.proton.me",
+   "d": "proton.me",
+   "s": "3f2ia4zv45hf5k6vqphdg2evzq.protonmail",
+   "dns": "published",
+   "candidates": [
+    {
+     "id": "61c054785daa01ec",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAn46zCm3zHBmS1zePKxA+RIXw41Nu6l91NpLLBnWnrcZ35H/843XNWPZEQ0OgGwx/yqTXETMLXIDjGEWlK1E1mpdguqu+3s7SuIHoo5+i6mgyxJguljkwc3dk8ojnJ6VVUPnDh5GJArkAhXxEb1aOK1BVGM0yDlmYdmaOfd48qcx5iODP/MFc8pivfxEXTIL+aUz7+X69lMiwUSHpWYL3/a5X3nLD0zEntxv08xs8J/rpuRg4v+OXEOhcNvhkeiRZqJBdpJTkoEZfGvdTct+U0YYC69NW0ClUcKio2uDPmxU1xvfvHbSTW2gHYk8RpYZaxLACULdMo+Vt4Na/oIR+swIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "dns",
+       "name": "3f2ia4zv45hf5k6vqphdg2evzq.protonmail._domainkey.proton.me",
+       "checked": "2026-11-02"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "6depblolyjfm7h433uoegbbf5m.protonmail._domainkey.proton.me",
+   "d": "proton.me",
+   "s": "6depblolyjfm7h433uoegbbf5m.protonmail",
+   "dns": "published",
+   "candidates": [
+    {
+     "id": "61c054785daa01ec",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAn46zCm3zHBmS1zePKxA+RIXw41Nu6l91NpLLBnWnrcZ35H/843XNWPZEQ0OgGwx/yqTXETMLXIDjGEWlK1E1mpdguqu+3s7SuIHoo5+i6mgyxJguljkwc3dk8ojnJ6VVUPnDh5GJArkAhXxEb1aOK1BVGM0yDlmYdmaOfd48qcx5iODP/MFc8pivfxEXTIL+aUz7+X69lMiwUSHpWYL3/a5X3nLD0zEntxv08xs8J/rpuRg4v+OXEOhcNvhkeiRZqJBdpJTkoEZfGvdTct+U0YYC69NW0ClUcKio2uDPmxU1xvfvHbSTW2gHYk8RpYZaxLACULdMo+Vt4Na/oIR+swIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "dns",
+       "name": "6depblolyjfm7h433uoegbbf5m.protonmail._domainkey.proton.me",
+       "checked": "2026-11-02"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "6vvv3dfpc5hkpkfvpgqy7nqkem.protonmail._domainkey.proton.me",
+   "d": "proton.me",
+   "s": "6vvv3dfpc5hkpkfvpgqy7nqkem.protonmail",
+   "dns": "published",
+   "candidates": [
+    {
+     "id": "61c054785daa01ec",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAn46zCm3zHBmS1zePKxA+RIXw41Nu6l91NpLLBnWnrcZ35H/843XNWPZEQ0OgGwx/yqTXETMLXIDjGEWlK1E1mpdguqu+3s7SuIHoo5+i6mgyxJguljkwc3dk8ojnJ6VVUPnDh5GJArkAhXxEb1aOK1BVGM0yDlmYdmaOfd48qcx5iODP/MFc8pivfxEXTIL+aUz7+X69lMiwUSHpWYL3/a5X3nLD0zEntxv08xs8J/rpuRg4v+OXEOhcNvhkeiRZqJBdpJTkoEZfGvdTct+U0YYC69NW0ClUcKio2uDPmxU1xvfvHbSTW2gHYk8RpYZaxLACULdMo+Vt4Na/oIR+swIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "dns",
+       "name": "6vvv3dfpc5hkpkfvpgqy7nqkem.protonmail._domainkey.proton.me",
+       "checked": "2026-11-02"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "debbugs-gnu-org._domainkey.debbugs.gnu.org",
+   "d": "debbugs.gnu.org",
+   "s": "debbugs-gnu-org",
+   "dns": "published",
+   "candidates": [
+    {
+     "id": "7865adbd213e91f9",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAv96YP8AxwTPVNkykRAmA0yIM+KIwI0tsLZ5ItMzf1bSfiHSEHKJFuwFS/jkuM1MLxOFXQ+IW6KRojV6i/hKFS5iqdWU/fxoZgQri35hqa5XDcCHgvVHxV87QdbZObteuGoalEicNQaYHc52Q/P6x0cGvFEHW4gngx3+3P8zIPgulh+wWv1B4qDqp9Cq36dZIWgBGPwzW1EgEN4IJDN6QkXLJNdMuCLY/27rXTHDeyeX4hHJrGyY2fEO4EosaMsh3Gsvlo3sU2fLIU6MZW5i0jmZoRVsFg0oIkgUSzRnN44dCCgSAAgy0Eeh7clOXJC2klA1NZPq56sujxFm2Z+ecOwIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "dns",
+       "name": "debbugs-gnu-org._domainkey.debbugs.gnu.org",
+       "checked": "2026-11-02"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "favwxn6wkzf3laseuay3sioehe.protonmail._domainkey.proton.me",
+   "d": "proton.me",
+   "s": "favwxn6wkzf3laseuay3sioehe.protonmail",
+   "dns": "published",
+   "candidates": [
+    {
+     "id": "61c054785daa01ec",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAn46zCm3zHBmS1zePKxA+RIXw41Nu6l91NpLLBnWnrcZ35H/843XNWPZEQ0OgGwx/yqTXETMLXIDjGEWlK1E1mpdguqu+3s7SuIHoo5+i6mgyxJguljkwc3dk8ojnJ6VVUPnDh5GJArkAhXxEb1aOK1BVGM0yDlmYdmaOfd48qcx5iODP/MFc8pivfxEXTIL+aUz7+X69lMiwUSHpWYL3/a5X3nLD0zEntxv08xs8J/rpuRg4v+OXEOhcNvhkeiRZqJBdpJTkoEZfGvdTct+U0YYC69NW0ClUcKio2uDPmxU1xvfvHbSTW2gHYk8RpYZaxLACULdMo+Vt4Na/oIR+swIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "dns",
+       "name": "favwxn6wkzf3laseuay3sioehe.protonmail._domainkey.proton.me",
+       "checked": "2026-11-02"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "fm1._domainkey.fastmail.com",
+   "d": "fastmail.com",
+   "s": "fm1",
+   "dns": "revoked (empty p=)",
+   "candidates": [
+    {
+     "id": "b59b4d4c1cd5be93",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmY0qzZIt9DsbmOXR0igKtSRmvCoUOMBaKck9p5N46kFgPn5ECaJwqfGEgDwncsKD1P7TmMYE9HmCv23oZW0Dh/4JiBA4md9okXmajibsBvyFjWe0IjrZuOfsvLIl13Ovi3UtvMyTVAYuc8c0ZwGUWeYEwNvsni87Y7PUNyLgpsLLHlAuutX3GP/43cJZ+tvw66sjORaKdsirIcBVQWIY3pjYie0s8w51Gizplpz9mfHPHeCRR7k4ideKs/q1IGRa6UhMOuqbolGtKDelwhw7YXY1Bl2Sod/+UOofNFcPlbUApRaz+Xv3FoH/8CdsbD9o+gRPFG5FT1WBdOqTZK0MNwIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=fastmail.com",
+       "recordId": 1180313,
+       "firstSeenAt": "2024-12-08T02:55:36.461Z",
+       "lastSeenAt": "2024-12-08T02:55:36.461Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "914a864d6201006f",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnIuNzSoVX8kne9I4OT7DqyouhsaD4rSulzqEX7uXpWsPmWQb2GxtyKqUC/2aQHhtHuBNC6cda7wVCpAJ+ZHg4kTP4fxj2gkbWocDtsCB3kshmBNJiAsx2cJhdeNPx+nbpeXW2cFuy7gjV41BoGY/mm0NVh0qPqULU9TdYPXmP/Fue+c5DNKjz0fWHosiEwBM269eTduSqKTCQ/5DUDoh5DbY5Vgf9TPRFN/3lhg0m3vN4Ewv34k7KNGy9vF8YRtxKOZ+0JuryaSEEjNsdRfc1Loxw335APltMD8BZI00kkzsW9R704A6yi0BzC/ZhzSqpnOclL6oValNtjsmL4wbLwIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=fastmail.com",
+       "recordId": 1321957,
+       "firstSeenAt": "2025-09-09T16:01:05.811Z",
+       "lastSeenAt": "2025-09-09T16:01:05.811Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "fm1._domainkey.messagingengine.com",
+   "d": "messagingengine.com",
+   "s": "fm1",
+   "dns": "revoked (empty p=)",
+   "candidates": [
+    {
+     "id": "580df6eb0674114e",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA59n5qgmz+a8tbfA+KZdLcHlSqCO/jN2i1M6ONxSwEsiCR7UB6Uk8OR5mpQgVEjizfkfKAy4rF77N1ImBX0aHWfCFgh+sPYwyyHlu5YZj6T0id2cwHaXUiut2cdDzHjWCl4OIqtsnD5d7Q9n6plofe0+L/XgVfqPmgo5lFot4M+NueJNAWrmNXYuYBsqDSoOJgY/NdMdGTiCbpIZ4DSh7nWxU4dVHRcYfdcX8z8EO5bJjfFsQBK5jGceZiY20lGkbf4MCWIbJc6hcgMAQHcus+tIdHHQRn7ks5o0YIgPeRekl02JGk9tC5SYcfnFiFUZ61S1kgTVdnMQ9+iZ/CSaudwIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=messagingengine.com",
+       "recordId": 1180314,
+       "firstSeenAt": "2024-12-08T02:55:37.368Z",
+       "lastSeenAt": "2024-12-08T02:55:37.368Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "b1eacbf53c4b0aba",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuhQ2hnM+r+vljLXTJxm9rB9loTENbnMG3JiYk9yYC45stOSa1Kp7qjdcvUkvLwOgwSUtNj0ian1CkRJMOMByXuBDpn+bppwGHBnisAzHjBe3ee6pdyfsj2risjbpQhfJZRfsS7nkA3xA9bqKx7BJpSgMQ0j4t/OzwUf4bIfgH2BwArJlAupnMhxXcP9Sx8ZhKVopDZXfosatO3K2IwIdLqn3ZRaiZLxfHVX8Renr3UdCnN9RODO+9Vf+gAOokUFudZE6094BJVxei7rMijZIe8YLLZhrIdpEr3AIjDPSeLlgenFXApzDiU3DEFwVaAo27rDdADvOUlMGfwEmGVTEyQIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=messagingengine.com",
+       "recordId": 1082913,
+       "firstSeenAt": "2024-08-31T05:15:53.547Z",
+       "lastSeenAt": "2024-08-31T05:15:53.547Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "87202a71dd265c9e",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAoeSm65wH41mFeyavkkk+GyaAv+d+R/RcRpfwK1PtzapDGf1KyAuSUwXfw/yyYXRjcAEktHYOYx6N2djCvDenWjpQXNt/8/QJVn/tduHSU3WQWfSbOnedEYuitty7/D8JfjDEhw+aqWuoaAqjbSJiFQ85/5lIPSc/19zR0gDThJz8pZYUb142I9YborSDVR3UfohfV/gZFL6D8NGdCQcs8ihYAl/idtWbxVsrk/nTU0YxPHmUgpFsMVLfnOdlrTjWlTyHecPAuapeVtoAj6B/luWND59u6YAdy+27ozGbxRoMxI2xLcnciTWULrDK8nUrK5AU1psnQL58gc0t5iJV7QIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=messagingengine.com",
+       "recordId": 1321958,
+       "firstSeenAt": "2025-09-09T16:02:01.996Z",
+       "lastSeenAt": "2025-09-09T16:02:01.996Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "5825800eefd9d24f",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAr/8AFAx7XPC4yGzCwf4MbDiGcY2hZvWnvHdf9GnVcII3Xp63P7zlIfvkv2cnRTRqrRkChBXiS+s3EtpvYjPH7Vu+BEu3L3l9AITQR+L0nRD6etKop9hRlTX8u+adgyjpSI/1mcGVG3ymc0GyqciSUdIxUQYPssxZJn+bUBR7UgFOcjb71VrFxcba2UA4zkXiAxHZD2/hkahhju9g8lmNkscUH91vttKwKtFpbCpVZm0dDmlwzpl3WMCx3MjmTAreFYLooC6vPLt3pNyBKlMUJmPNNE3m2qtUfmhePQeu1thR5RKOAfR37LdPXyN/fbdKSw0764c498ixJRHj8ms3HQIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=messagingengine.com",
+       "recordId": 7336,
+       "firstSeenAt": "2024-03-19T23:52:02.243Z",
+       "lastSeenAt": "2024-03-19T23:52:02.243Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "fm2._domainkey.fastmail.com",
+   "d": "fastmail.com",
+   "s": "fm2",
+   "dns": "published",
+   "candidates": [
+    {
+     "id": "44053c815067d81d",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAv6luynSP9HzHAOufAOY6DpDh/qaZLJRatskej4HX2tg8DdSjpp1kgEn0I8tXnxNwgmPR4UtO65mhcQLG2RIBrYkKB8uXNQLBOB/A147HDU0Zcc8RnLMtn1cAF/nkjAHzxHW3vI9lanb1RKm7nzycK5BL9GWQE2WUpeCdoH14K80ksSVoUMIktlHAe92N+HjjAaK1XNEvN+5Lybz0ACETuSQXDWopAhRg8lFClnL4yiiLUgqzHqObf9LdtX+EhPXyIiS5mC/4WThIOaiNQ1ThuqBtxgrR9SSoyclGzVIZTuGwUGvAg1HTVKIRaMALP5BGWYpmQkzsLVrVzbDGipMlWwIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "dns",
+       "name": "fm2._domainkey.fastmail.com",
+       "checked": "2026-11-02"
+      }
+     ]
+    },
+    {
+     "id": "2495919e2870d8d7",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlDwRZb3tOGf9HkjbbkS2b7lpQoYV1C+7EJXILQHVHOyclMLOL5lmXStn9QYzZz5ukntlXhb/RACW2h2cCF29CUhsZl34R1GT1BF9LMvSt7XJJ/Z4CZhCPRJlpBWtytXPO1YuNYp9ugXL8jXmzO1GGL4zWv9sjEyWgMUFbYJ6ES7Xj5crSSujw2HmR9HxWl+mTYCqFG1KgF9U1FqeUvnFA5A6btdfuYyJldQibAFm0WoJGX9uI2f++3zl6cLj04KTcEOOdRmjP5rEcqZlNAGXpcMWqortes3r1TYmrX819hz8bTbOpTFQpE2PVLs4BhtuuqYUEJewbaaS/8yPJJySIwIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=fastmail.com",
+       "recordId": 1202117,
+       "firstSeenAt": "2025-01-12T16:30:02.211Z",
+       "lastSeenAt": "2025-01-12T16:30:02.211Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "d33ced69c3ee94cf",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzLeotD8CK7N8cjtuQ9/+iu2IN3ScnW7yumb7vAye76mldDilzhxwpKkJFuwP3MOEtnyJeu67HyBarJxbiffvimA+u0Jo4J9HJj9BGMcXs1+5aBQfTZgBaJditmfCFfcYf64hnwDmqw7Xagn7A236gt/ujAqbMguY5anPN7AQr3qT1nWPYcH3m7MWd3vXpyE/OWODYmQOx2/YO8CHvH4CxN+U4EJwevouj7V5cRXiFsWVxcVlhhwdcp7kre02NjZpcAIFS7TaBQf++qfvDav/5U3HljRVm+eim3bxtaFcs493YIoZQagYUkEfmbN9a1rlylGyXq6Rb5+PPbLArT31fwIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=fastmail.com",
+       "recordId": 1286072,
+       "firstSeenAt": "2025-06-30T05:14:37.175Z",
+       "lastSeenAt": "2025-06-30T05:14:37.175Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "8c35415f7043d400",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAn2I5YACwpWXx8w8Sp+XFFDBvyOJRjCmJ/661WsiBJrEBgh9lQiddcIZxSbmmRSqmLfbThQI8fIgWfpzee8wtPJEOLX6QoqXx5nxU5BIfq1ehnXQgB2ia+H2uGWlwe4J4tOFi0Vs7642n+ZtwxAUpKkOIHJhsqUQiAamYihSYtlLKfvWDFXJwonkwDTUccFIJ/aejLegRw72ynUxNtXqJeKewOLuRaa+vNE8zAK/ckHAjK2QYQ/ZxeOy76dnQcLhDfVPj7yNu+d8T065OX69e8jX5O7HTG2MTI9DiPhGw07ZvHRlh4XeRYzBvVkZQBYRSQ1PVUyeC6xko7cdVwVJ8FQIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=fastmail.com",
+       "recordId": 1441631,
+       "firstSeenAt": "2026-04-14T10:22:02.785Z",
+       "lastSeenAt": "2026-04-14T10:22:02.785Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "271f0160d2e41863",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvfZ2hWGUdZ5l9BjjJyPyKhPuN9dsjjGHk7p+64dfhtvxxaptrlsMTNprSwGbEgVI+GIp9dqXoqYNH9LF9KIkJUyVmbaQKo8Ho8BEBSpkiqIkW4AE7D1ppO6pLcqulAx2kszcvonKyu8KuQiVrLXsi+zFpVGgdO1E2qkCabJXBgc1qPaY/iWJB1SjXM60ERlEJd6MlWjfYHgK4qNguhVoHwKjCvFdCdAfk47VS/SCOKsX0WvXEcQCjuLAiF7RM+ZzUj1poaXsgzm2XFEUjTrgJv2OQvZr3FS5WYPvYlDeMUR0AeKITOajuK9dvIkEgLYYLd6rOwq5+yIXPB0jt8dpYQIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=fastmail.com",
+       "recordId": 1405265,
+       "firstSeenAt": "2026-01-29T10:57:04.298Z",
+       "lastSeenAt": "2026-01-29T10:57:04.298Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "4278994bd84a79e0",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtUeaa+VHtTYNxwV4xv0/6QWhR++KQhi9/HO4qYvv+EnfntT+0GR/sjeQC4KZBp1F6wYgC0sixXIxC51tOanpV7Bt1QUg/yUSiEEIIQBUG0Fv2/Q+wSv2FPFNfIExrd4A+tvAFehb0XU3JG6JU6CkLaYaPb+i5BtZ9j3Cf5sEY3bqrHNISKquDWY/0u1sxzNMgx88zoa2fE1KsDA/+MMbNWrgz/CFyHUEfFphBtkOUA3miXAfiMeAcZHYUikXI838R67RAQCZSkP42NQlePwdGJvkkszGAByywg04l1c/rfPQCoTXMnVk0IdaVL8G+V4gOVol+8Hs+mQHeMb+AOxtvwIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=fastmail.com",
+       "recordId": 1237745,
+       "firstSeenAt": "2025-03-24T21:49:06.877Z",
+       "lastSeenAt": "2025-04-22T12:20:54.248Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "d7f4d946517aa4de",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArBTewSnwxQ6UmfjfQXQLOPzaNMKGGNkAHLaCOPpKfhr5iewaWjF8vYNDZVvhSkQ00xZS5vx6sXPLRfAJpWyxMocpmzN8EhITvIaV3ouQ4zismmCuXgGE5G5PN+IuyfOQlgJe4GRFQOmKPPZnDXA6eEzU2kc4x0fd5YGA8or8gXwCq5Nat9oJOWIYznqlCl74eP6RSol06LACkJKSyY1bo2bxVCmZXWgEoETZGcDwa7Rk23ba9evkCgcSInPFR2Ol/9fq6y2jKUYKkX+foCyosnxx/4yJJKUR20n9teikGfqzCLrQ61YPa/c8N2DdZQlYYkskBYiP4raom10NtF7gkQIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=fastmail.com",
+       "recordId": 71877,
+       "firstSeenAt": "2024-04-09T17:28:19.032Z",
+       "lastSeenAt": "2024-04-17T01:02:03.167Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "fm2._domainkey.messagingengine.com",
+   "d": "messagingengine.com",
+   "s": "fm2",
+   "dns": "published",
+   "candidates": [
+    {
+     "id": "89237294ecd20b47",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAy/WYfB0tXiQlsAUzkfnz4n/lCYHpLo96/v3zfuJb6yqb0qkf914nlSiBGh8S+TLPv2ZwW1qdcUDIfIS+hxebMaHHBT6TWusWjdPrFhlcAbTLVnadLVnriWaFYUnfgGgHl/53KGf00rxUv9a2YcmEry6ATyyKSjlkL0sG+HsAk/+IWxjvzvB8Af0gcfv1fgQPR0rK0cZCTHkGOZx2N0WPTvS8BoVzrp5SRoVDr5cWJZLoGSoTr8OgE3hW1rf/LcR5M7lNzCC8cv+P7hI4eAeMtNl3BKwweRbHWgCiz/N1bC6jTEL7EqxOmc6ZVTyK0vUOBbsyERQ653DxleSgeajFVQIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "dns",
+       "name": "fm2._domainkey.messagingengine.com",
+       "checked": "2026-11-02"
+      },
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=messagingengine.com",
+       "recordId": 1489998,
+       "firstSeenAt": "2026-10-22T09:10:19.881Z",
+       "lastSeenAt": "2026-10-22T09:10:19.881Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "25b5c55280b5bbff",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAypG/+LGZU/lruXfK1zg/EKSBSAPRvGZHvvxxfx37iwLWL9GYsj1jIpUPOF1YH9c8S46Qx34O/17qTAxLJqZareDICdCrITiVadqC6Br/d03A1KsdhypzTnLF52IHL2RFKpTcaDaA+lLv7k2buRnwQwQTfc++YzCegOhFjPc0h8yBpMSaGV2XfOrU4ragOWrmZey4ZQGYWWrwyQOdHF/rwE2+vjB7nnZTuMv9SGaXpsSHys8y5G9CNhWzRoE/+GcxHeDI6rZRG/G6MwzFTWsp+j9GUNZ49oo74DjfDNIwxV7UhVTqYiiX/rBCF/GoJHrNWge7GL9idVX1SkvEcXiDeQIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=messagingengine.com",
+       "recordId": 1203608,
+       "firstSeenAt": "2025-01-14T11:32:19.409Z",
+       "lastSeenAt": "2025-01-14T11:32:19.409Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "f7ab451fc1257d7e",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAoTUFew+bwcMBaeK1vHiZiO38f4Eb9NOYvNmT14cJEiThwU8/SafQxq5yEtlhpjwD9j9HK046BV8ZL06f+iVvkzRPKgX8wgoQWwoNqSd0xcXTOTw06ptBQqAxnFGgPsMmaHckY9G5w1xOdcWaj1uZLWjjJkyunP9NytTjy7DYbYFFJwpolueTVRkwnyM9sjrLMJm/O+1H3bFgcei9gsUaG6Gmqg7Nfxxb3T4nalDJShhhH5i8RoZN0QsFe3pyCmnrlPMjU32r3NkUcuVo2L9Vi7zaZbSlXV5wMciED0zAa5V4J4zZVWFGXiu9qpvK8BFwbuL0b7XdYX4N5u7dl2WowQIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=messagingengine.com",
+       "recordId": 1286073,
+       "firstSeenAt": "2025-06-30T05:14:39.841Z",
+       "lastSeenAt": "2025-06-30T05:14:39.841Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e5bbfedb6432b1c6",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0pqVOyEhflMBkO51MpBOlbwNy+zWWcaoFbfld9HUCIGoWMN9B9VdIfszzxpyhKnPc9V+fgTveoi2G/mXvOewfKnfBJn3dWg05k7jrO4Apfg9aQR4qd3bSpOIpAWSTmpgwImnqh0qHXG7VeSG968rUkY0DMkRy6kMsCZ4Zp+jLs/bwSpUCCGOCyzNdez+WuRJuEkim1GCZ6BFcGxsLKMtLZEYcQK453NgXLFZ7BS3iBVWWGHCTvqGjSBH3rrd2IK+1LVSE6mJc6ZVNjgPb9cOmLq/QfcjKf+3cIy8Ty0bUasvw+RPEIsI9CKZGPMmIf0pHRJezjyie0bhuIvHagleQwIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=messagingengine.com",
+       "recordId": 1405266,
+       "firstSeenAt": "2026-01-29T10:57:04.693Z",
+       "lastSeenAt": "2026-01-29T10:57:04.693Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "108d30408f691b46",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwCjpcwcdfSPvwZvtbDY5riAXrsFwfdi6I9RLWJUu9pht5iRdVLPyQYgJXB4v9dEtcXTNBf94QqJV1adcbS38BKmhtqQF9Zv8+KvG9YpiJbu5oCKepaXV/SHKTP2AqU8g4WVJ9F7mDnG71Pliov7iQl+I0B9f6gOA/QzGWVeZRgo83/ghfu5Bso2/s3lVrph4kaLGvU03BBqrqNgze0WvLvKfyg5Prp1TT91cLGQ6riRzNhQRWDWgaM1sZ395lu2xjv75zcb3FEbUyIJYpSRgM8LBBQ4OxdG34caHAXqjpy/YobU4DdZ8zBMaVts4Pc3P/PkbO6QfCv2J53Vme6X0UwIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=messagingengine.com",
+       "recordId": 1441632,
+       "firstSeenAt": "2026-04-14T10:22:02.914Z",
+       "lastSeenAt": "2026-04-14T10:22:02.914Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "d3e944722af4ccef",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqZ3SIROEyphxP1q6js0d52K2WSTHLrsSfHfqqU3TiVGjvW7oeyWmZ7iAq6lVbvZPpWf7ah6VmsHznJKVdK/2kEvawcXF60B6LHc875VhiQvVnqHW31nfAxUrZQq+wfUkiwBTxt/lCJE61NmstT0QQQHpuAjXkwNZJMUxSSmc6QaceVqlyL4BsEdBqCAnUik+EYysBdPnaqIXObsi3ANY4mlnOHWbsCFjY4+pgS0w2Y0R8H9OOirogua/st3GDmfAv0yejENoWamLUr+p+QWMcic4D6w+gPLe807zMqGyBsnN0BBuN7TaizFhCnnGU7B7RkADYFlRJMUZUtlfN144mQIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=messagingengine.com",
+       "recordId": 1097815,
+       "firstSeenAt": "2024-10-12T18:09:15.371Z",
+       "lastSeenAt": "2024-10-12T18:09:15.371Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "58eedbf840b8f645",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAx+iPWa2xIRSzpdXAdEejkA836Sq/2nCOBvodJDdH3Dgd7ySbCg+uSMc32EDJfyeNZSxwrfMU3u4ApGOmH8OS+KaT9Kq7ZJp1oNaMvH6YrHQIVVvdMt8OZ+cwa0UvnIC91QhsV8xziCNRMp+FfkSUC3QmsfLLaZCh7yujEKrL3PDqmzI80eEp+f8Yp9tUPFFo/AIDZZLhuJM5LpkeEDyXv/acuEMauY/7ha3AOxykXxWeTuet0B5XlDesQl40kdAhN2j75HZ8hKCTHaEMvxO0LGBmUbAoL19eG4brwMBPx/f+hAsr7G2q1mcSdkdb4bmWrCDX66aOn61bmo9B8pIcgwIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=messagingengine.com",
+       "recordId": 7247,
+       "firstSeenAt": "2024-03-19T23:04:45.257Z",
+       "lastSeenAt": "2024-04-18T18:38:13.216Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "fm3._domainkey.fastmail.com",
+   "d": "fastmail.com",
+   "s": "fm3",
+   "dns": "revoked (empty p=)",
+   "candidates": [
+    {
+     "id": "7938268ea973c0ef",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuN0WBXdRLt8SxaY1EytZIhXxhhOBDRKwzqsDWCSbHkr1iYMVVt+s49kAKK4GhbRUmPKxLKMGrV9iJVxQ5NEvT1Xqcg3GR5dhA9EMAdfZ17nnyR/PDvHbMqAg7byGBPPSrkGnIlSVXFtpIL72BbqHjidParkGmFFwIER9a1ekdl2q/R4yem/lHQfej1pP8arQ0bGxMlmcW6Ll4RiDX2DSCrTHnS6RXnehNOXYWj05Nu1tpZmrQBbM00hgWoHJgp2Vd3ud0qCi9q7iWOE2VPXLbt92MyqIcgGle7V0RnYZs6HsZzp81Po07BH44FyHRrbHaKg8/j0KpZ34V+8N00UuGQIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=fastmail.com",
+       "recordId": 1220976,
+       "firstSeenAt": "2025-02-16T21:51:05.809Z",
+       "lastSeenAt": "2025-02-16T21:51:05.809Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "32902a4774221c14",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwNQdwRFXAfcyDvSUXfXUxsYcsaGTXuRbjSp8MnM/BPP+3iWgjY00THrjqyd0yFnOultlxkfYdkP7Wl2sFcf80YsCVH98nCFMl/1z/wkXnPjlE9OAiSjfwygpdN20P2LkVtiQ/ZanPLgETejs2oi+1jQMj9YBPQxDbBZxcdT3OravOFSUx5fvhppWmH8O/JC5YvlS0maMeHV9Us1fpznC+1+ErmgVZdgjrtiRleXj6C9jgfpB6yRzLaODfrpZjkzltoB+na6OOTO/9ApoWIJk62WAh6k6iLYKX7C1xUSQ0nIzn/Km7WSDGLhR0hH9fngUQ1K+pCFBRoCqbDcRtWuljwIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=fastmail.com",
+       "recordId": 1406019,
+       "firstSeenAt": "2026-01-31T00:57:02.047Z",
+       "lastSeenAt": "2026-01-31T00:57:02.047Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "424dc3dfe4386770",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4ZILUMey5TfD6WwDby6imPEtk0qEKZOVhbv5ot6TEpBKwOOsr3ssvbzmgI0LpreK+3pAvPTyLfM2iulp2KM+dJauIsZFMIFLb+bhMqJPeH94eDJpzmyMg2T8Y9EaHr8Oe+uVZ3Dgm4VDCUxsXUjnoidaqDaUY0bU8BVEzYZieglbNrZkKYKgwxzIg7T4XPMGNYmpoAai1a8P3QwHx4UuKEvJDVjn7lmnclvTufDRQY0M05YnwFDbIb7BIMdlmlDfw0kTxjTLUtdibK7hSbwX9UWy3YZvZsjkF5A1iZuN1VoIlvdhh7QJh8sPrWn+ObPNQQe9s1V2K/uadCQ9OmvpoQIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=fastmail.com",
+       "recordId": 1256726,
+       "firstSeenAt": "2025-04-29T05:26:07.314Z",
+       "lastSeenAt": "2025-04-29T05:26:07.314Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "5988fd9924d8c54f",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsUAKe/ghld2yzhdkfHn151upwkzIAb0BoWtvzil1OT/NxTIsSe6oDUFDKM+b4ccnBVQkDg6dlUpvd5CpYWGsOqyupyfue8F7E/XOWLUOr1DkeGlITKOEQJuqcEOMiReedfJvBtW9FpNMoqy2553OHad8t3vUpnluVhqI/hIryl8v9yj9HTFNxvKa+WIasWn3IIjTBOzm7NJedi5kZRkXTQ7MCtRJS/st5+/YX72XvTqn/37GTLEoBwVYY9l8TaujnjNKKqtGrwAw4Pvn0m1LEJr2+xu+VqsfDwIrE6f4Hn7bRXP7mq7j9wGkl67TC3XGJo9g6EIe53nSHpQc+GxDDQIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=fastmail.com",
+       "recordId": 1372498,
+       "firstSeenAt": "2025-11-20T22:43:04.701Z",
+       "lastSeenAt": "2025-11-20T22:43:04.701Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "fm3._domainkey.messagingengine.com",
+   "d": "messagingengine.com",
+   "s": "fm3",
+   "dns": "revoked (empty p=)",
+   "candidates": [
+    {
+     "id": "7321835b72a15e87",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlKGXVzwD71YDvj1iqkPhc3JgPK5bKcc3cmNsjE4FDzp5IJs73f+nVnfKuuS0zwlhwh0qe9lCK0AhD+4BRA0Lc4s4w+aCXPwM1DeQ518/+8OO1cIjpNwUdoiVZCKqgUatk9yZuTCBvlTsGwp2VkXRbRBIA1wV1uQ+vJjWqxUmXCIg1flrxoMG5ckj/l/0cKl4xkMCmpEGTjhgK5PQ7BwPX9AOToRACRVBanP7UZaBQY1zI0gGlcvZIIDkjaYc1Um/Uu083awG/SI8fLb7GcOE9l/ncBSoHH9Mw/lFYM+Pj60F7VSdH16V3ADbPa+jPIuvLjBuuIR8D2jFhFhXWo8RQwIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=messagingengine.com",
+       "recordId": 925481,
+       "firstSeenAt": "2024-04-18T15:51:03.563Z",
+       "lastSeenAt": "2024-04-18T18:38:13.716Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "4622225cdb87db6d",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAw8vhR4Cy3KuZCcfZRj6HxWIzMJX0CUOflXhv0E/K2z/ph/Bk2p8as4SeChkOyK6r9KQeIvEj8gOBpVyCbKUJ+N82RIaaIoOpYfIw0LU+ZQOisX06nluysj6V9vk0H80LejucryXLRVymvEWKwh4eNaPTNA4KsY2bIW7AWvQ+euCmI6OedYOKTHd/A8Nm2gGGhTYqynOD+WG1/3dNbM6RDBBEd3wMu6SmqM+L41iGlAbLWfZoMPAB/3pBtfHozgM9otbnhAb4NREHjGcBnlMsFCZ4tXakGGLWeXrWxnLq5ib+cywQyAG3iWF3YmzVIMk+vkozT3O4EKVqipOfOyy2fQIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=messagingengine.com",
+       "recordId": 1255194,
+       "firstSeenAt": "2025-04-25T15:19:05.766Z",
+       "lastSeenAt": "2025-04-25T15:19:05.766Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "d3c9483a3c118148",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1G2N5ttikx9s07zXkQn29OQe3KiKb2ZK3sW4FoivBtOsEOhDSBxWxdrk3XqK3eBIoUOqLcb2wP9a8CVrjKMRx99pP4VaoOGqkHK+zeGHZGlC3qpTckpBz9h2Z8SgNqUTxIOz+mRSwEka0oU6lV34ePpTpxq+wrfg6qJHKylwW1oU4dC4qbf3YMFTm5VHAtKtSeRp7Z6YTgqNI9qJY1i71OkqXlorWIcyFyToKUZ74AjLU3p9bw18fcgqVR4DHYp6Lny4sx84Z9kOiuHtSBzYgFHySfF7sduwWseHMcV7kXN66L261ojbs7zj5OvVHCWFYxg3Jbh+xMmxF0owvHVjzQIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=messagingengine.com",
+       "recordId": 1219451,
+       "firstSeenAt": "2025-02-13T07:40:36.631Z",
+       "lastSeenAt": "2025-02-13T07:40:36.631Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "522302e976260325",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3TntGwdEtmIx+H8Etk1IgA2gLzy9v22TO+BcTUmUFaURWSG413g+VItm86ntW1bfbgFk/ArrTVAzQxgynoCQky3VXMXl2qEKgGSrLv+QaNvbebVDZI6VZX8D5+aJIN3sCSVY1eXA4x6LbPZ8pAqIAuAhtfXc7rVKbELqlEaUMrQ+ovyjF4R6gfL621BKdLeTF89/kbqJhLwmgtzok6UBUzexDDBhZ0gfGw331J+7aqdJLWUCQv6iE3zkI4myyEcMrgWxRjdZ861x374pNzady/B688A5i4BHoVnBJBuLEYfS1gTCC/7SB6U5AdEin3P0/+DqSH36cu8+MvAZ1C7E2wIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=messagingengine.com",
+       "recordId": 1372494,
+       "firstSeenAt": "2025-11-20T22:38:07.795Z",
+       "lastSeenAt": "2025-11-20T22:38:07.795Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "e8326bd0bb5efb12",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAw/CbD69tQKI8GeuJUz36BM7mZRBQjyAZUPq+qwAerc0F8yEta5PuyLlNPVhDQBXldHCCRXl/HQjZ0qbeB5LtSibPMoJX2f3SXop95hesc+pBgajQ6UcFc8bL5CPFUyt/HHpKcX6rjW8oq+GNbunNMvK1VVevRfx/E4luwPn1y9hHKKvFTl2hPwGQfAW39hMXNWy6NCxN3zRKBfwGIS30ey85DJiLaQHFfEGXLe6L1/hv6XXRs3EsQAGMQFiAKtzeUdG6mPI5Ifbvt9vVWIp8rCyXuv0Pu3fiScFHTmW7sExrTJMjLyn68gFfzs6yIv/vpxV0e7wRSmXEAhdV/lgIAwIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=messagingengine.com",
+       "recordId": 1406016,
+       "firstSeenAt": "2026-01-31T00:52:03.242Z",
+       "lastSeenAt": "2026-01-31T00:52:03.242Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    },
+    {
+     "id": "1d224d3dc5e429d3",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAofjLHa61n4NhpjPsffxirgfpKm/bcjbKEQBhpytndh2EkFsFcAqwfviV60l89gSCK3DCXAAGt80+TRMNmsskJk/4/5sg9B4FjiEuVVYswH495PuFy6NvLs0BYx2zjiEy4S2ZF1uoj2o0B0ZT30C2fmtVwz7IOX4VLVZJ8cKWLNCjHyaH013Ar1Icsjt4oH+WYqjnsCsHPf2O2DdbJpAhYCXwnfHBEdaKl9lp//zNt06DfXlnGwt2/YCqTfGEHM4Ks0clAKfQEd2XY9RLiqhBUAmP/xIHvXE9IQLZH1h22AlW0QKYcJplt59T+WiYSnGrV/fWY9rKayaWRlcADRk05QIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=messagingengine.com",
+       "recordId": 1155241,
+       "firstSeenAt": "2024-11-20T09:25:21.783Z",
+       "lastSeenAt": "2024-11-20T09:25:21.783Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "ghi74ms66fa7diw4mku2dsmyeq.protonmail2._domainkey.proton.me",
+   "d": "proton.me",
+   "s": "ghi74ms66fa7diw4mku2dsmyeq.protonmail2",
+   "dns": "published",
+   "candidates": [
+    {
+     "id": "444824d7f09d215d",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzyzKjxw9soyR/PtOaHGV2qeOR63FVUMlRr2ssw6yZQGea4O3DzioVtwQMjXhqkLSnthca9zIyInBEcWXbC2LwRWX0vXJrULQpFtY1anvBebUJgbX9W2TJUW8seVoVVcKk0DF4iENEtsWNPBpuGKdx1BPpN4OujjWFs7RN4oIMHnJpSIlxzX9hT8mwdlUuKA4GsOOBg8zpXQIeJy8jDWj2xrmd6GxGsSCBD4mRrqwscSWU+RN6vyUon8wT2b3HujvCCRUhIrd40tMeT9clyl7IZSTJu5M7q0+s/favDSKiyIMBG4Walzr5OuFMl2eEGwDp45s3jQZfjHlczjCeyjmEwIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "dns",
+       "name": "ghi74ms66fa7diw4mku2dsmyeq.protonmail2._domainkey.proton.me",
+       "checked": "2026-11-02"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "jjz57fyxhrbkzczy2qpcveqgye.protonmail._domainkey.proton.me",
+   "d": "proton.me",
+   "s": "jjz57fyxhrbkzczy2qpcveqgye.protonmail",
+   "dns": "published",
+   "candidates": [
+    {
+     "id": "61c054785daa01ec",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAn46zCm3zHBmS1zePKxA+RIXw41Nu6l91NpLLBnWnrcZ35H/843XNWPZEQ0OgGwx/yqTXETMLXIDjGEWlK1E1mpdguqu+3s7SuIHoo5+i6mgyxJguljkwc3dk8ojnJ6VVUPnDh5GJArkAhXxEb1aOK1BVGM0yDlmYdmaOfd48qcx5iODP/MFc8pivfxEXTIL+aUz7+X69lMiwUSHpWYL3/a5X3nLD0zEntxv08xs8J/rpuRg4v+OXEOhcNvhkeiRZqJBdpJTkoEZfGvdTct+U0YYC69NW0ClUcKio2uDPmxU1xvfvHbSTW2gHYk8RpYZaxLACULdMo+Vt4Na/oIR+swIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "dns",
+       "name": "jjz57fyxhrbkzczy2qpcveqgye.protonmail._domainkey.proton.me",
+       "checked": "2026-11-02"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "liv3ix6jl5eblpgxdkm7fy7e3u.protonmail._domainkey.proton.me",
+   "d": "proton.me",
+   "s": "liv3ix6jl5eblpgxdkm7fy7e3u.protonmail",
+   "dns": "published",
+   "candidates": [
+    {
+     "id": "61c054785daa01ec",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAn46zCm3zHBmS1zePKxA+RIXw41Nu6l91NpLLBnWnrcZ35H/843XNWPZEQ0OgGwx/yqTXETMLXIDjGEWlK1E1mpdguqu+3s7SuIHoo5+i6mgyxJguljkwc3dk8ojnJ6VVUPnDh5GJArkAhXxEb1aOK1BVGM0yDlmYdmaOfd48qcx5iODP/MFc8pivfxEXTIL+aUz7+X69lMiwUSHpWYL3/a5X3nLD0zEntxv08xs8J/rpuRg4v+OXEOhcNvhkeiRZqJBdpJTkoEZfGvdTct+U0YYC69NW0ClUcKio2uDPmxU1xvfvHbSTW2gHYk8RpYZaxLACULdMo+Vt4Na/oIR+swIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "dns",
+       "name": "liv3ix6jl5eblpgxdkm7fy7e3u.protonmail._domainkey.proton.me",
+       "checked": "2026-11-02"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "m6ndnd6bvjdulogxedg3zrxotm.protonmail._domainkey.proton.me",
+   "d": "proton.me",
+   "s": "m6ndnd6bvjdulogxedg3zrxotm.protonmail",
+   "dns": "published",
+   "candidates": [
+    {
+     "id": "61c054785daa01ec",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAn46zCm3zHBmS1zePKxA+RIXw41Nu6l91NpLLBnWnrcZ35H/843XNWPZEQ0OgGwx/yqTXETMLXIDjGEWlK1E1mpdguqu+3s7SuIHoo5+i6mgyxJguljkwc3dk8ojnJ6VVUPnDh5GJArkAhXxEb1aOK1BVGM0yDlmYdmaOfd48qcx5iODP/MFc8pivfxEXTIL+aUz7+X69lMiwUSHpWYL3/a5X3nLD0zEntxv08xs8J/rpuRg4v+OXEOhcNvhkeiRZqJBdpJTkoEZfGvdTct+U0YYC69NW0ClUcKio2uDPmxU1xvfvHbSTW2gHYk8RpYZaxLACULdMo+Vt4Na/oIR+swIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "dns",
+       "name": "m6ndnd6bvjdulogxedg3zrxotm.protonmail._domainkey.proton.me",
+       "checked": "2026-11-02"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "n6tut3na6bg4neobzur4mhsrfy.protonmail2._domainkey.proton.me",
+   "d": "proton.me",
+   "s": "n6tut3na6bg4neobzur4mhsrfy.protonmail2",
+   "dns": "published",
+   "candidates": [
+    {
+     "id": "444824d7f09d215d",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzyzKjxw9soyR/PtOaHGV2qeOR63FVUMlRr2ssw6yZQGea4O3DzioVtwQMjXhqkLSnthca9zIyInBEcWXbC2LwRWX0vXJrULQpFtY1anvBebUJgbX9W2TJUW8seVoVVcKk0DF4iENEtsWNPBpuGKdx1BPpN4OujjWFs7RN4oIMHnJpSIlxzX9hT8mwdlUuKA4GsOOBg8zpXQIeJy8jDWj2xrmd6GxGsSCBD4mRrqwscSWU+RN6vyUon8wT2b3HujvCCRUhIrd40tMeT9clyl7IZSTJu5M7q0+s/favDSKiyIMBG4Walzr5OuFMl2eEGwDp45s3jQZfjHlczjCeyjmEwIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "dns",
+       "name": "n6tut3na6bg4neobzur4mhsrfy.protonmail2._domainkey.proton.me",
+       "checked": "2026-11-02"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "nexjddiilfh67hnz5lngq4iraq.protonmail._domainkey.proton.me",
+   "d": "proton.me",
+   "s": "nexjddiilfh67hnz5lngq4iraq.protonmail",
+   "dns": "published",
+   "candidates": [
+    {
+     "id": "61c054785daa01ec",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAn46zCm3zHBmS1zePKxA+RIXw41Nu6l91NpLLBnWnrcZ35H/843XNWPZEQ0OgGwx/yqTXETMLXIDjGEWlK1E1mpdguqu+3s7SuIHoo5+i6mgyxJguljkwc3dk8ojnJ6VVUPnDh5GJArkAhXxEb1aOK1BVGM0yDlmYdmaOfd48qcx5iODP/MFc8pivfxEXTIL+aUz7+X69lMiwUSHpWYL3/a5X3nLD0zEntxv08xs8J/rpuRg4v+OXEOhcNvhkeiRZqJBdpJTkoEZfGvdTct+U0YYC69NW0ClUcKio2uDPmxU1xvfvHbSTW2gHYk8RpYZaxLACULdMo+Vt4Na/oIR+swIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "dns",
+       "name": "nexjddiilfh67hnz5lngq4iraq.protonmail._domainkey.proton.me",
+       "checked": "2026-11-02"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "protonmail._domainkey.proton.me",
+   "d": "proton.me",
+   "s": "protonmail",
+   "dns": "published",
+   "candidates": [
+    {
+     "id": "61c054785daa01ec",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAn46zCm3zHBmS1zePKxA+RIXw41Nu6l91NpLLBnWnrcZ35H/843XNWPZEQ0OgGwx/yqTXETMLXIDjGEWlK1E1mpdguqu+3s7SuIHoo5+i6mgyxJguljkwc3dk8ojnJ6VVUPnDh5GJArkAhXxEb1aOK1BVGM0yDlmYdmaOfd48qcx5iODP/MFc8pivfxEXTIL+aUz7+X69lMiwUSHpWYL3/a5X3nLD0zEntxv08xs8J/rpuRg4v+OXEOhcNvhkeiRZqJBdpJTkoEZfGvdTct+U0YYC69NW0ClUcKio2uDPmxU1xvfvHbSTW2gHYk8RpYZaxLACULdMo+Vt4Na/oIR+swIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "dns",
+       "name": "protonmail._domainkey.proton.me",
+       "checked": "2026-11-02"
+      },
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=proton.me",
+       "recordId": 3207,
+       "firstSeenAt": "2024-02-19T06:51:35.455Z",
+       "lastSeenAt": "2026-04-23T07:53:04.164Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "protonmail2._domainkey.proton.me",
+   "d": "proton.me",
+   "s": "protonmail2",
+   "dns": "published",
+   "candidates": [
+    {
+     "id": "444824d7f09d215d",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzyzKjxw9soyR/PtOaHGV2qeOR63FVUMlRr2ssw6yZQGea4O3DzioVtwQMjXhqkLSnthca9zIyInBEcWXbC2LwRWX0vXJrULQpFtY1anvBebUJgbX9W2TJUW8seVoVVcKk0DF4iENEtsWNPBpuGKdx1BPpN4OujjWFs7RN4oIMHnJpSIlxzX9hT8mwdlUuKA4GsOOBg8zpXQIeJy8jDWj2xrmd6GxGsSCBD4mRrqwscSWU+RN6vyUon8wT2b3HujvCCRUhIrd40tMeT9clyl7IZSTJu5M7q0+s/favDSKiyIMBG4Walzr5OuFMl2eEGwDp45s3jQZfjHlczjCeyjmEwIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "dns",
+       "name": "protonmail2._domainkey.proton.me",
+       "checked": "2026-11-02"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "protonmail3._domainkey.protonmail.com",
+   "d": "protonmail.com",
+   "s": "protonmail3",
+   "dns": "published",
+   "candidates": [
+    {
+     "id": "4baeeaee31c595e9",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzmFrmvkaVOE10ueeoEOMjotpj67tM+bNAAb/XEDbh/fPoWjbkyzsxR/HbcEh7lfJyrTl4Z+4zsJptSf7P5+d1puFiLsCP8W+Ln5f4lJNdp7cEEss4v0uM8h2cez89PZSuoD26h5cfFnnRdy7d05Ag0XbE/vYLv1kdWHHwK/UxL26GrsKJcTKcNo+Ukx3GnXqhsJJNLy/UUYAIy4w3mRQnxjdE0KC74fQBR/7WwiQb47JbQTDiJaFtihiB3CNd6/hZfi5fsGsoypWXR/uL/LiQcTGgC8gSM4YuSAzwIuUE4P+/23dOA8l81WmLTjKRdh4NWX1dGOPQ6a93nInUkfTmwIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "dns",
+       "name": "protonmail3._domainkey.protonmail.com",
+       "checked": "2026-11-02"
+      },
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=protonmail.com",
+       "recordId": 2994,
+       "firstSeenAt": "2024-02-19T05:52:58.721Z",
+       "lastSeenAt": "2026-05-08T12:56:03.721Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "s2048._domainkey.yahoo.com",
+   "d": "yahoo.com",
+   "s": "s2048",
+   "dns": "published",
+   "candidates": [
+    {
+     "id": "240d86fcad816987",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuoWufgbWw58MczUGbMv176RaxdZGOMkQmn8OOJ/HGoQ6dalSMWiLaj8IMcHC1cubJx2gziAPQHVPtFYayyLA4ayJUSNk10/uqfByiU8qiPCE4JSFrpxflhMIKV4bt+g1uHw7wLzguCf4YAoR6XxUKRsAoHuoF7M+v6bMZ/X1G+viWHkBl4UfgJQ6O8F1ckKKoZ5KqUkJH5pDaqbgs+F3PpyiAUQfB6EEzOA1KMPRWJGpzgPtKoukDcQuKUw9GAul7kSIyEcizqrbaUKNLGAmz0elkqRnzIsVpz6jdT1/YV5Ri6YUOQ5sN5bqNzZ8TxoQlkbVRy6eKOjUnoSSTmSAhwIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "dns",
+       "name": "s2048._domainkey.yahoo.com",
+       "checked": "2026-11-02"
+      },
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=yahoo.com",
+       "recordId": 1008,
+       "firstSeenAt": "2015-09-24T04:16:32.000Z",
+       "lastSeenAt": "2026-10-20T14:05:59.515Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "s29768273._domainkey.web.de",
+   "d": "web.de",
+   "s": "s29768273",
+   "dns": "published",
+   "candidates": [
+    {
+     "id": "e0e6a38729f9a0b2",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxDWxPz/5m3Ufz6fLSTZ9erebfjLUcXzAlwqy/KjnWiTu7ZrLJSTpYjaVtgcAJWZzFE4R0MFP9wm5RhlwGrm4SXkierBwuIdLFnj7lmkCKVuZIY+ctdQWL13ZzB7HvsuR7MprFcgCfsWikPYa2UTw93yr6T+x4yi9ZBJDPpVIV6noziCDE6cg05O+fj90hfw0dSUUctf+x+pOpmMdDCJKBBw0rh35/VaNWvONWxRYvyGZ58467vsYlKhE337d7iL+QqCGQ0YlFqG3g2Nuxf00Ns/aDp5kwl5I8ipdbBpfsNwJ/nxJw+NFwRnEnG09qioQlmkM/YqZSQStAcWQSf+B0wIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "dns",
+       "name": "s29768273._domainkey.web.de",
+       "checked": "2026-11-02"
+      },
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=web.de",
+       "recordId": 2737,
+       "firstSeenAt": "2024-02-18T19:16:50.783Z",
+       "lastSeenAt": "2026-06-15T08:32:02.562Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "s31663417._domainkey.gmx.de",
+   "d": "gmx.de",
+   "s": "s31663417",
+   "dns": "published",
+   "candidates": [
+    {
+     "id": "6dfaa36ae5617071",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAujKq2O+04tKe1Z8z5K852dJIqyreVB8jR4Z8PpIVR3dzbLcJt/cDivXpJBFJ8jFU63jT5lNcTthBxXP+7t8lp6nDoW6Vlvzkp4W/Wts9U8ZIOXBkw4hOTzVTdsk0aKGASrf9USh7JN9PT61bP2nXJ1GnnuiJ4o8EabE8MqwPELUuCd1+my+8pMsQ/wqqDWKu1lVDW0n99+uL/fAcc3tN4xrl4qBCBfuo/Do/hnyEJeuVLq3nxpCBClYROspfdrpQ2fDul2TIzdqDJcbsf/n62yrydNwHsSl9HPaQc98pxyix9zFGCRHlf08F2livgBjwVQ7Evzmag8Qc8meoqsyHMwIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "dns",
+       "name": "s31663417._domainkey.gmx.de",
+       "checked": "2026-11-02"
+      },
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=gmx.de",
+       "recordId": 2767,
+       "firstSeenAt": "2024-02-18T19:18:52.005Z",
+       "lastSeenAt": "2026-06-01T00:31:03.716Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "s31663417._domainkey.gmx.net",
+   "d": "gmx.net",
+   "s": "s31663417",
+   "dns": "published",
+   "candidates": [
+    {
+     "id": "6dfaa36ae5617071",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAujKq2O+04tKe1Z8z5K852dJIqyreVB8jR4Z8PpIVR3dzbLcJt/cDivXpJBFJ8jFU63jT5lNcTthBxXP+7t8lp6nDoW6Vlvzkp4W/Wts9U8ZIOXBkw4hOTzVTdsk0aKGASrf9USh7JN9PT61bP2nXJ1GnnuiJ4o8EabE8MqwPELUuCd1+my+8pMsQ/wqqDWKu1lVDW0n99+uL/fAcc3tN4xrl4qBCBfuo/Do/hnyEJeuVLq3nxpCBClYROspfdrpQ2fDul2TIzdqDJcbsf/n62yrydNwHsSl9HPaQc98pxyix9zFGCRHlf08F2livgBjwVQ7Evzmag8Qc8meoqsyHMwIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "dns",
+       "name": "s31663417._domainkey.gmx.net",
+       "checked": "2026-11-02"
+      },
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=gmx.net",
+       "recordId": 2701,
+       "firstSeenAt": "2024-02-16T22:23:50.686Z",
+       "lastSeenAt": "2026-05-27T14:44:03.964Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "selector1._domainkey.hotmail.com",
+   "d": "hotmail.com",
+   "s": "selector1",
+   "dns": "published",
+   "candidates": [
+    {
+     "id": "11ddf5c384e357ef",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvWyktrIL8DO/+UGvMbv7cPd/Xogpbs7pgVw8y9ldO6AAMmg8+ijENl/c7Fb1MfKM7uG3LMwAr0dVVKyM+mbkoX2k5L7lsROQr0Z9gGSpu7xrnZOa58+/pIhd2Xk/DFPpa5+TKbWodbsSZPRN8z0RY5x59jdzSclXlEyN9mEZdmOiKTsOP6A7vQxfSya9jg5N81dfNNvP7HnWejMMsKyIMrXptxOhIBuEYH67JDe98QgX14oHvGM2Uz53if/SW8MF09rYh9sp4ZsaWLIg6T343JzlbtrsGRGCDJ9JPpxRWZimtz+Up/BlKzT6sCCrBihb/Bi3pZiEBB4Ui/vruL5RCQIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "dns",
+       "name": "selector1._domainkey.hotmail.com",
+       "checked": "2026-11-02"
+      },
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=hotmail.com",
+       "recordId": 895,
+       "firstSeenAt": "2024-01-31T19:05:31.861Z",
+       "lastSeenAt": "2026-10-20T13:48:32.433Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "selector1._domainkey.outlook.com",
+   "d": "outlook.com",
+   "s": "selector1",
+   "dns": "published",
+   "candidates": [
+    {
+     "id": "11ddf5c384e357ef",
+     "p": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvWyktrIL8DO/+UGvMbv7cPd/Xogpbs7pgVw8y9ldO6AAMmg8+ijENl/c7Fb1MfKM7uG3LMwAr0dVVKyM+mbkoX2k5L7lsROQr0Z9gGSpu7xrnZOa58+/pIhd2Xk/DFPpa5+TKbWodbsSZPRN8z0RY5x59jdzSclXlEyN9mEZdmOiKTsOP6A7vQxfSya9jg5N81dfNNvP7HnWejMMsKyIMrXptxOhIBuEYH67JDe98QgX14oHvGM2Uz53if/SW8MF09rYh9sp4ZsaWLIg6T343JzlbtrsGRGCDJ9JPpxRWZimtz+Up/BlKzT6sCCrBihb/Bi3pZiEBB4Ui/vruL5RCQIDAQAB",
+     "bits": 2048,
+     "sources": [
+      {
+       "kind": "dns",
+       "name": "selector1._domainkey.outlook.com",
+       "checked": "2026-11-02"
+      },
+      {
+       "kind": "archive.zk.email",
+       "url": "https://archive.zk.email/api/key?domain=outlook.com",
+       "recordId": 24,
+       "firstSeenAt": "2024-01-23T16:56:31.992Z",
+       "lastSeenAt": "2026-10-20T13:50:27.966Z",
+       "observations": [
+        "live_dns"
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

@@ -5,7 +5,9 @@ This directory evaluates email recovery as built in this repository
 the email-recovery contracts on Stellar testnet with one complete
 email-factor recovery, the on-chain cost of an email vote on the test host,
 on the local network and on testnet, and the time and memory of proving a
-recovery email natively, in Node and in a browser. Every table below is
+recovery email natively, in Node and in a browser. The circuit's reading
+of real and fuzzed headers, and the per-provider review of sender
+authentication, are in [`parser/`](parser/README.md). Every table below is
 generated from a file in `results/` (or from `browser-prover.json` and
 `onchain.md`), and every file there is written by one of the commands under
 [Running it](#running-it); figures quoted in the prose come from those
@@ -25,6 +27,7 @@ front-running resistance, **4** one-factor safety.
 | Benchmark page for a phone | `just email-recovery-bench-phone` (`phone/build.mjs`, `phone/serve.mjs`); `node research/email-recovery/eval/phone/check.mjs` runs the build in headless Chrome | `target/email-bench-phone/`, served on the local network |
 | Testnet deployment and recovery | `research/email-recovery/eval/testnet/run.sh` | `results/testnet.json`, `DEPLOYED.md` |
 | Tables | `node research/email-recovery/eval/report.mjs` | this file |
+| The circuit's parsing against real mail and fuzzed headers | `just email-recovery-parser-check` (`parser/check.sh`) | `parser/results/`, the tables of `parser/README.md` |
 
 Prerequisites: Docker, the Stellar CLI, `git submodule update --init`,
 `just perch-infra`, `just build-contracts`, `npm ci` (which builds the npm

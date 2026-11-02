@@ -1,0 +1,8 @@
+[package]
+name = "parser_harness"
+type = "bin"
+compiler_version = ">=1.0.0"
+
+[dependencies]
+email_recovery = { path = "../../../../../circuits/email-recovery/lib" }
+sha256 = { path = "../../../../../circuits/email-recovery/vendor/sha256" }
