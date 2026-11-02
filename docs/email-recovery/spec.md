@@ -454,21 +454,37 @@ email locally:
 2. `From` parses under §4.5 and its domain is on the allowlist.
 3. The Subject is exactly the enrollment phrase with `hex(E)` for this
    account and the wallet's `rho_e`.
+4. The recovery circuit itself accepts the signed header block, leaving room
+   for the recovery Subject's one extra octet (`HEADER_MAX`).
 
 The wallet then computes `C` (§5.3) and the pin root (§7.4) and deploys the
 guardian (§8.2). Nothing on chain verifies the enrollment email: the owner
 enrolling their own recovery is the only party relying on it, and a wrong
 `C` disables only that owner's email factor.
 
-The check applies the recovery circuit's own rules to the enrollment email
-(§4.3 rules 2 to 7, the §4.5 grammar, `HEADER_MAX`), so an inbox whose
-recovery email could never be proven is refused at enrollment rather than
-discovered at recovery **[built, tested]**
-(`checkEnrollmentEmail` in `packages/email-recovery/src/enrollmentEmail.ts`;
-`test/enrollmentEmail.test.ts`: an honest Gmail enrollment email is
-accepted and `C` is its signed address's commitment; another account,
-another `rho_e`, the recovery phrase, a key that did not sign it, and a
-domain outside the allowlist are refused; the grammar cases of §4.5).
+Check 4 runs the recovery circuit's committed artifact
+(`circuits/email-recovery/artifacts/recovery.json`, the one the prover
+proves with) on the enrollment email's signed block with noir_js, without a
+proof, under placeholder public inputs and openings. The relation checks the
+header (C1, C2, the §4.5 grammar, the §4.3 tag rules and `d=`) and the
+Subject's position before it compares the Subject with the recovery phrase,
+so a block it accepts is refused first by the assertion `Subject: must start
+with the recovery phrase`; the wallet accepts exactly that refusal and
+refuses the email with any other. The circuit's rules, not a restatement of
+them, decide whether the provider signs in a form the circuit proves, so a
+provider that signs with `c=relaxed` (no body part), an upper-case `a=` or
+`c=`, or a space inside a tag is refused at enrollment rather than
+discovered at recovery. What the enrollment email cannot show is the
+recovery email's own Subject and its length beyond the extra octet
+**[built, tested]** (`checkEnrollmentEmail` and `circuitAcceptsHeader` in
+`packages/email-recovery/src/enrollmentEmail.ts`; `test/enrollmentEmail.test.ts`:
+an honest Gmail enrollment email is accepted and `C` is its signed address's
+commitment; another account, another `rho_e`, the recovery phrase, a key
+that did not sign it, and a domain outside the allowlist are refused; the
+circuit refuses re-signed copies with `c=relaxed`, `c=Relaxed/Relaxed`,
+`a=RSA-SHA256` and `d= gmail.com`, and a block with no room for the extra
+octet; the grammar cases of §4.5). The parser check's cross-check pins the
+order of the circuit's refusals on every real and fuzzed header (§12).
 
 **The wallet's enrollment flow** (`/security/recovery/email/`,
 `packages/frontend/src/lib/recovery/emailEnrollPage.ts`), while the owner
@@ -562,9 +578,19 @@ contract id`) and so open only given the account.
   user-chosen. It is five words drawn uniformly from the EFF large wordlist
   (7,776 words), lowercase, separated by single spaces, at least 64.6 bits.
   The Argon2id password is its UTF-8 bytes.
-- The provider stores the ciphertext. Without the passphrase it cannot
-  recover `account_code`, so it cannot compute `C` and link the inbox to the
-  guardian.
+- The provider stores the ciphertext, and the enrollment email passes
+  through the recovery address's mail exchanger (§4.6). Without the
+  passphrase neither recovers `account_code`, so neither can compute `C` and
+  link the inbox to the guardian.
+- **What the copy costs.** The GCM tag lets whoever holds the block test a
+  passphrase guess offline, one Argon2id evaluation (64 MiB, 3 passes) per
+  guess. For a user who keeps the copy, the email factor is therefore the
+  inbox and a five-word passphrase of about 64.6 bits stretched by Argon2id,
+  attackable offline by the inbox thief and the provider, not the inbox and
+  the 128-bit code: exhausting the passphrases takes about 2^64.6 Argon2id
+  evaluations instead of 2^128 guesses of the code. A user who keeps only
+  the kit (b) keeps the code's 128 bits. Which backups to offer is §13
+  question 4.
 
 **(b) Recovery kit / password manager:** the 16 bytes as 26 characters of
 RFC 4648 base32 without padding, shown in groups of four. The kit file also
@@ -1840,7 +1866,19 @@ answered `getTransactions` with exactly that window on 2026-11-02), which
 equals the email-plus-delay profile's minimum delay. Reconciliation recovers
 authorized attempts and email votes after a longer outage; it reads only
 accounts the vault holds contacts for. Reading every transaction costs the
-host the network's throughput in bandwidth (not run against mainnet here).
+host the network's throughput in bandwidth: 24 consecutive mainnet ledgers
+read through one public RPC (`mainnet.sorobanrpc.com`, 2026-11-02) held
+8,879 transactions, 2,275 of them Soroban, and 123,836,893 octets of JSON,
+about 5.2 MB a ledger and 89 GB a day at 5-second ledgers, fetched in 50.75
+s for 120 s of chain time **[measured]**
+(`research/email-recovery/eval/watcher-load.mjs`,
+`results/watcher-load-mainnet.json`). A watcher its RPC slows or
+rate-limits falls behind and raises the lag alarm; reconciliation, every six
+hours and after a refused cursor, still alerts an authorized attempt and the
+email votes on open attempts, so for those the cost is latency. An event the
+guardian emitted from `__check_auth` under a fixed topic would let a topic
+filter select email votes instead; guardians are immutable, so that is a new
+guardian version (§13 question 26).
 
 ### 10.3 Alert contacts
 
@@ -2200,10 +2238,10 @@ Every one is emitted **[built, tested]**; the announcements are
 | A1a | RSASSA-PKCS1-v1_5 with SHA-256 and 2048-bit moduli is existentially unforgeable, and providers keep their DKIM private keys secret. |
 | A1b | Each launch provider DKIM-signs a `from` field naming one of its mailboxes only when that mailbox's holder submitted the message. For the circuit's reading (§4.3, §4.5) this needs: (1) a submission with two `From` fields is refused or rewritten, or the provider authenticates the instance it signs (the bottom-most when `h=` names `from` once), and for a `From` with a display name the provider authenticates the angle-addr the circuit binds (a `From` that RFC 5322 readers read as several addresses, a group, another mailbox or none does not reach a proof: the circuit refuses it, §4.5); (2) sending as another address of the provider's domain requires proof of control of that mailbox; (3) an address is not reassigned, or a new holder cannot use it against an existing enrollment, which `account_code` provides (§5.1). The per-provider evidence, with a source for each cell or what would establish it, is `research/email-recovery/eval/parser/sender-authentication.md`; its unknowns are §13 question 23. |
 | A2 | SHA-256 is collision resistant. |
-| A3 | `P2` is collision resistant, and no input is known that it maps to `0` (the empty leaf); for the hiding claims (privacy, the blinded Subject, the salted pin) it is modelled as a random function. |
+| A3 | `P2` is collision resistant on `F_r^k`: nobody can compute two different lists of field elements of one length with one hash, or a list of field elements that it maps to `0` (the empty leaf); for the hiding claims (privacy, the blinded Subject, the salted pin) it is modelled as a random function. `P2` reads each input as a field element, so `x` and `x + r` are one input to it, not a collision; every value the circuit hashes is a `Field`. |
 | A4 | **Proof system.** UltraHonk in Perch's zero-knowledge flavor (Barretenberg 0.87.0's Keccak ZK flavor), Fiat–Shamir-compiled with Keccak, is zero-knowledge and simulation-extractable, in the random-oracle model (or that model with the algebraic group model): for every efficient adversary with oracle access to honest proofs, there is an efficient extractor for that adversary, which may read its code, coins and random-oracle queries, such that whenever the adversary outputs a proof the verifier accepts for public inputs `x` that no proof it was given has, the extractor returns a witness for `x`, except with negligible probability. The verifier contract embeds the email circuit's key. |
 | A5 | The registry holds a leaf `(domain, key_hash)` only for a key that domain's operator controls. The registry contract reduces this to its governance (§7.6): a key enters only with `threshold` member approvals, after a public timelock of ledger close time (72 hours if `attest_threshold` attesters vouched it live in DNS, 7 days otherwise; wall-clock time under A9 (a)) during which `revoke_threshold` members can stop it; revocation is applied when a compromise is known. |
-| A6 | `account_code` and `rho` come from a secure generator and stay with the user and the user's browser. |
+| A6 | `account_code` and `rho` come from a secure generator. `rho` stays in the user's browser. `account_code` stays with the user, except as the optional passphrase-encrypted copy in the enrollment email (§5.6 (a)), which whoever reads the Sent folder can attack offline at the passphrase's strength (about 64.6 bits, stretched by Argon2id), and as `k_code`, a key derived from it and sealed to the vault (§10.1, §10.5). |
 | A7 | The enrolling wallet is honest at enrollment (it computes `C` and the pin from the real enrollment email). |
 | A9 | **Timing.** (a) *Close time.* A ledger's close time tracks wall-clock time: stellar-core accepts a ledger only if its close time is later than the previous ledger's and at most 60 seconds past the validating node's clock (§7.6 "Clock"), and a quorum of validators keeps an honest clock. The registry's timelocks, grace, and proposal lifetime, the key pin, the enclave-image registry's timelock, and the vault's contact-change delay rest on (a) only, whatever the target close time. (b) *Ledger counts.* Perch's recovery delay, evidence window, and statement expiry are ledger counts, and Perch is used unchanged. Where one carries a security floor (the 7-day email-plus-delay delay, §9.3 rule 3), the wallet sizes it from the network's target ledger close time, `scp_timing.ledger_target_close_time_milliseconds` (CAP-0070; 5,000 ms on testnet and mainnet, read from both; at least 4,000 ms in protocol 23, a bound a later protocol may lower), and assumes ledgers close on average no faster than that target over the delay, since validators schedule each ledger that target after the previous one. A target lowered after a member was built shortens that member's delay in wall-clock time in proportion until it is rebuilt (§13 item 22); a core that closes faster than its target breaks (b): the local `stellar/quickstart --local` network reports 5,000 ms and closes about one ledger a second (measured: 30 ledgers in 30 seconds of close time), so there a 120,960-ledger delay lasts about 34 hours. |
 
@@ -2315,7 +2353,13 @@ How the assumptions enter the theorems:
   witness, the enrollment, and the tree of the accepted root; for replay: the
   encodings of the two statements the controller built), or, for A3's empty
   leaf, the extracted key's leaf input mapping to `0`. A break that only
-  asserted some collision exists would be true of any hash function.
+  asserted some collision exists would be true of any hash function. Every
+  Poseidon2 break named is on lists of field elements: the model's relation
+  bounds the witness's `Field` inputs (`account_code`, `rho`, the Merkle
+  siblings), the enrolled code has 16 bytes, and the registry and the pin
+  hold only RSA-2048 keys of domains of at most 62 bytes. Without those
+  bounds a pair such as `account_code` and `account_code + r`, which `P2`
+  reads as one input, would count as a break although nothing is broken.
 - **Extraction is A4's bad event on the accepted proof.** Theorem 1 holds
   for every function `X` from an accepted approval's public inputs and proof
   to a witness: the email facts hold of `X`'s witness, or `X` fails on that
@@ -2458,14 +2502,14 @@ network's.
 | The circuit's header parsing on real mail | 5,154 DKIM-signed posts from all 11 launch domains (18 GNU mailing lists, October 2025 and May to October 2026), 5,327 signatures: the circuit and the reference (mailauth 8.0.4 strict mode for RFC 6376, node:crypto for RSA, Python 3.14's RFC 5322 reader for From) agree on every one. 4,619 are accepted by both with the same address and domain; 708 are refused by both: 316 do not verify under any known key (an archived copy whose signed fields the list changed, or a key no public source still holds), 229 signed blocks exceed `HEADER_MAX` (in 197 the longest signed field is `References` or `In-Reply-To`; the others sign a long `Cc`, `Autocrypt`, `Face` or `Mail-Followup-To`), 162 have a `d=` other than the From domain, 1 has two signed Subjects. The committed recovery artifact agrees with the harness on all 10,320 executions; the encoder's signed block equals the reference's for every signature; 592 signatures verify only under a key from zkEmail's public archive | `research/email-recovery/eval/parser/results/differential.json` (`just email-recovery-parser-check`). These are list archives' copies of ordinary posts, not the providers' outbound recovery mail; no Fastmail signature verifies under any key the DNS or zkEmail's archive holds, so Fastmail is tested on the refusing side only **[measured]** |
 | Grammar-based fuzzing of the circuit's parsing | 50,000 seeded cases around the §4.5 From grammar and the §4.3 tag list (49,779 signatures, 51,814 circuit executions, 35 minutes on 18 cores), each compared with mailauth's strict RFC 6376 verifier and Python's RFC 5322 reader: 22,409 signatures accepted and 23,967 refused by both. Every From value the circuit accepts, Python reads as exactly the mailbox it binds; among the refused are 600 that Python reads as one mailbox but whose display name §4.5 excludes (of the 596 nothing else refuses, 498 hold a comment and 98 an RFC 2047 encoded-word with an `@`). The circuit accepts 2,692 that mailauth ignores for a defect in a tag the circuit does not read (§4.3), and refuses 711 that RFC 6376 allows, each for whitespace in a tag it reads (§4.3). The recovery artifact agreed with the harness on all 1,994 cross-checked signatures, and refuses each of the four From values of `from-finding.mjs` (an address list, an address before the angle-addr, a quoted word before an address, an unclosed quoted string) at the display-name check | `research/email-recovery/eval/parser/results/fuzz.json`, `results/from-finding.json` (`just email-recovery-parser-check`); seeded and reproducible case by case (`fuzz.mjs --show`); signed with a TEST-ONLY key **[measured]** |
 | Attack suite on a local network | 70 scenario rows in eleven classes (forged emails, replayed emails and proofs, a wrong account or new key in the statement, stale or malicious registry keys, a compromised inbox, the alert path, phishing and social engineering, repeated attempts, provider header quirks, front-running, privacy on chain), each outcome as expected and each refusal named by its layer (circuit assertion, guardian check number, registry rule, Perch controller error, alert path); the three registry scenarios that need an elapsed timelock or grace period on the test host with the registry's real timelocks | `research/email-recovery/eval/README.md` (`just email-recovery-attacks`; `network/attacks.mjs` on `stellar/quickstart --local` at protocol 29 with mainnet's settings, every approval a real proof by bb.js in Node; `email_guardian.rs::registry_*`). Mocked (TEST-ONLY): the mail providers, DNS, the sending services, the push service, the enclave and its custodians, and the enclave-image registry (the end-to-end test's stand-in). In CI (`email-recovery-attacks.yml`) **[built, tested]** |
-| Enrolling an account at mainnet's settings | minting the account 2,876,016 stroops, deploying its email guardian 1,609,367, the recovery document that lists it with one helper 6,949,238: 11,434,621 stroops (1.1 XLM), almost all of it rent (2,863,021, 1,603,056 and 6,918,606), since new entries live at least mainnet's 2,073,600-ledger minimum and the guardian and the account extend theirs to the maximum. The testnet recovery run's enrollment: 1,344,343, 1,997,088 and 5,711,756 | `research/email-recovery/eval/results/attacks-local.json`, medians over the attack run's 11 launch-domain accounts on the local network with mainnet's settings; testnet from `testnet.json` **[measured]** |
-| One `submit_guardian` with an email approval on a local network | metered: 121.6 million instructions (121,576,077 to 121,664,431 across 20 votes, median 121,641,679), 12 entries read, 2 entries and 1,208 bytes written; 126,485,435 to 126,577,531 instructions declared after simulation, which the fee is charged on; 18,080-byte transaction around a 16,784-byte authorization entry; 83,125 to 83,153 stroops charged, 2,047 to 2,049 of them rent. The vote that authorizes an attempt with a 7-day delay also writes the authorized attempt: 122.5 million instructions (127,443,767 declared), 4 entries and 1,488 bytes written, 3,632,052 stroops charged, 3,545,582 of them rent | `research/email-recovery/eval/results/attacks-local.json`, read from each transaction's result and the host's `core_metrics` events, on `stellar/quickstart --local` at protocol 29 with mainnet's settings loaded (`eval/network/start-local.sh`, settings archived in `eval/results/settings/`); the approvals use the guardian's pin, so the registry is not called (spec §7.4) **[measured]** |
+| Enrolling an account at mainnet's settings | minting the account 2,876,016 stroops, deploying its email guardian 1,609,367, the recovery document that lists it with one helper 6,949,238: 11,434,621 stroops (1.1 XLM), almost all of it rent (2,863,021, 1,603,056 and 6,918,606), since new entries live at least mainnet's 2,073,600-ledger minimum and the guardian and the account extend theirs to the maximum. The testnet recovery run's enrollment: 1,344,343, 1,997,088 and 5,711,756 | `research/email-recovery/eval/results/attacks-local.json`, medians over the attack run's 11 launch-domain accounts on the local network with mainnet's settings; testnet from `testnet.json`. Figures of the committed attack run: each run draws new keys and proofs, which moved the enrollment's total by up to 86 stroops over three runs of one build (`results/attack-reruns.json`); the paper and the slides typeset the current run's from `results/figures.json` **[measured]** |
+| One `submit_guardian` with an email approval on a local network | metered: 121.6 million instructions (121,576,077 to 121,664,431 across 20 votes, median 121,641,679), 12 entries read, 2 entries and 1,208 bytes written; 126,485,435 to 126,577,531 instructions declared after simulation, which the fee is charged on; 18,080-byte transaction around a 16,784-byte authorization entry; 83,125 to 83,153 stroops charged, 2,047 to 2,049 of them rent. The vote that authorizes an attempt with a 7-day delay also writes the authorized attempt: 122.5 million instructions (127,443,767 declared), 4 entries and 1,488 bytes written, 3,632,052 stroops charged, 3,545,582 of them rent | `research/email-recovery/eval/results/attacks-local.json`, read from each transaction's result and the host's `core_metrics` events, on `stellar/quickstart --local` at protocol 29 with mainnet's settings loaded (`eval/network/start-local.sh`, settings archived in `eval/results/settings/`); the approvals use the guardian's pin, so the registry is not called (spec §7.4). Figures of the committed attack run; over three runs of one build the bounds of the fee moved by at most 7 stroops and the median of the metered instructions by 10,310 (`results/attack-reruns.json`) **[measured]** |
 | One `submit_guardian` with an email approval on testnet | metered: 121,609,311 to 121,696,841 instructions across 6 votes, 12 entries read, 2 entries and 1,208 bytes written; 126,516,681 to 126,607,608 instructions declared; 18,080-byte transaction; 82,419 to 82,446 stroops charged, 1,333 of them rent; 2,215 to 3,397 ms from simulation to confirmation. The recovery run's vote: 121,675,439 instructions (126,586,879 declared), 82,440 stroops | `research/email-recovery/eval/results/testnet-votes.json` (`testnet/votes.mjs`) and `testnet.json` (`testnet/run.sh`), read back from Stellar RPC 30.0.0 (protocol 29). Both runs are of commit `ab274154` on `main`, each contract's wasm sha256 recorded, and read the deployed verifier's circuit id back (`a998d03e…`, this tree's verification key); every transaction's envelope, result and metadata XDR is in `testnet-xdr.json` (`testnet/evidence.mjs`). The approvals use the guardian's pin **[measured]** |
 | The same vote's fee by component at mainnet's settings | 37,969 compute, 3,016 for the 2 entries and 1,208 bytes written, 36,419 history, 3,585 transaction size, 10 events: 80,989 non-refundable; 2,049 rent and the 100-stroop inclusion fee: 83,148 stroops, the Gmail vote's charge on the local network. Testnet charges the same components except rent (1,333: its minimum temporary lifetime is 720 ledgers, mainnet's 17,280) | `eval/fees/model.mjs` over each transaction's declared resources and the archived settings, which reproduces every fee charged in the evaluation's network runs to the stroop; table in `research/email-recovery/eval/README.md` **[measured]** |
 | How many email votes a mainnet ledger holds | at most 12 (CAP-0063: 3 clusters per stage, each within 580,000,000 declared instructions, which 4 votes of about 126.5 million fill); 47 by transaction size, 245 by bytes written; 2.4 votes a second at 5-second ledgers. Past that, transactions compete on their inclusion fee; the resource fee is fixed by the settings | mainnet's settings (`eval/results/settings/mainnet.json`) and the local votes' declared resources **[measured]** |
-| Votes against a registry root on a network | **Not yet measured; scheduled.** A registry root holds a key only after its addition's attested timelock, 72 hours of ledger close time. The local network's run (`eval/network/run-registry-root.sh`: one account per launch domain with no pin and one with the wallet's pin) and the testnet run (`eval/testnet/votes.mjs`) are enrolled; both were set up from commit `ab274154` and check the verifier's circuit id before they vote; their additions are eligible from close time 2026-11-05 13:01:51 UTC and 13:04:40 UTC, when they vote against the registry's root. Until then the registry-root figures are the test host's: the two `submit_guardian` rows below, whose approvals use a registry root, and `is_accepted_root` | — |
-| One complete email-factor recovery on testnet | every step succeeded: mint, guardian deployment, the recovery document, `begin_lost_key`, the email vote, the helper's vote (which authorizes the attempt and pays its record's rent: 3,664,629 stroops charged, 3,653,812 rent), a 12-ledger delay (57,099 ms), and completion; 13,758,804 stroops charged over those 7 transactions; the account's document then holds the new passkey and not the lost one. An earlier run on the same Perch deployment found Perch's doc compiler and recovery controller archived and restored them first, one transaction per entry: 112,447,907 stroops over 4 transactions, 8.4 times that run's recovery (13,384,714); this run found them live | same, and `testnet-restorations.json` for the earlier run; deployment in `DEPLOYED.md`, "Email recovery (evaluation, TEST-ONLY)". Mocked (TEST-ONLY): the mail provider, DNS **[measured]** |
-| A recovery with every entry it reads archived, at mainnet's settings | 7 transactions and 3,959,831,748 stroops (396 XLM), almost all of it rent to restore 28 entries for mainnet's minimum persistent lifetime (2,073,600 ledgers): the code of Perch's doc compiler, account, controller and WebAuthn verifier and of the email verifier, guardian and registry dominate, and three code entries exceed one transaction's limits (200,000 bytes read, 132,096 written), so they restore in RestoreFootprint transactions of their own. The same 4 steps with nothing archived: 5,237,377 stroops. Rent is priced at mainnet's rate today, the 1,000-stroop-per-KB floor, which holds while the average Soroban state stays at most 2.0 GB (1.718 GB when the settings were read); the rate grows with the average, to 5.5 times at 2.5 GB (21,776,595,086 stroops) and ten times at 3.0 GB (39,593,358,424). Whoever submits pays it, and a recovering user's new device holds no XLM: the wallet submits through the relayer, whose mainnet configuration spends at most 100 XLM a day (`infra/relayer/fly.mainnet.toml`), and it has no RestoreFootprint path; who pays an archived recovery on mainnet is open | `crates/integration-tests/tests/it/email_archival.rs` (`eval/archival.sh`): each step re-executed by the test host with every entry not yet restored archived, under mainnet's cost model and entry lifetimes, priced by `eval/fees/archival.mjs`; code entries sized for rent as the network sizes them (`eval/results/code-entries.json`). Not a network: no network here archives within a run **[measured]** |
+| Votes against a registry root on a network | **Not measured.** A registry root holds a key only after its addition's attested timelock, 72 hours of ledger close time. The local network's run (`eval/network/run-registry-root.sh`: one account per launch domain with no pin and one with the wallet's pin) and the testnet run (`eval/testnet/votes.mjs`) are enrolled from commit `ab274154`, check the verifier's circuit id before they vote, and have additions eligible from close time 2026-11-05 13:01:51 UTC and 13:04:40 UTC; no vote against a registry root has been submitted on a network. The registry-root figures are the test host's: the two `submit_guardian` rows below, whose approvals use a registry root, and `is_accepted_root` | — |
+| One complete email-factor recovery on testnet | every step succeeded: mint, guardian deployment, the recovery document, `begin_lost_key`, the email vote, the helper's vote (which authorizes the attempt and pays its record's rent: 3,664,629 stroops charged, 3,653,812 rent), a 12-ledger delay (57,099 ms), and completion; 13,758,804 stroops charged over those 7 transactions; the account's document then holds the new passkey and not the lost one. An earlier run on the same Perch deployment found Perch's doc compiler and recovery controller archived and restored them first, one transaction per entry: 112,447,907 stroops over 4 transactions, 8.2 times this run's recovery, a cost of Perch's entries alone; this run found them live | same, and `testnet-restorations.json` for the earlier run; deployment in `DEPLOYED.md`, "Email recovery (evaluation, TEST-ONLY)". Mocked (TEST-ONLY): the mail provider, DNS **[measured]** |
+| A recovery with every entry it reads archived, at mainnet's settings | Priced as 7 transactions and 3,959,831,748 stroops (396 XLM), almost all of it rent to restore 28 entries for mainnet's minimum persistent lifetime (2,073,600 ledgers): the code of Perch's doc compiler, account, controller and WebAuthn verifier and of the email verifier, guardian and registry dominate, and three code entries (Perch's doc compiler and account, the registry) exceed one transaction's limits (200,000 bytes read, 132,096 written), so they restore in RestoreFootprint transactions of their own: the 4 steps are re-executed, those 3 transactions modelled, since the test host enforces no per-transaction limit. The same 4 steps with nothing archived: 5,237,377 stroops. Rent is priced at mainnet's rate today, the 1,000-stroop-per-KB floor, which holds while the average Soroban state stays at most 2.0 GB (1.718 GB when the settings were read); the rate grows with the average, to 5.5 times at 2.5 GB (21,776,595,086 stroops) and ten times at 3.0 GB (39,593,358,424). Whoever submits pays it, and a recovering user's new device holds no XLM: the wallet submits through the relayer, whose mainnet configuration spends at most 100 XLM a day (`infra/relayer/fly.mainnet.toml`). The wallet builds no RestoreFootprint transaction, and its inline restorations rely on simulation, untested with archived entries, so recovery through it waits, whenever one of those three code entries is archived, for a keeper or someone else to restore it; who pays on mainnet is open | `crates/integration-tests/tests/it/email_archival.rs` (`eval/archival.sh`): each step re-executed by the test host with every entry not yet restored archived, under mainnet's cost model and entry lifetimes, priced by `eval/fees/archival.mjs`; code entries sized for rent as the network sizes them (`eval/results/code-entries.json`). Not a network: no network here archives within a run **[measured]** |
 | Keeping the contracts live, a year of rent at mainnet's settings | 3,304,297,283 stroops (330.4 XLM) for the email verifier (instance and code), the key registry (instance and code) and the guardian's code, shared by every account; 3,245,716 (0.32 XLM) for each account's guardian instance; Perch's controller, doc compiler, WebAuthn verifier and account code, which Perch's operator keeps, 8,677,150,521 (867.7 XLM). A code entry is sized for rent by its in-memory module, 9 to 26 times its entry here (the guardian's 33,672-byte entry rents as 320,239 bytes, Perch's doc compiler's 110,040-byte one as 2,431,469). Each keeper transaction pays about 1,240 stroops besides rent. At 5.5 and 10 times today's rent rate (an average state of 2.5 and 3.0 GB) the shared entries cost 18,173,606,450 and 33,042,915,617 a year, an account's guardian instance 17,845,716 and 32,445,716 | `research/email-recovery/eval/results/keeper-local.json` (`eval/network/run-keeper.sh`: the keeper, `eval/network/keeper.mjs`, run once on a local network with mainnet's settings, every extension's rent reproduced from the entry's size for rent); a year is 6,307,200 ledgers at 5 seconds **[measured]** |
 | Moving an account to a new email guardian at mainnet's settings (§8.7) | under `Loss` 2 transactions, 2,631,221 stroops: the deployment 1,608,348 (1,601,271 of it rent for the new instance), the owner's `apply_doc` 1,022,873; under `Protected` 4 transactions, 3,159,077 stroops, the two helpers' `approve_change` votes adding 481,576 and 45,817 | `crates/integration-tests/tests/it/email_migration.rs` (`eval/migration.sh`): each transaction re-executed by the test host under mainnet's cost model and entry lifetimes, priced by `eval/fees/model.mjs` at mainnet's archived settings; `research/email-recovery/eval/results/migration-test-host.json`. Not a network **[measured]** |
 | One `submit_guardian` with an email approval and a real proof, whole invocation on the test host | 121,799,565 to 121,883,583 instructions (30.4 to 30.5% of 400,000,000); 5.6 MB of memory; 14 entries read; 2 entries and 1,208 bytes written; resource fee without rent 94,419 to 94,478 stroops at the SDK's 2026-07-10 fee snapshot, across the 12 fixtures | `email_proofs.rs` (every launch domain and the 124-byte address), `cost_estimate()`; table in `research/email-recovery/eval/onchain.md` (`measure-onchain.py`) **[measured]** |
@@ -2477,10 +2521,10 @@ network's.
 | `execute` of an addition (the leaf and the 16-level root recomputation) | 22,774,204 instructions; 1,068,056 bytes of memory; 37 entries read; 20 entries and 4,400 bytes written; 348 event bytes; fee without rent 102,662 stroops | same test **[measured]** |
 | The approval that executes a revocation (removal, root recomputation, refusals) | 20,048,562 instructions; 880,742 bytes of memory; 39 entries read; 21 entries and 1,956 bytes written; 516 event bytes; fee without rent 103,549 stroops | same test **[measured]** |
 | Enclave-image registry wasm, optimized | 10,584 bytes | `just build-contracts` output for `nido_enclave_image_registry.wasm` **[measured]** |
-| `attempt_authorized` to the email accepted by the sending mock | 11 to 62 ms, median 16.5 (10 runs) | `infra/email-alerts/test/e2e.test.ts` (`NIDO_ALERT_MEASUREMENTS`), from the start of the watcher's poll to the Lettermint mock's receipt; Node 24.18.0, darwin arm64, a shared machine (load average about 45) **[measured on mocks]** |
-| `attempt_authorized` to the push accepted by the push mock | 13 to 66 ms, median 19 (10 runs) | same **[measured on mocks]** |
+| `attempt_authorized` to the email accepted by the sending mock | 11 to 13 ms, median 11.5 (10 runs) | `research/email-recovery/eval/results/alert-latency.json` (`eval/alert-latency.mjs`, which runs `infra/email-alerts/test/e2e.test.ts` with `NIDO_ALERT_MEASUREMENTS`), from the start of the watcher's poll to the Lettermint mock's receipt; Node 24.18.0, darwin arm64, a shared machine (load average about 7.5) **[measured on mocks]** |
+| `attempt_authorized` to the push accepted by the push mock | 12 to 15 ms, median 13.5 (10 runs) | same **[measured on mocks]** |
 | Reading the event to the vault's answer (email and push sent) | 13.7 to 27.7 ms, median 17.3 (10 runs) | same, `PollReport.latencyMs` **[measured on mocks]** |
-| Vault restart: process start, shares from two custodians, reconstruction, unsealing | 147 to 238 ms, median 152 (10 runs) | same **[measured on mocks]** |
+| Vault restart: process start, shares from two custodians, reconstruction, unsealing | 98.2 to 105.9 ms, median 101.3 (10 runs) | same **[measured on mocks]** |
 | Vault attestation document (16 PCRs, 3-certificate bundle) | 3,775 bytes | same **[measured on mocks]** |
 | Contact registration request as the wallet posts it | 1,284 bytes of JSON | same **[measured on mocks]** |
 | Web Push body (RFC 8291, one record) | 353 bytes | same **[measured on mocks]** |
@@ -2558,10 +2602,12 @@ providers' own delivery to these figures.
    preventing a lock-out.
 4. **`account_code` backup.** v1 offers the passphrase-encrypted copy in the
    enrollment email and a recovery kit, both from one wallet component
-   (§5.6). Alternatives: the code in plain text in the enrollment email (best
-   recoverability; the provider can compute `C` and link the inbox to the
-   account), or a recovery kit only (no copy at the provider; lost if the
-   kit is lost).
+   (§5.6). The copy lowers the factor's offline work for whoever reads the
+   Sent folder from 2^128 guesses of the code to about 2^64.6 Argon2id
+   evaluations of the passphrase (§5.6). Alternatives: the code in plain
+   text in the enrollment email (best recoverability; the provider can
+   compute `C` and link the inbox to the account), or a recovery kit only
+   (no copy at the provider, the full 128 bits; lost if the kit is lost).
 5. **Registry parameters.** The registry is built with the defaults of §7.6;
    each is a constructor parameter.
    - *Grace period.* Built with 86,400 seconds (24 hours), capped at
@@ -2708,8 +2754,21 @@ providers' own delivery to these figures.
     (`research/email-recovery/eval/network/keeper.mjs`) extends the email
     verifier, the key registry, the guardian's code and every enrolled
     account's guardian instance before they archive (§12, "Keeping the
-    contracts live"). Open: who funds it on mainnet; whether the wallet
-    extends an account's own entries when it opens, since Perch's account
-    and controller are not Nido's to keep; and whether the keeper also
-    extends the registry's tree paths and proposals (`renew_path`), which
-    governance reads and votes do not.
+    contracts live"). Perch's operator keeps Perch's controller, doc
+    compiler, WebAuthn verifier and account code, 8,677,150,521 stroops
+    (867.7 XLM) a year at mainnet's settings. An account's own instance and
+    document are extended to the network maximum only when the account
+    changes them or anyone calls its permissionless `renew`, so they archive
+    about 180 days after that. Open: who funds the keeper on mainnet; whether
+    the keeper or the wallet renews each account's own entries; a wallet
+    path that restores archived entries (simulate, find the archived keys,
+    restore the large code entries first in RestoreFootprint transactions of
+    their own through the relayer), which is not built; and whether the
+    keeper also extends the registry's tree paths and proposals
+    (`renew_path`), which governance reads and votes do not.
+26. **Finding email votes.** The watcher reads every transaction on the
+    network, about 5.2 MB of JSON a ledger on mainnet (§10.2). A guardian
+    version that emits an event under a fixed topic from `__check_auth`
+    would let `getEvents` select the votes; it reveals nothing new, since
+    the guardian's address is public in the account's configuration, and it
+    needs a new guardian for every account.

@@ -1,6 +1,9 @@
-\section{Reproducibility and threats to validity}\label{app:repro}
+\section{Open science: artifacts, reproducibility and threats to validity}\label{app:repro}
 
-Every artifact builds from the repository with one command, run from its
+The artifacts are the paper's repository: the circuit, the contracts, the
+wallet, the alert service and the mocks, the Lean model, the evaluation's
+scripts and results, the claim ledger, and the sources of this paper and its
+slides. Every artifact builds from the repository with one command, run from its
 root after \texttt{git submodule update --init}, which fetches Perch at the
 pinned commit. Table~\ref{tab:repro} lists them. The circuit commands install
 Perch's pinned nargo and Barretenberg, checking each download against a
@@ -11,7 +14,13 @@ Live image pinned by digest, checks the claim ledger (every measured figure
 must occur in its measurement files), and fails on any undefined reference
 or citation; continuous integration runs it on every
 change, and runs the Lean build, the circuit tests, the contracts' tests and
-the local-network attack suite on the changes that touch them.
+the local-network attack suite on the changes that touch them. Re-running a
+measurement regenerates its evidence, and the documents regenerate from it:
+the attack suite rewrites its results, the evaluation's tables and the
+figures that move from run to run (each run draws new keys and proofs, which
+moves a vote's fee by a few stroops), and the next document build typesets
+them, so the build passes after any run whose rows have their expected
+outcomes.
 
 \paragraph{Threats to validity.}\label{sec:eval-threats}
 Every email is signed by a mock in its provider's published layout, and DNS,
@@ -46,11 +55,13 @@ people.
     Contract and integration tests & \texttt{just test} & the contracts above \\
     Cost on the test host & \texttt{python3 research/email-recovery/eval/measure-onchain.py} & the contracts above \\
     Network settings (read-only) & \texttt{node research/email-recovery/eval/fees/settings.mjs mainnet testnet --limits} & network access \\
+    Registry costs; alert latency & \texttt{research/email-recovery/eval/registry-costs.sh}; \texttt{node .../eval/alert-latency.mjs} & Node \\
+    What the alert watcher reads on mainnet & \texttt{node research/email-recovery/eval/watcher-load.mjs} & network access \\
     Attack suite (local network, test host) & \texttt{just email-recovery-attacks} & Docker, Stellar CLI, Node \\
     Registry-root votes, local network & \texttt{research/email-recovery/eval/network/run-registry-root.sh} & as above; 72 hours \\
     The keeper; recovery with everything archived & \texttt{research/email-recovery/eval/network/run-keeper.sh}; \texttt{research/email-recovery/eval/archival.sh} & as above \\
     Parsing on real mail and fuzzing & \texttt{just email-recovery-parser-check} & Node, Python \\
-    Testnet deployment and recovery; votes & \texttt{research/email-recovery/eval/testnet/run.sh}; \texttt{.../testnet/votes.mjs} & network access \\
+    Testnet deployment and recovery; votes; their XDR, checked again & \texttt{research/email-recovery/eval/testnet/run.sh}; \texttt{.../testnet/votes.mjs}; \texttt{.../testnet/evidence.mjs --check} & network access \\
     Proving (native, Node, browser) & \texttt{just email-recovery-proving} & Node, Chrome \\
     Benchmark page for a phone & \texttt{just email-recovery-bench-phone} & a phone on the same network \\
     End to end on a local network & \texttt{just test-e2e-email-local} & Docker, Playwright's Chromium \\

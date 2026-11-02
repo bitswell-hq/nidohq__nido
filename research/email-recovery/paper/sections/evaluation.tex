@@ -161,13 +161,13 @@ Fees are charged on declared resources, so the table gives both counts.
     \toprule
     & Test host & Local & Testnet \\
     \midrule
-    Instr.\ metered (M) & 131.17--131.25 & 121.58--121.66 & 121.61--121.70 \\
-    Instr.\ declared (M) & --- & 126.49--126.58 & 126.52--126.61 \\
+    Instr.\ metered (M) & 131.17--131.25 & \figM{vote-metered-min}--\figM{vote-metered-max} & 121.61--121.70 \\
+    Instr.\ declared (M) & --- & \figM{vote-declared-min}--\figM{vote-declared-max} & 126.52--126.61 \\
     Entries read / written & 14 / 2 & 12 / 2 & 12 / 2 \\
     Transaction (bytes) & 18{,}148 & 18{,}080 & 18{,}080 \\
-    Fee (stroops) & 178{,}196--178{,}249 & 83{,}125--83{,}153 & 82{,}419--82{,}446 \\
+    Fee (stroops) & 178{,}196--178{,}249 & \fig{vote-fee-min}--\fig{vote-fee-max} & 82{,}419--82{,}446 \\
     \quad mainnet's rates & 82{,}530 & as charged & --- \\
-    \quad of which rent & --- & 2{,}047--2{,}049 & 1{,}333 \\
+    \quad of which rent & --- & \fig{vote-rent-min}--\fig{vote-rent-max} & 1{,}333 \\
     Key path & registry root & pin & pin \\
     \bottomrule
   \end{tabularx}
@@ -177,77 +177,64 @@ Fees are charged on declared resources, so the table gives both counts.
 SDK's 2026-07-10 snapshot; at mainnet's current settings the same
 transaction costs 82{,}530 stroops before
 rent\claim{onchain-verification-cost}. The local network runs mainnet's
-settings, so its charge, 83{,}125 to 83{,}153 stroops a vote, is the mainnet
-projection, and at most 12 votes fit a ledger\claim{network-verification-cost}.
+settings, so its charge, \fig{vote-fee-min} to \fig{vote-fee-max} stroops a
+vote, is the mainnet projection, and at most \fig{votes-per-ledger} votes fit
+a ledger\claim{network-verification-cost}.
 A port of the host's fee computation reproduces every fee charged; of the
-Gmail vote's 83{,}148, compute is 37{,}969 and history, the 18\,KB envelope
-around the 16\,KB proof, 36{,}419\claim{fee-attribution}. The
-release-profile build meters 1.57 million fewer instructions per vote than
-the size-optimized wasm the networks run\claim{metering-attribution}. Every
+Gmail vote's \fig{gmail-total}, compute is \fig{gmail-compute} and history,
+the 18\,KB envelope around the 16\,KB proof,
+\fig{gmail-history}\claim{fee-attribution}. The release-profile build meters
+\figM{release-saving} million fewer instructions per vote than the
+size-optimized wasm the networks run; the networks' medians for the same wasm
+differ by less than the spread of votes within one
+run\claim{metering-attribution}. Every
 network vote uses the pin;
 a registry root adds \texttt{is\_accepted\_root}, 565{,}410 instructions, and
 the registry's instance and code to the footprint on the test
 host\claim{registry-costs}. Votes against a registry root have not been
 measured on a network. The vote that authorizes an attempt also writes it
-and pays its rent: 3{,}632{,}052 stroops, 3{,}545{,}582 of it
-rent\claim{authorizing-vote-cost}. Enrolling costs 11{,}434{,}621 stroops
+and pays its rent: \fig{authorizing-fee} stroops, \fig{authorizing-rent} of it
+rent\claim{authorizing-vote-cost}. Enrolling costs \fig{enrollment-total} stroops
 (1.1 XLM) at mainnet's settings, almost all of it rent for the new
 account, its guardian and its recovery document\claim{enrollment-cost}.
 
 \paragraph{Archival and the keeper.} Recovery is the operation least likely
 to have run recently, so the entries it reads are the likeliest to be
-archived. On testnet, an earlier run found Perch's doc compiler and
-controller archived, and restoring them cost 112{,}447{,}907 stroops (11.2
-XLM), 8.4 times the 13{,}384{,}714 of that run's seven-transaction recovery.
-At mainnet's settings, a recovery with every entry it reads archived takes 7
-transactions and 3{,}959{,}831{,}748 stroops (396 XLM), against 5{,}237{,}377
-with nothing archived. The operator's keeper extends the verifier, the
-registry and the guardian's code for 3{,}304{,}297{,}283 stroops (330.4 XLM)
-a year, plus 3{,}245{,}716 (0.3246 XLM) per account's guardian instance.
-These price rent at mainnet's rate when its settings were read, the
+archived. On testnet, restoring Perch's archived doc compiler and controller
+once cost 112{,}447{,}907 stroops (11.2 XLM), 8.2 times the
+13{,}758{,}804 of the recovery above. At mainnet's settings, a recovery
+with every entry it reads archived is priced as 7 transactions and
+3{,}959{,}831{,}748 stroops (396 XLM), against 5{,}237{,}377 with nothing
+archived: its 4 steps re-executed on the test host, which enforces no
+per-transaction limit, and 3 RestoreFootprint transactions modelled for the
+code entries too large to restore inline. The operator's keeper extends the
+verifier, the registry and the guardian's code for 3{,}304{,}297{,}283
+stroops (330.4 XLM) a year, plus 3{,}245{,}716 (0.3246 XLM) per account;
+keeping Perch's contracts costs Perch's operator 8{,}677{,}150{,}521 (867.7
+XLM). These price rent at mainnet's rate when its settings were read, the
 1{,}000-stroop floor per KB, which holds while the network's average state
 stays at most 2.0\,GB (it was 1.718\,GB); every rent figure is 5.5 times as
-large at 2.5\,GB and ten times at 3.0\,GB\claim{testnet-recovery-total}. If
-the keeper fails, recovery still works, restoring the same bytes, and the
-submitter pays. The recovering device holds no XLM, and the wallet has no
-path for restorations too large to make inline, so who pays an archived
-recovery on mainnet is open (Appendix~\ref{app:open}).
+large at 2.5\,GB and ten times at 3.0\,GB\claim{testnet-recovery-total}. A
+restored entry has its old bytes, so archival affects liveness, not safety
+(A13). The wallet builds no RestoreFootprint transaction, and its inline
+restorations rely on simulation, untested with archived entries; so when
+Perch's doc compiler or account code or the registry's code is archived, a
+recovery through the wallet waits for a keeper or for someone else to
+restore and pay, and who pays on mainnet is open (Appendix~\ref{app:open}).
 
 \subsection{Proving}\label{sec:eval-proving}
-Table~\ref{tab:proving} gives the time to prove one recovery email (the Gmail
-fixture, the circuit build the verifier embeds) natively, with bb.js in Node,
-and in Chrome with the wallet's prover worker on the recovery route's
-isolation headers\claims{desktop-proving-cost,browser-proving-cost,efficiency-core-proving}.
-The browser total includes cached assets, Barretenberg's start and local
-verification. A first proof downloads 18{,}664{,}335 octets of proving
-inputs, cached thereafter, and with the page and the prover's code,
-uncompressed, transfers 27{,}192{,}989\claim{prover-download}. The machine ran at a load average of
-about 6; a second run of the same build at 5.4 agrees within 2\%, though the
-slower tier's background-priority threads yield to other work.
-
-\begin{table}[t]
-  \caption{Proving one recovery email: median of five runs, in seconds;
-    memory is the peak resident set of \texttt{bb}, the Node process, or
-    Chrome's renderer. Total adds the witness (native, Node) or runs from
-    the page's request to the verified proof (Chrome).}
-  \label{tab:proving}
-  \small
-  \begin{tabularx}{\columnwidth}{@{}>{\raggedright\arraybackslash}X r r r r@{}}
-    \toprule
-    Prover & Thr. & Proving & Total & Memory \\
-    \midrule
-    Native \texttt{bb} & 18 & 0.94 & 1.69 & 876 MiB \\
-    Native \texttt{bb} & 1 & 4.64 & 5.38 & 870 MiB \\
-    bb.js, Node & 18 & 3.24 & 3.97 & 1{,}662 MiB \\
-    bb.js, Node & 1 & 13.4 & 14.1 & 1{,}386 MiB \\
-    Chrome 151 & 18 & 1.44 & 2.81 & 2{,}586 MiB \\
-    Chrome 151 & 1 & 8.37 & 9.88 & 1{,}432 MiB \\
-    Chrome, Performance tier & 4 & 10.3 & 14.9 & 2{,}034 MiB \\
-    Chrome, Performance tier & 1 & 32.5 & 37.3 & 1{,}398 MiB \\
-    Phone & --- & \multicolumn{3}{c}{not measured} \\
-    \bottomrule
-  \end{tabularx}
-\end{table}
+Proving one recovery email (the Gmail fixture, the circuit build the
+verifier embeds; median of five runs) takes 0.94\,s natively on 18 threads,
+3.24\,s with bb.js in Node, and 1.44\,s in Chrome with the wallet's prover
+worker on the recovery route's isolation headers, 2.81\,s from the page's
+request to the verified proof, the renderer peaking at 2{,}586\,MiB; on one
+thread Chrome takes 8.37\,s and 1{,}432\,MiB, and on the slower of the
+machine's two core tiers 32.5\,s (Table~\ref{tab:proving},
+Appendix~\ref{app:proving})\claims{desktop-proving-cost,browser-proving-cost,efficiency-core-proving}.
+A first proof downloads 18{,}664{,}335 octets of proving inputs, cached
+thereafter, and with the page and the prover's code, uncompressed, transfers
+27{,}192{,}989\claim{prover-download}. The machine ran at a load average of
+about 6; a second run of the same build at 5.4 agrees within 2\%.
 
 \paragraph{Phones are not measured.} No phone was measured, although a
 user who lost every device will often recover on a new phone. The design
@@ -260,9 +247,14 @@ desktop remains a way to recover.
 
 \subsection{Alerts, end to end, and testnet}\label{sec:eval-e2e}
 With every service a loopback mock, an \texttt{attempt\_authorized} event
-reaches the sending mock in 11 to 62\,ms (median 16.5) and the push mock in
-13 to 66\,ms (median 19), and a restarted vault restores its key from two
-custodians in 147 to 238\,ms (median 152)\claim{alert-latency}. On a local
+reaches the sending mock in 11 to 13\,ms (median 11.5) and the push mock in
+12 to 15\,ms (median 13.5), and a restarted vault restores its key from two
+custodians in 98 to 106\,ms (median 101)\claim{alert-latency}. Finding
+email votes means reading every transaction: on mainnet 5.2\,MB of JSON a
+ledger, about 89\,GB a day, which one public RPC served 2.4 times faster
+than the chain made it\claim{watcher-load}. A watcher held back raises the
+lag alarm, and reconciliation still alerts authorized attempts and email
+votes on open ones, late. On a local
 network, a browser test enrolls an inbox, deploys and lists its
 guardian, and after the passkey is lost recovers with one email proven in
 the browser and a second helper, the alert email and push carrying the code

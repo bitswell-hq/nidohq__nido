@@ -24,19 +24,23 @@ front-running resistance, **4** one-factor safety.
 | What | Command | Writes |
 | --- | --- | --- |
 | Network settings, read-only | `node research/email-recovery/eval/fees/settings.mjs mainnet testnet --limits`; `fees/code-entries.mjs` | `results/settings/{mainnet,testnet}.json`, `network/limits/mainnet.json`, `results/code-entries.json` |
-| Attack suite (local network and test host) | `just email-recovery-attacks` (`network/run-attacks.sh`) | `results/attacks-local.json`, `results/settings/local.json`, `results/attacks-test-host.jsonl`, the tables below |
+| Attack suite (local network and test host) | `just email-recovery-attacks` (`network/run-attacks.sh`) | `results/attacks-local.json`, `results/settings/local.json`, `results/attacks-test-host.jsonl`, the tables below, `results/figures.json` |
+| A run's figures beside earlier runs of the same build | `node research/email-recovery/eval/reruns.mjs` after a run | `results/attack-reruns.json` |
 | Votes against a registry root on a local network (about 72 hours) | `research/email-recovery/eval/network/run-registry-root.sh` | `results/registry-root-local.json` |
 | The keeper on a local network | `research/email-recovery/eval/network/run-keeper.sh` | `results/keeper-local.json` |
 | Recovery with every entry archived (test host) | `research/email-recovery/eval/archival.sh` | `results/archival-test-host.json` |
 | An account's move to a new email guardian (test host) | `research/email-recovery/eval/migration.sh` | `results/migration-test-host.json` |
+| The DKIM key registry's entry points (test host) | `research/email-recovery/eval/registry-costs.sh` | `results/registry-costs-test-host.jsonl` |
+| The alert path's latency on loopback mocks, 10 runs | `node research/email-recovery/eval/alert-latency.mjs` | `results/alert-latency.json` |
+| What the alert watcher reads on mainnet (read-only) | `node research/email-recovery/eval/watcher-load.mjs` | `results/watcher-load-mainnet.json` |
 | Proving on this machine | `just email-recovery-proving` (`proving/measure.sh`) | `results/proving.json`, the proving table |
 | Browser rows of the proving table | `node research/email-recovery/eval/measure-browser.mjs --runs 5` after `npx astro build --root packages/frontend` | `browser-prover.json`, `browser-prover.md` |
 | Everything a first proof downloads | `CHROME=<Chrome for Testing> node research/email-recovery/eval/first-load.mjs` after the same build | `results/first-load.json` |
 | Benchmark page for a phone | `just email-recovery-bench-phone` (`phone/build.mjs`, `phone/serve.mjs`); `node research/email-recovery/eval/phone/check.mjs` runs the build in headless Chrome | `target/email-bench-phone/`, served on the local network |
 | Testnet deployment and recovery | `research/email-recovery/eval/testnet/run.sh` | `results/testnet.json`, `DEPLOYED.md` |
 | Testnet votes on both key paths | `node research/email-recovery/eval/testnet/votes.mjs setup`, then, once its registry addition is eligible (about 72 hours later), `… vote` | `results/testnet-votes.json` |
-| Testnet transactions as XDR | `node research/email-recovery/eval/testnet/evidence.mjs` (read-only) | `results/testnet-xdr.json` |
-| Tables | `node research/email-recovery/eval/report.mjs` | this file |
+| Testnet transactions as XDR | `node research/email-recovery/eval/testnet/evidence.mjs` (read-only); `… --check` fetches them again and compares | `results/testnet-xdr.json` |
+| Tables | `node research/email-recovery/eval/report.mjs` | this file, `results/figures.json` |
 | The circuit's parsing against real mail and fuzzed headers | `just email-recovery-parser-check` (`parser/check.sh`) | `parser/results/`, the tables of `parser/README.md` |
 
 Prerequisites: Docker, the Stellar CLI, `git submodule update --init`,
@@ -433,7 +437,17 @@ sha256 of `contracts/email-verifier/vk/email_recovery.vk`).
 testnet's RPC and keeps its envelope, result and metadata XDR with its
 ledger and close time (`results/testnet-xdr.json`), so each figure here can
 be checked against the transaction itself after the RPC's retention window
-has passed.
+has passed. `testnet/evidence.mjs --check` fetches every recorded
+transaction again and compares it: the envelope and the result byte for
+byte, and the metadata after dropping its diagnostic events and sorting each
+operation's ledger-entry changes. A ledger's hash covers its transactions
+and their results but not their metadata, which each RPC node's core writes
+as it applies the ledger, so a fresh fetch may come from a node whose
+metadata differs from the stored copy there: the `core_metrics` diagnostic
+event carries that node's own readings, and nodes list an operation's
+changes in different orders. Two checks on 2026-11-02 matched all 70
+envelopes, results and normalized metadata; the metadata was byte-identical
+for 38 and 32 of the 70.
 
 `testnet/votes.mjs` adds votes on both key paths: it deploys a new email
 verifier and DKIM key registry, admits the Gmail mock's TEST-ONLY key on the
@@ -481,6 +495,16 @@ bytes, its size), not on what the host meters, so the tables give both.
 `fees.rs` does; it reproduces every fee charged in these runs, which is how
 each fee below is attributed to its components.
 
+The local network's figures are one attack run's. Each run draws new keys
+and proofs, which changes what each vote's verification meters and so what
+simulation declares and the fee charged: over three runs of one build
+(`results/attack-reruns.json`, the committed run and two more), the bounds
+of the vote fee moved by at most 7 stroops, the median of the metered
+instructions by 10,310 and the enrollment's total by 86 stroops. So
+`report.mjs` writes the figures the paper, the slides and the claim ledger
+quote to `results/figures.json`, and the document build typesets them from
+there; a re-run regenerates them with the rest of its evidence.
+
 <!-- BEGIN GENERATED cost by report.mjs; do not edit -->
 Fees: fees/model.mjs reproduces every fee charged in these runs from the network's archived settings, to the stroop: 277 transactions on the local network, 59 transactions on testnet (non-refundable and refundable resource fee as each transaction's fee split records them; the rest is the inclusion fee).
 
@@ -516,7 +540,7 @@ Testnet: the votes run of 2026-11-02 13:09 UTC (guardian wasm `e21515ae…`), 6 
 | of which rent (stroops) | 1,333 (1,333 to 1,333) |
 | Wall clock, simulation to confirmation (ms) | 2,912 (2,215 to 3,397) |
 
-The votes run's registry admits the Gmail mock's TEST-ONLY key on the attested 72-hour path; the addition is eligible from 2026-11-05 13:04 UTC (ledger close time), 72 hours after the run, and the registry-root votes follow it (`testnet/votes.mjs vote`).
+The votes run's registry admits the Gmail mock's TEST-ONLY key on the attested 72-hour path; the addition is eligible from 2026-11-05 13:04 UTC (ledger close time), 72 hours after the run. No vote against the registry's root has been submitted on testnet; `testnet/votes.mjs vote` submits them once the addition is eligible.
 
 The same call, the email vote with a real proof, in each environment (instructions; footprint as read-only + read-write entries). Test host from `onchain.md`; local network from the attack run; testnet from the first vote of the votes run (`results/testnet-votes.json`, Gmail only).
 
@@ -564,7 +588,7 @@ Instructions of the same email vote by host and cost model. The test host's tran
 | Testnet, applied: 6 pin votes | soroban-env-host 29.0.2 (stellar-core 30.0.0, protocol 29) | testnet's | 121,665,115 (121,609,311 to 121,696,841) |
 | Testnet, declared after simulation | Stellar RPC 30.0.0 | testnet's | 126,573,456 (126,516,681 to 126,607,608) |
 
-So testnet's cost model adds 34,176 instructions to mainnet's on the test host; between the networks, with the same wasm, the medians differ by 23,436 (0.02%); the release-profile build meters 1,574,340 fewer per vote than `just build-contracts`' wasm (the medians).
+So testnet's cost model adds 34,176 instructions to mainnet's on the test host; between the networks, with the same wasm, the medians differ by 23,436 (0.02%), less than the spread of either network's votes within one run (at least 87,530), so no difference is attributed to the networks; the release-profile build meters 1,574,340 fewer per vote than `just build-contracts`' wasm (the medians).
 
 Capacity (mainnet's settings, CAP-0063): a ledger's Soroban transactions run in stages of at most 3 clusters with no conflicting footprints, and the sum over stages of each stage's largest cluster, counted in declared instructions, must stay within 580,000,000. At 126,577,531 declared instructions, a cluster holds 4 email votes, so one ledger holds at most 12 votes on different attempts and 4 that conflict; the ledger's other limits allow 47 votes by transaction size (18,080 bytes each), 245 by bytes written and 2,000 by count. That is 2.4 votes a second at 5-second ledgers. Beyond that, transactions bid inclusion fees for the space (surge pricing); the resource fee stays what the settings fix, so a burst of recoveries raises only the inclusion fee.
 
@@ -678,21 +702,26 @@ the registry, the guardian's code and every enrolled account's guardian
 instance; Perch's contracts are Perch's operator's to keep, and an account's
 own entries its wallet's.
 
-**If the keeper fails**, recovery still works on chain: whoever submits the
-first transaction that reads an archived entry restores it, inline when the
-restoration fits the transaction's limits and in RestoreFootprint
-transactions of its own otherwise, and pays its rent. Safety does not
-change: restoring an entry restores the same bytes. The cost and the number
-of transactions do: with every entry a recovery reads archived, 3,959,831,748
-stroops (396 XLM) at mainnet's settings and today's rent rate, in 7
-transactions, against 5,237,377 with nothing archived (below). The
-recovering user's new device holds no XLM, so that submitter is someone
-else. The wallet sends `submit_guardian` through the relayer when its build
-has one, and otherwise pays from a friendbot-funded key, which exists on
-testnet only; the relayer's mainnet configuration caps what it spends at 100
-XLM a day (`FEE_LIMIT`, `infra/relayer/fly.mainnet.toml`), and the wallet has
-no RestoreFootprint path, which the restorations too large to make inline
-need. Who pays an archived recovery on mainnet is open (spec §12).
+**If the keeper fails**, the chain still accepts a recovery once someone
+restores the archived entries it reads: inline when the restoration fits the
+transaction's limits, and in RestoreFootprint transactions of their own
+otherwise, paying their rent. Safety does not change: restoring an entry
+restores the same bytes. The cost and the number of transactions do: with
+every entry a recovery reads archived, priced as 3,959,831,748 stroops (396
+XLM) at mainnet's settings and today's rent rate, in 7 transactions, against
+5,237,377 with nothing archived (below). The recovering user's new device
+holds no XLM, so whoever restores is someone else. The wallet sends
+`submit_guardian` through the relayer when its build has one, and otherwise
+pays from a friendbot-funded key, which exists on testnet only; the relayer's
+mainnet configuration caps what it spends at 100 XLM a day (`FEE_LIMIT`,
+`infra/relayer/fly.mainnet.toml`). The wallet builds no RestoreFootprint
+transaction, and its inline restorations rely on simulation, which nothing
+here exercises with archived entries; so whenever Perch's doc compiler or
+account code or the registry's code is archived, a recovery through the
+wallet waits for a keeper or for someone else to restore it. An account's
+own instance and document are extended only when the account changes them
+or anyone calls its permissionless `renew`, so they archive about 180 days
+after that. Who pays an archived recovery on mainnet is open (spec §12).
 
 <!-- BEGIN GENERATED archival by report.mjs; do not edit -->
 Testnet run of 2026-11-02 02:16 UTC (`results/testnet-restorations.json`): Perch's doc compiler and recovery controller, instance and code, had been archived and were restored before enrollment, one RestoreFootprint transaction per entry (testnet's minimum persistent lifetime, 120,960 ledgers, prepaid as rent). A later run on the same deployment found them live.
@@ -707,7 +736,7 @@ Testnet run of 2026-11-02 02:16 UTC (`results/testnet-restorations.json`): Perch
 | The recovery, mint to completion | 7 | 13,384,714 (1.3 XLM) | 13,189,667 |
 | **Both** | 11 | **125,832,621** (12.6 XLM) | |
 
-Every entry archived, at mainnet's settings: the test host's recovery (`email_archival.rs`: begin, the email vote, the helper's vote, completion) with every one of the 160 ledger entries archived when it starts, each step re-executed under mainnet's cost model and entry lifetimes with the host restoring what it reads. A step whose restorations do not fit one transaction (mainnet allows 200,000 bytes read from disk and 132,096 written) restores its largest entries first in their own RestoreFootprint transactions. Fees are fees/model.mjs at mainnet's settings; the rent sizes of code entries are the network's (`codeRentBytes` over the entries testnet holds, `results/code-entries.json`), 2 to 20% above the test host's own.
+Every entry archived, at mainnet's settings: the test host's recovery (`email_archival.rs`: begin, the email vote, the helper's vote, completion) with every one of the 160 ledger entries archived when it starts, each step re-executed under mainnet's cost model and entry lifetimes with the host restoring what it reads. The test host enforces no per-transaction limit, so a step whose restorations do not fit one transaction (mainnet allows 200,000 bytes read from disk and 132,096 written) is modelled as restoring its largest entries first in their own RestoreFootprint transactions, which are priced, not executed. Fees are fees/model.mjs at mainnet's settings; the rent sizes of code entries are the network's (`codeRentBytes` over the entries testnet holds, `results/code-entries.json`), 2 to 20% above the test host's own.
 
 | Transaction | Restores | Bytes restored | Fee (stroops) | of which rent |
 | --- | --- | --- | --- | --- |
@@ -881,18 +910,25 @@ Run, in this repository, on the machine of the proving table:
   contracts built from this tree and Perch's fetched testnet wasm, with every
   approval proven by bb.js in Node, and its three registry scenarios on the
   integration-test host;
+- two more runs of the attack suite on the same build, which regenerated the
+  results and the documents (both builds passed) and whose figures are in
+  `results/attack-reruns.json`; the committed results are the first run's;
 - the registry-root run's setup on its own local network
-  (`network/run-registry-root.sh`: the stack and 22 enrolled accounts); its
-  votes are scheduled for when the additions' timelock elapses;
+  (`network/run-registry-root.sh`: the stack and 22 enrolled accounts); no
+  vote against the registry's root has been submitted;
 - the keeper on its own local network (`network/run-keeper.sh`);
 - the recovery with every entry archived, on the test host (`archival.sh`);
 - on testnet, the recovery run (`testnet/run.sh`) and the votes run's setup
   (`testnet/votes.mjs setup`: the registry and six pin votes), both from
-  commit `ab274154`; its registry-root votes are scheduled for when its
-  addition is eligible;
+  commit `ab274154`; no vote against its registry's root has been
+  submitted;
 - read-only reads of mainnet's and testnet's settings, of testnet's code
   entries and of every testnet transaction's XDR (`fees/settings.mjs`,
-  `fees/code-entries.mjs`, `testnet/evidence.mjs`);
+  `fees/code-entries.mjs`, `testnet/evidence.mjs`, and `--check` twice);
+- the registry's entry points on the test host (`registry-costs.sh`), the
+  alert path's latency on loopback mocks, ten runs (`alert-latency.mjs`), and
+  a read-only sample of 24 mainnet ledgers through one public RPC
+  (`watcher-load.mjs`);
 - the proving measurements (`proving/measure.sh`, `measure-browser.mjs`) and
   a first proof's whole transfer (`first-load.mjs`);
 - the self-contained benchmark build and its server, on this machine only.
