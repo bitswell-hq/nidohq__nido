@@ -1,0 +1,143 @@
+{
+ "seed": "nido-email-recovery-parser-fuzz-v1",
+ "cases": {
+  "from": 0,
+  "count": 1000
+ },
+ "seconds": 1218,
+ "executions": 40255,
+ "signatures": 997,
+ "signaturesAccepted": 490,
+ "mutations": 39256,
+ "verdicts": {
+  "refused": 38276,
+  "sameBinding": 980,
+  "otherBinding": 0
+ },
+ "invariant": "holds on every mutated hint",
+ "families": {
+  "from.addr_start": {
+   "runs": 2939,
+   "refused": 2939,
+   "sameBinding": 0,
+   "otherBinding": 0
+  },
+  "from.addr_len": {
+   "runs": 2935,
+   "refused": 2935,
+   "sameBinding": 0,
+   "otherBinding": 0
+  },
+  "from.at_index": {
+   "runs": 2939,
+   "refused": 2939,
+   "sameBinding": 0,
+   "otherBinding": 0
+  },
+  "from window, end fixed": {
+   "runs": 1960,
+   "refused": 1960,
+   "sameBinding": 0,
+   "otherBinding": 0
+  },
+  "from window, @ fixed": {
+   "runs": 1960,
+   "refused": 1960,
+   "sameBinding": 0,
+   "otherBinding": 0
+  },
+  "tags.tag_starts": {
+   "runs": 22603,
+   "refused": 22603,
+   "sameBinding": 0,
+   "otherBinding": 0
+  },
+  "tags.tag_count": {
+   "runs": 980,
+   "refused": 980,
+   "sameBinding": 0,
+   "otherBinding": 0
+  },
+  "tags.h_from": {
+   "runs": 980,
+   "refused": 980,
+   "sameBinding": 0,
+   "otherBinding": 0
+  },
+  "tags.h_subject": {
+   "runs": 980,
+   "refused": 980,
+   "sameBinding": 0,
+   "otherBinding": 0
+  },
+  "tags.t_len": {
+   "runs": 980,
+   "refused": 0,
+   "sameBinding": 980,
+   "otherBinding": 0
+  }
+ },
+ "refusals": [
+  {
+   "DKIM: listed offset is not a tag start": 19813
+  },
+  {
+   "From: unbalanced angle-addr": 4157
+  },
+  {
+   "From: the address must end the field": 3563
+  },
+  {
+   "DKIM: tag offset out of range": 2683
+  },
+  {
+   "From: '@' expected": 998
+  },
+  {
+   "From: invalid character in the local part": 988
+  },
+  {
+   "attempt to add with overflow": 980
+  },
+  {
+   "DKIM: h= must list from": 980
+  },
+  {
+   "DKIM: h= must list subject": 980
+  },
+  {
+   "DKIM: tag list does not cover every tag": 978
+  },
+  {
+   "From: address length out of bounds": 805
+  },
+  {
+   "From: a bare address must be the whole field value": 562
+  },
+  {
+   "From: domain too short": 452
+  },
+  {
+   "From: address starts before the field value": 207
+  },
+  {
+   "DKIM: tag offsets must increase": 107
+  },
+  {
+   "From: field value spans more than one line": 10
+  },
+  {
+   "From: local part ends with a dot": 4
+  },
+  {
+   "From: empty local part": 4
+  },
+  {
+   "From: domain starts with a dot": 3
+  },
+  {
+   "DKIM: too many tags": 2
+  }
+ ],
+ "otherBindings": []
+}

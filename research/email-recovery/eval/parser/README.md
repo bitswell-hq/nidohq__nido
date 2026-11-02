@@ -36,7 +36,11 @@ and one `subject:` line), SHA-256 and RSA-2048, the From grammar, and the
 DKIM-Signature tags with `d=` equal to the From domain. Instead of binding
 the commitment, the Subject opening and the key tree, which a real post
 cannot open, the harness returns the From address, the lowercase `d=` and
-the key hash.
+the key hash, and the hints the checks ran on. The hints (the From address's
+position, length and `@` index, the DKIM-Signature tag starts, the `h=`
+entries and the `t=` length) are unconstrained, so in a proof the prover
+chooses them; the harness finds them with `find_hints`, as the honest
+prover does, or takes them from the caller (hint mutation, below).
 
 Each input is also executed against the committed recovery artifact
 (`circuits/email-recovery/artifacts/recovery.json`) with placeholder public
@@ -133,7 +137,7 @@ Corpus: 5,154 posts from 18 lists at https://lists.gnu.org/archive/mbox, months 
 | yahoo.com | 21 | 21 (21) | 21 | 21 | 21 |
 | **all** | 5,154 | 5,327 (5,154) | 4,619 | 4,619 | 5,154 |
 
-Verdicts per signature: posts NaN, codes NaN. Result: the circuit accepts exactly the signatures the reference accepts, and binds the address Python reads. The recovery artifact agreed with the harness on 5,327 of 5,327 signatures; the encoder's signed block differed from the reference's on 0; the verifying key came from the live DNS for 4,419 signatures and only from zkEmail's archive for 592. Python and mailauth read the From of every accepted signature the same way: yes.
+Verdicts per signature: agree-accept 4,619, agree-refuse 708. Result: the circuit accepts exactly the signatures the reference accepts, and binds the address Python reads. The recovery artifact agreed with the harness on 5,327 of 5,327 signatures; the encoder's signed block differed from the reference's on 0; the verifying key came from the live DNS for 4,419 signatures and only from zkEmail's archive for 592. Python and mailauth read the From of every accepted signature the same way: yes.
 <!-- END GENERATED real-mail -->
 
 Why signatures are refused, by both sides:
@@ -278,6 +282,38 @@ refuses):
 | `DKIM: h= must list from` | 44 | 117 | `DKIM-Signature:v=1; a=rsa-sha256; c=relaxed/relaxed; d=hotmail.com; s=fuzz; t=1793613600; h ␍␊ = ␍␊ from:to:subject:date` |
 <!-- END GENERATED fuzz-gaps -->
 
+### Hint mutation
+
+The runs above use the hints the honest prover finds. A dishonest prover
+may supply any others, so `fuzz.mjs --mutate-hints` runs every signature
+the circuit accepts on the honest hints again with each hint changed: each
+From hint moved by -2 to +2, set to a random position and to `2^32 - 1`;
+the address window moved with its end fixed and with its `@` fixed (which
+would bind a suffix of the address); each present tag start moved by -2 to
++2 and set to a random position; the tag count and the `h=` and `t=` hints
+moved by one. The invariant: the circuit refuses the mutated hint, or binds
+the same address, domain and key hash as on the honest hints.
+
+<!-- BEGIN GENERATED hint-mutation by report.mjs; do not edit -->
+Seed `nido-email-recovery-parser-fuzz-v1`, cases 0 to 999: 997 DKIM-Signature fields, 490 accepted on the honest hints, 39,256 mutated hints, 40,255 circuit executions, 1218 s. Refused: 38,276; accepted with the same address, domain and key hash: 980; accepted with another binding: 0. Invariant (a mutated hint is refused or binds what the honest hints bind): **holds on every mutated hint**.
+
+| Hint mutated | Runs | Refused | Same binding | Another binding |
+| --- | --- | --- | --- | --- |
+| `from.addr_start` | 2,939 | 2,939 | 0 | 0 |
+| `from.addr_len` | 2,935 | 2,935 | 0 | 0 |
+| `from.at_index` | 2,939 | 2,939 | 0 | 0 |
+| `from window, end fixed` | 1,960 | 1,960 | 0 | 0 |
+| `from window, @ fixed` | 1,960 | 1,960 | 0 | 0 |
+| `tags.tag_starts` | 22,603 | 22,603 | 0 | 0 |
+| `tags.tag_count` | 980 | 980 | 0 | 0 |
+| `tags.h_from` | 980 | 980 | 0 | 0 |
+| `tags.h_subject` | 980 | 980 | 0 | 0 |
+| `tags.t_len` | 980 | 0 | 980 | 0 |
+<!-- END GENERATED hint-mutation -->
+
+The `t=` length is read only by `DkimSignature::timestamp`, which the
+recovery circuit does not call, so changing it changes nothing.
+
 ## Findings
 
 **The From display name (spec §4.5).** The circuit accepts a display name
@@ -340,8 +376,9 @@ gives the evidence per provider and what would settle each unknown.
 
 | What | Command | Time here |
 | --- | --- | --- |
-| Everything, rewriting `results/` and these tables | `just email-recovery-parser-check` ([`check.sh`](check.sh)) | under an hour (part 1 about nine minutes, part 2 about forty), plus the archive downloads on a first run |
-| The CI subset: the first 10 posts per launch domain and the first 2,000 cases, which must reproduce `results/` exactly | `research/email-recovery/eval/parser/check.sh --ci` ([`compare-results.mjs`](compare-results.mjs)) | a few minutes |
+| Everything, rewriting `results/` and these tables | `just email-recovery-parser-check` ([`check.sh`](check.sh)) | about an hour (part 1 about nine minutes, part 2 about forty, hint mutation about twenty), plus the archive downloads on a first run |
+| The CI subset: the first 10 posts per launch domain and the first 2,000 cases, which must reproduce `results/` exactly, and hint mutation on the first 50 cases, which must hold its invariant | `research/email-recovery/eval/parser/check.sh --ci` ([`compare-results.mjs`](compare-results.mjs)) | a few minutes |
+| Hint mutation alone | `node research/email-recovery/eval/parser/fuzz.mjs --mutate-hints --cases 1000` | about 20 minutes (1,218 s on 17 workers, load average above 40) |
 | One fuzz case, printed | `node research/email-recovery/eval/parser/fuzz.mjs --show <index>` | seconds |
 | Rebuilding the corpus manifest and key list | `node research/email-recovery/eval/parser/build-corpus.mjs` | about 25 minutes, at the archive's pace |
 

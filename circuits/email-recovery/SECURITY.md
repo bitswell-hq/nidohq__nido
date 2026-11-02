@@ -208,16 +208,23 @@ verifier.
 
 ## 3. Compiler diagnostics
 
-`nargo compile` prints two kinds of `bug:` diagnostic ("Brillig function
-call isn't properly covered by a manual constraint"). Both are the
-compiler's heuristic under-constrained-value check, and both are expected:
+`nargo compile` (Perch's pinned 1.0.0-beta.9) prints two `bug:`
+diagnostics on the recovery circuit, "Brillig function call isn't properly
+covered by a manual constraint", at `lib/src/dkim.nr:85` and at
+`vendor/bignum/src/fns/expressions.nr:258`. Both are the compiler's
+heuristic under-constrained-value check, and both are expected:
 
-- on `find_hints`: its outputs are positions, checked through dynamic reads
-  of the scan's arrays and byte comparisons, which the heuristic does not
-  follow;
-- on noir-bignum's `compute_quadratic_expression_with_borrow_flags`: one of
-  its three outputs (the remainder) is discarded by the caller; the quotient
-  and borrow flags it uses are constrained.
+- on `find_hints` (`dkim.nr:85`): its outputs are positions, checked through
+  dynamic reads of the scan's arrays and byte comparisons, which the
+  heuristic does not follow. Hint mutation
+  (`research/email-recovery/eval/parser/README.md`) runs the 490 signatures
+  the circuit accepts in the first 1,000 fuzz cases again with each position
+  changed, as a dishonest prover may: all 39,256 mutated hints are refused
+  or bind the same address, domain and key hash;
+- on noir-bignum's `compute_quadratic_expression_with_borrow_flags`
+  (`expressions.nr:258`): one of its three outputs (the remainder) is
+  discarded by the caller; the quotient and borrow flags it uses are
+  constrained.
 
 
 ## 4. What is proven, tested and assumed

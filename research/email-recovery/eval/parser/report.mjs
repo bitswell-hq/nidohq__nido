@@ -6,11 +6,14 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { VERDICT_CODES, decodeVerdicts } from './lib/compare.mjs';
+
 const here = new URL('.', import.meta.url).pathname;
 const read = (f) => JSON.parse(readFileSync(join(here, 'results', f), 'utf8'));
 const diff = read('differential.json');
 const fuzz = read('fuzz.json');
 const finding = read('from-finding.json');
+const hintMutation = read('hint-mutation.json');
 
 const n = (x) => Number(x ?? 0).toLocaleString('en-US');
 const cell = (s) => String(s ?? '').replace(/\|/g, '\\|').replace(/\r\n/g, '␍␊').replace(/\t/g, '␉');
@@ -18,6 +21,14 @@ const code = (s) => (s == null || s === '' ? '—' : `\`${cell(s).replace(/`/g, 
 const table = (head, rows) => [`| ${head.join(' | ')} |`, `| ${head.map(() => '---').join(' | ')} |`, ...rows.map((r) => `| ${r.join(' | ')} |`)].join('\n');
 
 const sections = {};
+
+/** Signatures per verdict, from one-letter-per-signature verdict codes. */
+function verdictCounts(codes) {
+  const names = Object.fromEntries(Object.entries(VERDICT_CODES).map(([name, letter]) => [letter, name]));
+  const counts = {};
+  for (const letter of decodeVerdicts(codes).join('').replace(/\?/g, '')) counts[names[letter]] = (counts[names[letter]] ?? 0) + 1;
+  return counts;
+}
 
 // Part 1.
 {
@@ -34,7 +45,7 @@ const sections = {};
       ],
     ),
     '',
-    `Verdicts per signature: ${Object.entries(diff.verdicts).map(([k, v]) => `${k} ${n(v)}`).join(', ')}. Result: ${diff.result}. The recovery artifact agreed with the harness on ${n(diff.crossCheck.signatures - diff.crossCheck.disagreements)} of ${n(diff.crossCheck.signatures)} signatures; the encoder's signed block differed from the reference's on ${n(diff.blockDivergence)}; the verifying key came from the live DNS for ${n(diff.keysUsed['live DNS'])} signatures and only from zkEmail's archive for ${n(diff.keysUsed['archive.zk.email only'])}. Python and mailauth read the From of every accepted signature the same way: ${diff.fromDisagreements.length ? `no, ${diff.fromDisagreements.length} differ` : 'yes'}.`,
+    `Verdicts per signature: ${Object.entries(verdictCounts(diff.verdicts.codes)).map(([k, v]) => `${k} ${n(v)}`).join(', ')}. Result: ${diff.result}. The recovery artifact agreed with the harness on ${n(diff.crossCheck.signatures - diff.crossCheck.disagreements)} of ${n(diff.crossCheck.signatures)} signatures; the encoder's signed block differed from the reference's on ${n(diff.blockDivergence)}; the verifying key came from the live DNS for ${n(diff.keysUsed['live DNS'])} signatures and only from zkEmail's archive for ${n(diff.keysUsed['archive.zk.email only'])}. Python and mailauth read the From of every accepted signature the same way: ${diff.fromDisagreements.length ? `no, ${diff.fromDisagreements.length} differ` : 'yes'}.`,
   ].join('\n');
 
   sections['real-mail-reasons'] = table(
@@ -81,6 +92,19 @@ const sections = {};
     : 'None.';
 }
 
+// Part 2, hint mutation.
+{
+  const h = hintMutation;
+  sections['hint-mutation'] = [
+    `Seed \`${h.seed}\`, cases ${n(h.cases.from)} to ${n(h.cases.from + h.cases.count - 1)}: ${n(h.signatures)} DKIM-Signature fields, ${n(h.signaturesAccepted)} accepted on the honest hints, ${n(h.mutations)} mutated hints, ${n(h.executions)} circuit executions, ${h.seconds} s. Refused: ${n(h.verdicts.refused)}; accepted with the same address, domain and key hash: ${n(h.verdicts.sameBinding)}; accepted with another binding: ${n(h.verdicts.otherBinding)}. Invariant (a mutated hint is refused or binds what the honest hints bind): **${h.invariant}**.`,
+    '',
+    table(
+      ['Hint mutated', 'Runs', 'Refused', 'Same binding', 'Another binding'],
+      Object.entries(h.families).map(([f, x]) => [code(f), n(x.runs), n(x.refused), n(x.sameBinding), n(x.otherBinding)]),
+    ),
+  ].join('\n');
+}
+
 // The finding on the recovery artifact.
 sections['from-finding'] = table(
   ['Signed From value', 'Python reads', 'mailauth reads', 'Recovery artifact'],
@@ -89,6 +113,7 @@ sections['from-finding'] = table(
 
 let readme = readFileSync(join(here, 'README.md'), 'utf8');
 for (const [name, body] of Object.entries(sections)) {
+  if (/\bNaN\b/.test(body)) throw new Error(`generated section ${name} contains NaN: a result field is not the number report.mjs expects`);
   const re = new RegExp(`(<!-- BEGIN GENERATED ${name} by report.mjs; do not edit -->)[\\s\\S]*?(<!-- END GENERATED ${name} -->)`);
   if (!re.test(readme)) throw new Error(`README.md has no generated section ${name}`);
   readme = readme.replace(re, (_, a, b) => `${a}\n${body}\n${b}`);
