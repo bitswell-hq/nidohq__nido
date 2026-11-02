@@ -4,12 +4,50 @@
  * that alone holds the addresses.
  */
 export { type BootInfo, InProcessVault, type NsmSpec, ProcessVault, type TranscriptEntry, type VaultApi } from './channel.js';
-export { ALERTS, type AlertClass, type PerchEvent, type PerchEventName, type RpcEvent, alertSubject, decodePerchEvent } from './events.js';
-export { type GetEventsResult, RpcError, StellarRpc, accountSigners } from './rpc.js';
+export {
+  ALERTS,
+  type AlertClass,
+  alertEventId,
+  type AlertName,
+  type PerchEvent,
+  type PerchEventName,
+  type RpcEvent,
+  alertSubject,
+  decodePerchEvent,
+} from './events.js';
+export {
+  type AttemptView,
+  type ChainReads,
+  type GetEventsResult,
+  RpcError,
+  StellarRpc,
+  accountSigners,
+  attemptView,
+  chainReads,
+  contractWasmHash,
+} from './rpc.js';
 export { RegistryEventsView } from './registryView.js';
-export { AlertService, type PollReport, type ServiceConfig } from './service.js';
+export {
+  AlertService,
+  INBOUND_LIMIT,
+  INBOUND_KEEP_MS,
+  RECONCILE_EVERY_MS,
+  RECONCILE_SCAN,
+  type PollReport,
+  type ServiceConfig,
+  WindowLimiter,
+  clientPrefix,
+} from './service.js';
 export { type HostState, emptyState, loadState, saveState } from './store.js';
-export { alertText, confirmationText, contactChangeNotice } from './vault/content.js';
+export {
+  NEVER_ASKS,
+  PASSKEY_DEVICE_LEAD,
+  alertText,
+  confirmationText,
+  contactChangeNotice,
+  pushLapsedNotice,
+  pushMovedNotice,
+} from './vault/content.js';
 export { type CustodianEndpoint, type Nsm, genesis, restore } from './vault/custody.js';
 export { alertLookup, combineShares, deriveVaultKeys, splitSecret, type VaultKeys } from './vault/keys.js';
 export { type SendingConfig, sendEmail } from './vault/send.js';
@@ -18,6 +56,9 @@ export {
   CONFIRMATION_TTL_MS,
   CONTACT_CHANGE_DELAY_LEDGERS,
   type ChainView,
+  type ChannelStatus,
+  PROBE_INTERVAL_MS,
+  WATCH_MAX,
   type ContactResult,
   type DispatchRequest,
   Vault,

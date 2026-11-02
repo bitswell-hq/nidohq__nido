@@ -1,16 +1,19 @@
 /**
  * Stellar RPC as the host uses it: `getEvents` for the controller's events
  * (filtered only by contract, so the query never singles out an account),
- * and `simulateTransaction` to read contract views (an account's installed
- * rules). Request and result shapes follow Stellar RPC's OpenRPC
- * description.
+ * `simulateTransaction` to read contract views (an account's installed
+ * rules, a watched attempt), and `getLedgerEntries` for a contract's
+ * instance (its wasm hash). Request and result shapes follow Stellar RPC's
+ * OpenRPC description.
  */
 import {
   Account,
+  Address,
   Contract,
   Keypair,
   type Networks,
   TransactionBuilder,
+  nativeToScVal,
   scValToNative,
   xdr,
 } from '@stellar/stellar-sdk';
@@ -105,3 +108,79 @@ export async function accountSigners(rpc: StellarRpc, account: string, networkPa
   return [...keys.values()];
 }
 
+/** What the host reads of a watched attempt (Perch's `Attempt`, `perch-recovery/src/types.rs`). */
+export interface AttemptView {
+  /** `Collecting`, `Authorized`, `Completed`, `Cancelled`, or `Invalidated`. */
+  state: string;
+  /** Distinct enrolled guardians that approved the initiation statement. */
+  guardians: string[];
+  /** The last ledger initiation evidence is accepted. */
+  evidenceDeadline: number;
+}
+
+/** The controller's `attempt(account, attempt_id)` view, or `undefined` when there is no such attempt. */
+export async function attemptView(
+  rpc: StellarRpc,
+  controller: string,
+  account: string,
+  attemptId: bigint,
+  networkPassphrase: string,
+): Promise<AttemptView | undefined> {
+  const v = (await rpc.view(
+    controller,
+    'attempt',
+    [new Address(account).toScVal(), nativeToScVal(attemptId, { type: 'u64' })],
+    networkPassphrase,
+  )) as { state: unknown; guardians: unknown[]; evidence_deadline: unknown } | null | undefined;
+  if (!v) return undefined;
+  return {
+    state: String(Array.isArray(v.state) ? v.state[0] : v.state),
+    guardians: v.guardians.map(String),
+    evidenceDeadline: Number(v.evidence_deadline),
+  };
+}
+
+/** The wasm hash (hex) a contract instance runs, from its instance entry; `undefined` if none. */
+export async function contractWasmHash(rpc: StellarRpc, contract: string): Promise<string | undefined> {
+  const key = xdr.LedgerKey.contractData(
+    new xdr.LedgerKeyContractData({
+      contract: new Address(contract).toScAddress(),
+      key: xdr.ScVal.scvLedgerKeyContractInstance(),
+      durability: xdr.ContractDataDurability.persistent(),
+    }),
+  );
+  const r = await rpc.call<{ entries?: { xdr: string }[] | null }>('getLedgerEntries', { keys: [key.toXDR('base64')] });
+  const entry = r.entries?.[0];
+  if (!entry) return undefined;
+  const exe = xdr.LedgerEntryData.fromXDR(entry.xdr, 'base64').contractData().val().instance().executable();
+  return exe.switch() === xdr.ContractExecutableType.contractExecutableWasm() ? Buffer.from(exe.wasmHash()).toString('hex') : undefined;
+}
+
+/** The controller reads the host makes for email votes and reconciliation (spec §10.2). */
+export interface ChainReads {
+  attempt(account: string, attemptId: bigint): Promise<AttemptView | undefined>;
+  /** The account's authorized attempt, from the controller's `activity_gate`. */
+  authorizedAttempt(account: string): Promise<bigint | undefined>;
+  /** The id the account's next attempt will get (`next_attempt_id`). */
+  nextAttemptId(account: string): Promise<bigint>;
+  /** Whether a guardian runs the email guardian's wasm. */
+  isEmailGuardian(address: string): Promise<boolean>;
+}
+
+/** [`ChainReads`] through Stellar RPC, for `controller` on the network `networkPassphrase`. */
+export function chainReads(rpc: StellarRpc, controller: string, networkPassphrase: string, emailGuardianWasmHash: string): ChainReads {
+  const acct = (a: string) => new Address(a).toScVal();
+  return {
+    attempt: (account, attemptId) => attemptView(rpc, controller, account, attemptId, networkPassphrase),
+    async authorizedAttempt(account) {
+      const g = (await rpc.view(controller, 'activity_gate', [acct(account)], networkPassphrase)) as { authorized_attempt?: unknown } | null;
+      return g?.authorized_attempt === undefined || g.authorized_attempt === null ? undefined : BigInt(g.authorized_attempt as bigint);
+    },
+    async nextAttemptId(account) {
+      return BigInt((await rpc.view(controller, 'next_attempt_id', [acct(account)], networkPassphrase)) as bigint);
+    },
+    async isEmailGuardian(address) {
+      return address.startsWith('C') && (await contractWasmHash(rpc, address)) === emailGuardianWasmHash;
+    },
+  };
+}

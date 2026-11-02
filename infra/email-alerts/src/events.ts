@@ -4,7 +4,7 @@
  * case, topic 1 the account, and the data is the event struct's remaining
  * fields as a map (`#[contractevent]`, `perch-recovery/src/contract.rs`).
  */
-import { type AlertSubject, contractIdFromStrkey } from '@nidohq/email-recovery';
+import { type AlertSubject, bytes, contractIdFromStrkey } from '@nidohq/email-recovery';
 import { Address, scValToNative, xdr } from '@stellar/stellar-sdk';
 
 export type PerchEventName =
@@ -16,18 +16,33 @@ export type PerchEventName =
   | 'epoch_advanced'
   | 'change_evidence_recorded';
 
-export type AlertClass = 'required' | 'informational' | 'rate-limited' | 'none';
+/**
+ * `required` goes to every channel, `informational` and `rate-limited` to
+ * email only; `watch` sends nothing and has the vault watch the attempt for
+ * an email vote (the wallet shows open attempts itself).
+ */
+export type AlertClass = 'required' | 'informational' | 'rate-limited' | 'watch' | 'none';
 
-/** The §10 table. `required` goes to every channel; the others to email only. */
+/**
+ * The §10 table. `attempt_begun` is `watch` by default; a service
+ * configured with `emailOnAttemptBegun` sends it as `rate-limited`.
+ */
 export const ALERTS: Record<PerchEventName, AlertClass> = {
   attempt_authorized: 'required',
   recovery_completed: 'required',
   epoch_advanced: 'required',
   attempt_cancelled: 'informational',
   change_evidence_recorded: 'informational',
-  attempt_begun: 'rate-limited',
+  attempt_begun: 'watch',
   attempt_invalidated: 'none',
 };
+
+/**
+ * What an alert is about: a controller event, or `email_vote_recorded`, which
+ * no event carries: the host finds the email guardian's vote by reading a
+ * watched attempt (spec §10.2).
+ */
+export type AlertName = Exclude<PerchEventName, 'attempt_invalidated'> | 'email_vote_recorded';
 
 /** One event as Stellar RPC's `getEvents` returns it. */
 export interface RpcEvent {
@@ -92,4 +107,19 @@ export function alertSubject(ev: PerchEvent): AlertSubject {
     default:
       return { kind: 'attempt', attemptId: BigInt(ev.data.attempt_id as bigint) };
   }
+}
+
+/**
+ * The id an alert is delivered under: what it is about (`name:account:attempt`
+ * or `:epoch`), not the RPC event that reported it, so an alert found by
+ * reconciling controller state and the same alert from the event stream
+ * are one delivery. Attempt ids and epochs never repeat per account.
+ * `change_evidence_recorded`, emitted once per recorded approval of the
+ * same change, keeps its RPC event id.
+ */
+export function alertEventId(name: AlertName, account: string, subject: AlertSubject, rpcEventId?: string): string {
+  if (name === 'change_evidence_recorded' && rpcEventId) return rpcEventId;
+  const key =
+    subject.kind === 'attempt' ? subject.attemptId.toString() : subject.kind === 'epoch' ? subject.epoch.toString() : bytes.toHex(subject.digest);
+  return `${name}:${account}:${key}`;
 }

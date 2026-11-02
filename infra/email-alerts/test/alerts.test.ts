@@ -1,16 +1,18 @@
 /**
  * Alerts from events (spec §10, §10.1): what goes out for each event class,
  * the verification code, at-most-once delivery, failover and retries, the
- * `attempt_begun` rate limit, and a watcher that survives restarts and
- * crashes without missing or repeating an alert.
+ * opt-in `attempt_begun` email and its rate limit, and a watcher that
+ * survives restarts and crashes without missing or repeating an alert.
  */
 import { join } from 'node:path';
 import { NitroHypervisorMock, testImage } from '@nidohq/email-mocks';
 import { alertCode, bytes, contractIdFromStrkey, deriveAlertCodeKey } from '@nidohq/email-recovery';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { InProcessVault, type VaultApi } from '../src/channel.js';
+import { alertEventId } from '../src/events.js';
 import { accountSigners } from '../src/rpc.js';
 import { AlertService } from '../src/service.js';
+import { NEVER_ASKS, PASSKEY_DEVICE_LEAD } from '../src/vault/content.js';
 import { Vault } from '../src/vault/vault.js';
 import { IMAGE, Wallet, type World, alertsTo, loadFixture, networkId, startWorld } from './harness.js';
 import { attemptBegun } from './synthetic.js';
@@ -81,8 +83,30 @@ describe('what each event sends', () => {
     for (const p of pushes) expect(JSON.stringify(p)).not.toContain(w.fixture.account);
   });
 
-  it('informational events go by email only; attempt_invalidated sends nothing', async () => {
+  it('attempt_authorized: the push leads with cancelling, the email says who never asks for what, no code match reassures', async () => {
+    w.rpcMock.add(recovery());
+    await service.drain();
+    const push = owner.device.receive().map((r) => JSON.parse(Buffer.from(r.payload).toString('utf8'))).find((p) => p.kind === 'attempt_authorized');
+    expect(push.body.startsWith(PASSKEY_DEVICE_LEAD)).toBe(true);
+    expect(push.body).toMatch(/^This device has your passkey, so you do not need a recovery\. Cancel it unless you are deliberately replacing this passkey\./);
+    const email = alertsTo(w, ADDRESS).find((m) => /approved/.test(m.subject))!.text!;
+    expect(email).toContain('If you still have your passkey, you do not need a recovery: open your wallet and cancel it.');
+    expect(email).toContain(NEVER_ASKS);
+    expect(email).toContain('a matching code does not make it yours');
+    expect(email).not.toMatch(/nothing needs doing/i);
+  });
+
+  it('attempt_begun sends nothing by default: anyone can open an attempt, and the wallet shows open ones', async () => {
     w.rpcMock.add(recovery().slice(0, 1)); // attempt_begun
+    await service.drain();
+    expect(alertsTo(w, ADDRESS)).toEqual([]);
+    expect(w.push.accepted).toEqual([]);
+  });
+
+  it('a service configured to email attempt_begun sends it by email only', async () => {
+    await service.close();
+    service = newService(undefined, { emailOnAttemptBegun: true });
+    w.rpcMock.add(recovery().slice(0, 1));
     await service.drain();
     expect(alertsTo(w, ADDRESS).map((m) => m.subject)).toEqual(['Nido security alert: recovery attempt opened']);
     expect(w.push.accepted).toEqual([]);
@@ -94,8 +118,9 @@ describe('what each event sends', () => {
     const sent = alertsTo(w, ADDRESS).length;
     const pushed = w.push.accepted.length;
     const auth = recovery().find((e) => Buffer.from(e.topic[0]!, 'base64').includes(Buffer.from('attempt_authorized')))!;
+    expect(auth.id).not.toBe(alertEventId('attempt_authorized', w.fixture.account, { kind: 'attempt', attemptId: BigInt(w.fixture.attemptId) }));
     const again = await vault.dispatch({
-      eventId: auth.id,
+      eventId: alertEventId('attempt_authorized', w.fixture.account, { kind: 'attempt', attemptId: BigInt(w.fixture.attemptId) }),
       name: 'attempt_authorized',
       class: 'required',
       controller: contractIdFromStrkey(w.fixture.controller),
@@ -110,6 +135,8 @@ describe('what each event sends', () => {
 
 describe('sending', () => {
   it('fails over from Lettermint to Scaleway after two failures, reusing one Idempotency-Key', async () => {
+    await service.close();
+    service = newService(undefined, { emailOnAttemptBegun: true });
     w.lettermint.failNext({ status: 500, count: 2 });
     w.rpcMock.add(recovery().slice(0, 1));
     await service.drain();
@@ -121,7 +148,7 @@ describe('sending', () => {
   it('queues a retry when both services fail, moves the cursor on, and later sends exactly once', async () => {
     let clock = Date.now();
     await service.close();
-    service = newService(undefined, { retryBaseMs: 60_000, now: () => clock });
+    service = newService(undefined, { retryBaseMs: 60_000, now: () => clock, emailOnAttemptBegun: true });
     w.lettermint.failNext({ status: 503, count: 2 });
     w.scaleway.failNext({ status: 503, count: 2 });
     w.rpcMock.add(recovery().slice(0, 1));
@@ -152,6 +179,8 @@ describe('sending', () => {
 
 describe('the watcher', () => {
   it('rate-limits attempt_begun to one alert per account per day, counting the rest', async () => {
+    await service.close();
+    service = newService(undefined, { emailOnAttemptBegun: true });
     const { controller, account } = w.fixture;
     const start = w.rpcMock.latestLedger + 1;
     w.rpcMock.add([0, 1, 2, 3, 4].map((i) => attemptBegun(controller, account, start + i * 100, 50 + i)));
@@ -177,7 +206,7 @@ describe('the watcher', () => {
     await service.drain();
     const subjects = alertsTo(w, ADDRESS).map((m) => m.subject);
     expect(subjects.filter((s) => /approved/.test(s))).toHaveLength(1);
-    expect(subjects.filter((s) => /opened/.test(s))).toHaveLength(1);
+    expect(subjects.filter((s) => /opened/.test(s))).toEqual([]);
     expect(subjects.filter((s) => /completed/.test(s))).toHaveLength(1);
     expect(subjects.filter((s) => /settings changed/.test(s))).toHaveLength(1);
   });

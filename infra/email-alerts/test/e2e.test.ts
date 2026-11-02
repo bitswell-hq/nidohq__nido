@@ -126,7 +126,7 @@ describe('an account with an email guardian enters recovery', () => {
     const payload = JSON.parse(Buffer.from(pushes[0]!.payload).toString('utf8'));
     expect(payload).toMatchObject({ v: 1, kind: 'attempt_authorized', code });
     expect(JSON.stringify(payload)).not.toContain(w.fixture.account);
-    expect(w.lettermint.sent.length - sentBefore).toBe(2); // attempt_begun (email only) and attempt_authorized
+    expect(w.lettermint.sent.length - sentBefore).toBe(1); // attempt_authorized; attempt_begun sends nothing by default
 
     measured.eventToVaultAnswerMs = reports.map((r) => r.latencyMs[authId]).find((x) => x !== undefined)!;
     measured.eventsPollToEmailAcceptedMs = approved[0]!.receivedAt - t0;

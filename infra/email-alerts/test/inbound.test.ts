@@ -12,8 +12,8 @@ import {
 } from '@nidohq/email-recovery';
 import { afterEach, beforeAll, describe, expect, test } from 'vitest';
 import type { VaultApi } from '../src/channel.js';
-import { AlertService } from '../src/service.js';
-import { INBOUND_MAX_MESSAGES, INBOUND_TTL_MS, InboundBox } from '../src/vault/inbound.js';
+import { AlertService, INBOUND_LIMIT, WindowLimiter, clientPrefix } from '../src/service.js';
+import { INBOUND_MAX_MESSAGES, INBOUND_MAX_REGISTRATIONS, INBOUND_TTL_MS, InboundBox } from '../src/vault/inbound.js';
 
 const { toHex, toBase64Url, fromBase64Url } = bytes;
 const DIGEST = new Uint8Array(32).fill(7);
@@ -131,6 +131,62 @@ describe('the host’s inbound routes', () => {
     expect(got.messages).toHaveLength(1);
     expect(await openInboundMessage(secret, fromBase64Url(got.messages[0]!))).toEqual(raw);
     expect(((await (await fetch(`${base}/v1/inbound/${toHex(new Uint8Array(16))}`)).json()) as { messages: string[] }).messages).toEqual([]);
+  });
+});
+
+describe('the sealed-inbound rate limit', () => {
+  let svc: AlertService | undefined;
+  afterEach(async () => svc?.close());
+
+  test('limits registrations per client, says when to retry, and counts each client apart', async () => {
+    const vault = await vaultKeys();
+    const box = new InboundBox(vault.pair);
+    let clock = 1_000_000;
+    let client = '203.0.113.7';
+    svc = new AlertService(
+      {
+        rpc: {} as never,
+        controller: 'C'.padEnd(56, 'A'),
+        statePath: join(mkdtempSync(join(tmpdir(), 'inbound-')), 'state.json'),
+        startLedger: 1,
+        signers: async () => [],
+        log: () => undefined,
+        inboundLimit: { perClient: 2, windowMs: 60_000 },
+        clientKey: () => client,
+        now: () => clock,
+      },
+      { inbound: (e: Uint8Array) => box.register(e) } as unknown as VaultApi,
+    );
+    const base = await svc.listen();
+    const post = async (n: bigint) => {
+      const { envelope } = await inboundRegistration(vault.publicKey, recoverySubject(DIGEST, n).slice(-64));
+      return fetch(`${base}/v1/inbound`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ envelope: toBase64Url(envelope) }) });
+    };
+    expect((await post(1n)).status).toBe(200);
+    expect((await post(2n)).status).toBe(200);
+    const third = await post(3n);
+    expect(third.status).toBe(429);
+    expect(third.headers.get('retry-after')).toBe('60');
+    client = '203.0.113.8';
+    expect((await post(4n)).status).toBe(200);
+    client = '203.0.113.7';
+    clock += 60_000;
+    expect((await post(5n)).status).toBe(200);
+  });
+
+  test('a client is an IPv4 address or an IPv6 /64; the default bound needs 417 clients to fill the vault', () => {
+    expect(clientPrefix('203.0.113.7')).toBe('203.0.113.7');
+    expect(clientPrefix('::ffff:203.0.113.7')).toBe('203.0.113.7');
+    expect(clientPrefix('2001:db8:1:2:aaaa::1')).toBe('2001:db8:1:2::/64');
+    expect(clientPrefix('2001:db8:1:2:bbbb:cccc:dddd:eeee')).toBe('2001:db8:1:2::/64');
+    expect(clientPrefix('2001:db8::5')).toBe('2001:db8:0:0::/64');
+    expect(clientPrefix('::1')).toBe('0:0:0:0::/64');
+    const held = INBOUND_LIMIT.perClient * (INBOUND_TTL_MS / INBOUND_LIMIT.windowMs);
+    expect(held).toBe(240);
+    expect(Math.ceil(INBOUND_MAX_REGISTRATIONS / held)).toBe(417);
+    const l = new WindowLimiter(1, 10, () => 0);
+    expect(l.take('a')).toBe(0);
+    expect(l.take('a')).toBe(10);
   });
 });
 

@@ -3,13 +3,13 @@
  * §10.3): verify the vault's attestation, seal the contact to the attested
  * key, and have an account passkey authorize the change.
  *
- * Every registration, replacement, and removal is a [`ContactRequest`]: an
- * HPKE envelope only the vault opens, plus a WebAuthn assertion by one of
- * the account's passkeys over [`authorizationChallenge`], which binds the
- * operation, the account, the contact reference, the envelope's hash, the
- * purposes, the consent-text version, and a single-use vault nonce. The
- * host that relays the request sees the account and the operation, never
- * the address.
+ * Every registration, replacement, removal, push update, and status read
+ * is a [`ContactRequest`]: an HPKE envelope only the vault opens, plus a
+ * WebAuthn assertion by one of the account's passkeys over
+ * [`authorizationChallenge`], which binds the operation, the account, the
+ * contact reference, the envelope's hash, the purposes, the consent-text
+ * version, and a single-use vault nonce. The host that relays the request
+ * sees the account and the operation, never the address.
  */
 
 import { decode, encode } from 'cborg';
@@ -28,7 +28,12 @@ export const ENVELOPE_VERSION = 1;
 export const PURPOSE_SECURITY_ALERTS = 1;
 export const PURPOSE_PRODUCT_UPDATES = 2;
 
-export type ContactOp = 'register' | 'replace' | 'remove';
+/**
+ * `push` gives an existing contact a new Web Push subscription (the vault
+ * applies it at once only when the current one is gone); `status` reads the
+ * account's channels (spec §10.3).
+ */
+export type ContactOp = 'register' | 'replace' | 'remove' | 'push' | 'status';
 
 /** A `PushSubscription.toJSON()` (W3C Push API) the vault pushes to. */
 export interface PushSubscriptionJSON {
@@ -81,6 +86,9 @@ export type SealedRequest =
       consentVersion: number;
     }
   | { op: 'remove'; account: Uint8Array; contact: Uint8Array }
+  | { op: 'push'; account: Uint8Array; contact: Uint8Array; push: PushChannel }
+  /** `contact` is 16 zero octets: a status read names no contact. */
+  | { op: 'status'; account: Uint8Array; contact: Uint8Array }
   | { op: 'confirm'; account: Uint8Array; contact: Uint8Array; code: string };
 
 /** The assertion fields a vault needs, from `navigator.credentials.get`. */
@@ -151,25 +159,51 @@ export async function contactRequest(input: ContactInput, replaces?: Uint8Array)
     purposes: input.purposes,
     consentVersion: input.consentVersion,
   };
-  if (input.push) {
-    const p256dh = fromBase64Url(input.push.keys.p256dh);
-    const auth = fromBase64Url(input.push.keys.auth);
-    if (p256dh.length !== 65 || p256dh[0] !== 4 || auth.length !== 16) throw new Error('bad push subscription keys');
-    const loopback = input.allowLoopbackPush && input.push.endpoint.startsWith('http://127.0.0.1:');
-    if (!input.push.endpoint.startsWith('https://') && !loopback) throw new Error('push endpoint must be https');
-    req.push = { endpoint: input.push.endpoint, p256dh, auth };
-  }
+  if (input.push) req.push = pushChannel(input.push, input.allowLoopbackPush);
   return req;
+}
+
+/** A subscription as the vault keeps it, checked: P-256 keys, a 16-octet secret, an https endpoint. */
+function pushChannel(sub: PushSubscriptionJSON, allowLoopbackPush?: boolean): PushChannel {
+  const p256dh = fromBase64Url(sub.keys.p256dh);
+  const auth = fromBase64Url(sub.keys.auth);
+  if (p256dh.length !== 65 || p256dh[0] !== 4 || auth.length !== 16) throw new Error('bad push subscription keys');
+  const loopback = allowLoopbackPush && sub.endpoint.startsWith('http://127.0.0.1:');
+  if (!sub.endpoint.startsWith('https://') && !loopback) throw new Error('push endpoint must be https');
+  return { endpoint: sub.endpoint, p256dh, auth };
 }
 
 export function removalRequest(account: string, contact: Uint8Array): SealedRequest {
   return { op: 'remove', account: contractIdFromStrkey(account), contact };
 }
 
+/** A new Web Push subscription for the existing contact `contact`. */
+export function pushUpdateRequest(
+  account: string,
+  contact: Uint8Array,
+  push: PushSubscriptionJSON,
+  opts: { allowLoopbackPush?: boolean } = {},
+): SealedRequest {
+  if (contact.length !== 16) throw new Error('a contact id is 16 octets');
+  return { op: 'push', account: contractIdFromStrkey(account), contact, push: pushChannel(push, opts.allowLoopbackPush) };
+}
+
+/** A read of the account's alert channels. */
+export function statusRequest(account: string): SealedRequest {
+  return { op: 'status', account: contractIdFromStrkey(account), contact: new Uint8Array(16) };
+}
+
 export function confirmationRequest(account: string, contact: Uint8Array, code: string): SealedRequest {
   if (!/^\d{6}$/.test(code)) throw new Error('confirmation code is 6 digits');
   return { op: 'confirm', account: contractIdFromStrkey(account), contact, code };
 }
+
+const encodePush = (p: PushChannel) =>
+  new Map<string, unknown>([
+    ['endpoint', p.endpoint],
+    ['p256dh', p.p256dh],
+    ['auth', p.auth],
+  ]);
 
 export function encodeSealedRequest(r: SealedRequest): Uint8Array {
   const m = new Map<string, unknown>([
@@ -183,18 +217,11 @@ export function encodeSealedRequest(r: SealedRequest): Uint8Array {
     m.set('address', r.address);
     m.set('k_code', r.kCode);
     m.set('email_guardian', r.emailGuardian);
-    if (r.push) {
-      m.set(
-        'push',
-        new Map<string, unknown>([
-          ['endpoint', r.push.endpoint],
-          ['p256dh', r.push.p256dh],
-          ['auth', r.push.auth],
-        ]),
-      );
-    }
+    if (r.push) m.set('push', encodePush(r.push));
     m.set('purposes', r.purposes);
     m.set('consent_version', r.consentVersion);
+  } else if (r.op === 'push') {
+    m.set('push', encodePush(r.push));
   } else if (r.op === 'confirm') {
     m.set('code', r.code);
   }
@@ -222,6 +249,11 @@ export function decodeSealedRequest(bytes: Uint8Array): SealedRequest {
   const contact = field(m, 'contact', isBytes(16));
   const op = m.get('op');
   if (op === 'remove') return { op, account, contact };
+  if (op === 'status') {
+    if (contact.some((b) => b !== 0)) throw new Error('vault request: a status read names no contact');
+    return { op, account, contact };
+  }
+  if (op === 'push') return { op, account, contact, push: decodePush(field(m, 'push', isMap)) };
   if (op === 'confirm') {
     const code = field(m, 'code', isString);
     if (!/^\d{6}$/.test(code)) throw new Error('vault request: bad code');
@@ -240,16 +272,15 @@ export function decodeSealedRequest(bytes: Uint8Array): SealedRequest {
   };
   if (op === 'replace') req.replaces = field(m, 'replaces', isBytes(16));
   else if (m.has('replaces')) throw new Error('vault request: replaces on a registration');
-  if (m.has('push')) {
-    const p = field(m, 'push', isMap);
-    req.push = {
-      endpoint: field(p, 'endpoint', isString),
-      p256dh: field(p, 'p256dh', isBytes(65)),
-      auth: field(p, 'auth', isBytes(16)),
-    };
-  }
+  if (m.has('push')) req.push = decodePush(field(m, 'push', isMap));
   return req;
 }
+
+const decodePush = (p: Map<unknown, unknown>): PushChannel => ({
+  endpoint: field(p, 'endpoint', isString),
+  p256dh: field(p, 'p256dh', isBytes(65)),
+  auth: field(p, 'auth', isBytes(16)),
+});
 
 /** The envelope: CBOR `{v, enc, ct}` around the HPKE-sealed request. */
 export async function sealRequest(vaultPublicKey: Uint8Array, r: SealedRequest): Promise<Uint8Array> {
@@ -279,10 +310,10 @@ const u32 = (n: number) => {
 };
 
 /**
- * The WebAuthn challenge an account passkey signs for a contact change:
+ * The WebAuthn challenge an account passkey signs for a contact request:
  * `sha256(label || op || account || contact || sha256(envelope) ||
- * BE32(purposes) || BE32(consent_version) || nonce)`. `remove` signs
- * purposes and consent version 0.
+ * BE32(purposes) || BE32(consent_version) || nonce)`. `remove`, `push` and
+ * `status` sign purposes and consent version 0.
  */
 export async function authorizationChallenge(c: {
   op: ContactOp;
@@ -353,7 +384,7 @@ export function encodeContactRequest(r: ContactRequest): string {
 
 export function decodeContactRequest(json: string): ContactRequest {
   const b = JSON.parse(json) as Record<string, unknown>;
-  if (!['register', 'replace', 'remove', 'confirm'].includes(b.op as string)) throw new Error('bad op');
+  if (!['register', 'replace', 'remove', 'push', 'status', 'confirm'].includes(b.op as string)) throw new Error('bad op');
   contractIdFromStrkey(String(b.account));
   const r: ContactRequest = {
     op: b.op as ContactRequest['op'],
@@ -386,8 +417,8 @@ export async function prepareContactChange(
   finish(a: { publicKey: Uint8Array; authenticatorData: Uint8Array; clientDataJSON: Uint8Array; signature: Uint8Array }): ContactRequest;
 }> {
   const envelope = await sealRequest(vault.publicKey, request);
-  const purposes = request.op === 'remove' ? 0 : request.purposes;
-  const consentVersion = request.op === 'remove' ? 0 : request.consentVersion;
+  const purposes = request.op === 'register' || request.op === 'replace' ? request.purposes : 0;
+  const consentVersion = request.op === 'register' || request.op === 'replace' ? request.consentVersion : 0;
   const challenge = await authorizationChallenge({
     op: request.op,
     account: request.account,

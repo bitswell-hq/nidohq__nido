@@ -15,8 +15,12 @@ export interface Contact {
   id: Uint8Array;
   address: string;
   push?: PushChannel;
-  /** The push service answered 404/410: the subscription is gone. */
+  /** The push service answered 404/410: the subscription is gone (lapsed). */
   pushGone?: boolean;
+  /** When the subscription was found gone (ms). */
+  lapsedAt?: number;
+  /** When the push service last accepted a push or probe for it (ms); probes are due a week later. */
+  pushCheckedAt?: number;
   kCode: Uint8Array;
   emailGuardian: boolean;
   purposes: number;
@@ -40,10 +44,20 @@ export interface PendingChange {
   authorizer: Uint8Array;
 }
 
+/** An open attempt on an account with an email-guardian contact, watched for the email guardian's vote. */
+export interface WatchedAttempt {
+  /** The attempt id, decimal. */
+  attemptId: string;
+  /** When `attempt_begun` was handled (ms). */
+  since: number;
+}
+
 export interface AccountRecord {
   account: Uint8Array;
   contacts: Contact[];
   change?: PendingChange;
+  /** Attempts whose evidence the host reads for an email vote (spec §10.2). */
+  watch?: WatchedAttempt[];
 }
 
 function seal(key: Uint8Array, aad: Uint8Array, value: unknown): Uint8Array {

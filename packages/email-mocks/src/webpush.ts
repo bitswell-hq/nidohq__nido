@@ -10,7 +10,10 @@
  *   k=<key>`, an ES256 JWT whose `aud` is the push service's origin and
  *   whose `exp` is at most 24 hours away; a subscription created with an
  *   application server key accepts only that key, §4.2) and RFC 8291
- *   payloads (`Content-Encoding: aes128gcm`). It cannot read payloads.
+ *   payloads (`Content-Encoding: aes128gcm`). It cannot read payloads. A
+ *   push to a subscription it has expired (the user agent unsubscribed, or
+ *   the service dropped it) answers `404 Not Found`, as RFC 8030 §7.3
+ *   requires.
  * - The user agent holds the subscription's P-256 key pair and 16-byte
  *   authentication secret and decrypts RFC 8291 messages (one RFC 8188
  *   record).
@@ -59,6 +62,7 @@ export interface PushMessage {
 interface Subscription {
   applicationServerKey: Uint8Array;
   queue: PushMessage[];
+  expired?: boolean;
 }
 
 export class PushServiceMock {
@@ -84,6 +88,12 @@ export class PushServiceMock {
     const sub = this.subscriptions.get(id);
     if (!sub) return [];
     return sub.queue.splice(0);
+  }
+
+  /** Expire a subscription: every later push to it answers 404 Not Found (RFC 8030 §7.3). */
+  expire(endpoint: string): void {
+    const sub = this.subscriptions.get(endpoint.slice(endpoint.lastIndexOf('/') + 1));
+    if (sub) sub.expired = true;
   }
 
   failNext(status: number, count = 1): void {
@@ -124,6 +134,7 @@ export class PushServiceMock {
       const m = req.method === 'POST' ? req.url?.match(/^\/push\/([0-9a-f-]+)$/) : null;
       const sub = m ? this.subscriptions.get(m[1]!) : undefined;
       if (!m || !sub) return reject(404, 'no such subscription');
+      if (sub.expired) return reject(404, 'subscription expired');
       const failure = this.failures.shift();
       if (failure) return reject(failure, 'injected failure');
       const why = this.check(req.headers, sub);
