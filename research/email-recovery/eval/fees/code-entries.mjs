@@ -5,7 +5,9 @@
 // entry's XDR size and the parsing inputs (`ContractCodeCostInputs`) the
 // network's host recorded when the code was uploaded. fees/model.mjs
 // (`codeRentBytes`) turns them into the entry's size for rent under any
-// network's cost model. Read-only: Stellar RPC's getLedgerEntries.
+// network's cost model; and the optimized size and sha256 of each
+// email-recovery contract's wasm in this build. Read-only: Stellar RPC's
+// getLedgerEntries.
 //
 //   node research/email-recovery/eval/fees/code-entries.mjs [RPC]
 import { createHash } from 'node:crypto';
@@ -38,6 +40,13 @@ for (const [file, name] of Object.entries(FILES)) {
   const costInputs = Object.fromEntries(['nInstructions', 'nFunctions', 'nGlobals', 'nTableEntries', 'nTypes', 'nDataSegments', 'nElemSegments', 'nImports', 'nExports', 'nDataSegmentBytes'].map((k) => [k, ci[k]()]));
   entries.push({ name, file, hash: hash.toString('hex'), onNetwork: true, dataBytes: e.val.toXDR().length, costInputs });
 }
-const out = { fetched: new Date().toISOString(), rpc: RPC, passphrase: network.result.passphrase, protocolVersion: network.result.protocolVersion, entries };
+// The build these entries come from: each email-recovery contract's wasm as `just build-contracts` writes it.
+const build = Object.fromEntries(
+  ['nido_email_guardian', 'nido_dkim_registry', 'nido_email_verifier', 'nido_enclave_image_registry'].map((w) => {
+    const b = readFileSync(`${repo}target/wasm32v1-none/contract/${w}.wasm`);
+    return [w, { bytes: b.length, sha256: createHash('sha256').update(b).digest('hex') }];
+  }),
+);
+const out = { fetched: new Date().toISOString(), rpc: RPC, passphrase: network.result.passphrase, protocolVersion: network.result.protocolVersion, build, entries };
 writeFileSync(`${repo}research/email-recovery/eval/results/code-entries.json`, JSON.stringify(out, null, 1) + '\n');
 for (const e of entries) console.error(`${e.name}: ${e.onNetwork ? `${e.dataBytes} bytes` : 'not on this network'}`);

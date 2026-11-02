@@ -16,8 +16,8 @@
 // Run again with the state file present, `setup` continues that run (an
 // account it has not enrolled, a vote it has not submitted).
 //
-// `vote`, once the addition is eligible (its `eligible_at`, about 72 hours
-// of testnet ledgers after setup), executes it and has accounts submit
+// `vote`, once the addition is eligible (its `eligible_at`, 72 hours of
+// ledger close time after setup), executes it and has accounts submit
 // email votes proven against the registry's root.
 //
 // Both write results/testnet-votes.json.
@@ -189,7 +189,7 @@ async function setup(count, s) {
     }
   }
   await closeProver();
-  log(`registry ${s.stack.registry}: the Gmail key's addition is eligible from ledger ${s.proposal.eligibleAt}`);
+  log(`registry ${s.stack.registry}: the Gmail key's addition is eligible from close time ${new Date(1000 * s.proposal.eligibleAt).toISOString()}`);
   write(s);
 }
 
@@ -198,8 +198,8 @@ async function vote(s, count) {
   const registry = new Registry(chain, s.stack.registry, s.secrets.members.map((m) => Keypair.fromSecret(m)), attesters, deployer);
   const stack = { deployment: d, email: { guardianWasmHash: s.stack.guardianWasmHash, verifier: s.stack.verifier }, registry };
   chain.log.push(...s.log);
-  const at = await chain.ledger();
-  if (at < s.proposal.eligibleAt) throw new Error(`the addition is eligible from ledger ${s.proposal.eligibleAt}; testnet is at ${at}`);
+  const at = await chain.closeTime();
+  if (at < s.proposal.eligibleAt) throw new Error(`the addition is eligible from close time ${new Date(1000 * s.proposal.eligibleAt).toISOString()}; testnet's latest ledger closed at ${new Date(1000 * at).toISOString()}`);
   s.restored = [...s.restored, ...(await restorePerch(deployer))];
   if (!s.proposal.executed) {
     const r = await registry.execute(s.proposal.id);

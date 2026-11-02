@@ -217,6 +217,10 @@ function cost() {
     row('Resource fee declared (stroops)', (t) => t.declared?.resourceFee);
     row('Wall clock, simulation to confirmation (ms)', (t) => t.ms?.total);
   }
+  if (!root) {
+    out.push('');
+    out.push('Local network, registry root beside the pin: not yet recorded. `network/run-registry-root.sh` enrolls the accounts and then waits out the additions\' attested timelock, 72 hours of ledger close time, before its votes.');
+  }
   if (root) {
     const votes = (path) => root.transactions.filter((t) => isVote(t) && t.label.includes(`, ${path}, `));
     const reg = votes('registry');
@@ -224,7 +228,7 @@ function cost() {
     const registry = root.contracts.registry.slice(0, 6);
     const inFp = (t) => [...t.footprint.readOnly, ...t.footprint.readWrite].some((k) => k.includes(registry));
     out.push('');
-    out.push(`Local network, registry root beside the pin: one run (${day(root.generated)} UTC) deployed the stack, enrolled per launch domain an account whose guardian has no pin and one with the wallet's 30-day pin, waited ${n(root.waited.ledgers)} ledgers (${(root.waited.seconds / 3600).toFixed(1)} hours) for the additions' attested 72-hour timelock (51,840 ledgers), executed each addition, and submitted one email vote per account: ${reg.length} against the registry's root, ${pin.length} against the pin, on the same network at the same time. The registry's instance and code are in the footprint of ${reg.filter(inFp).length} of the ${reg.length} registry-root votes and ${pin.filter(inFp).length} of the ${pin.length} pin votes.`);
+    out.push(`Local network, registry root beside the pin: one run (${day(root.generated)} UTC) deployed the stack, enrolled per launch domain an account whose guardian has no pin and one with the wallet's 30-day pin, waited ${(root.waited.seconds / 3600).toFixed(1)} hours (${n(root.waited.ledgers)} ledgers) for the additions' attested timelock, 72 hours of ledger close time, executed each addition, and submitted one email vote per account: ${reg.length} against the registry's root, ${pin.length} against the pin, on the same network at the same time. The registry's instance and code are in the footprint of ${reg.filter(inFp).length} of the ${reg.length} registry-root votes and ${pin.filter(inFp).length} of the ${pin.length} pin votes.`);
     out.push('');
     out.push(`| Figure: median (range) | Registry root (${reg.length}) | Pin (${pin.length}) | Difference of medians |`);
     out.push('| --- | --- | --- | --- |');
@@ -245,12 +249,14 @@ function cost() {
     if (exec.length) out.push(`\nThe ${exec.length} executions that activated the keys (permissionless \`execute\`, each inserting a leaf and recomputing the 16-level root): ${stat(exec.map((t) => t.metered?.cpu_insn ?? t.declared.instructions))} instructions, ${stat(exec.map((t) => t.feeCharged))} stroops charged.`);
   }
   // Testnet: the recovery run's vote and the votes run.
-  const tnVotes = [...(tn ? tn.transactions.filter((t) => t.hash === tn.votes?.email) : []), ...(tv ? tv.transactions.filter(isVote) : [])];
+  // The votes run deploys this tree's build; the recovery run's record names the build it ran.
+  const tnVotes = tv ? tv.transactions.filter(isVote) : [];
   if (tnVotes.length) {
     const pin = tnVotes.filter((t) => !t.label.includes(', registry,'));
     const reg = tnVotes.filter((t) => t.label.includes(', registry,'));
+    const rv = tn?.transactions.find((t) => t.hash === tn.votes?.email);
     out.push('');
-    out.push(`Testnet: ${pin.length} email votes against the guardian's pin (the recovery run's and ${pin.length - 1} of the votes run of ${tv ? day(tv.generated) : '—'} UTC)${reg.length ? ` and ${reg.length} against the registry's root` : ''}, read back from the network.`);
+    out.push(`Testnet: the votes run of ${day(tv.generated)} UTC (guardian wasm \`${tv.contracts['nido-email-guardian'].sha256.slice(0, 8)}…\`), ${pin.length} email votes against the guardian's pin${reg.length ? ` and ${reg.length} against the registry's root` : ''}, read back from the network.${rv ? ` The recovery run's vote (\`results/testnet.json\`, guardian wasm \`${tn.contracts['nido-email-guardian'].sha256.slice(0, 8)}…\`) was metered at ${n(rv.metered.cpu_insn)} and charged ${n(rv.feeCharged)}.` : ''}`);
     out.push('');
     out.push(`| Figure: median (range) | Pin (${pin.length}) |${reg.length ? ` Registry root (${reg.length}) |` : ''}`);
     out.push(`| --- | --- |${reg.length ? ' --- |' : ''}`);
@@ -263,15 +269,15 @@ function cost() {
     row('Wall clock, simulation to confirmation (ms)', (t) => t.ms?.total);
     if (tv && !reg.length) {
       const p = tv.gmailProposal;
-      out.push(`\nThe votes run's registry admits the Gmail mock's TEST-ONLY key on the attested 72-hour path; the addition is eligible from ledger ${n(p.eligibleAt)}, about 72 hours after the run, and the registry-root votes follow it (\`testnet/votes.mjs vote\`).`);
+      out.push(`\nThe votes run's registry admits the Gmail mock's TEST-ONLY key on the attested 72-hour path; the addition is eligible from ${new Date(1000 * p.eligibleAt).toISOString().slice(0, 16).replace('T', ' ')} UTC (ledger close time), 72 hours after the run, and the registry-root votes follow it (\`testnet/votes.mjs vote\`).`);
     }
   }
   // The same call per launch domain.
   if (local && host.length) {
     const byDomain = Object.fromEntries(collecting(local.transactions).map((t) => [/, ([a-z.]+)\)$/.exec(t.label)?.[1], t]).filter(([d]) => d));
-    const tvote = tn?.transactions.find((t) => t.hash === tn.votes?.email);
+    const tvote = tv?.transactions.find(isVote) ?? tn?.transactions.find((t) => t.hash === tn.votes?.email);
     out.push('');
-    out.push('The same call, the email vote with a real proof, in each environment (instructions; footprint as read-only + read-write entries). Test host from `onchain.md`; local network from the attack run; testnet from `results/testnet.json` (Gmail only).');
+    out.push('The same call, the email vote with a real proof, in each environment (instructions; footprint as read-only + read-write entries). Test host from `onchain.md`; local network from the attack run; testnet from the first vote of the votes run (`results/testnet-votes.json`, Gmail only).');
     out.push('');
     out.push('| Domain | Test host invocation | Test host transaction | Test host footprint | Local network, metered | Local network, declared | Local footprint | Testnet, metered |');
     out.push('| --- | --- | --- | --- | --- | --- | --- | --- |');
@@ -288,7 +294,7 @@ function cost() {
     const hostTx = { declared: { instructions: gmailHost.tx.instructions, diskReadBytes: gmailHost.tx.disk_read_bytes, writeBytes: gmailHost.tx.write_bytes, readOnly: gmailHost.tx.read_only, readWrite: gmailHost.tx.read_write }, footprint: { readOnly: [], readWrite: [] }, eventsBytes: gmailHost.tx.events_and_return_bytes, envelopeBytes: gmailHost.tx.envelope_bytes, label: 'test host' };
     const lv = local.transactions.find((t) => t.label === 'submit_guardian (email, gmail.com)');
     const rv = root?.transactions.find((t) => t.label === 'submit_guardian (email, registry, gmail.com)');
-    const tvote = tn?.transactions.find((t) => t.hash === tn.votes?.email);
+    const tvote = tv?.transactions.find(isVote) ?? tn?.transactions.find((t) => t.hash === tn.votes?.email);
     const mainnet = schedule(S.mainnet.settings);
     const cols = [
       ['Test host transaction, SDK snapshot', column(hostTx, SDK_SNAPSHOT)],
@@ -320,6 +326,7 @@ function cost() {
     row('**Total**', (c) => c.total);
   }
   // Metering: hosts and cost models.
+  const release = json('release-build-votes-local.json');
   if (archival && local) {
     const m = archival.emailVoteMetering;
     const lv = collecting(local.transactions);
@@ -334,7 +341,6 @@ function cost() {
     out.push(`| Test host, transaction (Gmail) | soroban-env-host 27.0.1 | testnet's | ${n(m.testnet)} |`);
     out.push(`| Local network, applied: ${lv.length} pin votes | soroban-env-host 29.0.2 (stellar-core 30.0.0, protocol 29) | mainnet's | ${stat(lv.map((t) => t.metered.cpu_insn))} |`);
     out.push(`| Local network, declared after simulation | Stellar RPC 30.0.0 | mainnet's | ${stat(lv.map((t) => t.declared.instructions))} |`);
-    const release = json('release-build-votes-local.json');
     if (release) {
       const rv = collecting(release.votes.map((v) => ({ ...v, status: 'SUCCESS' })));
       out.push(`| Local network, applied: ${rv.length} pin votes, the email contracts' release-profile build (\`release-build-votes-local.json\`) | soroban-env-host 29.0.2 (stellar-core 30.0.0, protocol 29) | mainnet's | ${stat(rv.map((t) => t.metered.cpu_insn))} |`);
@@ -343,6 +349,18 @@ function cost() {
       out.push(`| Testnet, applied: ${tnPin.length} pin votes | soroban-env-host 29.0.2 (stellar-core 30.0.0, protocol 29) | testnet's | ${stat(tnPin.map((t) => t.metered.cpu_insn))} |`);
       out.push(`| Testnet, declared after simulation | Stellar RPC 30.0.0 | testnet's | ${stat(tnPin.map((t) => t.declared.instructions))} |`);
     }
+    const localMedian = median(lv.map((t) => t.metered.cpu_insn));
+    const parts = [`testnet's cost model adds ${n(m.testnet - m.mainnet)} instructions to mainnet's on the test host`];
+    if (tnPin.length) {
+      const d = median(tnPin.map((t) => t.metered.cpu_insn)) - localMedian;
+      parts.push(`between the networks, with the same wasm, the medians differ by ${n(Math.round(d))} (${((d / localMedian) * 100).toFixed(2)}%)`);
+    }
+    if (release) {
+      const rm = median(collecting(release.votes.map((v) => ({ ...v, status: 'SUCCESS' }))).map((t) => t.metered.cpu_insn));
+      parts.push(`the release-profile build meters ${n(Math.round(localMedian - rm))} fewer per vote than \`just build-contracts\`' wasm (the medians)`);
+    }
+    out.push('');
+    out.push(`So ${parts.join('; ')}.`);
   }
   // Capacity: one mainnet ledger.
   if (local && S.mainnet) {
@@ -474,7 +492,7 @@ function proving() {
   const out = [p.table, ''];
   out.push(`Proving time against load: each configuration's median of ${p.runs_per_configuration} runs here (load average ${p.machine.load_average_at_start} at the start) beside a second run of the same circuit build on the same machine (${q.generated.slice(0, 16).replace('T', ' ')} UTC, load average ${q.machine.load_average_at_start} at its start, ${q.machine.load_average_at_end} at its end).`);
   out.push('');
-  out.push(`| Configuration | Proving (s), load ${p.machine.load_average_at_start.split(' ')[0]} | Proving (s), load ${q.machine.load_average_at_start.split(' ')[0]} | Change |`);
+  out.push(`| Configuration | Proving (s), this run | Proving (s), the second run | Second run against this one |`);
   out.push('| --- | --- | --- | --- |');
   for (const r of p.rows) {
     const o = q.rows.find((x) => key(x) === key(r));

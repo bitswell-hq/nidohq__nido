@@ -2,8 +2,8 @@
 // Email votes proven against a root the DKIM key registry accepts, on a
 // local network (research/email-recovery/eval/README.md, "The registry-root
 // path"). A key reaches a registry root only after its addition's timelock:
-// 51,840 ledgers on the attested 72-hour path, which the local network's
-// one ledger a second turns into about 14.4 hours of waiting.
+// 72 hours of ledger close time on the attested path, which the local
+// network's close times, the wall clock, make 72 hours of waiting.
 //
 // 1. `setup` deploys the stack as the attack suite does (lib/stack.mjs: each
 //    launch domain's TEST-ONLY key proposed, approved by three members and
@@ -71,7 +71,7 @@ async function setup() {
         quorum: 2,
         delayLedgers: 20,
         expiryLedgers: 2_000,
-        pinLedgers: path === 'pin' ? 518_400 : null,
+        pinSeconds: path === 'pin' ? 30 * 86_400 : null,
       });
       accounts.push({ path, domain, ...enrolledJson(e) });
     }
@@ -84,16 +84,17 @@ async function setup() {
   const at = await chain.call('getLatestLedger');
   const s = { stack: stackJson(stack), accounts, proposals, setup: { ledger: at.sequence, closeTime: Number(at.closeTime), seconds: Math.round((Date.now() - t0) / 1000) } };
   save(s);
-  log(`${accounts.length} accounts enrolled; eligible from ledger ${Math.max(...Object.values(proposals).map((p) => p.eligibleAt))}`);
+  log(`${accounts.length} accounts enrolled; eligible from close time ${new Date(1000 * Math.max(...Object.values(proposals).map((p) => p.eligibleAt))).toISOString()}`);
   return s;
 }
 
 async function wait(s) {
+  // Eligibility is a ledger close time (Unix seconds).
   const eligible = Math.max(...Object.values(s.proposals).map((p) => p.eligibleAt));
   for (;;) {
-    const at = await chain.ledger();
+    const at = await chain.closeTime();
     if (at >= eligible) break;
-    log(`ledger ${at}, eligible at ${eligible} (${eligible - at} to go)`);
+    log(`close time ${at}, eligible at ${eligible} (${((eligible - at) / 3600).toFixed(1)} hours to go)`);
     await new Promise((ok) => setTimeout(ok, Math.min(600_000, Math.max(5_000, (eligible - at) * 1_000))));
   }
 }

@@ -2,8 +2,8 @@
 # Email votes against a registry root on a local network (registry-root.mjs):
 # builds what the network runs (network/build.sh), starts its own local
 # network (network/start-local.sh, container nido-email-registry-root), and
-# runs the setup, the wait for the attested 72-hour timelock (51,840 ledgers,
-# about 14.4 hours at the local network's one ledger a second) and the votes,
+# runs the setup, the wait for the attested 72-hour timelock (72 hours of
+# ledger close time, which on the local network is the wall clock) and the votes,
 # then regenerates the tables of research/email-recovery/eval/README.md. The
 # container is left running when the run fails, so `--resume` can finish it
 # from target/email-registry-root/state.json.
