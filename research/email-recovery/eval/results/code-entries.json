@@ -1,0 +1,141 @@
+{
+ "fetched": "2026-11-02T05:10:28.320Z",
+ "rpc": "https://soroban-testnet.stellar.org",
+ "passphrase": "Test SDF Network ; September 2015",
+ "protocolVersion": 29,
+ "entries": [
+  {
+   "name": "Perch doc compiler",
+   "file": "perch_doc_compiler.wasm",
+   "hash": "2730a7d39d619579bb7873818900fa5f9150d69d49fa1ee3b4a38f61ba768a16",
+   "onNetwork": true,
+   "dataBytes": 110040,
+   "costInputs": {
+    "nInstructions": 41936,
+    "nFunctions": 250,
+    "nGlobals": 2,
+    "nTableEntries": 22,
+    "nTypes": 31,
+    "nDataSegments": 9,
+    "nElemSegments": 1,
+    "nImports": 38,
+    "nExports": 6,
+    "nDataSegmentBytes": 21894
+   }
+  },
+  {
+   "name": "Perch recovery controller",
+   "file": "perch_recovery.wasm",
+   "hash": "daaf09d9f73f6890753572b33a5c41a22c2ebf0e9ce29593e8407ff858844eb8",
+   "onNetwork": true,
+   "dataBytes": 68356,
+   "costInputs": {
+    "nInstructions": 15015,
+    "nFunctions": 152,
+    "nGlobals": 2,
+    "nTableEntries": 0,
+    "nTypes": 39,
+    "nDataSegments": 7,
+    "nElemSegments": 0,
+    "nImports": 41,
+    "nExports": 28,
+    "nDataSegmentBytes": 35542
+   }
+  },
+  {
+   "name": "Perch WebAuthn verifier",
+   "file": "perch_webauthn_verifier.wasm",
+   "hash": "f2e1dfce8c496be6d318045bc5a24ac5eb799ada837f92e8032ec953f1994230",
+   "onNetwork": true,
+   "dataBytes": 11920,
+   "costInputs": {
+    "nInstructions": 4611,
+    "nFunctions": 34,
+    "nGlobals": 2,
+    "nTableEntries": 0,
+    "nTypes": 18,
+    "nDataSegments": 7,
+    "nElemSegments": 0,
+    "nImports": 17,
+    "nExports": 5,
+    "nDataSegmentBytes": 2419
+   }
+  },
+  {
+   "name": "Perch account",
+   "file": "perch_account.wasm",
+   "hash": "2c976bfd98678f3b6fcf5514420a81ef5e5b9fc1c5b6c60ec6f2dd64448479d5",
+   "onNetwork": true,
+   "dataBytes": 70796,
+   "costInputs": {
+    "nInstructions": 21212,
+    "nFunctions": 210,
+    "nGlobals": 2,
+    "nTableEntries": 0,
+    "nTypes": 41,
+    "nDataSegments": 10,
+    "nElemSegments": 0,
+    "nImports": 58,
+    "nExports": 30,
+    "nDataSegmentBytes": 24757
+   }
+  },
+  {
+   "name": "email verifier",
+   "file": "nido_email_verifier.wasm",
+   "hash": "0e4239ca92d3e38a9efc40c24ed2d4237c437253a1d35372c8c6a5aa7c3194b9",
+   "onNetwork": true,
+   "dataBytes": 45708,
+   "costInputs": {
+    "nInstructions": 9437,
+    "nFunctions": 54,
+    "nGlobals": 4,
+    "nTableEntries": 0,
+    "nTypes": 22,
+    "nDataSegments": 12,
+    "nElemSegments": 0,
+    "nImports": 25,
+    "nExports": 8,
+    "nDataSegmentBytes": 23552
+   }
+  },
+  {
+   "name": "email guardian",
+   "file": "nido_email_guardian.wasm",
+   "hash": "9e7f39eff1ee4d930dabdfcb8e5ed87c45dd3f02f1c0bada2cfd169e82be8d48",
+   "onNetwork": true,
+   "dataBytes": 33572,
+   "costInputs": {
+    "nInstructions": 3276,
+    "nFunctions": 30,
+    "nGlobals": 4,
+    "nTableEntries": 0,
+    "nTypes": 21,
+    "nDataSegments": 8,
+    "nElemSegments": 0,
+    "nImports": 26,
+    "nExports": 9,
+    "nDataSegmentBytes": 26078
+   }
+  },
+  {
+   "name": "DKIM key registry",
+   "file": "nido_dkim_registry.wasm",
+   "hash": "f0a16ccf736c4bc8364bef4cd3f568612f95cb13cd997be5f5be9fb41084e883",
+   "onNetwork": true,
+   "dataBytes": 68364,
+   "costInputs": {
+    "nInstructions": 14203,
+    "nFunctions": 104,
+    "nGlobals": 4,
+    "nTableEntries": 0,
+    "nTypes": 29,
+    "nDataSegments": 12,
+    "nElemSegments": 0,
+    "nImports": 40,
+    "nExports": 24,
+    "nDataSegmentBytes": 38182
+   }
+  }
+ ]
+}
