@@ -1,0 +1,854 @@
+{
+ "about": "Email votes on the local network (protocol 29, mainnet's settings) with the email contracts built as the end-to-end test builds them (scripts/email-recovery-e2e.sh: stellar contract build --package <p>, the release profile without spec shaking, then stellar contract optimize): the configuration network/run-attacks.sh runs with NIDO_EVAL_EMAIL_WASM=target/email-e2e/wasm/. Without it the attack suite deploys the wasm just build-contracts writes.",
+ "generated": "2026-11-02T05:09:24.411Z",
+ "network": {
+  "kind": "stellar/quickstart --local",
+  "image": "stellar/quickstart@sha256:e05d68bb3b2629a829310dc3434fc0ee3f801854bdfa1a7c8c362d2f1c9060f8",
+  "passphrase": "Standalone Network ; February 2017",
+  "protocolVersion": 29,
+  "rpc": {
+   "version": "30.0.0",
+   "commitHash": "13e53516633c3ce1281c7edbacb607107d3a4e55",
+   "buildTimestamp": "2026-10-22T00:42:10",
+   "captiveCoreVersion": "v30.0.0",
+   "protocolVersion": 29
+  }
+ },
+ "wasm": {
+  "nido-email-verifier": {
+   "sha256": "efdc30c89a7dfa31f3d6c822ea06bf5c0fb191672191026760383405775f9c7b",
+   "bytes": 77889
+  },
+  "nido-email-guardian": {
+   "sha256": "65548beeb55170b085479fd3b1040be8fe9d00327748812a851ae1ee0f46c8d1",
+   "bytes": 34230
+  },
+  "nido-dkim-registry": {
+   "sha256": "8183d63187809b3ef083f24eaa0fafa1b07c50b1426b62f7b252dba071187f50",
+   "bytes": 78748
+  }
+ },
+ "votes": [
+  {
+   "label": "submit_guardian (email)",
+   "hash": "5c006cac10c464fa4b3ea88c523e049636313133b39f44a5e8eff199ab3bb029",
+   "ledger": 203,
+   "metered": {
+    "cpu_insn": 120055222,
+    "mem_byte": 5582104
+   },
+   "declared": {
+    "instructions": 124903954,
+    "diskReadBytes": 0,
+    "writeBytes": 1208,
+    "readOnly": 10,
+    "readWrite": 2,
+    "resourceFee": 90885,
+    "archivedEntries": 0
+   },
+   "feeCharged": 82651,
+   "feeSplit": {
+    "nonRefundableResource": 80492,
+    "refundableResource": 2059,
+    "rent": 2049
+   },
+   "envelopeBytes": 18080,
+   "footprint": {
+    "readOnly": [
+     "data CAUW27 persistent instance",
+     "data CBVUO2 persistent instance",
+     "data CC7SPV persistent Attempt",
+     "data CC7SPV persistent Config",
+     "data CC7SPV persistent Epoch",
+     "data CC7SPV persistent InvalidateBelow",
+     "data CC7SPV persistent instance",
+     "code 65548bee",
+     "code daaf09d9",
+     "code efdc30c8"
+    ],
+    "readWrite": [
+     "data CBVUO2 temporary _maxDepth",
+     "data CC7SPV temporary Collecting"
+    ]
+   }
+  },
+  {
+   "label": "submit_guardian (email)",
+   "hash": "779ff3ffb36bfefd466d33198d94cebf16bf1062802050cd1d0b1f8ab5180de9",
+   "ledger": 240,
+   "metered": {
+    "cpu_insn": 120075223,
+    "mem_byte": 5582449
+   },
+   "declared": {
+    "instructions": 124924755,
+    "diskReadBytes": 0,
+    "writeBytes": 1208,
+    "readOnly": 10,
+    "readWrite": 2,
+    "resourceFee": 90891,
+    "archivedEntries": 0
+   },
+   "feeCharged": 82657,
+   "feeSplit": {
+    "nonRefundableResource": 80498,
+    "refundableResource": 2059,
+    "rent": 2049
+   },
+   "envelopeBytes": 18080,
+   "footprint": {
+    "readOnly": [
+     "data CAUW27 persistent instance",
+     "data CBURQL persistent instance",
+     "data CC7SPV persistent Attempt",
+     "data CC7SPV persistent Config",
+     "data CC7SPV persistent Epoch",
+     "data CC7SPV persistent InvalidateBelow",
+     "data CC7SPV persistent instance",
+     "code 65548bee",
+     "code daaf09d9",
+     "code efdc30c8"
+    ],
+    "readWrite": [
+     "data CBURQL temporary _maxDepth",
+     "data CC7SPV temporary Collecting"
+    ]
+   }
+  },
+  {
+   "label": "submit_guardian (email, wrong-body-hash)",
+   "hash": "397d4490975e4f9c8db3ab8dbb8944fffef9ce3313c91e479bf897523ffb4dbd",
+   "ledger": 305,
+   "metered": {
+    "cpu_insn": 120059771,
+    "mem_byte": 5582043
+   },
+   "declared": {
+    "instructions": 124906584,
+    "diskReadBytes": 0,
+    "writeBytes": 1208,
+    "readOnly": 10,
+    "readWrite": 2,
+    "resourceFee": 90885,
+    "archivedEntries": 0
+   },
+   "feeCharged": 82651,
+   "feeSplit": {
+    "nonRefundableResource": 80492,
+    "refundableResource": 2059,
+    "rent": 2049
+   },
+   "envelopeBytes": 18080,
+   "footprint": {
+    "readOnly": [
+     "data CAUW27 persistent instance",
+     "data CC7SPV persistent Attempt",
+     "data CC7SPV persistent Config",
+     "data CC7SPV persistent Epoch",
+     "data CC7SPV persistent InvalidateBelow",
+     "data CC7SPV persistent instance",
+     "data CDPRYN persistent instance",
+     "code 65548bee",
+     "code daaf09d9",
+     "code efdc30c8"
+    ],
+    "readWrite": [
+     "data CC7SPV temporary Collecting",
+     "data CDPRYN temporary _maxDepth"
+    ]
+   }
+  },
+  {
+   "label": "submit_guardian (email)",
+   "hash": "a508a96e531bb31e35307b86b7e41f895520dd0cbb77b72aa7320a4ec0047722",
+   "ledger": 339,
+   "metered": {
+    "cpu_insn": 120030427,
+    "mem_byte": 5581231
+   },
+   "declared": {
+    "instructions": 124876066,
+    "diskReadBytes": 0,
+    "writeBytes": 1208,
+    "readOnly": 10,
+    "readWrite": 2,
+    "resourceFee": 90876,
+    "archivedEntries": 0
+   },
+   "feeCharged": 82642,
+   "feeSplit": {
+    "nonRefundableResource": 80483,
+    "refundableResource": 2059,
+    "rent": 2049
+   },
+   "envelopeBytes": 18080,
+   "footprint": {
+    "readOnly": [
+     "data CAUW27 persistent instance",
+     "data CC7SPV persistent Attempt",
+     "data CC7SPV persistent Config",
+     "data CC7SPV persistent Epoch",
+     "data CC7SPV persistent InvalidateBelow",
+     "data CC7SPV persistent instance",
+     "data CDHVVR persistent instance",
+     "code 65548bee",
+     "code daaf09d9",
+     "code efdc30c8"
+    ],
+    "readWrite": [
+     "data CC7SPV temporary Collecting",
+     "data CDHVVR temporary _maxDepth"
+    ]
+   }
+  },
+  {
+   "label": "submit_guardian (email)",
+   "hash": "68b8593da383a44b9e2734f97301c48574d2fe8d1bc502bb6523179149240d89",
+   "ledger": 437,
+   "metered": {
+    "cpu_insn": 120069894,
+    "mem_byte": 5582510
+   },
+   "declared": {
+    "instructions": 124919213,
+    "diskReadBytes": 0,
+    "writeBytes": 1208,
+    "readOnly": 10,
+    "readWrite": 2,
+    "resourceFee": 90886,
+    "archivedEntries": 0
+   },
+   "feeCharged": 82652,
+   "feeSplit": {
+    "nonRefundableResource": 80496,
+    "refundableResource": 2056,
+    "rent": 2046
+   },
+   "envelopeBytes": 18080,
+   "footprint": {
+    "readOnly": [
+     "data CAUW27 persistent instance",
+     "data CBVUO2 persistent instance",
+     "data CC7SPV persistent Attempt",
+     "data CC7SPV persistent Config",
+     "data CC7SPV persistent Epoch",
+     "data CC7SPV persistent InvalidateBelow",
+     "data CC7SPV persistent instance",
+     "code 65548bee",
+     "code daaf09d9",
+     "code efdc30c8"
+    ],
+    "readWrite": [
+     "data CBVUO2 temporary _maxDepth",
+     "data CC7SPV temporary Collecting"
+    ]
+   }
+  },
+  {
+   "label": "submit_guardian (email, authorizes)",
+   "hash": "88536fb3a831b7d06810cbf55b9727cb8c0cac6f36246521b366e9e84e664d6c",
+   "ledger": 447,
+   "metered": {
+    "cpu_insn": 120919625,
+    "mem_byte": 5663948
+   },
+   "declared": {
+    "instructions": 125835213,
+    "diskReadBytes": 0,
+    "writeBytes": 1488,
+    "readOnly": 11,
+    "readWrite": 5,
+    "resourceFee": 4171485,
+    "archivedEntries": 0
+   },
+   "feeCharged": 3631569,
+   "feeSplit": {
+    "nonRefundableResource": 85330,
+    "refundableResource": 3546139,
+    "rent": 3545582
+   },
+   "envelopeBytes": 18396,
+   "footprint": {
+    "readOnly": [
+     "data CAUW27 persistent instance",
+     "data CCH6WU persistent instance",
+     "data CCZK2Y persistent instance",
+     "data CC7SPV persistent Config",
+     "data CC7SPV persistent Epoch",
+     "data CC7SPV persistent NextAttempt",
+     "data CC7SPV persistent instance",
+     "code 326f8a63",
+     "code 65548bee",
+     "code daaf09d9",
+     "code efdc30c8"
+    ],
+    "readWrite": [
+     "data CCZK2Y temporary _maxDepth",
+     "data CC7SPV persistent Attempt",
+     "data CC7SPV persistent Authorized",
+     "data CC7SPV temporary Collecting",
+     "data CC7SPV persistent InvalidateBelow"
+    ]
+   }
+  },
+  {
+   "label": "submit_guardian (email, gmail.com)",
+   "hash": "a98db51a926bae9aa0f3a115ca81128a89697f67fb41f4806f6e6a016eb3eddd",
+   "ledger": 463,
+   "metered": {
+    "cpu_insn": 120060551,
+    "mem_byte": 5582043
+   },
+   "declared": {
+    "instructions": 124909496,
+    "diskReadBytes": 0,
+    "writeBytes": 1208,
+    "readOnly": 10,
+    "readWrite": 2,
+    "resourceFee": 90886,
+    "archivedEntries": 0
+   },
+   "feeCharged": 82652,
+   "feeSplit": {
+    "nonRefundableResource": 80493,
+    "refundableResource": 2059,
+    "rent": 2049
+   },
+   "envelopeBytes": 18080,
+   "footprint": {
+    "readOnly": [
+     "data CAUW27 persistent instance",
+     "data CA2POW persistent instance",
+     "data CC7SPV persistent Attempt",
+     "data CC7SPV persistent Config",
+     "data CC7SPV persistent Epoch",
+     "data CC7SPV persistent InvalidateBelow",
+     "data CC7SPV persistent instance",
+     "code 65548bee",
+     "code daaf09d9",
+     "code efdc30c8"
+    ],
+    "readWrite": [
+     "data CA2POW temporary _maxDepth",
+     "data CC7SPV temporary Collecting"
+    ]
+   }
+  },
+  {
+   "label": "submit_guardian (email, outlook.com)",
+   "hash": "0f62ad957156eeac8f9f0a623b40faf42ad261d545976ad54836a0f3ebbeb159",
+   "ledger": 474,
+   "metered": {
+    "cpu_insn": 120059771,
+    "mem_byte": 5582043
+   },
+   "declared": {
+    "instructions": 124906584,
+    "diskReadBytes": 0,
+    "writeBytes": 1208,
+    "readOnly": 10,
+    "readWrite": 2,
+    "resourceFee": 90885,
+    "archivedEntries": 0
+   },
+   "feeCharged": 82651,
+   "feeSplit": {
+    "nonRefundableResource": 80492,
+    "refundableResource": 2059,
+    "rent": 2049
+   },
+   "envelopeBytes": 18080,
+   "footprint": {
+    "readOnly": [
+     "data CAUW27 persistent instance",
+     "data CC7SPV persistent Attempt",
+     "data CC7SPV persistent Config",
+     "data CC7SPV persistent Epoch",
+     "data CC7SPV persistent InvalidateBelow",
+     "data CC7SPV persistent instance",
+     "data CDIVKQ persistent instance",
+     "code 65548bee",
+     "code daaf09d9",
+     "code efdc30c8"
+    ],
+    "readWrite": [
+     "data CC7SPV temporary Collecting",
+     "data CDIVKQ temporary _maxDepth"
+    ]
+   }
+  },
+  {
+   "label": "submit_guardian (email, hotmail.com)",
+   "hash": "2a8beab417db3025e22aae196da37f5090e6c3bbbf0132fffca3ae423cb490e6",
+   "ledger": 485,
+   "metered": {
+    "cpu_insn": 120075173,
+    "mem_byte": 5582449
+   },
+   "declared": {
+    "instructions": 124924495,
+    "diskReadBytes": 0,
+    "writeBytes": 1208,
+    "readOnly": 10,
+    "readWrite": 2,
+    "resourceFee": 90891,
+    "archivedEntries": 0
+   },
+   "feeCharged": 82657,
+   "feeSplit": {
+    "nonRefundableResource": 80498,
+    "refundableResource": 2059,
+    "rent": 2049
+   },
+   "envelopeBytes": 18080,
+   "footprint": {
+    "readOnly": [
+     "data CACR3X persistent instance",
+     "data CAUW27 persistent instance",
+     "data CC7SPV persistent Attempt",
+     "data CC7SPV persistent Config",
+     "data CC7SPV persistent Epoch",
+     "data CC7SPV persistent InvalidateBelow",
+     "data CC7SPV persistent instance",
+     "code 65548bee",
+     "code daaf09d9",
+     "code efdc30c8"
+    ],
+    "readWrite": [
+     "data CACR3X temporary _maxDepth",
+     "data CC7SPV temporary Collecting"
+    ]
+   }
+  },
+  {
+   "label": "submit_guardian (email, icloud.com)",
+   "hash": "084877c2ca0c4780cbd92808093ee069abcb6cf53c666a8b1854f2d578c9d940",
+   "ledger": 492,
+   "metered": {
+    "cpu_insn": 120053215,
+    "mem_byte": 5581840
+   },
+   "declared": {
+    "instructions": 124901866,
+    "diskReadBytes": 0,
+    "writeBytes": 1208,
+    "readOnly": 10,
+    "readWrite": 2,
+    "resourceFee": 90884,
+    "archivedEntries": 0
+   },
+   "feeCharged": 82650,
+   "feeSplit": {
+    "nonRefundableResource": 80491,
+    "refundableResource": 2059,
+    "rent": 2049
+   },
+   "envelopeBytes": 18080,
+   "footprint": {
+    "readOnly": [
+     "data CAUW27 persistent instance",
+     "data CCATV2 persistent instance",
+     "data CC7SPV persistent Attempt",
+     "data CC7SPV persistent Config",
+     "data CC7SPV persistent Epoch",
+     "data CC7SPV persistent InvalidateBelow",
+     "data CC7SPV persistent instance",
+     "code 65548bee",
+     "code daaf09d9",
+     "code efdc30c8"
+    ],
+    "readWrite": [
+     "data CCATV2 temporary _maxDepth",
+     "data CC7SPV temporary Collecting"
+    ]
+   }
+  },
+  {
+   "label": "submit_guardian (email, yahoo.com)",
+   "hash": "6b85cf395f7c8f184f9a0cdc541efdddd4f3951380e29e6d67b01faa97c9832a",
+   "ledger": 499,
+   "metered": {
+    "cpu_insn": 120023821,
+    "mem_byte": 5581028
+   },
+   "declared": {
+    "instructions": 124871089,
+    "diskReadBytes": 0,
+    "writeBytes": 1208,
+    "readOnly": 10,
+    "readWrite": 2,
+    "resourceFee": 90875,
+    "archivedEntries": 0
+   },
+   "feeCharged": 82641,
+   "feeSplit": {
+    "nonRefundableResource": 80482,
+    "refundableResource": 2059,
+    "rent": 2049
+   },
+   "envelopeBytes": 18080,
+   "footprint": {
+    "readOnly": [
+     "data CAQYGS persistent instance",
+     "data CAUW27 persistent instance",
+     "data CC7SPV persistent Attempt",
+     "data CC7SPV persistent Config",
+     "data CC7SPV persistent Epoch",
+     "data CC7SPV persistent InvalidateBelow",
+     "data CC7SPV persistent instance",
+     "code 65548bee",
+     "code daaf09d9",
+     "code efdc30c8"
+    ],
+    "readWrite": [
+     "data CAQYGS temporary _maxDepth",
+     "data CC7SPV temporary Collecting"
+    ]
+   }
+  },
+  {
+   "label": "submit_guardian (email, proton.me)",
+   "hash": "1eeafef000c5e68e99c152fb0cad2321cbfd8ba48a43b96bb98a01f9eab3bf8a",
+   "ledger": 505,
+   "metered": {
+    "cpu_insn": 120074443,
+    "mem_byte": 5582449
+   },
+   "declared": {
+    "instructions": 124921843,
+    "diskReadBytes": 0,
+    "writeBytes": 1208,
+    "readOnly": 10,
+    "readWrite": 2,
+    "resourceFee": 90890,
+    "archivedEntries": 0
+   },
+   "feeCharged": 82656,
+   "feeSplit": {
+    "nonRefundableResource": 80497,
+    "refundableResource": 2059,
+    "rent": 2049
+   },
+   "envelopeBytes": 18080,
+   "footprint": {
+    "readOnly": [
+     "data CAUW27 persistent instance",
+     "data CC7SPV persistent Attempt",
+     "data CC7SPV persistent Config",
+     "data CC7SPV persistent Epoch",
+     "data CC7SPV persistent InvalidateBelow",
+     "data CC7SPV persistent instance",
+     "data CDEGPY persistent instance",
+     "code 65548bee",
+     "code daaf09d9",
+     "code efdc30c8"
+    ],
+    "readWrite": [
+     "data CC7SPV temporary Collecting",
+     "data CDEGPY temporary _maxDepth"
+    ]
+   }
+  },
+  {
+   "label": "submit_guardian (email, protonmail.com)",
+   "hash": "712df37f525dbf41c607b365bd632f261aafaa094a65f1c24ec959503baa34af",
+   "ledger": 511,
+   "metered": {
+    "cpu_insn": 120053215,
+    "mem_byte": 5581840
+   },
+   "declared": {
+    "instructions": 124901866,
+    "diskReadBytes": 0,
+    "writeBytes": 1208,
+    "readOnly": 10,
+    "readWrite": 2,
+    "resourceFee": 90884,
+    "archivedEntries": 0
+   },
+   "feeCharged": 82650,
+   "feeSplit": {
+    "nonRefundableResource": 80491,
+    "refundableResource": 2059,
+    "rent": 2049
+   },
+   "envelopeBytes": 18080,
+   "footprint": {
+    "readOnly": [
+     "data CAUW27 persistent instance",
+     "data CCI3A6 persistent instance",
+     "data CC7SPV persistent Attempt",
+     "data CC7SPV persistent Config",
+     "data CC7SPV persistent Epoch",
+     "data CC7SPV persistent InvalidateBelow",
+     "data CC7SPV persistent instance",
+     "code 65548bee",
+     "code daaf09d9",
+     "code efdc30c8"
+    ],
+    "readWrite": [
+     "data CCI3A6 temporary _maxDepth",
+     "data CC7SPV temporary Collecting"
+    ]
+   }
+  },
+  {
+   "label": "submit_guardian (email, fastmail.com)",
+   "hash": "9162ec1d7e7773225bc25336f720f4843a3fe9a0b44b4b55bbdf5dc66882dd12",
+   "ledger": 517,
+   "metered": {
+    "cpu_insn": 120067837,
+    "mem_byte": 5582246
+   },
+   "declared": {
+    "instructions": 124916865,
+    "diskReadBytes": 0,
+    "writeBytes": 1208,
+    "readOnly": 10,
+    "readWrite": 2,
+    "resourceFee": 90889,
+    "archivedEntries": 0
+   },
+   "feeCharged": 82655,
+   "feeSplit": {
+    "nonRefundableResource": 80496,
+    "refundableResource": 2059,
+    "rent": 2049
+   },
+   "envelopeBytes": 18080,
+   "footprint": {
+    "readOnly": [
+     "data CAIB24 persistent instance",
+     "data CAUW27 persistent instance",
+     "data CC7SPV persistent Attempt",
+     "data CC7SPV persistent Config",
+     "data CC7SPV persistent Epoch",
+     "data CC7SPV persistent InvalidateBelow",
+     "data CC7SPV persistent instance",
+     "code 65548bee",
+     "code daaf09d9",
+     "code efdc30c8"
+    ],
+    "readWrite": [
+     "data CAIB24 temporary _maxDepth",
+     "data CC7SPV temporary Collecting"
+    ]
+   }
+  },
+  {
+   "label": "submit_guardian (email, gmx.net)",
+   "hash": "81b6394d3e3d4f5d14d609aa9713db87fcc6d16e806fe006847a2c01f436524e",
+   "ledger": 524,
+   "metered": {
+    "cpu_insn": 120016535,
+    "mem_byte": 5580825
+   },
+   "declared": {
+    "instructions": 124863719,
+    "diskReadBytes": 0,
+    "writeBytes": 1208,
+    "readOnly": 10,
+    "readWrite": 2,
+    "resourceFee": 90873,
+    "archivedEntries": 0
+   },
+   "feeCharged": 82639,
+   "feeSplit": {
+    "nonRefundableResource": 80480,
+    "refundableResource": 2059,
+    "rent": 2049
+   },
+   "envelopeBytes": 18080,
+   "footprint": {
+    "readOnly": [
+     "data CAUW27 persistent instance",
+     "data CC2GS7 persistent instance",
+     "data CC7SPV persistent Attempt",
+     "data CC7SPV persistent Config",
+     "data CC7SPV persistent Epoch",
+     "data CC7SPV persistent InvalidateBelow",
+     "data CC7SPV persistent instance",
+     "code 65548bee",
+     "code daaf09d9",
+     "code efdc30c8"
+    ],
+    "readWrite": [
+     "data CC2GS7 temporary _maxDepth",
+     "data CC7SPV temporary Collecting"
+    ]
+   }
+  },
+  {
+   "label": "submit_guardian (email, gmx.de)",
+   "hash": "a1fddbab09378d097d9f90f86e096ed6170d3212dce0f764f8617127009e6b40",
+   "ledger": 531,
+   "metered": {
+    "cpu_insn": 120023871,
+    "mem_byte": 5581028
+   },
+   "declared": {
+    "instructions": 124871349,
+    "diskReadBytes": 0,
+    "writeBytes": 1208,
+    "readOnly": 10,
+    "readWrite": 2,
+    "resourceFee": 90875,
+    "archivedEntries": 0
+   },
+   "feeCharged": 82641,
+   "feeSplit": {
+    "nonRefundableResource": 80482,
+    "refundableResource": 2059,
+    "rent": 2049
+   },
+   "envelopeBytes": 18080,
+   "footprint": {
+    "readOnly": [
+     "data CAUW27 persistent instance",
+     "data CAWYUG persistent instance",
+     "data CC7SPV persistent Attempt",
+     "data CC7SPV persistent Config",
+     "data CC7SPV persistent Epoch",
+     "data CC7SPV persistent InvalidateBelow",
+     "data CC7SPV persistent instance",
+     "code 65548bee",
+     "code daaf09d9",
+     "code efdc30c8"
+    ],
+    "readWrite": [
+     "data CAWYUG temporary _maxDepth",
+     "data CC7SPV temporary Collecting"
+    ]
+   }
+  },
+  {
+   "label": "submit_guardian (email, web.de)",
+   "hash": "ac6887a03a9439104f88096f793819cb7846b18277cc470c9ecedf25aad7e2e2",
+   "ledger": 537,
+   "metered": {
+    "cpu_insn": 120074443,
+    "mem_byte": 5582449
+   },
+   "declared": {
+    "instructions": 124921843,
+    "diskReadBytes": 0,
+    "writeBytes": 1208,
+    "readOnly": 10,
+    "readWrite": 2,
+    "resourceFee": 90890,
+    "archivedEntries": 0
+   },
+   "feeCharged": 82656,
+   "feeSplit": {
+    "nonRefundableResource": 80497,
+    "refundableResource": 2059,
+    "rent": 2049
+   },
+   "envelopeBytes": 18080,
+   "footprint": {
+    "readOnly": [
+     "data CAUW27 persistent instance",
+     "data CC7SPV persistent Attempt",
+     "data CC7SPV persistent Config",
+     "data CC7SPV persistent Epoch",
+     "data CC7SPV persistent InvalidateBelow",
+     "data CC7SPV persistent instance",
+     "data CDNHIU persistent instance",
+     "code 65548bee",
+     "code daaf09d9",
+     "code efdc30c8"
+    ],
+    "readWrite": [
+     "data CC7SPV temporary Collecting",
+     "data CDNHIU temporary _maxDepth"
+    ]
+   }
+  },
+  {
+   "label": "submit_guardian (email, subject-folded-at-space)",
+   "hash": "3088a0dfc04f06835aee112bfd07066da15d0de54202a701b532a539df3fddfc",
+   "ledger": 543,
+   "metered": {
+    "cpu_insn": 120074443,
+    "mem_byte": 5582449
+   },
+   "declared": {
+    "instructions": 124921843,
+    "diskReadBytes": 0,
+    "writeBytes": 1208,
+    "readOnly": 10,
+    "readWrite": 2,
+    "resourceFee": 90890,
+    "archivedEntries": 0
+   },
+   "feeCharged": 82656,
+   "feeSplit": {
+    "nonRefundableResource": 80497,
+    "refundableResource": 2059,
+    "rent": 2049
+   },
+   "envelopeBytes": 18080,
+   "footprint": {
+    "readOnly": [
+     "data CAUW27 persistent instance",
+     "data CC7SPV persistent Attempt",
+     "data CC7SPV persistent Config",
+     "data CC7SPV persistent Epoch",
+     "data CC7SPV persistent InvalidateBelow",
+     "data CC7SPV persistent instance",
+     "data CDPRYN persistent instance",
+     "code 65548bee",
+     "code daaf09d9",
+     "code efdc30c8"
+    ],
+    "readWrite": [
+     "data CC7SPV temporary Collecting",
+     "data CDPRYN temporary _maxDepth"
+    ]
+   }
+  },
+  {
+   "label": "submit_guardian (email, subject-extra-whitespace)",
+   "hash": "b834e395f4a1329672a5662c3a2f314de0eddbb6b9dddedc7edb34eabec3e440",
+   "ledger": 549,
+   "metered": {
+    "cpu_insn": 120008419,
+    "mem_byte": 5580622
+   },
+   "declared": {
+    "instructions": 124853178,
+    "diskReadBytes": 0,
+    "writeBytes": 1208,
+    "readOnly": 10,
+    "readWrite": 2,
+    "resourceFee": 90869,
+    "archivedEntries": 0
+   },
+   "feeCharged": 82635,
+   "feeSplit": {
+    "nonRefundableResource": 80476,
+    "refundableResource": 2059,
+    "rent": 2049
+   },
+   "envelopeBytes": 18080,
+   "footprint": {
+    "readOnly": [
+     "data CAUW27 persistent instance",
+     "data CC7SPV persistent Attempt",
+     "data CC7SPV persistent Config",
+     "data CC7SPV persistent Epoch",
+     "data CC7SPV persistent InvalidateBelow",
+     "data CC7SPV persistent instance",
+     "data CDPRYN persistent instance",
+     "code 65548bee",
+     "code daaf09d9",
+     "code efdc30c8"
+    ],
+    "readWrite": [
+     "data CC7SPV temporary Collecting",
+     "data CDPRYN temporary _maxDepth"
+    ]
+   }
+  }
+ ]
+}

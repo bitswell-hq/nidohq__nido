@@ -145,8 +145,20 @@ export class Chain {
     return kp;
   }
 
+  /** `source`'s account; a just-funded one can be missing from an RPC node a ledger behind, so that is retried. */
+  async account(source) {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await this.server.getAccount(source.publicKey());
+      } catch (e) {
+        if (attempt >= 6 || !/Account not found/.test(String(e.message))) throw e;
+        await sleep(2_500);
+      }
+    }
+  }
+
   async build(source, op) {
-    return new TransactionBuilder(await this.server.getAccount(source.publicKey()), {
+    return new TransactionBuilder(await this.account(source), {
       fee: this.baseFee,
       networkPassphrase: this.passphrase,
     })
@@ -226,12 +238,7 @@ export class Chain {
       throw new Refused('submission', { kind: code, label, fee: prepared.fee, raw: sent.errorResult?.toXDR('base64') ?? '', ...measure(prepared, undefined, sim) });
     }
     const tSent = performance.now();
-    let got;
-    for (let i = 0; i < 240; i++) {
-      got = await this.server.getTransaction(sent.hash);
-      if (got.status !== 'NOT_FOUND') break;
-      await sleep(250);
-    }
+    const got = await this.confirmed(sent.hash, label);
     const tDone = performance.now();
     const m = measure(prepared, got, sim);
     const entry = {
@@ -251,13 +258,23 @@ export class Chain {
     return { value: got.returnValue ? scValToNative(got.returnValue) : undefined, scVal: got.returnValue, ...entry };
   }
 
+  /** The network's result for `hash`, waiting up to three minutes for a loaded network to apply it. */
+  async confirmed(hash, label = '') {
+    for (let i = 0; i < 720; i++) {
+      const got = await this.server.getTransaction(hash);
+      if (got.status !== 'NOT_FOUND') return got;
+      await sleep(250);
+    }
+    throw new Error(`${label || hash}: not applied within three minutes (${hash})`);
+  }
+
   /**
    * Restore archived ledger entries (`keys`, LedgerKey XDR) with one
    * RestoreFootprint transaction from `source`; returns its measurement.
    */
   async restore(source, keys, { label = 'restore' } = {}) {
     const t0 = performance.now();
-    const tx = new TransactionBuilder(await this.server.getAccount(source.publicKey()), { fee: this.baseFee, networkPassphrase: this.passphrase })
+    const tx = new TransactionBuilder(await this.account(source), { fee: this.baseFee, networkPassphrase: this.passphrase })
       .addOperation(Operation.restoreFootprint({}))
       .setSorobanData(new SorobanDataBuilder().setReadWrite(keys).build())
       .setTimeout(180)
@@ -268,17 +285,47 @@ export class Chain {
     prepared.sign(source);
     const sent = await this.server.sendTransaction(prepared);
     if (sent.status !== 'PENDING' && sent.status !== 'DUPLICATE') throw new Refused('submission', { kind: sent.errorResult?.result().switch().name ?? sent.status, label });
-    let got;
-    for (let i = 0; i < 240; i++) {
-      got = await this.server.getTransaction(sent.hash);
-      if (got.status !== 'NOT_FOUND') break;
-      await sleep(250);
-    }
+    const got = await this.confirmed(sent.hash, label);
     const entry = { label, hash: sent.hash, status: got.status, ledger: got.ledger, ms: { total: Math.round(performance.now() - t0) }, ...measure(prepared, got, sim) };
     this.log.push(entry);
     if (this.settleMs) await sleep(this.settleMs);
     if (got.status !== 'SUCCESS') throw new Refused('execution', { kind: got.status, label, hash: sent.hash });
     return entry;
+  }
+
+  /**
+   * Extend live ledger entries (`keys`, LedgerKey XDR) to live until
+   * `extendTo` ledgers from now, with one ExtendFootprintTTL transaction from
+   * `source`; returns its measurement.
+   */
+  async extend(source, keys, extendTo, { label = 'extend' } = {}) {
+    const t0 = performance.now();
+    const tx = new TransactionBuilder(await this.account(source), { fee: this.baseFee, networkPassphrase: this.passphrase })
+      .addOperation(Operation.extendFootprintTtl({ extendTo }))
+      .setSorobanData(new SorobanDataBuilder().setReadOnly(keys).build())
+      .setTimeout(180)
+      .build();
+    const sim = await this.server.simulateTransaction(tx);
+    if (rpc.Api.isSimulationError(sim)) throw new Refused('simulation', decodeHostError(sim.error, sim.events ?? []));
+    const prepared = rpc.assembleTransaction(tx, sim).build();
+    prepared.sign(source);
+    const sent = await this.server.sendTransaction(prepared);
+    if (sent.status !== 'PENDING' && sent.status !== 'DUPLICATE') throw new Refused('submission', { kind: sent.errorResult?.result().switch().name ?? sent.status, label });
+    const got = await this.confirmed(sent.hash, label);
+    const entry = { label, hash: sent.hash, status: got.status, ledger: got.ledger, ms: { total: Math.round(performance.now() - t0) }, ...measure(prepared, got, sim) };
+    this.log.push(entry);
+    if (this.settleMs) await sleep(this.settleMs);
+    if (got.status !== 'SUCCESS') throw new Refused('execution', { kind: got.status, label, hash: sent.hash });
+    return entry;
+  }
+
+  /** Each of `keys`' entry XDR (base64) and live-until ledger, or undefined when there is none. */
+  async entries(keys) {
+    const r = await this.server.getLedgerEntries(...keys);
+    return keys.map((k) => {
+      const e = r.entries.find((x) => x.key.toXDR('base64') === k.toXDR('base64'));
+      return e ? { xdr: e.val.toXDR('base64'), bytes: e.val.toXDR().length, liveUntil: e.liveUntilLedgerSeq, value: e.val } : undefined;
+    });
   }
 
   /** The keys among `keys` whose entries are archived (live until a past ledger, or reported at 0). */
@@ -327,6 +374,8 @@ export function measure(envelope, got, sim) {
       readOnly: r.footprint().readOnly().length,
       readWrite: r.footprint().readWrite().length,
       resourceFee: Number(data.resourceFee().toBigInt()),
+      // Archived entries the transaction restores as it runs (read from disk).
+      archivedEntries: data.ext().switch() === 1 ? data.ext().resourceExt().archivedSorobanEntries().length : 0,
     };
     out.footprint = { readOnly: r.footprint().readOnly().map(describeKey), readWrite: r.footprint().readWrite().map(describeKey) };
   }

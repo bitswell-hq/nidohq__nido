@@ -12,12 +12,19 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { Address, Keypair, Operation } from '@stellar/stellar-sdk';
 import { imageMeasurement, testImage, testKey } from '@nidohq/email-mocks';
+import { keyHash, merkleRoot, registryLeaf } from '@nidohq/email-recovery';
 import { deployStack } from '../../../../../tests/support/emailLocalStack.mjs';
 import { sc } from './chain.mjs';
 import { launchKeys } from './email.mjs';
 
 const repo = new URL('../../../../../', import.meta.url).pathname;
 const sha256 = (b) => createHash('sha256').update(b).digest();
+/**
+ * The email contracts the evaluation deploys: `just build-contracts`'
+ * optimized wasm, the bytes testnet runs, unless NIDO_EVAL_EMAIL_WASM names
+ * another build's directory.
+ */
+export const EMAIL_WASM = process.env.NIDO_EVAL_EMAIL_WASM ?? `${repo}target/wasm32v1-none/contract/`;
 
 export const LAUNCH_DOMAINS = ['gmail.com', 'outlook.com', 'hotmail.com', 'icloud.com', 'yahoo.com', 'proton.me', 'protonmail.com', 'fastmail.com', 'gmx.net', 'gmx.de', 'web.de'];
 export const REGISTRY = { members: 5, threshold: 3, revokeThreshold: 2, attesters: 3, attestThreshold: 2, graceSeconds: 86_400 };
@@ -105,6 +112,23 @@ export class Registry {
   isAcceptedRoot(root) {
     return this.chain.read(this.address, 'is_accepted_root', [sc.bytes(root)]);
   }
+
+  /**
+   * The path a proof for `key` ({domain, modulus}) is made against: the
+   * key's leaf index (`leaf`), the siblings the registry stores for it, and
+   * the root they reach, which must be the registry's current root.
+   */
+  async keyPath(key) {
+    const kh = keyHash(key.modulus);
+    const rec = await this.chain.read(this.address, 'leaf', [sc.bytes(Buffer.from(key.domain)), sc.bytes(Buffer.from(kh.toString(16).padStart(64, '0'), 'hex'))]);
+    if (!rec?.present) throw new Error(`${key.domain}'s key is not in the registry's tree`);
+    const index = Number(rec.index);
+    const siblings = (await this.chain.read(this.address, 'siblings', [sc.u32(index)])).map((b) => BigInt(`0x${Buffer.from(b).toString('hex')}`));
+    const root = merkleRoot(registryLeaf(key.domain, kh), index, siblings);
+    const current = BigInt(`0x${Buffer.from(await this.chain.read(this.address, 'root')).toString('hex')}`);
+    if (root !== current) throw new Error(`${key.domain}'s path does not reach the registry's root`);
+    return { root, index, siblings };
+  }
 }
 
 /** The ledger's close time, for an attestation's `observed_at`. */
@@ -127,7 +151,7 @@ export async function admitThroughTimelock(reg, key) {
 export async function deployLocal(chain, base) {
   Attester.ensureBuilt();
   const measurement = Buffer.from(imageMeasurement(testImage('nido-alert-vault-v1'))).toString('hex');
-  const stack = await deployStack({ base, imageMeasurement: measurement, gmailModulus: testKey('gmail').modulus });
+  const stack = await deployStack({ base, imageMeasurement: measurement, gmailModulus: testKey('gmail').modulus, emailWasm: EMAIL_WASM });
   const members = [];
   for (let i = 0; i < REGISTRY.members; i++) members.push(await chain.funded(Keypair.random()));
   const attesters = [0, 1, 2].map((i) => new Attester(i));
@@ -136,7 +160,7 @@ export async function deployLocal(chain, base) {
     operator,
     Operation.createCustomContract({
       address: Address.fromString(operator.publicKey()),
-      wasmHash: await uploadWasm(chain, operator, `${repo}target/email-e2e/wasm/nido_dkim_registry.wasm`),
+      wasmHash: await uploadWasm(chain, operator, `${EMAIL_WASM}nido_dkim_registry.wasm`),
       salt: Buffer.from(sha256(`nido-eval/email-attacks/registry/${Date.now()}`)),
       constructorArgs: [Registry.configScVal({ members, attesters })],
     }),
