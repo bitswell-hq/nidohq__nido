@@ -21,6 +21,10 @@ echo "==> attack tables"
 perl attacks-to-tex.pl >"$build/gen/attacks.tex.tmp"
 mv "$build/gen/attacks.tex.tmp" "$build/gen/attacks.tex"
 
+echo "==> run-dependent figures"
+perl figures-to-tex.pl >"$build/gen/figures.tex.tmp"
+mv "$build/gen/figures.tex.tmp" "$build/gen/figures.tex"
+
 # Both documents find the shared macros and figures, the generated ledger,
 # and the paper's references.bib.
 export TEXINPUTS=".:$here/shared//:$build/gen//:"

@@ -43,3 +43,9 @@ claims:
     evidence:
       lean: Outer.Ns.dotted_thm
       file: formal/Fixture.lean
+  - id: a-measured-placeholders
+    statement: A vote is charged {{vote-fee-min}} stroops for {{vote-metered-median:m}} million instructions, and writes 1,208 bytes.
+    status: measured
+    evidence:
+      - file: eval/figures.json
+      - file: eval/run-figures.json

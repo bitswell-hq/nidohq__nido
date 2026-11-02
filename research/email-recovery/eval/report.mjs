@@ -21,6 +21,14 @@
 //   (migration-test-host.json) as transactions at mainnet's fees;
 // - `proving`: proving.json (proving/measure.mjs) when present.
 //
+// It also writes results/figures.json: the figures of the attack run that
+// differ from run to run (each vote's random keys and proof change its
+// metered work, and the declared resources follow simulation), each under a
+// name, as the cost block computes them. The document build typesets the
+// paper's, the slides' and the claim ledger's copies of those figures from
+// that file (research/email-recovery/figures-to-tex.pl), so re-running the
+// attack suite regenerates the documents' figures with its evidence.
+//
 // Every fee a network charged in these files is recomputed from that
 // network's archived settings; one the model does not reproduce stops the
 // report.
@@ -45,6 +53,13 @@ const range = (xs) => (xs.length ? `${n(Math.min(...xs))} to ${n(Math.max(...xs)
 const stat = (xs) => (xs.length ? `${n(Math.round(median(xs)))} (${range(xs)})` : '—');
 const cell = (s) => String(s ?? '').replace(/\|/g, '\\|').replace(/\n/g, ' ');
 const day = (iso) => iso.slice(0, 16).replace('T', ' ');
+
+/** The run-dependent figures the documents typeset (results/figures.json), by name. */
+const figures = {};
+const fig = (name, value) => {
+  if (!Number.isFinite(value)) throw new Error(`figure ${name} is ${value}`);
+  figures[name] = value;
+};
 
 const S = Object.fromEntries(['mainnet', 'testnet', 'local'].map((k) => [k, json(`settings/${k}.json`)]));
 const YEAR_LEDGERS = 6_307_200; // 365 days at 5-second ledgers
@@ -218,6 +233,21 @@ function cost() {
     row('of which rent (stroops)', (t) => t.feeSplit?.rent);
     row('Resource fee declared (stroops)', (t) => t.declared?.resourceFee);
     row('Wall clock, simulation to confirmation (ms)', (t) => t.ms?.total);
+    const each = (prefix, xs) => {
+      fig(`${prefix}-min`, Math.min(...xs));
+      fig(`${prefix}-max`, Math.max(...xs));
+      fig(`${prefix}-median`, Math.round(median(xs)));
+    };
+    fig('vote-count', plain.length);
+    each('vote-metered', plain.map((t) => t.metered.cpu_insn));
+    each('vote-declared', plain.map((t) => t.declared.instructions));
+    each('vote-fee', plain.map((t) => t.feeCharged));
+    each('vote-rent', plain.map((t) => t.feeSplit.rent));
+    if (auth.length === 1) {
+      fig('authorizing-declared', auth[0].declared.instructions);
+      fig('authorizing-fee', auth[0].feeCharged);
+      fig('authorizing-rent', auth[0].feeSplit.rent);
+    }
   }
   if (!root) {
     out.push('');
@@ -271,7 +301,7 @@ function cost() {
     row('Wall clock, simulation to confirmation (ms)', (t) => t.ms?.total);
     if (tv && !reg.length) {
       const p = tv.gmailProposal;
-      out.push(`\nThe votes run's registry admits the Gmail mock's TEST-ONLY key on the attested 72-hour path; the addition is eligible from ${new Date(1000 * p.eligibleAt).toISOString().slice(0, 16).replace('T', ' ')} UTC (ledger close time), 72 hours after the run, and the registry-root votes follow it (\`testnet/votes.mjs vote\`).`);
+      out.push(`\nThe votes run's registry admits the Gmail mock's TEST-ONLY key on the attested 72-hour path; the addition is eligible from ${new Date(1000 * p.eligibleAt).toISOString().slice(0, 16).replace('T', ' ')} UTC (ledger close time), 72 hours after the run. No vote against the registry's root has been submitted on testnet; \`testnet/votes.mjs vote\` submits them once the addition is eligible.`);
     }
   }
   // The same call per launch domain.
@@ -326,6 +356,19 @@ function cost() {
     row('Rent', (c) => c.rent);
     row('Inclusion fee', (c) => c.inclusion);
     row('**Total**', (c) => c.total);
+    if (lv) {
+      const g = projection(column(lv, mainnet, { rent: lv.feeSplit.rent }));
+      if (g.total !== lv.feeCharged) throw new Error(`mainnet's settings price the local Gmail vote at ${g.total}, the local network charged ${lv.feeCharged}`);
+      fig('gmail-compute', g.compute);
+      fig('gmail-history', g.historical);
+      fig('gmail-size', g.size);
+      fig('gmail-write-entries', g.writeEntries);
+      fig('gmail-write-bytes', g.writeBytes);
+      fig('gmail-events', g.events);
+      fig('gmail-nonrefundable', g.nonRefundable);
+      fig('gmail-rent', g.rent);
+      fig('gmail-total', g.total);
+    }
   }
   // Metering: hosts and cost models.
   const release = json('release-build-votes-local.json');
@@ -355,10 +398,13 @@ function cost() {
     const parts = [`testnet's cost model adds ${n(m.testnet - m.mainnet)} instructions to mainnet's on the test host`];
     if (tnPin.length) {
       const d = median(tnPin.map((t) => t.metered.cpu_insn)) - localMedian;
-      parts.push(`between the networks, with the same wasm, the medians differ by ${n(Math.round(d))} (${((d / localMedian) * 100).toFixed(2)}%)`);
+      const spread = (xs) => Math.max(...xs) - Math.min(...xs);
+      const within = Math.min(spread(lv.map((t) => t.metered.cpu_insn)), spread(tnPin.map((t) => t.metered.cpu_insn)));
+      parts.push(`between the networks, with the same wasm, the medians differ by ${n(Math.round(Math.abs(d)))} (${((Math.abs(d) / localMedian) * 100).toFixed(2)}%), ${Math.abs(d) < within ? `less than the spread of either network's votes within one run (at least ${n(within)}), so no difference is attributed to the networks` : `beyond the spread of either network's votes within one run (${n(within)})`}`);
     }
     if (release) {
       const rm = median(collecting(release.votes.map((v) => ({ ...v, status: 'SUCCESS' }))).map((t) => t.metered.cpu_insn));
+      fig('release-saving', Math.round(localMedian - rm));
       parts.push(`the release-profile build meters ${n(Math.round(localMedian - rm))} fewer per vote than \`just build-contracts\`' wasm (the medians)`);
     }
     out.push('');
@@ -374,6 +420,8 @@ function cost() {
     const perCluster = Math.floor(Number(s.contract_compute_v0.ledger_max_instructions) / declared);
     const clusters = s.contract_parallel_compute_v0.ledger_max_dependent_tx_clusters;
     const close = s.scp_timing.ledger_target_close_time_milliseconds / 1000;
+    fig('votes-per-cluster', perCluster);
+    fig('votes-per-ledger', perCluster * clusters);
     out.push('');
     out.push(`Capacity (mainnet's settings, CAP-0063): a ledger's Soroban transactions run in stages of at most ${clusters} clusters with no conflicting footprints, and the sum over stages of each stage's largest cluster, counted in declared instructions, must stay within ${n(s.contract_compute_v0.ledger_max_instructions)}. At ${n(declared)} declared instructions, a cluster holds ${perCluster} email votes, so one ledger holds at most ${perCluster * clusters} votes on different attempts and ${perCluster} that conflict; the ledger's other limits allow ${n(Math.floor(s.contract_bandwidth_v0.ledger_max_txs_size_bytes / env))} votes by transaction size (${n(env)} bytes each), ${n(Math.floor(s.contract_ledger_cost_v0.ledger_max_write_bytes / wb))} by bytes written and ${n(s.contract_execution_lanes.ledger_max_tx_count)} by count. That is ${(perCluster * clusters / close).toFixed(1)} votes a second at ${close}-second ledgers. Beyond that, transactions bid inclusion fees for the space (surge pricing); the resource fee stays what the settings fix, so a burst of recoveries raises only the inclusion fee.`);
   }
@@ -389,6 +437,10 @@ function cost() {
       const tnStep = (re) => tn?.transactions.find((t) => re.test(t.label));
       const tm = tnStep(/^mint testnet/), tg = tnStep(/^deploy guardian testnet/), td = tnStep(/^apply_doc testnet/);
       const total = fee(mint) + fee(guardian) + fee(doc);
+      fig('enrollment-mint', fee(mint));
+      fig('enrollment-guardian', fee(guardian));
+      fig('enrollment-doc', fee(doc));
+      fig('enrollment-total', total);
       out.push('');
       out.push(`Enrollment at mainnet's settings (the local network, which runs them, entry lifetimes included): minting the account ${n(fee(mint))} stroops, deploying its email guardian ${n(fee(guardian))}, and the document that lists it with one helper ${n(fee(doc))} (medians over the attack run's ${mint.length} launch-domain accounts; ${n(rent(mint))}, ${n(rent(guardian))} and ${n(rent(doc))} of them rent: new entries live at least mainnet's ${n(S.mainnet.settings.state_archival.min_persistent_ttl)}-ledger minimum, and the guardian and the account extend theirs to the maximum on any network): ${n(total)} stroops (${xlm(total)}).${tm && tg && td ? ` The testnet recovery run's enrollment: ${n(tm.feeCharged)}, ${n(tg.feeCharged)} and ${n(td.feeCharged)} stroops.` : ''}`);
     }
@@ -443,7 +495,7 @@ function archivalBlock() {
     const sum = (p) => p.reduce((x, t) => x + t.fee, 0);
     const lim = limits(s);
     out.push('');
-    out.push(`Every entry archived, at mainnet's settings: the test host's recovery (\`email_archival.rs\`: begin, the email vote, the helper's vote, completion) with every one of the ${n(a.entriesAtRest)} ledger entries archived when it starts, each step re-executed under mainnet's cost model and entry lifetimes with the host restoring what it reads. A step whose restorations do not fit one transaction (mainnet allows ${n(lim.diskReadBytes)} bytes read from disk and ${n(lim.writeBytes)} written) restores its largest entries first in their own RestoreFootprint transactions. Fees are fees/model.mjs at mainnet's settings; the rent sizes of code entries are the network's (\`codeRentBytes\` over the entries testnet holds, \`results/code-entries.json\`), 2 to 20% above the test host's own${offNetwork(code)}.`);
+    out.push(`Every entry archived, at mainnet's settings: the test host's recovery (\`email_archival.rs\`: begin, the email vote, the helper's vote, completion) with every one of the ${n(a.entriesAtRest)} ledger entries archived when it starts, each step re-executed under mainnet's cost model and entry lifetimes with the host restoring what it reads. The test host enforces no per-transaction limit, so a step whose restorations do not fit one transaction (mainnet allows ${n(lim.diskReadBytes)} bytes read from disk and ${n(lim.writeBytes)} written) is modelled as restoring its largest entries first in their own RestoreFootprint transactions, which are priced, not executed. Fees are fees/model.mjs at mainnet's settings; the rent sizes of code entries are the network's (\`codeRentBytes\` over the entries testnet holds, \`results/code-entries.json\`), 2 to 20% above the test host's own${offNetwork(code)}.`);
     out.push('');
     out.push('| Transaction | Restores | Bytes restored | Fee (stroops) | of which rent |');
     out.push('| --- | --- | --- | --- | --- |');
@@ -587,3 +639,6 @@ for (const [name, body] of Object.entries({ settings: settingsTable(), attacks: 
 }
 writeFileSync(readme, text);
 console.log('rewrote', readme);
+const sorted = Object.fromEntries(Object.entries(figures).sort(([a], [b]) => a.localeCompare(b)));
+writeFileSync(`${results}figures.json`, `${JSON.stringify({ source: 'research/email-recovery/eval/report.mjs, from results/attacks-local.json, results/release-build-votes-local.json and results/settings/', figures: sorted }, null, 2)}\n`);
+console.log('wrote', `${results}figures.json`);
