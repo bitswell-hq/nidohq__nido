@@ -269,10 +269,11 @@ passkey device~\cite{rfc8030,rfc8291,rfc8292}. The vault probes it weekly and
 marks it lapsed when the push service no longer accepts it; the wallet then
 shows the lapse and refuses configurations that keep the email guardian
 until notifications move to a device again\claim{wallet-second-alert-channel}.
-A contact changes only with an assertion by an administrative
-passkey~\cite{webauthn3}, after 14 days of close time, longer than the 7-day
-minimum delay, while the old one keeps receiving alerts; removal is refused
-during an authorized recovery\claim{alert-contacts}. A watcher that missed
+A contact is registered, replaced or removed only with an assertion by an
+administrative passkey~\cite{webauthn3}; a replacement or removal takes
+effect after 14 days of close time, longer than the 7-day minimum delay,
+while the old contact keeps receiving alerts, and removal is refused during
+an authorized recovery\claim{alert-contacts}. A watcher that missed
 events reconciles from the controller's state after it restarts and raises a
 lag alarm, and independently the wallet reads live attempts from the
 controller whenever it opens\claims{compromised-inbox-alerted,wallet-live-attempts}. Alert email goes through an EU-owned
