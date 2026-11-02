@@ -1,0 +1,57 @@
+name: Email-recovery parser checks
+
+# The circuit's header parsing against real mail and fuzzed headers
+# (research/email-recovery/eval/parser/README.md). `check.sh --ci` runs the
+# first 10 real posts per launch domain and the first 2,000 fuzz cases and
+# fails unless every verdict is the one results/ records for the same post or
+# case, and the committed recovery artifact agrees with the harness. The full
+# run (`just email-recovery-parser-check`) takes too long for every pull
+# request on a hosted runner.
+
+on:
+  pull_request:
+    paths: &paths
+      - '.github/workflows/email-recovery-parser.yml'
+      - 'circuits/email-recovery/**'
+      - 'packages/email-mocks/**'
+      - 'packages/email-recovery/**'
+      - 'research/email-recovery/eval/parser/**'
+      - 'vendor/perch'
+  push:
+    branches: [main]
+    paths: *paths
+  workflow_dispatch:
+
+jobs:
+  parser:
+    name: Parser checks (real mail and fuzzing)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # The reference From reader is Python's standard library; the recorded
+      # results were made with this minor version.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      # The archive's mboxes, fetched at one request per 10 seconds; a past
+      # month's mbox does not change.
+      - name: Cache the public archive
+        uses: actions/cache@v4
+        with:
+          path: target/email-recovery-parser/mbox
+          key: email-parser-corpus-${{ hashFiles('research/email-recovery/eval/parser/corpus/manifest.json') }}
+
+      - name: Parser checks
+        run: research/email-recovery/eval/parser/check.sh --ci

@@ -233,6 +233,31 @@ section numbers in brackets):
 8. The signature value `s` satisfies `s < n`, so each email has exactly one
    accepted signature encoding.
 
+Two rules on the tag list itself [§3.2, §3.5, §6.1.1]:
+
+- The six tags the circuit reads, `v=`, `a=`, `c=`, `d=`, `h=` and `b=`,
+  each appear exactly once. The values of `v=`, `a=`, `c=`, `d=` and `b=`
+  follow `=` directly and end at `;` or the end of the field, so whitespace
+  around their `=` or before their `;` is refused, although RFC 6376 §3.2
+  allows it. In `h=`, whitespace around the entries is accepted (Fastmail
+  folds right after `h=`), but not between the name and `=`. This is a
+  completeness limit: among the 5,327 signatures on real launch-provider
+  posts of §12, whitespace in these places occurs in Fastmail's `h=`, which
+  the circuit accepts (its mock reproduces the fold), and in
+  `d= messagingengine.com`, Fastmail's second signature,
+  which the circuit refuses for its `d=` in any case (rule 7).
+- Every other tag is located, so no value is ever read from inside one, but
+  not validated. The circuit accepts a field that RFC 6376 tells verifiers to
+  ignore for a defect in a tag it does not read: an empty tag-spec, a tag
+  without `=`, a missing or repeated `s=`, a missing `bh=`, a malformed `l=`
+  or `i=`, an `i=` outside `d=`, a `q=` without `dns/txt`. This does not weaken the proof: the field
+  is part of the signed data, so only the holder of the signing key can
+  write it (A1a).
+
+Both rules are **[built, tested]**: the grammar-based fuzzing in
+`research/email-recovery/eval/parser/` reaches each case and compares the
+circuit with mailauth's strict RFC 6376 verifier.
+
 ### 4.4 What is not bound
 
 | Item | Why it is not bound |
@@ -261,8 +286,28 @@ let-dig      = ALPHA / DIGIT
 
 - If the value contains `<`, it contains exactly one `<` and exactly one `>`,
   `>` is its last byte, and the address is the bytes between them. Otherwise
-  the whole value is the address. No input has two candidate addresses.
-- Quoted local parts, comments, groups, and address lists are refused.
+  the whole value is the address. No input has two candidate addresses, and
+  the address is never taken from the display name.
+- Quoted local parts and comments are refused. Groups and address lists are
+  refused except where their syntax falls inside the display name, as the
+  next point describes.
+- The display name above is wider than RFC 5322's phrase: it admits an
+  unquoted `,`, `;`, `:`, `@` or `\` and an unbalanced `"`. RFC 5322 readers
+  read such a value as an address list, a group, another mailbox, or none,
+  while the circuit binds the angle-addr that ends it: `b@yahoo.com, x
+  <a@yahoo.com>` is a valid RFC 5322 address list whose first mailbox is
+  `b@yahoo.com`, and the circuit binds `a@yahoo.com`. A provider that
+  authenticates the first address of such a value (A1b, §11.1) would sign
+  mail the circuit reads as another user's. **[built, tested]**:
+  `research/email-recovery/eval/parser/` (`from-finding.mjs` on the
+  committed recovery artifact, and the fuzzing). Open, §13 question 23.
+- **[specified]**, to be built by a change to the circuit: outside balanced
+  quoted strings the display name holds only `atext`, `.` and WSP (RFC 2047
+  encoded-words consist of these); `\` appears only as a quoted-pair inside
+  a quoted string; `<` and `>` appear nowhere in it. Every value accepted
+  under this rule is, in RFC 5322 terms, exactly the one mailbox the circuit
+  binds. None of the From values of the 4,619 real signatures the circuit
+  accepts (§12) is outside it.
 - `1 ≤ len(addr-spec) ≤ 124` bytes (`ADDR_MAX`).
 - The address is used **exactly as these bytes**: case, dots, and `+` tags
   are preserved, and nothing is normalized.
@@ -270,9 +315,11 @@ let-dig      = ALPHA / DIGIT
   digit (`123mail.org`). Which domains are usable is decided by the registry
   allowlist (§7.3), not by this grammar.
 
-The circuit's `From` parser implements this grammar **[built, tested]**
+The circuit's `From` parser implements this grammar, with the wider
+display name **[built, tested]**
 (`circuits/email-recovery/lib/src/from_address.nr`; tests in
-`circuits/email-recovery/tests/`).
+`circuits/email-recovery/tests/`; its reading of real and fuzzed headers
+against RFC 5322 readers in `research/email-recovery/eval/parser/`).
 
 ### 4.6 Getting the email to the browser
 
@@ -1907,7 +1954,8 @@ Every one is emitted **[built, tested]**; the announcements are
 
 | Id | Assumption |
 | --- | --- |
-| A1 | RSASSA-PKCS1-v1_5 with SHA-256 and 2048-bit moduli is existentially unforgeable, and providers keep their DKIM private keys secret. |
+| A1a | RSASSA-PKCS1-v1_5 with SHA-256 and 2048-bit moduli is existentially unforgeable, and providers keep their DKIM private keys secret. |
+| A1b | Each launch provider DKIM-signs a `from` field naming one of its mailboxes only when that mailbox's holder submitted the message. For the circuit's reading (§4.3, §4.5) this needs: (1) a submission with two `From` fields is refused or rewritten, or the provider authenticates the instance it signs (the bottom-most when `h=` names `from` once), and a `From` naming several addresses is refused, or the provider authenticates the angle-addr the circuit binds; (2) sending as another address of the provider's domain requires proof of control of that mailbox; (3) an address is not reassigned, or a new holder cannot use it against an existing enrollment, which `account_code` provides (§5.1). The per-provider evidence, with a source for each cell or what would establish it, is `research/email-recovery/eval/parser/sender-authentication.md`; its unknowns are §13 question 24. |
 | A2 | SHA-256 is collision resistant. |
 | A3 | `P2` is collision resistant, and no input is known that it maps to `0` (the empty leaf); for the hiding claims (privacy, the blinded Subject, the salted pin) it is modelled as a random function. |
 | A4 | The UltraHonk proof system with Perch's zero-knowledge flavor is knowledge sound and zero-knowledge, and the verifier contract embeds the email circuit's key. |
@@ -1998,7 +2046,7 @@ How the assumptions enter the theorems:
 
 | Property | Circuit obligations | Contract obligations (guardian) | Perch obligations | Assumptions | Status |
 | --- | --- | --- | --- | --- | --- |
-| 1 Soundness | C1, C2, C3, C4, C5, C6 | §8.3 checks 1 to 12; §8.2 wiring check; registry: §7.3 rules 1 to 5 and the same tree hashing as C6 (§7.2, §7.6 cross-check) | Statement construction from controller state (Perch §4) | A1, A2, A3 (collision), A4 (soundness), A5, A7 | Proven with A5 and A7 as hypotheses, A4's break named per accepted proof, and A3's breaks named on computed inputs (`EmailRecovery.soundness`); the conclusion fixes the `From` address, the account code and the key `(domain, modulus)`; A1 assumed; guardian checks and registry rules tested; registry hashing tested against Noir; circuit built, C1 to C6 tested (§6.2, §6.4), not proven; real proofs verified on chain (§8.6) |
+| 1 Soundness | C1, C2, C3, C4, C5, C6 | §8.3 checks 1 to 12; §8.2 wiring check; registry: §7.3 rules 1 to 5 and the same tree hashing as C6 (§7.2, §7.6 cross-check) | Statement construction from controller state (Perch §4) | A1a, A1b, A2, A3 (collision), A4 (soundness), A5, A7 | Proven with A5 and A7 as hypotheses, A4's break named per accepted proof, and A3's breaks named on computed inputs (`EmailRecovery.soundness`), for any reading of the header (the model's `Format` is a parameter); the conclusion fixes the `From` address, the account code and the key `(domain, modulus)`; A1a and A1b assumed, A1b reviewed per provider; guardian checks and registry rules tested; registry hashing tested against Noir; circuit built, C1 to C6 tested (§6.2, §6.4), not proven; the circuit's reading of headers tested against reference implementations on real mail and fuzzed headers (§12), with the open display-name finding of §4.5; real proofs verified on chain (§8.6) |
 | 2 Privacy | Public inputs are exactly §6.1; nothing else is exposed | Stores `C` and a salted pin root, never an address or key hash; emits nothing | — | A3 (random function), A4 (zero-knowledge), A6 | Proven in the ideal model: an adaptive adversary's view, proofs included, equals a simulator's computed from the handles and the public statements, so any two addresses give the same view (`EmailRecovery.privacy_simulation`, `privacy_two_runs`); the step from the ideal model to Poseidon2 and UltraHonk rests on A3, A4, A6, assumed; structural lemma proven (the contracts store and emit nothing about the address beyond `C` and the pin root, `EmailRecovery.structural_noninterference`); guardian storage tested; the circuit's public inputs are exactly §6.1 (built, tested) |
 | 3 Replay | C5 binds `d` | Checks 1, 2, 5, 6, 8, 12 | One vote per guardian per attempt and domain, or per change digest (Perch §6.3 T2, §5); attempt ids never reused (T1); epochs only grow (§3.3) | A2, A3, A4 | Proven with A2's break named on the two statements' encodings (`EmailRecovery.Perch.email_vote_replay`); tested (unit and integration) |
 | 4 One-factor safety | — | The guardian is one address | Quorum (T4), delay (T5), cancellation (T6, T7) | A9 (b), for the wallet's delay floor in wall-clock time | Proven over all controller traces (`EmailRecovery.Perch.one_factor_safety`) and for the wallet policy (`one_factor_under_wallet_policy`, with the floor lasting 7 days at the target close time, `emailOnlyFloor_lasts`); on-chain part tested; wallet policy tested (§9.3); A9 assumed |
@@ -2094,6 +2142,8 @@ network's.
 | What a first proof downloads | 18,790,270 octets (the artifact, the key, and the CRS prefix), then nothing on a retry; the prover's code is part of the page's build | `browser-prover.md` (the cold runs), `test/prover.test.ts` **[measured]** |
 | Phones | **Not measured.** No phone was available. `/security/recover/bench/` runs the same benchmark on any device, with no account, and prints copyable JSON; `just email-recovery-bench-phone` builds it as a self-contained directory (the page, its assets, the circuit and key, and the CRS prefix checked against the prover's pinned digests, read by the page through `?crs=`) and serves it over HTTPS on this machine's network addresses with the recovery routes' headers. `research/email-recovery/eval/phone/check.mjs` runs that build in headless Chrome (cross-origin isolated, the CRS from the build, both proofs verified); that is a check of the build, not a phone figure | — |
 | Enrollment and recovery end to end on a local network | Passes in 1.7 minutes: in Chromium, the owner's Nido turns on recovery, enrolls an inbox (two groups of the recovery code typed back; the Gmail mock signs the enrollment email; the vault seals it back; the page checks it, warns when the alert address is the enrolled inbox, registers an alert contact at another address with Web Push, deploys the guardian with its pin, and lists it with a quorum of two); a new device opens a lost-key attempt, the page warns where the code is typed, prefills the warning line in the email's body and shows the pickup deadline, the vault seals the recovery email back, the page proves it in the browser and submits `submit_guardian`, the alert service alerts the email vote, the other helper approves, the alert email and push carry the code the page showed, and after the delay the page completes the recovery | `tests/e2e/local/email-recovery.local.spec.ts` (`just test-e2e-email-local`) on `stellar/quickstart --local` (core and RPC v29, protocol 28) with Perch's stack built for that network and Nido's contracts from source. Mocked (TEST-ONLY): the mail provider and MX, DNS, the sending services, the push service, the Nitro enclave and its custodians, and the enclave-image registry (a stand-in answering `is_active`, since its 14-day timelock cannot elapse locally); the test's passkeys are the repository's test authenticator. Not in CI **[built, tested]** |
+| The circuit's header parsing on real mail | 5,154 DKIM-signed posts from all 11 launch domains (18 GNU mailing lists, October 2025 and May to October 2026), 5,327 signatures: the circuit and the reference (mailauth 8.0.4 strict mode for RFC 6376, node:crypto for RSA, Python 3.14's RFC 5322 reader for From) agree on every one. 4,619 are accepted by both with the same address and domain; 708 are refused by both: 316 do not verify under any known key (an archived copy whose signed fields the list changed, or a key no public source still holds), 229 signed blocks exceed `HEADER_MAX` (in 197 the longest signed field is `References` or `In-Reply-To`; the others sign a long `Cc`, `Autocrypt`, `Face` or `Mail-Followup-To`), 162 have a `d=` other than the From domain, 1 has two signed Subjects. The committed recovery artifact agrees with the harness on all 10,320 executions; the encoder's signed block equals the reference's for every signature; 592 signatures verify only under a key from zkEmail's public archive | `research/email-recovery/eval/parser/results/differential.json` (`just email-recovery-parser-check`). These are list archives' copies of ordinary posts, not the providers' outbound recovery mail; no Fastmail signature verifies under any key the DNS or zkEmail's archive holds, so Fastmail is tested on the refusing side only **[measured]** |
+| Grammar-based fuzzing of the circuit's parsing | 50,000 seeded cases around the §4.5 From grammar and the §4.3 tag list (49,779 signatures, 51,814 circuit executions, 45 minutes on 18 cores), each compared with mailauth's strict RFC 6376 verifier and Python's RFC 5322 reader: 23,002 signatures accepted and 20,619 refused by both. The circuit accepts 2,460 where Python reads another mailbox, a list, or none, the display-name issue of §4.5 (an unquoted `@` 1,181, an unbalanced `"` 507, an unquoted `\` 271, `,` 255, `;` 246); 2,733 that mailauth ignores for a defect in a tag the circuit does not read (§4.3); and 251 group-shaped values whose address both readers read as the circuit does. It refuses 714 that RFC 6376 allows, each for whitespace in a tag it reads (§4.3). The recovery artifact agreed with the harness on all 1,994 cross-checked signatures, and accepts each of the four From values of `from-finding.mjs` with a full witness | `research/email-recovery/eval/parser/results/fuzz.json`, `results/from-finding.json` (`just email-recovery-parser-check`); seeded and reproducible case by case (`fuzz.mjs --show`); signed with a TEST-ONLY key **[measured]** |
 | Attack suite on a local network | 65 scenario rows in eleven classes (forged emails, replayed emails and proofs, a wrong account or new key in the statement, stale or malicious registry keys, a compromised inbox, the alert path, phishing and social engineering, repeated attempts, provider header quirks, front-running, privacy on chain), each outcome as expected and each refusal named by its layer (circuit assertion, guardian check number, registry rule, Perch controller error, alert path); the three registry scenarios that need an elapsed timelock or grace period on the test host with the registry's real timelocks | `research/email-recovery/eval/README.md` (`just email-recovery-attacks`; `network/attacks.mjs` on `stellar/quickstart --local`, every approval a real proof by bb.js in Node; `email_guardian.rs::registry_*`). Mocked (TEST-ONLY): the mail providers, DNS, the sending services, the push service, the enclave and its custodians, and the enclave-image registry (the end-to-end test's stand-in). In CI (`email-recovery-attacks.yml`) **[built, tested]** |
 | One `submit_guardian` with an email approval on a local network | metered: 120.0 million instructions (119,993,200 to 120,090,525 across 20 votes), 12 entries read, 2 entries and 1,208 bytes written; 125 million instructions declared after simulation; 18,080-byte transaction around a 16,784-byte authorization entry; 176,232 stroops charged (median), 2,604 of them rent. The vote that authorizes an attempt with a 7-day delay also writes the authorized attempt: 120.9 million instructions, 4 entries and 1,488 bytes written, 3,734,675 stroops charged, 3,550,194 of them rent | `research/email-recovery/eval/results/attacks-local.json`, read from each transaction's result and the host's `core_metrics` events; the approvals use the guardian's pin, so the registry is not called (spec §7.4) **[measured]** |
 | One `submit_guardian` with an email approval on testnet | metered: 121,639,784 instructions, 12 entries read, 2 entries and 1,208 bytes written; 126,548,373 instructions declared; 18,080-byte transaction; 82,428 stroops charged, 1,333 of them rent; 1,715 ms from simulation to confirmation | `research/email-recovery/eval/results/testnet.json` (`testnet/run.sh`): transaction `08cdc915727c…`, read back from Stellar RPC 30.0.0 (protocol 29); the approval uses the guardian's pin **[measured]** |
@@ -2205,7 +2255,10 @@ providers' own delivery to these figures.
    allowlist per launch provider (for example whether secondary domains sign
    with their own `d=`), each provider's signed header block for very long
    addresses and display names, and whether each provider's stored or
-   received copy keeps its `DKIM-Signature`.
+   received copy keeps its `DKIM-Signature`. The circuit reads 5,327 real
+   launch-provider signatures from public list archives as reference
+   implementations do (§12); those are list copies of ordinary posts, so the
+   points above remain open.
 7. **`RECOVERY_INBOX`.** How its mail reaches the browser is §4.6 (sealed
    inbound by default, `.eml` import as the alternative). Open: the address
    itself (a deployment parameter; the tests use `recover@recovery.test`),
@@ -2288,3 +2341,24 @@ providers' own delivery to these figures.
     target (§9.3 rule 3). Not built: the wallet noticing a lower target
     and asking those owners to rebuild, and whether to leave a margin above
     the floor for that case.
+23. **The From display name.** The built circuit accepts a display name
+    with an unquoted `,`, `;`, `:`, `@` or `\`, or an unbalanced `"`, and
+    binds the angle-addr after it, where RFC 5322 readers read an address
+    list, a group, another mailbox, or none (§4.5; reproduced on the
+    committed recovery artifact and counted by class in
+    `research/email-recovery/eval/parser/README.md`). The restriction
+    §4.5 specifies closes it and refuses none of the real launch-provider
+    From values of §12; until the circuit is changed, the binding of such
+    values rests on A1b condition 1, which public measurements from 2020
+    and 2021 found Yahoo and iCloud did not meet.
+24. **Provider sender authentication (A1b).** Unknown today for every launch
+    provider: whether its submission path refuses two `From` fields, a
+    `From` naming several addresses, or an address in the display name, and
+    which `from` instance its signature then covers. Unknown for Outlook.com,
+    iCloud and GMX/WEB.DE: whether a user can send as another existing
+    mailbox of the domain. Unknown for iCloud and Yahoo: whether a deleted
+    address is assigned again (Fastmail and GMX/WEB.DE document that they
+    are; `account_code` covers it). A controlled submission test from test
+    accounts would settle the first; it sends real mail through the
+    providers, which this repository's mocks do not
+    (`research/email-recovery/eval/parser/sender-authentication.md`).
