@@ -4,11 +4,14 @@
 # (real mail from corpus/manifest.json) and part 2 (grammar-based fuzzing).
 #
 #   check.sh          full run: every post of the manifest, 50,000 fuzz cases,
-#                     the From finding on the recovery artifact; rewrites
-#                     results/ and the README's tables
+#                     hint mutation on the first 1,000, the From finding on
+#                     the recovery artifact; rewrites results/ and the
+#                     README's tables
 #   check.sh --ci     the first 10 posts per launch domain and the first 2,000
 #                     fuzz cases; fails unless their verdicts are exactly the
-#                     ones results/ records for the same posts and cases
+#                     ones results/ records for the same posts and cases; and
+#                     hint mutation on the first 50 cases, which fails if a
+#                     mutated hint binds anything the honest hints do not
 #
 # The harness is compiled from circuits/email-recovery/lib on every run, and
 # the recovery artifact is circuits/email-recovery/artifacts/recovery.json
@@ -33,9 +36,11 @@ if [[ "${1:-}" == "--ci" ]]; then
   node "$here/differential.mjs" --per-domain 10 --out "$out/differential.json"
   node "$here/fuzz.mjs" --cases 2000 --out "$out/fuzz.json"
   node "$here/compare-results.mjs" "$out/differential.json" "$out/fuzz.json"
+  node "$here/fuzz.mjs" --mutate-hints --cases 50 --out "$out/hint-mutation.json"
 else
   node "$here/differential.mjs"
   node "$here/fuzz.mjs"
+  node "$here/fuzz.mjs" --mutate-hints --cases 1000
   node "$here/from-finding.mjs"
   node "$here/report.mjs"
 fi

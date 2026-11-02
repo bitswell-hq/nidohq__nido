@@ -69,7 +69,12 @@ fn describe(w: &World, names: &[(&soroban_sdk::Address, &str)], k: &LedgerKey) -
     }
 }
 
-fn reading(w: &World, names: &[(&soroban_sdk::Address, &str)], step: &str, a: &Archived) -> Value {
+pub(crate) fn reading(
+    w: &World,
+    names: &[(&soroban_sdk::Address, &str)],
+    step: &str,
+    a: &Archived,
+) -> Value {
     let r = &a.measured.resources;
     json!({
         "step": step,

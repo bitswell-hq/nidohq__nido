@@ -8,6 +8,7 @@ mod dkim_registry;
 mod email_alerts;
 mod email_archival;
 mod email_guardian;
+mod email_migration;
 mod email_proofs;
 mod factory_governance;
 mod grant_signer;

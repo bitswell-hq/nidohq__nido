@@ -16,8 +16,8 @@ parentPort.on('message', async ({ id, inputs, artifactInputs }) => {
   const out = { id };
   try {
     const { returnValue } = await harness.execute(inputs);
-    const [address, domain, keyHash] = returnValue;
-    out.harness = { accepted: true, address: bytesOf(address).toString('latin1'), domain: bytesOf(domain).toString('latin1'), keyHash };
+    const [address, domain, keyHash, hints] = returnValue;
+    out.harness = { accepted: true, address: bytesOf(address).toString('latin1'), domain: bytesOf(domain).toString('latin1'), keyHash, hints };
   } catch (err) {
     out.harness = { accepted: false, refusal: message(err) };
   }

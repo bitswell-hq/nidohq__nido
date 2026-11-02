@@ -28,6 +28,7 @@ front-running resistance, **4** one-factor safety.
 | Votes against a registry root on a local network (about 72 hours) | `research/email-recovery/eval/network/run-registry-root.sh` | `results/registry-root-local.json` |
 | The keeper on a local network | `research/email-recovery/eval/network/run-keeper.sh` | `results/keeper-local.json` |
 | Recovery with every entry archived (test host) | `research/email-recovery/eval/archival.sh` | `results/archival-test-host.json` |
+| An account's move to a new email guardian (test host) | `research/email-recovery/eval/migration.sh` | `results/migration-test-host.json` |
 | Proving on this machine | `just email-recovery-proving` (`proving/measure.sh`) | `results/proving.json`, the proving table |
 | Browser rows of the proving table | `node research/email-recovery/eval/measure-browser.mjs --runs 5` after `npx astro build --root packages/frontend` | `browser-prover.json`, `browser-prover.md` |
 | Everything a first proof downloads | `CHROME=<Chrome for Testing> node research/email-recovery/eval/first-load.mjs` after the same build | `results/first-load.json` |
@@ -749,6 +750,39 @@ The rent rate is not fixed: it follows the network's average Soroban state size,
 | 5,500 (×5.5) | 2.5 GB | 21,776,595,086 (2,177.7 XLM) | 18,173,606,450 (1,817.4 XLM) | 17,845,716 (1.8 XLM) |
 | 10,000 (×10) | 3.0 GB | 39,593,358,424 (3,959.3 XLM) | 33,042,915,617 (3,304.3 XLM) | 32,445,716 (3.2 XLM) |
 <!-- END GENERATED archival -->
+
+## Moving an account to a new guardian
+
+A guardian names its verifier and `circuit_id` for its lifetime (spec
+§8.2), so a fixed email circuit reaches an account only when the account
+deploys a new guardian with the fixed circuit's verifier and applies a
+recovery document listing it in place of the old one (spec §8.7). The new
+verifier is deployed once for all accounts. `email_migration.rs` runs that
+move on the test host for an account with an email guardian and two
+helpers at quorum 2: under `Loss` the owner's `apply_doc` alone; under
+`Protected` after the two helpers' `approve_change` votes meet the recovery
+condition. The new guardian keeps the account's commitment, so the user
+sends no new enrollment email; the test gives it a 30-day pin, which in the
+wallet needs the user's backup of `account_code` (spec §5.6).
+
+<!-- BEGIN GENERATED migration by report.mjs; do not edit -->
+At mainnet's settings: each transaction of `email_migration.rs` re-executed by the test host under mainnet's cost model and entry lifetimes with nothing archived, priced with fees/model.mjs at mainnet's fees, rent (at today's rate, 1,000 stroops per KB, which scales with the network's average state size as above) and the 100-stroop inclusion fee included. The deployment's rent prepays the new guardian's instance for the maximum lifetime (3,110,400 ledgers), to which its constructor extends it; the keeper's yearly rent for that instance is the per-account figure above.
+
+| Profile | Transaction | Instructions | Bytes written | Fee (stroops) | of which rent |
+| --- | --- | --- | --- | --- | --- |
+| Loss | deploy the new guardian | 3,973,757 | 640 | 1,608,348 | 1,601,271 |
+| Loss | apply_doc (owner) | 30,420,756 | 4,768 | 1,022,873 | 982,939 |
+| **Loss** | **2 transactions** | | | **2,631,221** (0.2631 XLM) | 2,584,210 |
+| Protected | deploy the new guardian | 3,972,948 | 640 | 1,608,347 | 1,601,271 |
+| Protected | approve_change (helper 1) | 11,142,964 | 352 | 481,576 | 469,708 |
+| Protected | approve_change (helper 2) | 11,175,632 | 392 | 45,817 | 33,922 |
+| Protected | apply_doc (owner) | 30,703,827 | 4,780 | 1,023,337 | 982,939 |
+| **Protected** | **4 transactions** | | | **3,159,077** (0.3159 XLM) | 3,087,840 |
+<!-- END GENERATED migration -->
+
+A `Protected` account whose quorum needs the email guardian's own vote
+moves only with that vote, from the guardian being replaced; one whose
+other guardians cannot reach the quorum cannot move at all.
 
 ## Proving
 

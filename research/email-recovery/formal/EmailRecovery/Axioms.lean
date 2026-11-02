@@ -23,6 +23,14 @@ and code assumptions are hypotheses of the theorems, never axioms.
 #guard_msgs in
 #print axioms EmailRecovery.email_of_check
 
+/-- info: 'EmailRecovery.email_binds_statement' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms EmailRecovery.email_binds_statement
+
+/-- info: 'EmailRecovery.signedEmail_binds_statement' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms EmailRecovery.signedEmail_binds_statement
+
 /-- info: 'EmailRecovery.from_is_enrolled' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms EmailRecovery.from_is_enrolled
@@ -166,6 +174,14 @@ info: 'EmailRecovery.Perch.email_only_authorizes_only_at_quorum_one' depends on 
 /-- info: 'EmailRecovery.slot_binds' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms EmailRecovery.slot_binds
+
+/-- info: 'EmailRecovery.subject_binds_digest' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms EmailRecovery.subject_binds_digest
+
+/-- info: 'EmailRecovery.hex_injective' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms EmailRecovery.hex_injective
 
 /-- info: 'EmailRecovery.modulusLimbs_injective' depends on axioms: [propext] -/
 #guard_msgs in

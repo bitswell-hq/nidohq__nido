@@ -31,7 +31,7 @@ import { deflateRawSync, inflateRawSync } from 'node:zlib';
 
 import { dkimSignatures, parseMessage, signedHeaderBlock } from '@nidohq/email-recovery';
 
-import { crossCheckAgrees } from './circuit.mjs';
+import { crossCheckAgrees, hintsOf } from './circuit.mjs';
 import { rsaKey } from './keys.mjs';
 import { profileViolation, readFrom, referenceSignatures, verifyingKey } from './reference.mjs';
 
@@ -42,9 +42,11 @@ const big = (bytes) => (bytes.length ? BigInt(`0x${Buffer.from(bytes).toString('
 
 /**
  * Compares one message. `keysFor(d, s)` lists candidate keys `{ id, p }`.
- * Resolves to one row per DKIM-Signature field, top-most first.
+ * Resolves to one row per DKIM-Signature field, top-most first. With
+ * `keepInputs`, a row the circuit accepts also carries the first accepted
+ * run's inputs and the hints it ran on (`circuit.acceptedRun`).
  */
-export async function compareMessage(eml, keysFor, pool) {
+export async function compareMessage(eml, keysFor, pool, { keepInputs = false } = {}) {
   const sigs = await referenceSignatures(eml);
   let parsed;
   let encoded = [];
@@ -91,7 +93,7 @@ export async function compareMessage(eml, keysFor, pool) {
     for (const b of blocks) {
       for (const modulus of moduli) {
         const res = await pool.run(b.bytes, modulus, big(sig.signature));
-        runs.push({ via: b.via, ...res, crossCheck: crossCheckAgrees(res) });
+        runs.push({ via: b.via, ...res, crossCheck: crossCheckAgrees(res), ...(keepInputs ? { header: b.bytes, modulus } : {}) });
       }
     }
     const accepted = runs.filter((r) => r.harness.accepted);
@@ -146,6 +148,9 @@ export async function compareMessage(eml, keysFor, pool) {
         runs: runs.length,
         crossCheck: runs.every((r) => r.crossCheck),
         artifactRefusals: [...new Set(runs.filter((r) => r.artifact).map((r) => r.artifact.refusal))],
+        ...(keepInputs && accepted.length
+          ? { acceptedRun: { header: accepted[0].header, modulus: accepted[0].modulus, signature: big(sig.signature), keyHash: accepted[0].harness.keyHash, hints: hintsOf(accepted[0].harness.hints) } }
+          : {}),
       },
       verdict,
       kind,

@@ -12,12 +12,12 @@ the circuit proves between its four public inputs (§6.1) and its private inputs
 The header-level functions (which bytes are the `From` address, the Subject
 value, the `d=` value, and so on) are abstract (`Format`): the relation is stated
 in their terms, and computing them as §4.3 and §4.5 say is the circuit's
-obligation, outside this model. The modulus limbs, the packing and every
+obligation, outside this model. The modulus limbs, the packing, `hex` and every
 Poseidon2 input are the spec's formulas.
 
 Each binding lemma (`commit_binds`, `keyHash_binds`, `keyLeaf_binds`,
-`slot_binds`) concludes that the hashed values are equal, or names a Poseidon2
-break on inputs it computes from its arguments.
+`slot_binds`, `subject_binds_digest`) concludes that the hashed values are
+equal, or names a Poseidon2 break on inputs it computes from its arguments.
 -/
 
 namespace EmailRecovery
@@ -38,8 +38,6 @@ structure Format where
   domainOf : Bytes → Bytes
   /-- ASCII lowercase. -/
   lower : Bytes → Bytes
-  /-- `hex(x)` (spec §2). -/
-  hex : Nat → Bytes
   /-- The EMSA-PKCS1-v1_5 encoding of a SHA-256 digest, as a 2048-bit integer. -/
   emsa : Nat → Nat
 
@@ -97,6 +95,53 @@ theorem modulusLimbs_injective {n m : Nat} (h : modulusLimbs n = modulusLimbs m)
   rw [← unlimbs_limbs 17 n, ← unlimbs_limbs 17 m]
   exact congrArg unlimbs h
 
+/-! ## `hex` (spec §2) -/
+
+/-- The lowercase hexadecimal digit of `v < 16` as an ASCII byte (the circuit's
+`hex_digit`: `v + 48` below 10, `v + 87` from 10). -/
+def hexDigit (v : Nat) : UInt8 := if v < 10 then (v + 48).toUInt8 else (v + 87).toUInt8
+
+/-- The last `k` hexadecimal digits of `x`, most significant first. -/
+def hexDigits : Nat → Nat → Bytes
+  | 0, _ => []
+  | k + 1, x => hexDigits k (x / 16) ++ [hexDigit (x % 16)]
+
+/-- `hex(x)`: the 64 lowercase hexadecimal characters of the 32-byte big-endian
+encoding of a field element `x` (the circuit's `hex_of_field`, two digits per
+byte of `x.to_be_bytes()`, high nibble first). -/
+def hex (x : Nat) : Bytes := hexDigits 64 x
+
+theorem hexDigits_length : ∀ (k x : Nat), (hexDigits k x).length = k
+  | 0, _ => rfl
+  | k + 1, x => by simp [hexDigits, hexDigits_length k]
+
+theorem hex_length (x : Nat) : (hex x).length = 64 := hexDigits_length 64 x
+
+/-- Different digits are different characters. -/
+theorem hexDigit_injective : ∀ a, a < 16 → ∀ b, b < 16 → hexDigit a = hexDigit b → a = b := by
+  decide
+
+theorem hexDigits_injective :
+    ∀ (k x y : Nat), x < 16 ^ k → y < 16 ^ k → hexDigits k x = hexDigits k y → x = y
+  | 0, x, y, hx, hy, _ => by simp at hx hy; omega
+  | k + 1, x, y, hx, hy, h => by
+    simp only [hexDigits] at h
+    obtain ⟨hhigh, hlow⟩ := List.append_inj h (by simp [hexDigits_length])
+    simp only [List.cons.injEq, and_true] at hlow
+    have hmod := hexDigit_injective _ (Nat.mod_lt x (by decide)) _ (Nat.mod_lt y (by decide)) hlow
+    rw [Nat.pow_succ] at hx hy
+    have hdiv := hexDigits_injective k (x / 16) (y / 16)
+      ((Nat.div_lt_iff_lt_mul (by decide)).2 hx) ((Nat.div_lt_iff_lt_mul (by decide)).2 hy) hhigh
+    rw [← Nat.div_add_mod x 16, ← Nat.div_add_mod y 16, hdiv, hmod]
+
+/-- `hex` is injective on 32-byte values, so on field elements: a Subject's
+64 characters determine its token. -/
+theorem hex_injective {x y : Nat} (hx : x < 2 ^ 256) (hy : y < 2 ^ 256) (h : hex x = hex y) :
+    x = y := by
+  have e : (2 : Nat) ^ 256 = 16 ^ 64 := by decide
+  rw [e] at hx hy
+  exact hexDigits_injective 64 x y hx hy h
+
 /-! ## Poseidon2 inputs and values -/
 
 /-- The input of the commitment, spec §5.3:
@@ -113,6 +158,10 @@ def leafInput (domain : Bytes) (kh : Nat) : List Nat :=
 
 /-- The input of the pin tree's leaf 0, spec §7.4: `(DOM_PIN_SALT, account_code)`. -/
 def saltInput (code : Nat) : List Nat := [domPinSalt, code]
+
+/-- The input of the blinded Subject token, spec §4.2:
+`(DOM_BLIND, digest_hi, digest_lo, rho)`. -/
+def blindInput (d rho : Nat) : List Nat := [domBlind, hi d, lo d, rho]
 
 variable (H : Hashes) (F : Format)
 
@@ -159,7 +208,7 @@ def pinRoot (code : Nat) (keys : List (Bytes × Nat)) : Nat :=
   treeRoot H treeDepth fun i => (pinSlot code keys i).leaf H
 
 /-- Spec §4.2: `T = P2(DOM_BLIND, digest_hi, digest_lo, rho)`. -/
-def blind (d rho : Nat) : Nat := H.p2 [domBlind, hi d, lo d, rho]
+def blind (d rho : Nat) : Nat := H.p2 (blindInput d rho)
 
 /-- The bytes of an ASCII string. -/
 def ascii (s : String) : Bytes := s.toList.map fun c => c.toNat.toUInt8
@@ -232,7 +281,7 @@ structure Relation (x : PublicInputs) (w : Witness) : Prop where
   leafDomain : F.lower w.dkimD = w.leafDomain
   /-- C5: exactly one `subject` field, the phrase and `hex(T)` for the digest limbs -/
   subject : F.subject w.header =
-    some (recoveryPhrase ++ F.hex (H.p2 [domBlind, x.digestHi, x.digestLo, w.rho]))
+    some (recoveryPhrase ++ hex (H.p2 [domBlind, x.digestHi, x.digestLo, w.rho]))
   /-- C6: the leaf index decomposes into `treeDepth` bits -/
   leafIndex : w.leafIndex < 2 ^ treeDepth
   /-- C6: one sibling per level -/
@@ -282,6 +331,22 @@ theorem keyLeaf_binds {a b : Bytes} {k l : Nat} (ha : a.length ≤ 62)
     have hkh : [k] = [l] := List.append_inj_right h (by simp [pack_length])
     simp only [List.cons.injEq, and_true] at hkh
     exact Or.inl ⟨pack_injective hlen (by omega) hpack, hkh⟩
+  · exact Or.inr h
+
+variable {F} in
+/-- A Subject binds the digest: if one header's Subject opens to the digests
+`d₁` and `d₂` (C5), they are equal, unless the two blinding inputs are a
+Poseidon2 collision. -/
+theorem subject_binds_digest {hdr : Bytes} {d₁ d₂ ρ₁ ρ₂ : Nat}
+    (h₁ : F.subject hdr = some (recoveryPhrase ++ hex (blind H d₁ ρ₁)))
+    (h₂ : F.subject hdr = some (recoveryPhrase ++ hex (blind H d₂ ρ₂))) :
+    d₁ = d₂ ∨ H.P2Collides (blindInput d₁ ρ₁, blindInput d₂ ρ₂) := by
+  have h := h₁.symm.trans h₂
+  simp only [Option.some.injEq, List.append_cancel_left_eq] at h
+  rcases H.p2_eq (hex_injective (H.p2_canonical _).lt_two_pow (H.p2_canonical _).lt_two_pow h)
+    with h | h
+  · simp only [blindInput, List.cons.injEq, true_and, and_true] at h
+    exact Or.inl (split_injective h.1 h.2.1)
   · exact Or.inr h
 
 /-- The break a key leaf equal to the leaf of `slot` names: a collision of the

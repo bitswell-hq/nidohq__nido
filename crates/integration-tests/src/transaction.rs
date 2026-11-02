@@ -94,9 +94,7 @@ pub fn measure(
     budget.reset_unlimited().unwrap();
     let (result, measured) = run(
         &budget,
-        contract,
-        function,
-        args,
+        invoke(contract, function, args),
         auth,
         w.env.ledger().get(),
         Rc::new(w.env.to_ledger_snapshot()),
@@ -105,24 +103,30 @@ pub fn measure(
     measured
 }
 
-/// `contract.function(args)` authorized by `auth`, run in recording mode
-/// over `snapshot` at `ledger`, and its envelope and fee (see the module
-/// docs).
+/// The source account of every measured transaction.
+#[must_use]
+pub fn source_account() -> AccountId {
+    AccountId(PublicKey::PublicKeyTypeEd25519(Uint256([7; 32])))
+}
+
+fn invoke(contract: &Address, function: &str, args: Vec<ScVal>) -> HostFunction {
+    HostFunction::InvokeContract(InvokeContractArgs {
+        contract_address: ScAddress::from(contract.clone()),
+        function_name: ScSymbol(function.try_into().unwrap()),
+        args: args.try_into().unwrap(),
+    })
+}
+
+/// `host_function` authorized by `auth`, run in recording mode over
+/// `snapshot` at `ledger`, and its envelope and fee (see the module docs).
 fn run(
     budget: &Budget,
-    contract: &Address,
-    function: &str,
-    args: Vec<ScVal>,
+    host_function: HostFunction,
     auth: Vec<SorobanAuthorizationEntry>,
     ledger: LedgerInfo,
     snapshot: Rc<dyn SnapshotSource>,
 ) -> (InvokeHostFunctionRecordingModeResult, Measured) {
-    let host_function = HostFunction::InvokeContract(InvokeContractArgs {
-        contract_address: ScAddress::from(contract.clone()),
-        function_name: ScSymbol(function.try_into().unwrap()),
-        args: args.try_into().unwrap(),
-    });
-    let source = AccountId(PublicKey::PublicKeyTypeEd25519(Uint256([7; 32])));
+    let source = source_account();
     let mut diagnostics = Vec::new();
     let result = invoke_host_function_in_recording_mode(
         budget,
@@ -139,7 +143,7 @@ fn run(
     result
         .invoke_result
         .as_ref()
-        .unwrap_or_else(|e| panic!("{function} fails as a transaction: {e:?}"));
+        .unwrap_or_else(|e| panic!("{host_function:?} fails as a transaction: {e:?}"));
 
     let ext = if result.restored_rw_entry_indices.is_empty() {
         SorobanTransactionDataExt::V0
@@ -301,6 +305,28 @@ pub fn measure_archived(
     archived: &dyn Fn(&LedgerKey) -> bool,
     settings: &NetworkSettings,
 ) -> Archived {
+    measure_host_function_archived(
+        w,
+        invoke(contract, function, args),
+        auth,
+        archived,
+        settings,
+    )
+}
+
+/// [`measure_archived`] of any host function, a contract deployment
+/// included, with [`source_account`] as the transaction's source.
+///
+/// # Panics
+/// If the host function fails, or the settings' cost model does not load.
+#[must_use]
+pub fn measure_host_function_archived(
+    w: &World,
+    host_function: HostFunction,
+    auth: Vec<SorobanAuthorizationEntry>,
+    archived: &dyn Fn(&LedgerKey) -> bool,
+    settings: &NetworkSettings,
+) -> Archived {
     let mut ledger = w.env.ledger().get();
     ledger.min_persistent_entry_ttl = settings.min_persistent_ttl;
     ledger.min_temp_entry_ttl = settings.min_temporary_ttl;
@@ -337,15 +363,7 @@ pub fn measure_archived(
         settings.mem_cost_params.clone(),
     )
     .expect("the network's cost model");
-    let (result, measured) = run(
-        &budget,
-        contract,
-        function,
-        args,
-        auth,
-        ledger,
-        Rc::new(snapshot),
-    );
+    let (result, measured) = run(&budget, host_function, auth, ledger, Rc::new(snapshot));
     let rw = &result.resources.footprint.read_write;
     let restored_keys: Vec<LedgerKey> = result
         .restored_rw_entry_indices

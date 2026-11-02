@@ -3,8 +3,9 @@ import EmailRecovery.Guardian
 /-!
 # Theorem 1: soundness of the email factor (spec §11.2 item 1)
 
-Both theorems are statements about one accepted approval, and each names the
-break it reduces to on that approval's own data.
+`email_of_check` and `soundness` are statements about one accepted approval,
+and `email_binds_statement` about two; each names the breaks it reduces to on
+the approvals' own data.
 
 `email_of_check`: if the guardian's `__check_auth` succeeds, every check of
 §8.3 holds (`Accepted`), and for every extractor `X`, either the witness `X`
@@ -13,18 +14,30 @@ email (`SignedEmail`) whose signed header block carries a valid RSA-2048 DKIM
 signature under a modulus whose leaf is in the tree of the accepted root, whose
 `From` address opens the guardian's commitment, whose domain is the `d=` value
 and the leaf domain, and whose Subject opens to the authorized digest; or `X`
-fails on this accepted proof (`ExtractionFails`, the break of A4).
+fails on this accepted proof (`ExtractionFails`, A4's bad event).
 
 `soundness` adds the registry (A5) and the honest enrollment (A7): the email's
 `From` address and account code are the enrolled ones and its modulus is a
 trusted key of the leaf domain, unless one of the Poseidon2 breaks
-`SoundnessBreak` lists holds, each on inputs computed from the extracted
-witness, the enrollment and the accepted root's tree.
+`SoundnessAssumptions.Break` lists holds, each on inputs computed from the
+extracted witness, the enrollment and the accepted root's tree.
 
-Knowledge soundness is not a hypothesis. The theorems hold for every function
-`X`; A4 is the computational statement that the proof system has an efficient
-extractor (which may use the prover's code) for which an efficient prover
-makes the guardian accept a proof on which `ExtractionFails` holds only with
+`email_binds_statement`: two accepted approvals whose extracted emails share a
+header carry one statement, unless their blinding inputs collide under
+Poseidon2, their statements collide under SHA-256, or extraction fails on one
+of them. An email approves at most one statement, so a recovery email accepted
+once, which the inbox's Sent folder keeps, approves no other.
+
+Extraction is not a hypothesis. The theorems hold for every function `X`, and
+`ExtractionFails` is the complement of the relation on `X`'s witness, so their
+disjunctions hold by excluded middle: the content is in A4 (spec §11.1), and
+`ExtractionFails` on the accepted proof is A4's bad event. A4 is simulation
+extractability: for each efficient adversary, including one that has seen
+honest approvals with their proofs, there is an efficient extractor for that
+adversary, which may use its code, coins and random-oracle queries. In one run,
+`X` is that extractor's output on each accepted proof whose public inputs no
+honest proof had, and the wallet's own witness on a proof for public inputs it
+proved. A4 says that `ExtractionFails` then holds on an accepted proof only with
 negligible probability.
 
 What is not in these statements, and why: A1a (DKIM unforgeability) is the step
@@ -35,8 +48,11 @@ starts where the conclusion ends.
 
 namespace EmailRecovery
 
-/-- An extractor: a witness for each proof, as a function of its public inputs
-and bytes. Any function is one. -/
+/-- The witnesses of one run: a witness for each proof, indexed by its public
+inputs and bytes. Any function is one. The instance A4 is about is the output
+of the extractor A4 gives for the run's adversary on the run's accepted proofs,
+whatever that extractor reads (the adversary's code, coins and random-oracle
+queries); it is not a function of the public inputs and the proof alone. -/
 abbrev Extractor := PublicInputs → Bytes → Witness
 
 /-- The public inputs the guardian verifies an approval's proof against (§8.3
@@ -77,7 +93,7 @@ structure SignedEmail (H : Hashes) (F : Format) (c : GuardianConfig) (ap : Appro
   aligned : F.lower (F.domainOf w.address) = F.lower w.dkimD
   leafDomain : F.lower w.dkimD = w.leafDomain
   /-- The Subject of `H` opens to `d` (C5). -/
-  subject : F.subject w.header = some (recoveryPhrase ++ F.hex (blind H d w.rho))
+  subject : F.subject w.header = some (recoveryPhrase ++ hex (blind H d w.rho))
 
 variable {H : Hashes} {F : Format} {E : Encoding} {c : GuardianConfig} {env : Env} {p : Nat}
   {ap : Approval} {contexts : List AuthContext}
@@ -284,5 +300,50 @@ theorem soundness (X : Extractor) (A : SoundnessAssumptions H c env Trusted)
       · exact Or.inr (Or.inr hb)
     · exact Or.inr (Or.inl hcoll)
   · exact Or.inr hx
+
+/-! ## The email binds one statement -/
+
+/-- Two signed emails with one header open to one statement: the statement bytes
+of their approvals are equal, unless the two blinding inputs collide under
+Poseidon2 or the two statements collide under SHA-256. The approvals may be for
+different guardians. -/
+theorem signedEmail_binds_statement {c₁ c₂ : GuardianConfig} {ap₁ ap₂ : Approval}
+    {w₁ w₂ : Witness} (e₁ : SignedEmail H F c₁ ap₁ (H.sha256 ap₁.statement) w₁)
+    (e₂ : SignedEmail H F c₂ ap₂ (H.sha256 ap₂.statement) w₂) (hdr : w₁.header = w₂.header) :
+    ap₁.statement = ap₂.statement ∨
+      H.P2Collides (blindInput (H.sha256 ap₁.statement) w₁.rho,
+        blindInput (H.sha256 ap₂.statement) w₂.rho) ∨
+      H.Sha256Collides (ap₁.statement, ap₂.statement) := by
+  have s₁ := e₁.subject
+  rw [hdr] at s₁
+  rcases subject_binds_digest s₁ e₂.subject with hd | hc
+  · rcases H.sha256_eq hd with h | h
+    · exact Or.inl h
+    · exact Or.inr (Or.inr h)
+  · exact Or.inr (Or.inl hc)
+
+/-- **The email binds one statement.** For every extractor `X`: if guardians
+`c₁` and `c₂` accept approvals `ap₁` and `ap₂` and `X`'s witnesses for their
+proofs carry one header, the two approvals carry one statement, unless the two
+blinding inputs collide under Poseidon2, the two statements collide under
+SHA-256, or `X` fails on one of the two accepted proofs. -/
+theorem email_binds_statement (X : Extractor) {c₁ c₂ : GuardianConfig} {env₁ env₂ : Env}
+    {p₁ p₂ : Nat} {ap₁ ap₂ : Approval} {ctx₁ ctx₂ : List AuthContext}
+    (h₁ : check H E c₁ env₁ p₁ ap₁ ctx₁ = .ok ()) (h₂ : check H E c₂ env₂ p₂ ap₂ ctx₂ = .ok ())
+    (hdr : (extracted H X c₁ ap₁).header = (extracted H X c₂ ap₂).header) :
+    ap₁.statement = ap₂.statement ∨
+      H.P2Collides (blindInput (H.sha256 ap₁.statement) (extracted H X c₁ ap₁).rho,
+        blindInput (H.sha256 ap₂.statement) (extracted H X c₂ ap₂).rho) ∨
+      H.Sha256Collides (ap₁.statement, ap₂.statement) ∨
+      ExtractionFails H F (env₁.verifier c₁.verifier) X (approvalInputs H c₁ ap₁) ap₁.proof ∨
+      ExtractionFails H F (env₂.verifier c₂.verifier) X (approvalInputs H c₂ ap₂) ap₂.proof := by
+  obtain ⟨_, _, _, e₁ | x₁⟩ := email_of_check (F := F) X h₁
+  · obtain ⟨_, _, _, e₂ | x₂⟩ := email_of_check (F := F) X h₂
+    · rcases signedEmail_binds_statement e₁ e₂ hdr with h | h | h
+      · exact Or.inl h
+      · exact Or.inr (Or.inl h)
+      · exact Or.inr (Or.inr (Or.inl h))
+    · exact Or.inr (Or.inr (Or.inr (Or.inr x₂)))
+  · exact Or.inr (Or.inr (Or.inr (Or.inl x₁)))
 
 end EmailRecovery

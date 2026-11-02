@@ -14,8 +14,15 @@
 //! are left out because they bind values a real message does not carry.
 //!
 //! Instead of binding them, it returns what the recovery circuit would bind:
-//! the From address, the lowercase `d=` domain and the key hash.
-use email_recovery::dkim::find_hints;
+//! the From address, the lowercase `d=` domain and the key hash, and the
+//! hints the checks ran on.
+//!
+//! The hints are unconstrained: in a proof the prover chooses them. With
+//! `hint_override` false the harness computes them with `find_hints`, as the
+//! recovery circuit's honest prover does; with it true it runs the checks on
+//! `given_hints` instead, so a caller can try positions an honest prover would
+//! not choose (`fuzz.mjs --mutate-hints`).
+use email_recovery::dkim::{DkimHeaderHints, find_hints};
 use email_recovery::dkim_signature::check_dkim_signature;
 use email_recovery::from_address::parse_from;
 use email_recovery::header::scan_header;
@@ -29,10 +36,13 @@ fn main(
     modulus: [u128; 18],
     redc: [u128; 18],
     signature: [u128; 18],
-) -> pub (BoundedVec<u8, ADDR_MAX>, BoundedVec<u8, DOMAIN_MAX>, Field) {
+    hint_override: bool,
+    given_hints: DkimHeaderHints<DKIM_TAGS_MAX>,
+) -> pub (BoundedVec<u8, ADDR_MAX>, BoundedVec<u8, DOMAIN_MAX>, Field, DkimHeaderHints<DKIM_TAGS_MAX>) {
     // Safety: every hint is checked by the calls below, as in
     // verify_dkim_header_with_hints.
-    let hints = unsafe { find_hints::<HEADER_MAX, DKIM_TAGS_MAX>(header.storage(), header.len()) };
+    let found = unsafe { find_hints::<HEADER_MAX, DKIM_TAGS_MAX>(header.storage(), header.len()) };
+    let hints = if hint_override { given_hints } else { found };
     let layout = scan_header(header);
     let h = header.storage();
     let digest = sha256_var(h, header.len());
@@ -45,5 +55,5 @@ fn main(
         from,
         hints.tags,
     );
-    (from.address, field.domain, key_hash(modulus))
+    (from.address, field.domain, key_hash(modulus), hints)
 }
