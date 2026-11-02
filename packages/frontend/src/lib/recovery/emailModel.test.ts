@@ -5,9 +5,19 @@ import {
   KIT_STORAGE_ADVICE,
   NOBODY_ASKS_LINE,
   PASSKEY_DEVICE_CANCEL,
+  CONSENT_TEXT,
+  CONSENT_VERSION,
+  ENROLLED_ADDRESS_NOTE,
   PRIVACY_CLAIM,
+  PROVIDER_SEES,
+  RECENT_ACK_MS,
   SECOND_CHANNEL_LAPSED,
+  SECOND_CHANNEL_UNACKNOWLEDGED,
   accountFromKitInput,
+  channelView,
+  kitActions,
+  recoveryPageUrl,
+  syncedPasskeyNote,
   alertAddressWarning,
   checkCodeAgainstPin,
   chooseKeyPath,
@@ -18,7 +28,6 @@ import {
   kitCheckMatches,
   pinValidUntil,
   recoveryKitText,
-  secondChannel,
   clock,
   delayCountdown,
   mailtoLink,
@@ -39,7 +48,7 @@ import {
   guardianConfigScVal,
   submitGuardianOperation,
 } from './emailGuardian';
-import { PIN_LIFETIME_SECONDS, parseEmailRecoveryDeployment } from './emailConfig';
+import { PIN_LIFETIME_SECONDS, parseEmailRecoveryDeployment, walletApex } from './emailConfig';
 import { EMAIL_CIRCUIT_ID } from './emailProver';
 
 const contract = (n: number) => StrKey.encodeContract(Buffer.alloc(32, n));
@@ -78,6 +87,22 @@ describe('the email to send', () => {
 
   it('the privacy claim is the scoped one', () => {
     expect(PRIVACY_CLAIM).toBe('Nido’s servers and staff can’t read your address.');
+  });
+
+  it('the privacy copy around the claim says what the provider, a chain watcher and the sending services see', () => {
+    expect(PROVIDER_SEES).toBe(
+      'Your mail provider sees that you sent a Nido recovery email and when; someone watching the blockchain at the same moment may be able to tell which Nido it was for.',
+    );
+    expect(PROVIDER_SEES).not.toMatch(/only/);
+    expect(ENROLLED_ADDRESS_NOTE).toBe(
+      'On chain there is only a salted fingerprint of it. Nido stores the address itself only if you also send alerts to it, and then only inside its sealed alert vault; ' +
+        'the email services that deliver alerts, Lettermint, or Scaleway if Lettermint fails (both EU email services), then see it with every alert.',
+    );
+    expect(ENROLLED_ADDRESS_NOTE).not.toMatch(/never leaves this browser/);
+    expect(CONSENT_VERSION).toBe(3);
+    expect(CONSENT_TEXT).toContain('Alert emails are sent through Lettermint, or Scaleway if Lettermint fails (both EU email services), which see this address and each alert.');
+    expect(CONSENT_TEXT).toContain('About once a month this device asks you to tap a notification');
+    expect(CONSENT_TEXT).not.toMatch(/once a week|quiet notification/);
   });
 });
 
@@ -225,12 +250,20 @@ describe('the email recovery deployment', () => {
 describe('phishing and the recovery code', () => {
   const account = contract(7);
   it('the code entry says nobody asks for it and how to check the origin against the kit', () => {
-    const w = codeEntryWarning(`${account.toLowerCase()}.nido.test`, account);
+    const apex = walletApex('mainnet');
+    const w = codeEntryWarning(account, apex);
     expect(w).toMatch(/^Nobody from Nido will ask for this code/);
-    expect(w).toContain(`it must show ${account.toLowerCase()}.nido.test`);
-    expect(w).toContain(account.toLowerCase().slice(0, 6));
-    expect(w).toContain(account.toLowerCase().slice(-6));
+    // The whole recovery page address, built from the build's apex, never from the page's own host.
+    expect(w).toContain(`it must show exactly https://${account.toLowerCase()}.nido.fyi/security/recover/, the Recovery page line of your recovery kit`);
+    expect(w).toContain('every Nido page ends in .nido.fyi');
     expect(PASSKEY_DEVICE_CANCEL).toBe('This device has your passkey, so you do not need a recovery. Cancel it unless you are deliberately replacing this passkey.');
+  });
+
+  it('the apex is a constant of the network; only a local-network build takes the host it runs on', () => {
+    expect(walletApex('mainnet', { scheme: 'http:', host: 'evil.example' })).toEqual({ scheme: 'https:', host: 'nido.fyi' });
+    expect(walletApex('testnet')).toEqual({ scheme: 'https:', host: 'test.nido.fyi' });
+    expect(walletApex('testnet', { scheme: 'http:', host: 'localhost:4399' })).toEqual({ scheme: 'http:', host: 'localhost:4399' });
+    expect(recoveryPageUrl(account, walletApex('testnet'))).toBe(`https://${account.toLowerCase()}.test.nido.fyi/security/recover/`);
   });
 
   it('enrollment warns, without blocking, when alerts would go to the enrolled inbox', () => {
@@ -252,12 +285,34 @@ describe('phishing and the recovery code', () => {
   });
 
   it('the kit names its Nido and where recovery starts, and advises keeping it away from the inbox’s account', () => {
-    const text = recoveryKitText({ kit: 'ABCD EFGH', account, recoverUrl: `https://${account.toLowerCase()}.nido.test/security/recover/` });
+    const text = recoveryKitText({ kit: 'ABCD EFGH', account, apex: walletApex('mainnet') });
     expect(text).toContain('Recovery code: ABCD EFGH');
     expect(text).toContain(`Nido: ${account}`);
-    expect(text).toContain(`Recovery page: https://${account.toLowerCase()}.nido.test/security/recover/`);
+    expect(text).toContain(`Recovery page: https://${account.toLowerCase()}.nido.fyi/security/recover/`);
+    expect(text).toContain("Nido's address: https://nido.fyi (every Nido page ends in .nido.fyi)");
+    expect(text).toContain('check that the address bar shows exactly');
     expect(text).toContain(KIT_STORAGE_ADVICE);
     expect(KIT_STORAGE_ADVICE).toMatch(/Google Password Manager/);
+  });
+
+  it('on an iPhone or iPad the kit is printed first, and the page names where a download goes', () => {
+    const iphone = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1';
+    expect(kitActions(iphone)).toEqual({ primary: 'print', note: expect.stringMatching(/saves the kit to iCloud Drive \(Files\) unless you changed Safari’s download location/) });
+    expect(kitActions('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36')).toEqual({ primary: 'download' });
+  });
+
+  it('enrollment notes when the inbox is at the platform that likely syncs this passkey', () => {
+    const android = 'Mozilla/5.0 (Linux; Android 15; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Mobile Safari/537.36';
+    const iphone = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1';
+    const firefox = 'Mozilla/5.0 (Windows NT 10.0; rv:133.0) Gecko/20100101 Firefox/133.0';
+    expect(syncedPasskeyNote('gmail.com', android)).toMatch(/^The passkey on this device is probably saved in your Google account \(Google Password Manager\)/);
+    expect(syncedPasskeyNote('GMail.com', android)).toMatch(/Use an inbox at another provider, or add another helper\.$/);
+    expect(syncedPasskeyNote('icloud.com', iphone)).toMatch(/your Apple account \(iCloud Keychain\)/);
+    expect(syncedPasskeyNote('me.com', iphone)).toBeDefined();
+    expect(syncedPasskeyNote('gmail.com', iphone)).toBeUndefined();
+    expect(syncedPasskeyNote('icloud.com', android)).toBeUndefined();
+    expect(syncedPasskeyNote('proton.me', android)).toBeUndefined();
+    expect(syncedPasskeyNote('gmail.com', firefox)).toBeUndefined();
   });
 
   it('the apex recovery page starts from the Nido address in a kit, its URL, or a name', () => {
@@ -280,14 +335,39 @@ describe('phishing and the recovery code', () => {
 });
 
 describe('the second alert channel at runtime (rule 2)', () => {
-  it('lapses on the vault word or on this device subscription; is live only on the vault word', () => {
-    expect(secondChannel({ vault: 'live' })).toBe('live');
-    expect(secondChannel({ vault: 'lapsed' })).toBe('lapsed');
-    expect(secondChannel({ vault: 'none' })).toBe('lapsed');
-    expect(secondChannel({ vault: 'live', device: 'gone' })).toBe('lapsed');
-    expect(secondChannel({ device: 'live' })).toBe('unknown');
-    expect(secondChannel({})).toBe('unknown');
+  const now = Date.UTC(2026, 10, 2);
+  const date = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+  const dev = (id: string, state: 'live' | 'unacknowledged' | 'lapsed', addedAt = now - 90 * 86_400_000) => ({ id, state, addedAt, ackedAt: now - 86_400_000 });
+
+  it('"they reach this device" only on the device the vault lists as live, or that confirmed recently', () => {
+    expect(channelView({ vault: [dev('aa', 'live')], device: { state: 'live', id: 'aa' }, now, date })).toEqual({
+      state: 'here',
+      rule2: 'ok',
+      offerAdd: false,
+      text: 'Alert notifications: they reach this device (last confirmed 2026-11-01).',
+    });
+    expect(channelView({ device: { state: 'live', id: 'aa', ackedAt: now - 3_600_000 }, now, date }).state).toBe('here');
+    const stale = channelView({ device: { state: 'live', id: 'aa', ackedAt: now - RECENT_ACK_MS - 1 }, now, date });
+    expect(stale).toMatchObject({ state: 'unknown', rule2: 'ok', offerAdd: false });
+    expect(stale.text).toMatch(/needs your passkey/);
+  });
+
+  it('on another device than the one subscribed, it says where notifications go and offers this device', () => {
+    const v = channelView({ vault: [dev('aa', 'live', Date.UTC(2026, 5, 3))], now, date });
+    expect(v).toEqual({ state: 'elsewhere', rule2: 'ok', offerAdd: true, text: 'Recovery notifications go to another device (set up on 2026-06-03). Add this device too.' });
+    expect(channelView({ vault: [dev('aa', 'live')], device: { state: 'live', id: 'bb' }, now, date }).state).toBe('elsewhere');
+    expect(channelView({ now, date })).toMatchObject({ state: 'unknown', offerAdd: true, text: expect.stringMatching(/does not receive them/) });
+  });
+
+  it('unacknowledged and lapsed devices break rule 2, as a lost subscription on this device does', () => {
+    expect(channelView({ vault: [dev('aa', 'unacknowledged')], device: { state: 'live', id: 'aa' }, now, date })).toEqual({ state: 'unacknowledged', rule2: 'broken', offerAdd: true, text: SECOND_CHANNEL_UNACKNOWLEDGED });
+    expect(channelView({ vault: [dev('aa', 'lapsed')], now, date })).toMatchObject({ state: 'lapsed', rule2: 'broken' });
+    expect(channelView({ vault: [], now, date })).toMatchObject({ state: 'lapsed', rule2: 'broken' });
+    expect(channelView({ device: { state: 'gone', id: 'aa' }, now, date })).toMatchObject({ state: 'lapsed', rule2: 'broken', offerAdd: true });
+    // One live device keeps rule 2, whatever the others.
+    expect(channelView({ vault: [dev('aa', 'unacknowledged'), dev('bb', 'live')], device: { state: 'live', id: 'bb' }, now, date }).state).toBe('here');
     expect(SECOND_CHANNEL_LAPSED).toMatch(/rule 2/);
+    expect(SECOND_CHANNEL_UNACKNOWLEDGED).toMatch(/rule 2/);
   });
 });
 

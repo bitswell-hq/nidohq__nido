@@ -11,7 +11,9 @@
  * 4. Register the alert contact with the Web Push channel that email
  *    recovery requires (§9.3 rule 2, §10.3), and confirm it. The address
  *    field starts empty, with a warning (not a block) when it is the
- *    enrolled inbox itself, whose thief could delete the alerts.
+ *    enrolled inbox itself, whose thief could delete the alerts, and a note
+ *    when the inbox's provider is the platform that likely syncs this
+ *    device's passkey (`syncedPasskeyNote`).
  * 5. Deploy the account's email guardian with `C` and the key pin (§7.4,
  *    §8.2), and check what was deployed (§5.5).
  * 6. Apply the document that lists it among the recovery helpers, built by
@@ -33,7 +35,7 @@ import {
   randomRho,
   type InboxSecret,
 } from '@nidohq/email-recovery';
-import { accountUrl, perch } from '@nidohq/passkey-sdk';
+import { perch } from '@nidohq/passkey-sdk';
 import { esc } from '../html.js';
 import { submitPermissionlessOp } from '../recoverySubmit.js';
 import { getSubmitter } from '../primaryPasskeySigner.js';
@@ -42,15 +44,18 @@ import { currentOrFirstDoc, latestCloseTime, readRecoveryState, targetCloseMs } 
 import { perchDeployment, requireDeployment } from './deployment.js';
 import { backupPanel } from './emailBackup.js';
 import { CONSENT_TEXT, confirmAlertContact, pushSubscription, registerAlertContact } from './emailAlerts.js';
-import { emailRecoveryDeployment } from './emailConfig.js';
+import { emailRecoveryDeployment, thisWalletApex } from './emailConfig.js';
 import { ALLOW_ALL, contractWasmHash, deployGuardianOperation, deployedAddress, readGuardianConfig, type GuardianConfig } from './emailGuardian.js';
 import {
+  ENROLLED_ADDRESS_NOTE,
   PRIVACY_CLAIM,
+  PROVIDER_SEES,
   alertAddressWarning,
   mailtoLink,
   nextEnrollStep,
   pinValidUntil,
   subjectValue,
+  syncedPasskeyNote,
   type EmailToSend,
   type EnrollStep,
 } from './emailModel.js';
@@ -101,7 +106,7 @@ export async function mountEmailEnroll(root: HTMLElement, accountOrNull: string 
       'How email recovery works',
       `<p style="margin:0;font-size:13.5px;line-height:1.5;">If you lose your passkey, you send one email from your inbox and this browser proves your mail provider signed it.
         It counts as <strong>one</strong> of your recovery helpers: your other helpers and the waiting period still apply, and you are alerted when your email approves a recovery and when a recovery is approved.
-        ${esc(PRIVACY_CLAIM)} Your provider learns only that you sent a Nido recovery email.</p>`,
+        ${esc(PRIVACY_CLAIM)} ${esc(PROVIDER_SEES)}</p>`,
     ),
   );
   // The enrollment Subject (E) and the commitment are Poseidon2 hashes (bb.js).
@@ -135,9 +140,8 @@ export async function mountEmailEnroll(root: HTMLElement, accountOrNull: string 
         const c = card('1. Your recovery code');
         const body = c.querySelector('.card') as HTMLElement;
         const go = el('button', { class: 'btn primary', type: 'button', disabled: '' }, 'Continue') as HTMLButtonElement;
-        const recoverUrl = `${window.location.protocol}${accountUrl(window.location.host, account, '/security/recover/')}`;
         body.append(
-          backupPanel(accountCode, { address: account, id: accountId, recoverUrl }, (s) => {
+          backupPanel(accountCode, { address: account, id: accountId, apex: thisWalletApex() }, (s) => {
             go.disabled = !s.saved;
             progress.emailBlock = s.emailBlock;
             save(account, progress);
@@ -210,9 +214,11 @@ export async function mountEmailEnroll(root: HTMLElement, accountOrNull: string 
       }
       case 'check':
       case 'alerts': {
+        const synced = syncedPasskeyNote(progress.checked!.domain, navigator.userAgent);
         const c = card(
           '3. Alerts',
-          `<div style="font-size:13.5px;">Enrolled address, exactly as your provider writes it: <code class="mono" data-address>${esc(progress.checked!.address)}</code>. It never leaves this browser except sealed to the alert vault.</div>
+          `<div style="font-size:13.5px;">Enrolled address, exactly as your provider writes it: <code class="mono" data-address>${esc(progress.checked!.address)}</code>. ${esc(ENROLLED_ADDRESS_NOTE)}</div>
+           ${synced ? `<div class="alert warn" role="note" style="font-size:12.5px;" data-synced-passkey>${esc(synced)}</div>` : ''}
            <div style="font-size:13px;">${esc(CONSENT_TEXT)} Because email can help recover your Nido, alerts also go to this device as notifications.</div>
            <label class="pol-input-label">Send alerts to
              <input name="alert-address" class="input" type="email" autocomplete="email" placeholder="An address at another provider">
@@ -234,7 +240,7 @@ export async function mountEmailEnroll(root: HTMLElement, accountOrNull: string 
           go.addEventListener('click', () =>
             busy(go, status, 'Setting up alerts…', async () => {
               const vault = await vaultKey();
-              const push = await pushSubscription(vault.vapid);
+              const { push, deviceKey } = await pushSubscription(vault.vapid);
               status.textContent = 'Confirm with your passkey…';
               const address = addressInput!.value.trim();
               if (!address) throw new Error('Enter the address alerts should go to.');
@@ -243,6 +249,7 @@ export async function mountEmailEnroll(root: HTMLElement, accountOrNull: string 
                 address,
                 accountCode,
                 push,
+                deviceKey,
                 vault,
               });
               progress.contact = toHex(contact);

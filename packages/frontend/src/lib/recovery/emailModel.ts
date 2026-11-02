@@ -8,11 +8,35 @@
 
 import { bytes, fieldHex, recoverySubject } from '@nidohq/email-recovery';
 import { StrKey } from '@stellar/stellar-sdk';
-import { PIN_LIFETIME_SECONDS } from './emailConfig.js';
+import { PIN_LIFETIME_SECONDS, type WalletApex } from './emailConfig.js';
+
+export type { WalletApex };
 import { ledgersToText, SECONDS_PER_LEDGER } from './model.js';
 
 /** The privacy claim the pages make, scoped as the spec states it (§10.7). */
 export const PRIVACY_CLAIM = 'Nido’s servers and staff can’t read your address.';
+
+/** What the mail provider, and someone watching the chain, can tell from a recovery or enrollment email (spec §10.7). */
+export const PROVIDER_SEES =
+  'Your mail provider sees that you sent a Nido recovery email and when; someone watching the blockchain at the same moment may be able to tell which Nido it was for.';
+
+/** The email services that deliver alerts (spec §10.6), as the pages name them. */
+export const SENDING_SERVICES = 'Lettermint, or Scaleway if Lettermint fails (both EU email services)';
+
+/** Where the enrolled address goes once enrollment has read it (spec §10.7). */
+export const ENROLLED_ADDRESS_NOTE =
+  'On chain there is only a salted fingerprint of it. Nido stores the address itself only if you also send alerts to it, and then only inside its sealed alert vault; ' +
+  `the email services that deliver alerts, ${SENDING_SERVICES}, then see it with every alert.`;
+
+/** The version of the consent text below; the vault records which one the user saw. */
+export const CONSENT_VERSION = 3;
+export const CONSENT_TEXT =
+  'Nido will email this address and send a notification to this device whenever your Nido’s recovery needs your attention: ' +
+  'when a recovery is approved or completes, when your recovery email approves a recovery, its cancellation or a settings change, ' +
+  'when many recovery attempts are open at once, or when the recovery settings change. ' +
+  'Alerts carry a six-digit code and never name your Nido or contain a link. Recovery attempts that are only opened, ' +
+  `which anyone can do, show in your wallet instead. Alert emails are sent through ${SENDING_SERVICES}, which see this address and each alert. ` +
+  'About once a month this device asks you to tap a notification, to confirm that alerts still reach you.';
 
 /** What the user sends, from their own inbox (spec §4.1). */
 export interface EmailToSend {
@@ -45,13 +69,21 @@ export function recoveryEmail(inbox: string, digest: Uint8Array, rho: bigint): E
 export const PASSKEY_DEVICE_CANCEL =
   'This device has your passkey, so you do not need a recovery. Cancel it unless you are deliberately replacing this passkey.';
 
-/** Where the recovery code is typed: nobody asks for it, and how to tell this page is the user's own. */
-export function codeEntryWarning(host: string, account: string): string {
-  const a = account.toLowerCase();
+/** The account's recovery page, on the wallet's apex (spec §5.7). */
+export function recoveryPageUrl(account: string, apex: WalletApex): string {
+  return `${apex.scheme}//${account.toLowerCase()}.${apex.host}/security/recover/`;
+}
+
+/**
+ * Where the recovery code is typed: nobody asks for it, and how to tell
+ * this page is the user's own: the whole address against the recovery
+ * kit's, and the wallet's apex, both from this build's constants.
+ */
+export function codeEntryWarning(account: string, apex: WalletApex): string {
   return (
     'Nobody from Nido will ask for this code, and nobody else should either: type it only here, yourself, after losing every device with your passkey. ' +
-    `Check the address bar first: it must show ${host}. Compare its first characters (${a.slice(0, 6)}…) and last characters (…${a.slice(-6)}) ` +
-    'with the Nido address in your recovery kit; if they differ, close this page.'
+    `Check the address bar first: it must show exactly ${recoveryPageUrl(account, apex)}, the Recovery page line of your recovery kit, ` +
+    `and every Nido page ends in .${apex.host}. If any character differs, close this page.`
   );
 }
 
@@ -70,6 +102,46 @@ export const KIT_STORAGE_ADVICE =
   '(for a Gmail address, not in Google Password Manager or Drive; for iCloud Mail, not in iCloud Keychain or Files). ' +
   'Whoever takes over that account would then have both your inbox and this code.';
 
+/**
+ * How the kit is best saved on this device (spec §5.6). On an iPhone or iPad
+ * a download goes to iCloud Drive unless Safari's download location was
+ * changed, the place to avoid for an iCloud Mail inbox: there printing
+ * comes first, and the page says where a download goes.
+ */
+export function kitActions(userAgent: string): { primary: 'print' | 'download'; note?: string } {
+  if (!/iPhone|iPad|iPod/.test(userAgent)) return { primary: 'download' };
+  return {
+    primary: 'print',
+    note:
+      'On an iPhone or iPad, Download saves the kit to iCloud Drive (Files) unless you changed Safari’s download location ' +
+      '(Settings, Apps, Safari, Downloads). If your recovery inbox is iCloud Mail, print the kit, or keep it somewhere other than iCloud.',
+  };
+}
+
+/**
+ * The note enrollment shows when the inbox's provider is the platform that
+ * likely syncs this device's passkey (spec §5.4): losing that one account
+ * would lose the passkey and the inbox together. Inferred from the inbox's
+ * domain and this browser's user agent; `undefined` otherwise.
+ */
+export function syncedPasskeyNote(domain: string, userAgent: string): string | undefined {
+  const d = domain.trim().toLowerCase();
+  const apple = /iPhone|iPad|iPod|Macintosh/.test(userAgent);
+  const google = /Android|Chrome\/|CriOS\//.test(userAgent);
+  const platform =
+    ['gmail.com', 'googlemail.com'].includes(d) && google
+      ? { name: 'Google', keychain: 'Google Password Manager' }
+      : ['icloud.com', 'me.com', 'mac.com'].includes(d) && apple
+        ? { name: 'Apple', keychain: 'iCloud Keychain' }
+        : undefined;
+  if (!platform) return undefined;
+  return (
+    `The passkey on this device is probably saved in your ${platform.name} account (${platform.keychain}), which syncs it to your other devices. ` +
+    `If ${d} is that same account, losing it loses your passkey and this inbox together, and email recovery would not help. ` +
+    'Use an inbox at another provider, or add another helper.'
+  );
+}
+
 /** The groups of the kit code (of seven) enrollment asks to have typed back: two distinct ones. */
 export function kitCheckGroups(random: () => number = Math.random): [number, number] {
   const a = Math.floor(random() * 7);
@@ -83,17 +155,19 @@ export function kitCheckMatches(kit: string, groups: readonly number[], typed: r
   return groups.every((g, i) => (typed[i] ?? '').replace(/\s+/g, '').toUpperCase() === parts[g]);
 }
 
-/** The recovery kit file: the code, the Nido it recovers, and where recovery starts (spec §5.6). */
-export function recoveryKitText(o: { kit: string; account: string; recoverUrl: string }): string {
+/** The recovery kit file: the code, the Nido it recovers, where recovery starts, and Nido's apex (spec §5.6). */
+export function recoveryKitText(o: { kit: string; account: string; apex: WalletApex }): string {
   return [
     'Nido recovery kit',
     '',
     `Recovery code: ${o.kit}`,
     `Nido: ${o.account}`,
-    `Recovery page: ${o.recoverUrl}`,
+    `Recovery page: ${recoveryPageUrl(o.account, o.apex)}`,
+    `Nido's address: ${o.apex.scheme}//${o.apex.host} (every Nido page ends in .${o.apex.host})`,
     '',
     'If you lose every device with your passkey, open the recovery page (or paste the Nido address above at the start of',
-    'Nido’s recovery page) and follow the email step. Nobody from Nido will ask for this code.',
+    'Nido’s recovery page) and follow the email step. Before typing the code, check that the address bar shows exactly',
+    'the recovery page above. Nobody from Nido will ask for this code.',
     '',
     KIT_STORAGE_ADVICE,
     '',
@@ -127,18 +201,89 @@ export function inboundDeadline(expiresAt: number, now: number): { expired: bool
   };
 }
 
-/** The second alert channel at runtime (spec §9.3 rule 2): the vault's answer first, then this device's own subscription. */
-export type SecondChannel = 'live' | 'lapsed' | 'unknown';
-export function secondChannel(o: { vault?: 'live' | 'lapsed' | 'none'; device?: 'live' | 'gone' }): SecondChannel {
-  if (o.vault === 'lapsed' || o.vault === 'none' || o.device === 'gone') return 'lapsed';
-  return o.vault === 'live' ? 'live' : 'unknown';
+/** How long after a device last acknowledged a probe the wallet still calls it confirmed: two 30-day probe intervals (spec §10.6). */
+export const RECENT_ACK_MS = 60 * 24 * 3600_000;
+
+/** One push device as the vault's `status` read answers (spec §10.3 rule 7). */
+export interface DeviceChannel {
+  id: string;
+  state: 'live' | 'unacknowledged' | 'lapsed';
+  addedAt: number;
+  ackedAt: number;
 }
 
-/** What the wallet says when the second channel lapsed: email recovery breaks rule 2 until it is back. */
+/** This device's own push registration for the account, as the browser and its service worker know it. */
+export interface ThisDevice {
+  /** `live` while this browser still holds the subscription it registered; `gone` when it lost it. */
+  state: 'live' | 'gone';
+  /** Its id in a `status` answer. */
+  id: string;
+  /** When this device last acknowledged a probe (ms), as its service worker recorded it. */
+  ackedAt?: number;
+}
+
+/**
+ * The second alert channel at runtime (spec §9.3 rule 2): `here` when this
+ * device receives the notifications and confirmed so recently; `elsewhere`
+ * when another device does; `unacknowledged` when no device confirmed the
+ * last two probes; `lapsed` when none is left; `unknown` until the vault is
+ * asked (with the passkey).
+ */
+export type SecondChannel = 'here' | 'elsewhere' | 'unacknowledged' | 'lapsed' | 'unknown';
+
+/** What the alert channels section shows. `rule2` is broken while no device is known to receive and confirm alerts. */
+export interface ChannelView {
+  state: SecondChannel;
+  rule2: 'ok' | 'broken';
+  text: string;
+  /** Offer "Add this device". */
+  offerAdd: boolean;
+}
+
+/** What the wallet says when no device receives the notifications any more. */
 export const SECOND_CHANNEL_LAPSED =
-  'Notifications for your recovery alerts no longer reach your device. Email can help recover this Nido only while a second alert channel works, ' +
-  'so until you turn them on again Nido treats your email helper as not allowed (rule 2) and will not save recovery settings that keep it. ' +
-  'Turn notifications on again on this device.';
+  'Notifications for your recovery alerts no longer reach any of your devices. Email can help recover this Nido only while a second alert channel works, ' +
+  'so until a device receives them again Nido treats your email helper as not allowed (rule 2) and will not save recovery settings that keep it. ' +
+  'Add this device.';
+
+/** What the wallet says when no device confirmed the last two probes. */
+export const SECOND_CHANNEL_UNACKNOWLEDGED =
+  'Nido could not confirm that your recovery notifications reach you: no device has confirmed the last two checks, which ask you to tap a notification. ' +
+  'Email can help recover this Nido only while a second alert channel works, so until a device confirms, Nido treats your email helper as not allowed (rule 2) ' +
+  'and will not save recovery settings that keep it. Add this device, or tap the next check on the device that has them.';
+
+/**
+ * The channel as this page sees it: the vault's devices once the owner
+ * asked (`vault`), else this device's own registration; `now` and `date`
+ * for the copy. "They reach this device" is said only on a device the vault
+ * lists as live, or that confirmed a probe within [`RECENT_ACK_MS`].
+ */
+export function channelView(o: { vault?: DeviceChannel[]; device?: ThisDevice; now: number; date?: (ms: number) => string }): ChannelView {
+  const date = o.date ?? ((ms: number) => new Date(ms).toLocaleDateString());
+  const broken = (state: SecondChannel, text: string): ChannelView => ({ state, rule2: 'broken', text, offerAdd: true });
+  if (o.vault) {
+    const live = o.vault.filter((d) => d.state === 'live');
+    if (!live.length) {
+      return o.vault.some((d) => d.state === 'unacknowledged')
+        ? broken('unacknowledged', SECOND_CHANNEL_UNACKNOWLEDGED)
+        : broken('lapsed', SECOND_CHANNEL_LAPSED);
+    }
+    const mine = o.device?.state === 'live' ? live.find((d) => d.id === o.device!.id) : undefined;
+    if (mine) {
+      const confirmed = Math.max(mine.ackedAt, o.device?.ackedAt ?? 0);
+      return { state: 'here', rule2: 'ok', offerAdd: false, text: `Alert notifications: they reach this device (last confirmed ${date(confirmed)}).` };
+    }
+    const first = live.reduce((a, b) => (b.addedAt < a.addedAt ? b : a));
+    return { state: 'elsewhere', rule2: 'ok', offerAdd: true, text: `Recovery notifications go to another device (set up on ${date(first.addedAt)}). Add this device too.` };
+  }
+  if (o.device?.state === 'gone') return broken('lapsed', SECOND_CHANNEL_LAPSED);
+  if (o.device?.ackedAt !== undefined && o.now - o.device.ackedAt <= RECENT_ACK_MS) {
+    return { state: 'here', rule2: 'ok', offerAdd: false, text: `Alert notifications: they reach this device (you last confirmed ${date(o.device.ackedAt)}).` };
+  }
+  return o.device
+    ? { state: 'unknown', rule2: 'ok', offerAdd: false, text: 'Alert notifications: this device is set up for them. Checking that they reach you needs your passkey.' }
+    : { state: 'unknown', rule2: 'ok', offerAdd: true, text: 'Alert notifications: this device does not receive them. Check your alert channels to see which device does, or add this one.' };
+}
 
 /** The result of the recovery-code check (spec §5.6): the code against the guardian's pin root. */
 export function codeCheckText(r: 'match' | 'mismatch' | 'no-pin'): string {

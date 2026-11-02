@@ -2,11 +2,15 @@
  * The account's alert contact at the alert vault
  * (`docs/email-recovery/spec.md` §10.3): registering the address alerts go
  * to and the Web Push subscription that is the required second channel when
- * email is a recovery factor (§9.3 rule 2), reading whether that channel
- * still works, and moving a lapsed one to this device. Each request is
- * sealed to the vault's attested key and authorized by this browser's
- * passkey for the account; the alert service's host relays it and never
- * sees the address.
+ * email is a recovery factor (§9.3 rule 2), reading which devices receive
+ * and confirm it, and adding this device at once. Each request is sealed to
+ * the vault's attested key and authorized by this browser's passkey for the
+ * account; the alert service's host relays it and never sees the address.
+ *
+ * With each subscription the wallet's service worker (`public/sw.js`)
+ * creates a device key (ECDSA P-256, not extractable, kept in its
+ * IndexedDB); the vault stores its public half and accepts a probe
+ * acknowledgement only signed by it (§10.6).
  */
 
 import {
@@ -26,20 +30,35 @@ import {
 } from '@nidohq/email-recovery';
 import { loadCredential, nidoKey } from '@nidohq/passkey-sdk';
 import { requireEmailRecovery } from './emailConfig.js';
+import { CONSENT_VERSION, type DeviceChannel, type ThisDevice } from './emailModel.js';
 
-const { fromBase64Url, fromHex, toBase64Url } = bytes;
+const { fromBase64Url, fromHex, toHex, toBase64Url } = bytes;
 
-/** The version of the consent text below; the vault records which one the user saw. */
-export const CONSENT_VERSION = 2;
-export const CONSENT_TEXT =
-  'Nido will email this address and send a notification to this device whenever your Nido’s recovery needs your attention: ' +
-  'when a recovery is approved or completes, when your recovery email approves one, or when the recovery settings change. ' +
-  'Alerts carry a six-digit code and never name your Nido or contain a link. Recovery attempts that are only opened, ' +
-  'which anyone can do, show in your wallet instead. About once a week this device shows a quiet notification that ' +
-  'notifications still work.';
+export { CONSENT_TEXT, CONSENT_VERSION } from './emailModel.js';
 
-/** This device's Web Push subscription for the vault's VAPID key, through the wallet's service worker. */
-export async function pushSubscription(vapid: Uint8Array): Promise<PushSubscriptionJSON> {
+/** Ask the wallet's service worker `message`; its answer on a `MessageChannel`. */
+async function askWorker<T>(message: Record<string, unknown>): Promise<T> {
+  const reg = await navigator.serviceWorker.ready;
+  if (!reg.active) throw new Error('The wallet’s service worker is not running.');
+  return new Promise<T>((resolve, reject) => {
+    const channel = new MessageChannel();
+    const timer = setTimeout(() => reject(new Error('The wallet’s service worker did not answer.')), 10_000);
+    channel.port1.onmessage = (e) => {
+      clearTimeout(timer);
+      const d = e.data as T & { error?: string };
+      if (d.error) reject(new Error(d.error));
+      else resolve(d);
+    };
+    reg.active!.postMessage(message, [channel.port2]);
+  });
+}
+
+/**
+ * This device's Web Push subscription for the vault's VAPID key and the
+ * device key its service worker made for it (the key is created once per
+ * origin and kept; the worker also keeps where to post acknowledgements).
+ */
+export async function pushSubscription(vapid: Uint8Array): Promise<{ push: PushSubscriptionJSON; deviceKey: Uint8Array }> {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
     throw new Error('This browser cannot receive push notifications. On an iPhone, add Nido to your Home Screen first.');
   }
@@ -49,15 +68,22 @@ export async function pushSubscription(vapid: Uint8Array): Promise<PushSubscript
   const existing = await reg.pushManager.getSubscription();
   if (existing) await existing.unsubscribe();
   const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: new Uint8Array(vapid) });
-  return sub.toJSON() as PushSubscriptionJSON;
+  const { deviceKey } = await askWorker<{ deviceKey: string }>({ type: 'nido-device-key', alertService: requireEmailRecovery().alertService });
+  return { push: sub.toJSON() as PushSubscriptionJSON, deviceKey: fromBase64Url(deviceKey) };
+}
+
+/** A device's id in the vault's `status` answer: hex of the first 8 octets of `sha256(endpoint)`. */
+export async function deviceIdOf(endpoint: string): Promise<string> {
+  const h = new Uint8Array(await crypto.subtle.digest('SHA-256', new Uint8Array(new TextEncoder().encode(endpoint))));
+  return toHex(h.subarray(0, 8));
 }
 
 /** One contact's channels as the vault reports them (no address). */
 export interface ChannelStatus {
   contact: string;
   state: 'unconfirmed' | 'active';
-  push: 'live' | 'lapsed' | 'none';
-  lapsedAt?: number;
+  push: 'live' | 'unacknowledged' | 'lapsed' | 'none';
+  devices: DeviceChannel[];
 }
 
 /** This device's push registration for an account, kept where the browser registered it. */
@@ -76,12 +102,12 @@ export function rememberAlertDevice(account: string, r: DeviceRecord): void {
 }
 
 /**
- * Whether this device still holds the subscription it registered for the
- * account: `gone` when notifications were turned off or the subscription
- * changed, `live` when it is still there, `undefined` when this device
- * registered none (another device holds the account's notifications).
+ * This device's push registration for the account: `gone` when
+ * notifications were turned off or the subscription changed, `live` when it
+ * is still there, with when its service worker last acknowledged a probe;
+ * `undefined` when this device registered none.
  */
-export async function deviceChannel(account: string): Promise<'live' | 'gone' | undefined> {
+export async function deviceChannel(account: string): Promise<ThisDevice | undefined> {
   let r: DeviceRecord | undefined;
   try {
     const raw = localStorage.getItem(deviceKey(account));
@@ -90,10 +116,13 @@ export async function deviceChannel(account: string): Promise<'live' | 'gone' | 
     return undefined;
   }
   if (!r) return undefined;
-  if (typeof Notification === 'undefined' || Notification.permission !== 'granted' || !('serviceWorker' in navigator)) return 'gone';
+  const id = await deviceIdOf(r.endpoint);
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted' || !('serviceWorker' in navigator)) return { state: 'gone', id };
   const reg = await navigator.serviceWorker.getRegistration('/');
   const sub = await reg?.pushManager.getSubscription();
-  return sub?.endpoint === r.endpoint ? 'live' : 'gone';
+  if (sub?.endpoint !== r.endpoint) return { state: 'gone', id };
+  const ackedAt = await askWorker<{ ackedAt: number | null }>({ type: 'nido-device-state' }).then((x) => x.ackedAt ?? undefined, () => undefined);
+  return { state: 'live', id, ...(ackedAt !== undefined ? { ackedAt } : {}) };
 }
 
 async function post(path: string, body: string): Promise<{ ok: boolean; status?: string; error?: string; channels?: ChannelStatus[] }> {
@@ -116,6 +145,7 @@ export async function registerAlertContact(p: {
   address: string;
   accountCode: Uint8Array;
   push: PushSubscriptionJSON;
+  deviceKey: Uint8Array;
   vault: VaultKey;
 }): Promise<Uint8Array> {
   const d = requireEmailRecovery();
@@ -125,6 +155,7 @@ export async function registerAlertContact(p: {
     accountCode: p.accountCode,
     emailGuardian: true,
     push: p.push,
+    deviceKey: p.deviceKey,
     purposes: PURPOSE_SECURITY_ALERTS,
     consentVersion: CONSENT_VERSION,
     allowLoopbackPush: d.testOnlyLoopbackPush === true,
@@ -174,12 +205,12 @@ export async function alertChannels(account: string, vault: VaultKey): Promise<C
 }
 
 /**
- * Move contact `contact`'s notifications to this device (spec §10.3 `push`).
- * The vault applies it only when the current subscription is gone.
+ * Add this device to contact `contact`'s notifications (spec §10.3 `push`):
+ * at once, whatever its other devices do; the address is told.
  */
-export async function moveNotificationsHere(account: string, contact: string, vault: VaultKey): Promise<void> {
-  const push = await pushSubscription(vault.vapid);
-  const request = pushUpdateRequest(account, bytes.fromHex(contact), push, { allowLoopbackPush: requireEmailRecovery().testOnlyLoopbackPush === true });
+export async function addThisDevice(account: string, contact: string, vault: VaultKey): Promise<void> {
+  const { push, deviceKey } = await pushSubscription(vault.vapid);
+  const request = pushUpdateRequest(account, bytes.fromHex(contact), push, deviceKey, { allowLoopbackPush: requireEmailRecovery().testOnlyLoopbackPush === true });
   const r = await authorized(account, vault, request as Extract<SealedRequest, { op: ContactOp }>);
   if (!r.ok) throw new Error(`The alert service refused: ${r.error ?? 'unknown reason'}`);
   rememberAlertDevice(account, { endpoint: push.endpoint, contact });

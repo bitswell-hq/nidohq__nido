@@ -5,6 +5,8 @@
  * recovery is not deployed on this network (the pages then say so).
  */
 
+import { stripSubdomain } from '@nidohq/passkey-sdk';
+import { IS_LOCAL_NETWORK, NETWORK_NAME } from '../network.js';
 import { EMAIL_CIRCUIT_ID } from './emailProver.js';
 
 export interface EmailRecoveryDeployment {
@@ -69,6 +71,30 @@ export function requireEmailRecovery(): EmailRecoveryDeployment {
   const d = emailRecoveryDeployment();
   if (!d) throw new Error('Email recovery is not available on this network yet.');
   return d;
+}
+
+/** Where Nido's pages live: the wallet's apex for a build's network, never read from a page's own address. */
+export interface WalletApex {
+  scheme: 'https:' | 'http:';
+  /** The apex host, with a port if any: `nido.fyi`, `test.nido.fyi`. */
+  host: string;
+}
+
+/** The apex of mainnet's or testnet's wallet; only a local-network build (end-to-end tests) passes the host it runs on. */
+export function walletApex(network: 'mainnet' | 'testnet', local?: WalletApex): WalletApex {
+  if (network === 'mainnet') return { scheme: 'https:', host: 'nido.fyi' };
+  return local ?? { scheme: 'https:', host: 'test.nido.fyi' };
+}
+
+/**
+ * Nido's apex for this build (spec §5.6, §5.7): a constant of its network,
+ * named in the recovery kit and where the recovery code is typed. Only a
+ * local-network build, which runs on a loopback host, takes the host it is
+ * served from.
+ */
+export function thisWalletApex(): WalletApex {
+  const local = IS_LOCAL_NETWORK ? { scheme: window.location.protocol === 'http:' ? ('http:' as const) : ('https:' as const), host: stripSubdomain(window.location.host) } : undefined;
+  return walletApex(NETWORK_NAME, local);
 }
 
 /** How long the guardian's key pin lasts (spec §7.4), in seconds of ledger
