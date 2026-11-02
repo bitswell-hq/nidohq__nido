@@ -12,7 +12,7 @@
 // research/email-recovery/eval/network/run-attacks.sh (`just
 // email-recovery-attacks`) starts the network, builds what it needs and
 // runs this. Three registry scenarios whose precondition is a registry
-// timelock having elapsed (51,840 or 120,960 ledgers) run on the
+// timelock having elapsed (72 hours or 7 days of ledger close time) run on the
 // integration-test host instead, where the ledger can be advanced
 // (crates/integration-tests/tests/it/email_guardian.rs, `registry_*`).
 import assert from 'node:assert/strict';
@@ -36,7 +36,7 @@ import { proxy } from './lib/tls.mjs';
 const repo = new URL('../../../../', import.meta.url).pathname;
 const BASE = process.env.NIDO_EVAL_QUICKSTART_URL ?? 'http://127.0.0.1:8000';
 const PASSPHRASE = 'Standalone Network ; February 2017';
-const OUT = `${repo}research/email-recovery/eval/results/attacks-local.json`;
+const OUT = process.env.NIDO_EVAL_ATTACKS_OUT ?? `${repo}research/email-recovery/eval/results/attacks-local.json`;
 const PHRASE = 'APPROVE NIDO ACCOUNT RECOVERY';
 const APEX = { scheme: 'http:', host: 'localhost', port: 4399 };
 const TESTNET_ID = sha256('Test SDF Network ; September 2015');

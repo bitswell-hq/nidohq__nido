@@ -78,7 +78,7 @@ const PERCH = repo + 'target/wasm32v1-none/contract/';
 const LOCAL = repo + 'target/eval-local/wasm/';
 const EMAIL = repo + 'target/email-e2e/wasm/';
 
-export async function deployStack({ base = 'http://127.0.0.1:8000', imageMeasurement, gmailModulus }) {
+export async function deployStack({ base = 'http://127.0.0.1:8000', imageMeasurement, gmailModulus, emailWasm = EMAIL }) {
   const server = new rpc.Server(`${base}/rpc`, { allowHttp: true });
   const fund = async (kp) => {
     for (let attempt = 1; ; attempt++) {
@@ -101,7 +101,7 @@ export async function deployStack({ base = 'http://127.0.0.1:8000', imageMeasure
     prepared.sign(signer);
     const sent = await server.sendTransaction(prepared);
     if (sent.status === 'ERROR') throw new Error(`rejected: ${sent.errorResult?.toXDR('base64')}`);
-    const done = await server.pollTransaction(sent.hash, { attempts: 60 });
+    const done = await server.pollTransaction(sent.hash, { attempts: 180 });
     if (done.status !== 'SUCCESS') throw new Error(`${done.status}: ${sent.hash}`);
     return done.returnValue;
   }
@@ -151,8 +151,8 @@ export async function deployStack({ base = 'http://127.0.0.1:8000', imageMeasure
   if (!pinned.equals(accountHash)) throw new Error(`the factory pins account ${pinned.toString('hex')}, not the uploaded ${accountHash.toString('hex')}`);
 
   // Nido's email contracts.
-  const verifier = await create(await upload(EMAIL + 'nido_email_verifier.wasm'), Buffer.alloc(32, 2));
-  const guardianWasmHash = await upload(EMAIL + 'nido_email_guardian.wasm');
+  const verifier = await create(await upload(emailWasm + 'nido_email_verifier.wasm'), Buffer.alloc(32, 2));
+  const guardianWasmHash = await upload(emailWasm + 'nido_email_guardian.wasm');
   const domains = ['gmail.com', 'outlook.com', 'hotmail.com', 'icloud.com', 'yahoo.com', 'proton.me', 'protonmail.com', 'fastmail.com', 'gmx.net', 'gmx.de', 'web.de'];
   const config = xdr.ScVal.scvMap(
     [
@@ -165,7 +165,7 @@ export async function deployStack({ base = 'http://127.0.0.1:8000', imageMeasure
       ['threshold', xdr.ScVal.scvU32(1)],
     ].map(([k, v]) => new xdr.ScMapEntry({ key: xdr.ScVal.scvSymbol(k), val: v })),
   );
-  const registry = await create(await upload(EMAIL + 'nido_dkim_registry.wasm'), Buffer.alloc(32, 3), [config]);
+  const registry = await create(await upload(emailWasm + 'nido_dkim_registry.wasm'), Buffer.alloc(32, 3), [config]);
   const imageAllowlist = await create(await upload(EMAIL + 'nido_e2e_image_allowlist.wasm'), Buffer.alloc(32, 4), [
     xdr.ScVal.scvBytes(Buffer.from(imageMeasurement, 'hex')),
   ]);

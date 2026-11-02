@@ -1,0 +1,159 @@
+{
+ "fetched": "2026-11-02T06:45:05.783Z",
+ "rpc": "https://soroban-testnet.stellar.org",
+ "passphrase": "Test SDF Network ; September 2015",
+ "protocolVersion": 29,
+ "build": {
+  "nido_email_guardian": {
+   "bytes": 33577,
+   "sha256": "e21515aef4ed843dc32a3c0407aa4fc1609e6d945c34e7b8bc42af835a329893"
+  },
+  "nido_dkim_registry": {
+   "bytes": 68899,
+   "sha256": "7e115ff9409131f99889a04cd2b6058bf1aa86def03a3ca5574b6ea3e600523d"
+  },
+  "nido_email_verifier": {
+   "bytes": 45616,
+   "sha256": "0e4239ca92d3e38a9efc40c24ed2d4237c437253a1d35372c8c6a5aa7c3194b9"
+  },
+  "nido_enclave_image_registry": {
+   "bytes": 10584,
+   "sha256": "27ae9151b0de1807226a01f32125a35692664c480cf401b4c1ceb79393a0c2d4"
+  }
+ },
+ "entries": [
+  {
+   "name": "Perch doc compiler",
+   "file": "perch_doc_compiler.wasm",
+   "hash": "2730a7d39d619579bb7873818900fa5f9150d69d49fa1ee3b4a38f61ba768a16",
+   "onNetwork": true,
+   "dataBytes": 110040,
+   "costInputs": {
+    "nInstructions": 41936,
+    "nFunctions": 250,
+    "nGlobals": 2,
+    "nTableEntries": 22,
+    "nTypes": 31,
+    "nDataSegments": 9,
+    "nElemSegments": 1,
+    "nImports": 38,
+    "nExports": 6,
+    "nDataSegmentBytes": 21894
+   }
+  },
+  {
+   "name": "Perch recovery controller",
+   "file": "perch_recovery.wasm",
+   "hash": "daaf09d9f73f6890753572b33a5c41a22c2ebf0e9ce29593e8407ff858844eb8",
+   "onNetwork": true,
+   "dataBytes": 68356,
+   "costInputs": {
+    "nInstructions": 15015,
+    "nFunctions": 152,
+    "nGlobals": 2,
+    "nTableEntries": 0,
+    "nTypes": 39,
+    "nDataSegments": 7,
+    "nElemSegments": 0,
+    "nImports": 41,
+    "nExports": 28,
+    "nDataSegmentBytes": 35542
+   }
+  },
+  {
+   "name": "Perch WebAuthn verifier",
+   "file": "perch_webauthn_verifier.wasm",
+   "hash": "f2e1dfce8c496be6d318045bc5a24ac5eb799ada837f92e8032ec953f1994230",
+   "onNetwork": true,
+   "dataBytes": 11920,
+   "costInputs": {
+    "nInstructions": 4611,
+    "nFunctions": 34,
+    "nGlobals": 2,
+    "nTableEntries": 0,
+    "nTypes": 18,
+    "nDataSegments": 7,
+    "nElemSegments": 0,
+    "nImports": 17,
+    "nExports": 5,
+    "nDataSegmentBytes": 2419
+   }
+  },
+  {
+   "name": "Perch account",
+   "file": "perch_account.wasm",
+   "hash": "2c976bfd98678f3b6fcf5514420a81ef5e5b9fc1c5b6c60ec6f2dd64448479d5",
+   "onNetwork": true,
+   "dataBytes": 70796,
+   "costInputs": {
+    "nInstructions": 21212,
+    "nFunctions": 210,
+    "nGlobals": 2,
+    "nTableEntries": 0,
+    "nTypes": 41,
+    "nDataSegments": 10,
+    "nElemSegments": 0,
+    "nImports": 58,
+    "nExports": 30,
+    "nDataSegmentBytes": 24757
+   }
+  },
+  {
+   "name": "email verifier",
+   "file": "nido_email_verifier.wasm",
+   "hash": "0e4239ca92d3e38a9efc40c24ed2d4237c437253a1d35372c8c6a5aa7c3194b9",
+   "onNetwork": true,
+   "dataBytes": 45708,
+   "costInputs": {
+    "nInstructions": 9437,
+    "nFunctions": 54,
+    "nGlobals": 4,
+    "nTableEntries": 0,
+    "nTypes": 22,
+    "nDataSegments": 12,
+    "nElemSegments": 0,
+    "nImports": 25,
+    "nExports": 8,
+    "nDataSegmentBytes": 23552
+   }
+  },
+  {
+   "name": "email guardian",
+   "file": "nido_email_guardian.wasm",
+   "hash": "e21515aef4ed843dc32a3c0407aa4fc1609e6d945c34e7b8bc42af835a329893",
+   "onNetwork": true,
+   "dataBytes": 33672,
+   "costInputs": {
+    "nInstructions": 3313,
+    "nFunctions": 31,
+    "nGlobals": 4,
+    "nTableEntries": 0,
+    "nTypes": 21,
+    "nDataSegments": 8,
+    "nElemSegments": 0,
+    "nImports": 28,
+    "nExports": 9,
+    "nDataSegmentBytes": 26094
+   }
+  },
+  {
+   "name": "DKIM key registry",
+   "file": "nido_dkim_registry.wasm",
+   "hash": "7e115ff9409131f99889a04cd2b6058bf1aa86def03a3ca5574b6ea3e600523d",
+   "onNetwork": true,
+   "dataBytes": 68992,
+   "costInputs": {
+    "nInstructions": 14387,
+    "nFunctions": 108,
+    "nGlobals": 4,
+    "nTableEntries": 0,
+    "nTypes": 33,
+    "nDataSegments": 12,
+    "nElemSegments": 0,
+    "nImports": 40,
+    "nExports": 24,
+    "nDataSegmentBytes": 38302
+   }
+  }
+ ]
+}

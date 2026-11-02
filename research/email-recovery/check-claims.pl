@@ -14,7 +14,12 @@
 #       proven    { lean: <theorem name>, file: <path> }  the file declares it
 #                 (the name or a dotted suffix of it, as namespaces allow)
 #       tested    { test: <test name>,    file: <path> }  the name is in the file
-#       measured  { file: <path> }                        the file exists
+#       measured  { file: <path> }                        the file exists, and
+#                 every figure of four or more digits in the statement
+#                 (121,639,784 or 1208 alike) occurs in one of the claim's
+#                 files, written with or without its thousands separators,
+#                 unless "about", "around", "roughly" or "approximately"
+#                 introduces it as a rounded figure
 #       assumed   { assumption: <text> }
 #       unproven  no evidence
 #     Paths are relative to the repository root.
@@ -88,6 +93,33 @@ for my $i (0 .. $#$claims) {
     for my $item (@items) {
         unless (ref $item eq 'HASH') { fail "$where: evidence must be a mapping or a list of mappings"; next }
         check_evidence($where, $status, $want, $item);
+    }
+    check_figures($where, $statement, \@items) if $status eq 'measured' && defined $statement;
+}
+
+# Every figure of four or more digits in a measured claim's statement occurs
+# in one of its evidence files, as a whole number (not part of a longer
+# one), with or without thousands separators.
+sub check_figures {
+    my ($where, $statement, $items) = @_;
+    my $text = '';
+    for my $ev (@$items) {
+        next unless ref $ev eq 'HASH' && defined $ev->{file} && !ref $ev->{file};
+        my $abs = File::Spec->catfile($repo, $ev->{file});
+        next unless -f $abs && open my $fh, '<', $abs;
+        local $/;
+        $text .= <$fh> . "\n";
+        close $fh;
+    }
+    return unless length $text;
+    my %seen;
+    while ($statement =~ /(?:\b(about|around|roughly|approximately)\s+)?(?<![\d.,])(\d{1,3}(?:,\d{3})+|\d{4,})(?![\d,]|\.\d)/g) {
+        my ($rounded, $written) = ($1, $2);
+        next if $rounded;    # "about 97,000" states a rounded figure, not a measured one
+        (my $bare = $written) =~ s/,//g;
+        next if $seen{$bare}++;
+        next if $text =~ /(?<![\d.])\Q$bare\E(?![\d])/ || $text =~ /(?<![\d,.])\Q$written\E(?![\d])/;
+        fail "$where: the figure $written does not occur in its evidence files";
     }
 }
 

@@ -1,15 +1,23 @@
 {
- "generated": "2026-11-02T00:52:32.181Z",
+ "generated": "2026-11-02T07:28:18.675Z",
  "machine": {
   "cpu": "Apple M5 Max",
   "logical_cpus": 18,
-  "performance_cores": 6,
-  "efficiency_cores": 12,
+  "core_tiers": [
+   {
+    "name": "Super",
+    "logical": 6
+   },
+   {
+    "name": "Performance",
+    "logical": 12
+   }
+  ],
   "memory_gib": 128,
   "os": "macOS 26.5.2",
   "node": "v24.18.0",
-  "load_average_at_start": "5.36 5.40 5.36",
-  "load_average_at_end": "5.95 5.54 5.38"
+  "load_average_at_start": "6.13 7.58 25.05",
+  "load_average_at_end": "6.67 5.30 13.23"
  },
  "circuit": {
   "artifact": "circuits/email-recovery/artifacts/recovery.json",
@@ -25,32 +33,32 @@
    "prover": "native",
    "label": "Native bb, every core",
    "threads": 18,
-   "efficiency_cores": false,
+   "background_qos": false,
    "runs": [
     {
      "witness_ms": 650,
-     "prove_ms": 1000,
-     "peak_rss_mib": 877
-    },
-    {
-     "witness_ms": 650,
-     "prove_ms": 930,
-     "peak_rss_mib": 877
-    },
-    {
-     "witness_ms": 630,
-     "prove_ms": 930,
+     "prove_ms": 980,
      "peak_rss_mib": 878
     },
     {
-     "witness_ms": 630,
+     "witness_ms": 660,
      "prove_ms": 950,
      "peak_rss_mib": 879
     },
     {
      "witness_ms": 640,
-     "prove_ms": 940,
+     "prove_ms": 960,
      "peak_rss_mib": 878
+    },
+    {
+     "witness_ms": 650,
+     "prove_ms": 940,
+     "peak_rss_mib": 876
+    },
+    {
+     "witness_ms": 660,
+     "prove_ms": 970,
+     "peak_rss_mib": 871
     }
    ]
   },
@@ -58,97 +66,97 @@
    "prover": "native",
    "label": "Native bb, one thread",
    "threads": 1,
-   "efficiency_cores": false,
+   "background_qos": false,
    "runs": [
     {
-     "witness_ms": 630,
+     "witness_ms": 650,
      "prove_ms": 4670,
-     "peak_rss_mib": 870
+     "peak_rss_mib": 871
     },
     {
      "witness_ms": 640,
-     "prove_ms": 4670,
-     "peak_rss_mib": 872
+     "prove_ms": 4640,
+     "peak_rss_mib": 871
     },
     {
-     "witness_ms": 660,
-     "prove_ms": 4720,
+     "witness_ms": 640,
+     "prove_ms": 4730,
      "peak_rss_mib": 871
     },
     {
      "witness_ms": 650,
-     "prove_ms": 4690,
+     "prove_ms": 4750,
      "peak_rss_mib": 872
     },
     {
-     "witness_ms": 640,
-     "prove_ms": 4630,
-     "peak_rss_mib": 872
+     "witness_ms": 650,
+     "prove_ms": 4690,
+     "peak_rss_mib": 871
     }
    ]
   },
   {
    "prover": "native",
-   "label": "Native bb, efficiency cores, one thread",
+   "label": "Native bb, Performance-tier cores (background QoS), one thread",
    "threads": 1,
-   "efficiency_cores": true,
+   "background_qos": true,
    "runs": [
     {
-     "witness_ms": 2360,
-     "prove_ms": 18530,
-     "peak_rss_mib": 875
+     "witness_ms": 2000,
+     "prove_ms": 15810,
+     "peak_rss_mib": 884
     },
     {
-     "witness_ms": 2380,
-     "prove_ms": 18240,
+     "witness_ms": 2140,
+     "prove_ms": 15010,
+     "peak_rss_mib": 883
+    },
+    {
+     "witness_ms": 2050,
+     "prove_ms": 15590,
      "peak_rss_mib": 871
     },
     {
-     "witness_ms": 2290,
-     "prove_ms": 18280,
-     "peak_rss_mib": 881
+     "witness_ms": 1990,
+     "prove_ms": 16050,
+     "peak_rss_mib": 870
     },
     {
-     "witness_ms": 2310,
-     "prove_ms": 17340,
-     "peak_rss_mib": 871
-    },
-    {
-     "witness_ms": 1040,
-     "prove_ms": 17180,
+     "witness_ms": 2150,
+     "prove_ms": 15930,
      "peak_rss_mib": 883
     }
    ]
   },
   {
    "prover": "native",
-   "label": "Native bb, efficiency cores, four threads",
+   "label": "Native bb, Performance-tier cores (background QoS), four threads",
    "threads": 4,
-   "efficiency_cores": true,
+   "background_qos": true,
    "runs": [
     {
-     "witness_ms": 2360,
-     "prove_ms": 6230,
+     "witness_ms": 2030,
+     "prove_ms": 5370,
+     "peak_rss_mib": 870
+    },
+    {
+     "witness_ms": 1950,
+     "prove_ms": 5230,
+     "peak_rss_mib": 909
+    },
+    {
+     "witness_ms": 1960,
+     "prove_ms": 5460,
+     "peak_rss_mib": 882
+    },
+    {
+     "witness_ms": 2100,
+     "prove_ms": 5580,
      "peak_rss_mib": 871
     },
     {
-     "witness_ms": 2310,
-     "prove_ms": 6380,
-     "peak_rss_mib": 872
-    },
-    {
-     "witness_ms": 2350,
-     "prove_ms": 6280,
-     "peak_rss_mib": 871
-    },
-    {
-     "witness_ms": 2420,
-     "prove_ms": 6230,
-     "peak_rss_mib": 879
-    },
-    {
-     "witness_ms": 2300,
-     "prove_ms": 6250,
+     "witness_ms": 2110,
+     "prove_ms": 5570,
      "peak_rss_mib": 872
     }
    ]
@@ -157,32 +165,32 @@
    "prover": "node",
    "label": "bb.js in Node, one thread",
    "threads": 1,
-   "efficiency_cores": false,
+   "background_qos": false,
    "runs": [
     {
-     "witness_ms": 746,
+     "witness_ms": 769,
      "prove_ms": 13422,
+     "peak_rss_mib": 1419
+    },
+    {
+     "witness_ms": 749,
+     "prove_ms": 13511,
+     "peak_rss_mib": 1348
+    },
+    {
+     "witness_ms": 751,
+     "prove_ms": 13398,
      "peak_rss_mib": 1383
     },
     {
-     "witness_ms": 760,
-     "prove_ms": 13620,
-     "peak_rss_mib": 1348
-    },
-    {
      "witness_ms": 769,
-     "prove_ms": 13530,
-     "peak_rss_mib": 1382
+     "prove_ms": 13357,
+     "peak_rss_mib": 1384
     },
     {
-     "witness_ms": 756,
-     "prove_ms": 13456,
-     "peak_rss_mib": 1421
-    },
-    {
-     "witness_ms": 762,
-     "prove_ms": 13636,
-     "peak_rss_mib": 1348
+     "witness_ms": 767,
+     "prove_ms": 13458,
+     "peak_rss_mib": 1419
     }
    ]
   },
@@ -190,97 +198,97 @@
    "prover": "node",
    "label": "bb.js in Node, 18 threads",
    "threads": 18,
-   "efficiency_cores": false,
+   "background_qos": false,
    "runs": [
     {
-     "witness_ms": 759,
-     "prove_ms": 3296,
+     "witness_ms": 748,
+     "prove_ms": 3266,
+     "peak_rss_mib": 1715
+    },
+    {
+     "witness_ms": 769,
+     "prove_ms": 3328,
      "peak_rss_mib": 1711
     },
     {
-     "witness_ms": 756,
-     "prove_ms": 3287,
-     "peak_rss_mib": 1716
-    },
-    {
-     "witness_ms": 756,
-     "prove_ms": 3301,
-     "peak_rss_mib": 1716
-    },
-    {
-     "witness_ms": 763,
-     "prove_ms": 3361,
-     "peak_rss_mib": 1716
-    },
-    {
      "witness_ms": 766,
-     "prove_ms": 3379,
-     "peak_rss_mib": 1708
+     "prove_ms": 3344,
+     "peak_rss_mib": 1680
+    },
+    {
+     "witness_ms": 767,
+     "prove_ms": 3398,
+     "peak_rss_mib": 1713
+    },
+    {
+     "witness_ms": 760,
+     "prove_ms": 3336,
+     "peak_rss_mib": 1682
     }
    ]
   },
   {
    "prover": "node",
-   "label": "bb.js in Node, efficiency cores, one thread",
+   "label": "bb.js in Node, Performance-tier cores (background QoS), one thread",
    "threads": 1,
-   "efficiency_cores": true,
+   "background_qos": true,
    "runs": [
     {
-     "witness_ms": 2812,
-     "prove_ms": 56576,
-     "peak_rss_mib": 1275
+     "witness_ms": 2576,
+     "prove_ms": 47449,
+     "peak_rss_mib": 1311
     },
     {
-     "witness_ms": 2836,
-     "prove_ms": 53103,
-     "peak_rss_mib": 1352
+     "witness_ms": 2340,
+     "prove_ms": 50375,
+     "peak_rss_mib": 1280
     },
     {
-     "witness_ms": 2858,
-     "prove_ms": 56409,
-     "peak_rss_mib": 1278
+     "witness_ms": 2425,
+     "prove_ms": 50297,
+     "peak_rss_mib": 1316
     },
     {
-     "witness_ms": 2390,
-     "prove_ms": 57751,
-     "peak_rss_mib": 1298
+     "witness_ms": 2423,
+     "prove_ms": 51281,
+     "peak_rss_mib": 1288
     },
     {
-     "witness_ms": 2788,
-     "prove_ms": 57531,
-     "peak_rss_mib": 1244
+     "witness_ms": 2478,
+     "prove_ms": 50306,
+     "peak_rss_mib": 1292
     }
    ]
   },
   {
    "prover": "node",
-   "label": "bb.js in Node, efficiency cores, four threads",
+   "label": "bb.js in Node, Performance-tier cores (background QoS), four threads",
    "threads": 4,
-   "efficiency_cores": true,
+   "background_qos": true,
    "runs": [
     {
-     "witness_ms": 2856,
-     "prove_ms": 23168,
+     "witness_ms": 2448,
+     "prove_ms": 18988,
+     "peak_rss_mib": 1283
+    },
+    {
+     "witness_ms": 2364,
+     "prove_ms": 19047,
      "peak_rss_mib": 1446
     },
     {
-     "witness_ms": 2773,
-     "prove_ms": 21353,
-     "peak_rss_mib": 1409
+     "witness_ms": 1668,
+     "prove_ms": 18015,
+     "peak_rss_mib": 1393
     },
     {
-     "witness_ms": 2730,
-     "prove_ms": 21236,
-     "peak_rss_mib": 1445
+     "witness_ms": 2432,
+     "prove_ms": 19160,
+     "peak_rss_mib": 1426
     },
     {
-     "witness_ms": 2770,
-     "prove_ms": 21480,
-     "peak_rss_mib": 1407
-    },
-    {
-     "witness_ms": 2736,
-     "prove_ms": 22186,
+     "witness_ms": 2424,
+     "prove_ms": 18291,
      "peak_rss_mib": 1408
     }
    ]
@@ -289,162 +297,162 @@
    "prover": "browser",
    "label": "Chrome/151.0.7922.34 (headless), one thread",
    "threads": 1,
-   "efficiency_cores": false,
+   "background_qos": false,
    "runs": [
     {
-     "witness_ms": 799,
-     "prove_ms": 8357,
-     "total_ms": 9896,
+     "witness_ms": 820,
+     "prove_ms": 8464,
+     "total_ms": 10036,
+     "bb_wasm_mib": 738
+    },
+    {
+     "witness_ms": 795,
+     "prove_ms": 8342,
+     "total_ms": 9852,
+     "bb_wasm_mib": 738
+    },
+    {
+     "witness_ms": 792,
+     "prove_ms": 8495,
+     "total_ms": 10005,
      "bb_wasm_mib": 738
     },
     {
      "witness_ms": 802,
-     "prove_ms": 8456,
-     "total_ms": 9983,
+     "prove_ms": 8399,
+     "total_ms": 9947,
      "bb_wasm_mib": 738
     },
     {
      "witness_ms": 796,
-     "prove_ms": 8348,
-     "total_ms": 9876,
-     "bb_wasm_mib": 738
-    },
-    {
-     "witness_ms": 801,
-     "prove_ms": 8451,
-     "total_ms": 9980,
-     "bb_wasm_mib": 738
-    },
-    {
-     "witness_ms": 806,
-     "prove_ms": 8423,
-     "total_ms": 9964,
+     "prove_ms": 8378,
+     "total_ms": 9897,
      "bb_wasm_mib": 738
     }
    ],
-   "peak_renderer_rss_mib": 1468,
-   "recorded": "2026-11-02T00:38:38.899Z"
+   "peak_renderer_rss_mib": 1463,
+   "recorded": "2026-11-02T07:15:47.852Z"
   },
   {
    "prover": "browser",
    "label": "Chrome/151.0.7922.34 (headless), 18 threads",
    "threads": 18,
-   "efficiency_cores": false,
+   "background_qos": false,
    "runs": [
     {
-     "witness_ms": 798,
-     "prove_ms": 1524,
-     "total_ms": 3062,
+     "witness_ms": 799,
+     "prove_ms": 1512,
+     "total_ms": 3051,
      "bb_wasm_mib": 805
     },
     {
-     "witness_ms": 747,
-     "prove_ms": 1456,
-     "total_ms": 2854,
+     "witness_ms": 743,
+     "prove_ms": 1433,
+     "total_ms": 2818,
      "bb_wasm_mib": 805
     },
     {
-     "witness_ms": 795,
-     "prove_ms": 1526,
-     "total_ms": 3028,
+     "witness_ms": 741,
+     "prove_ms": 1418,
+     "total_ms": 2805,
      "bb_wasm_mib": 805
     },
     {
-     "witness_ms": 773,
-     "prove_ms": 1484,
-     "total_ms": 2921,
+     "witness_ms": 745,
+     "prove_ms": 1423,
+     "total_ms": 2812,
      "bb_wasm_mib": 805
     },
     {
-     "witness_ms": 760,
-     "prove_ms": 1465,
-     "total_ms": 2896,
+     "witness_ms": 743,
+     "prove_ms": 1435,
+     "total_ms": 2824,
      "bb_wasm_mib": 805
     }
    ],
-   "peak_renderer_rss_mib": 2616,
-   "recorded": "2026-11-02T00:38:38.899Z"
+   "peak_renderer_rss_mib": 2595,
+   "recorded": "2026-11-02T07:15:47.852Z"
   },
   {
    "prover": "browser",
-   "label": "Chrome/151.0.7922.34 (headless), efficiency cores, one thread",
+   "label": "Chrome/151.0.7922.34 (headless), Performance-tier cores (background QoS), one thread",
    "threads": 1,
-   "efficiency_cores": true,
+   "background_qos": true,
    "runs": [
     {
-     "witness_ms": 3045,
-     "prove_ms": 35565,
-     "total_ms": 41348,
+     "witness_ms": 2532,
+     "prove_ms": 31718,
+     "total_ms": 36531,
      "bb_wasm_mib": 738
     },
     {
-     "witness_ms": 2860,
-     "prove_ms": 35564,
-     "total_ms": 41213,
+     "witness_ms": 2590,
+     "prove_ms": 32075,
+     "total_ms": 36989,
      "bb_wasm_mib": 738
     },
     {
-     "witness_ms": 3085,
-     "prove_ms": 36591,
-     "total_ms": 42242,
+     "witness_ms": 2554,
+     "prove_ms": 32050,
+     "total_ms": 36894,
      "bb_wasm_mib": 738
     },
     {
-     "witness_ms": 2835,
-     "prove_ms": 36420,
-     "total_ms": 41296,
+     "witness_ms": 2554,
+     "prove_ms": 32711,
+     "total_ms": 37526,
      "bb_wasm_mib": 738
     },
     {
-     "witness_ms": 3114,
-     "prove_ms": 36971,
-     "total_ms": 42881,
+     "witness_ms": 2661,
+     "prove_ms": 31957,
+     "total_ms": 37039,
      "bb_wasm_mib": 738
     }
    ],
-   "peak_renderer_rss_mib": 1428,
-   "recorded": "2026-11-02T00:38:38.899Z"
+   "peak_renderer_rss_mib": 1421,
+   "recorded": "2026-11-02T07:15:47.852Z"
   },
   {
    "prover": "browser",
-   "label": "Chrome/151.0.7922.34 (headless), efficiency cores, 4 threads",
+   "label": "Chrome/151.0.7922.34 (headless), Performance-tier cores (background QoS), 4 threads",
    "threads": 4,
-   "efficiency_cores": true,
+   "background_qos": true,
    "runs": [
     {
-     "witness_ms": 2985,
-     "prove_ms": 12324,
-     "total_ms": 18053,
+     "witness_ms": 2608,
+     "prove_ms": 10567,
+     "total_ms": 15437,
      "bb_wasm_mib": 771
     },
     {
-     "witness_ms": 3071,
-     "prove_ms": 12187,
-     "total_ms": 17631,
+     "witness_ms": 2642,
+     "prove_ms": 10173,
+     "total_ms": 14917,
      "bb_wasm_mib": 771
     },
     {
-     "witness_ms": 2926,
-     "prove_ms": 11456,
-     "total_ms": 16667,
+     "witness_ms": 2280,
+     "prove_ms": 10189,
+     "total_ms": 14372,
      "bb_wasm_mib": 771
     },
     {
-     "witness_ms": 3080,
-     "prove_ms": 11681,
-     "total_ms": 17031,
+     "witness_ms": 2559,
+     "prove_ms": 10143,
+     "total_ms": 14883,
      "bb_wasm_mib": 771
     },
     {
-     "witness_ms": 3015,
-     "prove_ms": 11953,
-     "total_ms": 17510,
+     "witness_ms": 2685,
+     "prove_ms": 10181,
+     "total_ms": 14970,
      "bb_wasm_mib": 771
     }
    ],
-   "peak_renderer_rss_mib": 2015,
-   "recorded": "2026-11-02T00:38:38.899Z"
+   "peak_renderer_rss_mib": 2094,
+   "recorded": "2026-11-02T07:15:47.852Z"
   }
  ],
- "table": "Generated by `research/email-recovery/eval/proving/measure.mjs` on 2026-11-02 00:52 UTC (browser rows: `measure-browser.mjs`, 2026-11-02T00:38:38.899Z).\nMachine: Apple M5 Max, 18 logical CPUs (6 performance and 12 efficiency cores), 128 GiB, macOS 26.5.2, Node v24.18.0; load average 5.36 5.40 5.36 at the start and 5.95 5.54 5.38 at the end; browser rows on the same machine, load average 4.59 4.88 5.17 at their start.\nCircuit build: `circuits/email-recovery/artifacts/recovery.json` (sha256 `5d793cbe967bf11f…`), verification key sha256 `2837d0cfd7ddad68…` (the verifier's circuit id); nargo version = 1.0.0-beta.9, bb v0.87.0; the Gmail fixture's recovery email. Times in seconds: median (minimum to maximum) of 5 runs (browser: 5 warm runs).\n\n| Prover | Threads | Witness (s) | Proving (s) | Total (s) | Peak memory | Runs |\n| --- | --- | --- | --- | --- | --- | --- |\n| Native bb, every core | 18 | 0.64 (0.63 to 0.65) | 0.94 (0.93 to 1.00) | 1.58 (1.56 to 1.65) | 879 MiB (`bb prove` RSS) | 5 |\n| Native bb, one thread | 1 | 0.64 (0.63 to 0.66) | 4.67 (4.63 to 4.72) | 5.31 (5.27 to 5.38) | 872 MiB (`bb prove` RSS) | 5 |\n| Native bb, efficiency cores, one thread | 1 | 2.31 (1.04 to 2.38) | 18.2 (17.2 to 18.5) | 20.6 (18.2 to 20.9) | 883 MiB (`bb prove` RSS) | 5 |\n| Native bb, efficiency cores, four threads | 4 | 2.35 (2.30 to 2.42) | 6.25 (6.23 to 6.38) | 8.63 (8.55 to 8.69) | 879 MiB (`bb prove` RSS) | 5 |\n| bb.js in Node, one thread | 1 | 0.76 (0.75 to 0.77) | 13.5 (13.4 to 13.6) | 14.3 (14.2 to 14.4) | 1,421 MiB (process RSS) | 5 |\n| bb.js in Node, 18 threads | 18 | 0.76 (0.76 to 0.77) | 3.30 (3.29 to 3.38) | 4.06 (4.04 to 4.14) | 1,716 MiB (process RSS) | 5 |\n| bb.js in Node, efficiency cores, one thread | 1 | 2.81 (2.39 to 2.86) | 56.6 (53.1 to 57.8) | 59.4 (55.9 to 60.3) | 1,352 MiB (process RSS) | 5 |\n| bb.js in Node, efficiency cores, four threads | 4 | 2.77 (2.73 to 2.86) | 21.5 (21.2 to 23.2) | 24.3 (24.0 to 26.0) | 1,446 MiB (process RSS) | 5 |\n| Chrome/151.0.7922.34 (headless), one thread | 1 | 0.80 (0.80 to 0.81) | 8.42 (8.35 to 8.46) | 9.96 (9.88 to 9.98) | 1,468 MiB (renderer RSS); 738 MiB Barretenberg memory | 5 |\n| Chrome/151.0.7922.34 (headless), 18 threads | 18 | 0.77 (0.75 to 0.80) | 1.48 (1.46 to 1.53) | 2.92 (2.85 to 3.06) | 2,616 MiB (renderer RSS); 805 MiB Barretenberg memory | 5 |\n| Chrome/151.0.7922.34 (headless), efficiency cores, one thread | 1 | 3.04 (2.83 to 3.11) | 36.4 (35.6 to 37.0) | 41.3 (41.2 to 42.9) | 1,428 MiB (renderer RSS); 738 MiB Barretenberg memory | 5 |\n| Chrome/151.0.7922.34 (headless), efficiency cores, 4 threads | 4 | 3.02 (2.93 to 3.08) | 12.0 (11.5 to 12.3) | 17.5 (16.7 to 18.1) | 2,015 MiB (renderer RSS); 771 MiB Barretenberg memory | 5 |\n| Phone-class device | — | not measured | not measured | not measured | not measured | 0 |\n\nWitness: native `nargo execute`; Node the encoder and noir_js; browser the encoder and noir_js in the prover worker. Total: native and Node witness plus proving; browser from the page's request to the locally verified proof (cached assets, Barretenberg's start and the verification included)."
+ "table": "Generated by `research/email-recovery/eval/proving/measure.mjs` on 2026-11-02 07:28 UTC (browser rows: `measure-browser.mjs`, 2026-11-02T07:15:47.852Z).\nMachine: Apple M5 Max, 18 logical CPUs (6 Super and 12 Performance, as macOS names its core tiers), 128 GiB, macOS 26.5.2, Node v24.18.0; load average 6.13 7.58 25.05 at the start and 6.67 5.30 13.23 at the end; browser rows on the same machine, load average 5.01 24.41 45.57 at their start.\nCircuit build: `circuits/email-recovery/artifacts/recovery.json` (sha256 `5d793cbe967bf11f…`), verification key sha256 `2837d0cfd7ddad68…` (the verifier's circuit id); nargo version = 1.0.0-beta.9, bb v0.87.0; the Gmail fixture's recovery email. Times in seconds: median (minimum to maximum) of 5 runs (browser: 5 warm runs).\n\n| Prover | Threads | Witness (s) | Proving (s) | Total (s) | Peak memory | Runs |\n| --- | --- | --- | --- | --- | --- | --- |\n| Native bb, every core | 18 | 0.65 (0.64 to 0.66) | 0.96 (0.94 to 0.98) | 1.61 (1.59 to 1.63) | 879 MiB (`bb prove` RSS) | 5 |\n| Native bb, one thread | 1 | 0.65 (0.64 to 0.65) | 4.69 (4.64 to 4.75) | 5.34 (5.28 to 5.40) | 872 MiB (`bb prove` RSS) | 5 |\n| Native bb, Performance-tier cores (background QoS), one thread | 1 | 2.05 (1.99 to 2.15) | 15.8 (15.0 to 16.1) | 17.8 (17.1 to 18.1) | 884 MiB (`bb prove` RSS) | 5 |\n| Native bb, Performance-tier cores (background QoS), four threads | 4 | 2.03 (1.95 to 2.11) | 5.46 (5.23 to 5.58) | 7.42 (7.18 to 7.68) | 909 MiB (`bb prove` RSS) | 5 |\n| bb.js in Node, one thread | 1 | 0.77 (0.75 to 0.77) | 13.4 (13.4 to 13.5) | 14.2 (14.1 to 14.3) | 1,419 MiB (process RSS) | 5 |\n| bb.js in Node, 18 threads | 18 | 0.77 (0.75 to 0.77) | 3.34 (3.27 to 3.40) | 4.10 (4.01 to 4.17) | 1,715 MiB (process RSS) | 5 |\n| bb.js in Node, Performance-tier cores (background QoS), one thread | 1 | 2.42 (2.34 to 2.58) | 50.3 (47.4 to 51.3) | 52.7 (50.0 to 53.7) | 1,316 MiB (process RSS) | 5 |\n| bb.js in Node, Performance-tier cores (background QoS), four threads | 4 | 2.42 (1.67 to 2.45) | 19.0 (18.0 to 19.2) | 21.4 (19.7 to 21.6) | 1,446 MiB (process RSS) | 5 |\n| Chrome/151.0.7922.34 (headless), one thread | 1 | 0.80 (0.79 to 0.82) | 8.40 (8.34 to 8.49) | 9.95 (9.85 to 10.0) | 1,463 MiB (renderer RSS); 738 MiB Barretenberg memory | 5 |\n| Chrome/151.0.7922.34 (headless), 18 threads | 18 | 0.74 (0.74 to 0.80) | 1.43 (1.42 to 1.51) | 2.82 (2.81 to 3.05) | 2,595 MiB (renderer RSS); 805 MiB Barretenberg memory | 5 |\n| Chrome/151.0.7922.34 (headless), Performance-tier cores (background QoS), one thread | 1 | 2.55 (2.53 to 2.66) | 32.0 (31.7 to 32.7) | 37.0 (36.5 to 37.5) | 1,421 MiB (renderer RSS); 738 MiB Barretenberg memory | 5 |\n| Chrome/151.0.7922.34 (headless), Performance-tier cores (background QoS), 4 threads | 4 | 2.61 (2.28 to 2.69) | 10.2 (10.1 to 10.6) | 14.9 (14.4 to 15.4) | 2,094 MiB (renderer RSS); 771 MiB Barretenberg memory | 5 |\n| Phone-class device | — | not measured | not measured | not measured | not measured | 0 |\n\nWitness: native `nargo execute`; Node the encoder and noir_js; browser the encoder and noir_js in the prover worker. Total: native and Node witness plus proving; browser from the page's request to the locally verified proof (cached assets, Barretenberg's start and the verification included)."
 }

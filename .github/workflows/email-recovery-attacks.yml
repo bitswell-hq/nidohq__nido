@@ -55,10 +55,10 @@ jobs:
         with:
           shared-key: email-attacks
 
-      - name: Install just + Stellar CLI (prebuilt release binaries)
+      - name: Install just + Stellar CLI + stellar-scaffold (prebuilt release binaries)
         uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
         with:
-          tool: just,stellar-cli@28.1.0
+          tool: just,stellar-cli@28.1.0,stellar-scaffold-cli@0.0.27
 
       - uses: actions/setup-node@v4
         with:
@@ -69,6 +69,11 @@ jobs:
 
       - name: Fetch Perch's deployed stack
         run: just perch-infra
+
+      # The email contracts the local network runs: the optimized wasm the
+      # testnet deployment runs.
+      - name: Build the contracts
+        run: just build-contracts
 
       # Builds what the network runs, starts the pinned quickstart, runs the
       # suite (attacks.mjs) and rewrites the result file and tables.
