@@ -8,7 +8,7 @@
 import { buildPolicyDoc, canonicalJson, perch } from '@nidohq/passkey-sdk';
 import { Keypair } from '@stellar/stellar-sdk';
 import { NidoAccount, Passkey } from './account.mjs';
-import { ALLOW_ALL, approvalEntry, approve, deployGuardian, freshRho, pinFor, subjectFor, submitGuardianOp } from './email.mjs';
+import { ALLOW_ALL, Inbox, approvalEntry, approve, deployGuardian, freshRho, pinFor, subjectFor, submitGuardianOp } from './email.mjs';
 
 export const { EvidenceDomain } = perch;
 
@@ -92,6 +92,47 @@ export class Enrolled {
   }
 }
 
+/** An enrolled account as JSON (its TEST-ONLY keys included), to resume a run that waits on the network. */
+export function enrolledJson(e) {
+  return {
+    label: e.label,
+    inbox: { address: e.inbox.address, displayName: e.inbox.displayName, accountCode: e.inbox.accountCode.toString() },
+    key: e.key.domain,
+    owner: e.owner.label,
+    account: e.account.address,
+    apex: e.apex,
+    guardian: e.guardian,
+    helpers: e.helpers.map((h) => h.secret()),
+    payer: e.payer.secret(),
+    pinValidUntil: e.pinValidUntil ?? null,
+  };
+}
+
+/** `enrolledJson`'s account on `chain`, with `keys` (launchKeys()) for its provider key. */
+export function enrolledFromJson({ chain, stack, keys }, j) {
+  const d = stack.deployment;
+  const inbox = new Inbox(j.inbox.address, { displayName: j.inbox.displayName, accountCode: BigInt(j.inbox.accountCode) });
+  const key = keys.find((k) => k.domain === j.key);
+  const owner = new Passkey(j.owner);
+  return new Enrolled({
+    chain,
+    deployment: d,
+    label: j.label,
+    inbox,
+    key,
+    pin: pinFor(inbox.accountCode, [key]),
+    pinValidUntil: j.pinValidUntil ?? undefined,
+    account: new NidoAccount({ chain, address: j.account, owner, verifier: d.webauthnVerifier, apex: j.apex }),
+    apex: j.apex,
+    owner,
+    guardian: j.guardian,
+    helpers: j.helpers.map((s) => Keypair.fromSecret(s)),
+    payer: Keypair.fromSecret(j.payer),
+    controller: d.recoveryController,
+    verifier: d.webauthnVerifier,
+  });
+}
+
 /**
  * Mint an account, deploy its email guardian for `inbox` (pinning `key`
  * for `pinSeconds` of ledger close time), and enroll recovery: `helpers` more guardians (funded
@@ -162,6 +203,7 @@ export async function enroll({
     pin,
     pinValidUntil: pinSeconds === null ? undefined : deployedAt + pinSeconds,
     account,
+    apex,
     owner,
     guardian,
     helpers: helperKeys,

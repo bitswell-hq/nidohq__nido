@@ -126,6 +126,8 @@ Deployer `GCPMJ444S4Q7IVRFLDLCCPF4OVX7Q2LPGE4OF4NE7XILXI7L3NQ7LHRE`. Members: `G
 
 Perch's doc compiler and recovery controller (instance and code) were archived on testnet when this ran; the run restored them first, one `RestoreFootprint` transaction each, because restoring them inside the enrollment's `apply_doc` exceeds the per-transaction write limit (`txSorobanInvalid`). Transactions: `research/email-recovery/eval/results/testnet.json`.
 
+The votes run (`research/email-recovery/eval/testnet/votes.mjs`, research/email-recovery/eval/README.md "Testnet") deployed a second email verifier `CB7OHSAP7RX7SLQ3A24FZ4A5FA4DCROTB2UC2V4J4VJE2YD5CHSJ55YE` and DKIM key registry `CDCFWGNH5QODWHAM5SFDBCOGDXMPVI73ODXTA55HPRDAJPWK6PRK4Y2Q` from the same wasm, with the same governance shape and its own throwaway members (deployer `GDFIYYSIY2TE7DBWCJJBEXDFOHDFUGRAMTJENHQVV26PTTNX5GU2LBBM`). Its proposal 1 (the Gmail mock's TEST-ONLY key) is approved and attested live, eligible from ledger 5,566,157; the run's registry-root votes follow it.
+
 ## Deploying
 
 See [docs/RUNBOOKS.md](docs/RUNBOOKS.md) §2. Record every deployment here:
