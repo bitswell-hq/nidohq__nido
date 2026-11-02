@@ -111,6 +111,21 @@ manifest. Pinned against perch rev `845c49a` (perch-interpreter 0.1.3).
 | Perch doc-compiler 0.3.2 | `CCYSZHRHY7GKT2OYXF6JW332GA2BL6ZKPAWIV6RVC5JW2RNPHQPSW5ZI` | Stateless `compile_doc`; wasm `ccea12cd…`. The smart account cross-calls it from `apply_doc`; refuses a non-canonical external-signer key. Previous `CDWBJPDMBORIZERIFVMTGJFND6ZTAQJIVDNYST4SV33YBQP47BPKOHR6`. |
 | Perch interpreter 0.1.3 | `CA5JLPEVA3E5X7YEDVABMEM3TML33ZS3I6WL5NDBFIZZAXFYNZPBBWTO` | OZ `Policy` evaluating perch constraint programs. Wasm `2254f17d…`. Bindings: `@stellar-registry/perch-interpreter` (npm, upstream-published). Previous `CDR2OTZIZYTAHEHHH5MBOL6RKLWKIEN5KLPIVOG7FVBVTFET552NTWL2`. |
 
+## Email recovery (evaluation, TEST-ONLY)
+
+The email-recovery contracts as `research/email-recovery/eval/testnet/run.mjs` deployed them for the evaluation (research/email-recovery/eval/README.md, "Testnet"), around Perch's deployment and Nido's factory above. Built from Nido commit `da4450b23cf22f7dd015a0f64cc4f0eea7663bc9` with `just build-contracts`; deployed 2026-11-02 with stellar 27.0.0 (5a7c5fe76530bf4248477ac812fc757146b98cc4). Every governing key is a throwaway testnet key, and the registry's only key is the Gmail provider mock's TEST-ONLY key: these contracts are not for real accounts.
+
+| Contract | Address | Wasm sha256 | Configuration |
+| --- | --- | --- | --- |
+| `nido-email-verifier` | `CD7UBCFQTFSZW4NDESQV53ZD7NL2XLDODRVRI6SRJVCWK4OCTPLJ32QM` | `0e4239ca…` | Constructorless; reports circuit id `2837d0cfd7ddad68…` (read back) |
+| `nido-dkim-registry` | `CAMCKDAC4UIHT4H25GWKSBEXM53PXTYV55HE2Z35LDVDW73I2DJQ5HKE` | `f0a16ccf…` | 5 members, threshold 3, revocation 2; the DNS attester mock's 3 TEST-ONLY keys, threshold 2; grace 17,280 ledgers; the launch allowlist. Proposal 1 (the Gmail mock's key) approved and attested, eligible from ledger 5,564,237 |
+| `nido-enclave-image-registry` | `CBHYVBSWH4GX37PGQYASXL5GM3X3MZY4W3JJTSU4JTBFCFW3XZ2TXECZ` | `e23fbc6b…` | One signer `GAKZZFCJMYQYTS4DUU7VKYQDRTOAM3OAODYPYS6YLAW352WPXEW36OHZ`, threshold 1; no measurement approved |
+| `nido-email-guardian` | wasm uploaded; one instance per account (the run's: `CCLG2C25XQBGVFBR56WJLVNAV7T3XPKZYO2RU5G3UGPIBFXSLKREBRGT`) | `9e7f39ef…` | — |
+
+Deployer `GCPMJ444S4Q7IVRFLDLCCPF4OVX7Q2LPGE4OF4NE7XILXI7L3NQ7LHRE`. Members: `GDXUMUOIFRILZWQLS5OO3OZA4GMBXE734SAXA4J2K6O3ZRYE44IZ43KV`, `GBIBKGD7OBCKXTBG5L5JMRALGZUZAOBNR5B6DCMJAWP6KHAQ55BFFWOG`, `GC7E6LD4ZDGCFMFI6SJFGW27ZCVZT7ZPSL2JYEXPJIVAMH3JQQBWEGOM`, `GAFLWIOMYE6OU2XZPELPHEATA4BLE7Y43L477SERVMXUFEFRBDIN4DGM`, `GCTMJ5PB46MC6DFR6BKGEMRMZMLNIZTVB53Q2UXNVCF7LBEP37KBISGH`.
+
+Perch's doc compiler and recovery controller (instance and code) were archived on testnet when this ran; the run restored them first, one `RestoreFootprint` transaction each, because restoring them inside the enrollment's `apply_doc` exceeds the per-transaction write limit (`txSorobanInvalid`). Transactions: `research/email-recovery/eval/results/testnet.json`.
+
 ## Deploying
 
 See [docs/RUNBOOKS.md](docs/RUNBOOKS.md) §2. Record every deployment here:

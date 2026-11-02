@@ -16,9 +16,12 @@ The cost does not depend on the provider: the proof, its public inputs and
 the circuit's size are the same for every email. The signed transaction is
 dominated by the 16{,}224-byte proof inside the guardian's authorisation
 entry.
+\claimstatement{network-verification-cost}\claim{network-verification-cost}
+\claimstatement{testnet-email-recovery}\claim{testnet-email-recovery}
 
 \paragraph{Proving.}
 \claimstatement{desktop-proving-cost}\claim{desktop-proving-cost}
+\claimstatement{browser-proving-cost}\claim{browser-proving-cost}
 A browser without cross-origin isolation proves on one thread; the recovery
 origin's isolation headers let bb.js use one worker per core.
 
@@ -28,6 +31,10 @@ The circuit-level attack suite is part of the implementation
 account or statement, and provider header quirks, against the circuit with
 mocked provider emails.
 
-\pending{phone-class proving, costs and fees on a network, and the
-registry, compromised-inbox and front-running attacks on a network are not
-yet measured.}
+Every attack class also runs on a local Stellar network.
+\claimstatement{network-attack-suite}\claim{network-attack-suite}
+\claimstatement{registry-timelock-attacks}\claim{registry-timelock-attacks}
+\claimstatement{compromised-inbox-alerted}\claim{compromised-inbox-alerted}
+\claimstatement{front-running-one-vote}\claim{front-running-one-vote}
+
+\pending{phone-class proving is not yet measured.}

@@ -187,7 +187,110 @@ claims:
       1.7 GiB; phone-class devices are not measured.
     status: measured
     evidence:
-      file: circuits/email-recovery/MEASUREMENTS.md
+      - file: circuits/email-recovery/MEASUREMENTS.md
+      - file: research/email-recovery/eval/results/proving.json
+
+  # The evaluation on a network (research/email-recovery/eval/README.md).
+  - id: network-attack-suite
+    statement: >-
+      On a local Stellar network, with Perch's controller and account and
+      Nido's guardian, verifier and key registry deployed from their
+      WebAssembly, the real circuit and real proofs, every attack scenario of
+      the evaluation has its expected outcome, and each refusal comes from a
+      named layer: forged and replayed emails and proofs, a wrong account or
+      new key in the statement, planted keys and expired pins, a compromised
+      inbox, provider header variants, and front-running.
+    status: tested
+    evidence:
+      - test: forged-emails-circuit
+        file: research/email-recovery/eval/network/attacks.mjs
+      - test: forged-wrong-key
+        file: research/email-recovery/eval/network/attacks.mjs
+      - test: replay-another-account
+        file: research/email-recovery/eval/network/attacks.mjs
+      - test: replay-another-controller
+        file: research/email-recovery/eval/network/attacks.mjs
+      - test: statement-other-new-key
+        file: research/email-recovery/eval/network/attacks.mjs
+      - test: registry-planted-key-in-timelock
+        file: research/email-recovery/eval/network/attacks.mjs
+      - test: registry-pin-expiry
+        file: research/email-recovery/eval/network/attacks.mjs
+      - test: quirks-each-provider
+        file: research/email-recovery/eval/network/attacks.mjs
+
+  - id: registry-timelock-attacks
+    statement: >-
+      A key planted in the registry that has passed its timelock still cannot
+      approve for an account whose account code the attacker lacks; revoking
+      an active key refuses every root holding it in the same ledger; and a
+      superseded root is refused one ledger after its grace period ends.
+      Tested on the integration-test host with the registry's real timelocks,
+      not on a network.
+    status: tested
+    evidence:
+      - test: registry_planted_key_after_activation_without_account_code
+        file: crates/integration-tests/tests/it/email_guardian.rs
+      - test: registry_revoked_active_key
+        file: crates/integration-tests/tests/it/email_guardian.rs
+      - test: registry_grace_expiry
+        file: crates/integration-tests/tests/it/email_guardian.rs
+
+  - id: compromised-inbox-alerted
+    statement: >-
+      With the email guardian as the only guardian, under the lost-key
+      profile and a seven-day delay, an attacker who holds the inbox and the
+      account code can authorize a recovery attempt but cannot complete it
+      within the delay; the owner receives the attempt's verification code by
+      email and by Web Push, and cancels it.
+    status: tested
+    evidence:
+      test: inbox-email-plus-delay
+      file: research/email-recovery/eval/network/attacks.mjs
+
+  - id: front-running-one-vote
+    statement: >-
+      An email approval copied and submitted first by someone else records
+      the guardian's single vote for the same attempt, and cannot be
+      redirected to a cancellation, another attempt or another account.
+    status: tested
+    evidence:
+      - test: front-running-copy-first
+        file: research/email-recovery/eval/network/attacks.mjs
+      - test: front-running-redirect
+        file: research/email-recovery/eval/network/attacks.mjs
+
+  - id: browser-proving-cost
+    statement: >-
+      In Chrome on the same desktop, the wallet's own prover worker proves a
+      recovery email in about 8.4 seconds on one thread and 1.5 seconds on
+      18, and in about 36 seconds on one thread of the desktop's efficiency
+      cores; phone-class devices are not measured.
+    status: measured
+    evidence:
+      file: research/email-recovery/eval/results/proving.json
+
+  - id: network-verification-cost
+    statement: >-
+      On a local Stellar network, an email vote with a real proof is metered
+      at about 120 million instructions, reads 12 ledger entries and writes
+      2 (1,208 bytes), and is an 18,080-byte transaction charged about
+      176,000 stroops, rent included.
+    status: measured
+    evidence:
+      file: research/email-recovery/eval/results/attacks-local.json
+
+  - id: testnet-email-recovery
+    statement: >-
+      On Stellar testnet, through Perch's deployment and Nido's factory and
+      with the email-recovery contracts deployed from this repository, one
+      complete email-factor recovery ran from enrollment to completion; its
+      email vote, with a real proof, was metered at about 122 million
+      instructions in an 18,080-byte transaction charged about 82,000
+      stroops, rent included.
+    status: measured
+    evidence:
+      file: research/email-recovery/eval/results/testnet.json
 
   # The assumptions the properties rest on.
   - id: dkim-unforgeability

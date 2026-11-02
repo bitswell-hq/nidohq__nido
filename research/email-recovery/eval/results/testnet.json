@@ -1,0 +1,1594 @@
+{
+ "generated": "2026-11-02T02:16:03.722Z",
+ "network": "Test SDF Network ; September 2015",
+ "rpc": "https://soroban-testnet.stellar.org",
+ "rpcVersion": {
+  "version": "30.0.0-13e53516633c3ce1281c7edbacb607107d3a4e55",
+  "commitHash": "13e53516633c3ce1281c7edbacb607107d3a4e55",
+  "buildTimestamp": "2026-10-20T22:36:51",
+  "captiveCoreVersion": "stellar-core 30.0.0 (0e49751aa9ddf892302cca02cea7f3f5d97df9f1)",
+  "protocolVersion": 29
+ },
+ "commit": "da4450b23cf22f7dd015a0f64cc4f0eea7663bc9",
+ "stellarCli": "stellar 27.0.0 (5a7c5fe76530bf4248477ac812fc757146b98cc4)",
+ "perch": {
+  "network": "Test SDF Network ; September 2015",
+  "factory": "CDDIW3F63PB6ZKMJN7CCGJSCYXTAVAVEEYNS36K2YFEJH7GQ3ADVZSVS",
+  "webauthnVerifier": "CDEV5YPS5IITPLQPYTKJGWBNZ2YZ7FQZIJNSHUMJRBE4QWYK2IVK4EJT",
+  "statelessRegistry": "CDZGU4AIND6QRCGAN72I7DCS2EKRZ76JSKYY7KKJR4CG5IR2AMFIBZTM",
+  "docCompiler": "CAYCPM5O6SGGAZOCCAUJ27CZZ7SMHU4VYSA25ZHDMGKILP4Z5RGF467E",
+  "interpreter": "CBOGVUQWY5G7BP7OWEJX3Z5PSZLYJXHM54A7OEMXQQ7ZO4GHHM4WCEAP",
+  "spendingLimit": "CAG3IDO3FXE2HQVQHRGRBKWGL2IPAA2V6B3UMHES4ZUNS7OEV646HYV5",
+  "recoveryController": "CBOFO5KWQKCZ7LBS4LDIYXA6LGZSUSA6JKOHHBBL64KQNZLPGDJ252FT",
+  "zkPool": "CASXCXSBIG6ECB3LO4LCEW6SZIFHZDTJ3PFOZJK5JI56VKXLSZY6J67P",
+  "zkAdapter": "CDWVAUSTU2DHBBWANQKGSHCXFK5C46WMUEMWRBOV2LBVXQGK4PGIFBQS",
+  "circuitId": "9e39c41f4f35aad43e64b255dfe3ba13f10e8c9d36d6f56fce23c2d97c0a0b4a",
+  "treeDepth": 32,
+  "accountWasmHash": "2c976bfd98678f3b6fcf5514420a81ef5e5b9fc1c5b6c60ec6f2dd64448479d5"
+ },
+ "contracts": {
+  "nido-email-verifier": {
+   "address": "CD7UBCFQTFSZW4NDESQV53ZD7NL2XLDODRVRI6SRJVCWK4OCTPLJ32QM",
+   "sha256": "0e4239ca92d3e38a9efc40c24ed2d4237c437253a1d35372c8c6a5aa7c3194b9",
+   "bytes": 45616
+  },
+  "nido-dkim-registry": {
+   "address": "CAMCKDAC4UIHT4H25GWKSBEXM53PXTYV55HE2Z35LDVDW73I2DJQ5HKE",
+   "sha256": "f0a16ccf736c4bc8364bef4cd3f568612f95cb13cd997be5f5be9fb41084e883",
+   "bytes": 68269
+  },
+  "nido-enclave-image-registry": {
+   "address": "CBHYVBSWH4GX37PGQYASXL5GM3X3MZY4W3JJTSU4JTBFCFW3XZ2TXECZ",
+   "sha256": "e23fbc6b2cce15c83831c9269aba30fde970c7e942c0116aed0febea178d6514",
+   "bytes": 10152
+  },
+  "nido-email-guardian": {
+   "uploaded": true,
+   "sha256": "9e7f39eff1ee4d930dabdfcb8e5ed87c45dd3f02f1c0bada2cfd169e82be8d48",
+   "bytes": 33479,
+   "instance": "CCLG2C25XQBGVFBR56WJLVNAV7T3XPKZYO2RU5G3UGPIBFXSLKREBRGT"
+  }
+ },
+ "deployer": "GCPMJ444S4Q7IVRFLDLCCPF4OVX7Q2LPGE4OF4NE7XILXI7L3NQ7LHRE",
+ "registryConfig": {
+  "members": [
+   "GDXUMUOIFRILZWQLS5OO3OZA4GMBXE734SAXA4J2K6O3ZRYE44IZ43KV",
+   "GBIBKGD7OBCKXTBG5L5JMRALGZUZAOBNR5B6DCMJAWP6KHAQ55BFFWOG",
+   "GC7E6LD4ZDGCFMFI6SJFGW27ZCVZT7ZPSL2JYEXPJIVAMH3JQQBWEGOM",
+   "GAFLWIOMYE6OU2XZPELPHEATA4BLE7Y43L477SERVMXUFEFRBDIN4DGM",
+   "GCTMJ5PB46MC6DFR6BKGEMRMZMLNIZTVB53Q2UXNVCF7LBEP37KBISGH"
+  ],
+  "threshold": 3,
+  "revokeThreshold": 2,
+  "attesters": [
+   "2fd728cb33032750a3cc6f89e9bd1a55dffb81c00a328c644c276f5088f4c80d",
+   "ddada4f50dc2476d817096757bce73fee26a83afc7fbc6bcc688ad46c04eaa27",
+   "65aab59ae4af34e1a3a50e253fff31ad1b49de8b6604c6bc77bf769572a9b1e1"
+  ],
+  "attestThreshold": 2,
+  "graceLedgers": 17280
+ },
+ "imageRegistryConfig": {
+  "signers": [
+   "GAKZZFCJMYQYTS4DUU7VKYQDRTOAM3OAODYPYS6YLAW352WPXEW36OHZ"
+  ],
+  "threshold": 1
+ },
+ "gmailProposal": {
+  "id": 1,
+  "eligibleAt": 5564237
+ },
+ "restoredPerchEntries": [
+  "doc compiler instance",
+  "doc compiler code",
+  "recovery controller instance",
+  "recovery controller code"
+ ],
+ "account": "CCMXZU44L3SXSER2GYKF2GDXVWEESZYGKNM5WE5RNMUIWZM3HOZYGQRN",
+ "guardian": "CCLG2C25XQBGVFBR56WJLVNAV7T3XPKZYO2RU5G3UGPIBFXSLKREBRGT",
+ "attemptId": 0,
+ "proving": {
+  "witnessMs": 708,
+  "proveMs": 3381,
+  "totalMs": 5065
+ },
+ "completed": {
+  "hash": "ff431206c9e3c9ad4d0880fececaec432b95ef159a531bbf58641d7889037be4",
+  "newOwnerInstalled": true
+ },
+ "votes": {
+  "email": "08cdc915727cc9b569bd4015ea01a33fa5486d2d18cb673d30ab7d393b5810ff",
+  "helper": "e1e4b757c0833fdad4eea9156853ec6278715c7d81eccf79a2cd8bf0961c16bc"
+ },
+ "steps": [
+  {
+   "step": "deploy the email contracts",
+   "ms": 52219,
+   "transactions": [
+    "d4c48e05c842663c2094f5bea4c740cf1f085d51fa69847eabb8e9470deed9f4",
+    "a225fea7f32c099c0de77f8b68624f63de1792f0b30339a9bafdc5426111a4e5",
+    "1096b46c5fb1a9080e4eea235eae9fd6072399bc4ff226957b8509b0f1ddaa52",
+    "b9e490ae231885476a1f6ca264e3eb513b5d06532b80804a00faadd15c6e3ff3",
+    "94578fb9ea0d6d4aba53e74c3732d24da72aab4fca4ebc1937c63449edaed0d5",
+    "769923dc18640a2b30e46b195ef83d1d977a28190d28cba3c3e6ebd9f4570427",
+    "86c04faf160c5c934d2b22485909e34cfe36fb1413e091b156d5f4c5173fb3d0"
+   ]
+  },
+  {
+   "step": "registry: propose, approve and attest the Gmail mock key",
+   "ms": 24337,
+   "transactions": [
+    "12b5f3b5c199c40e99c6ce8db8d8f11e04cc8cd731ae0992560a881b2ca8f792",
+    "c263b7cae16449e77c723cb3e72e32b39caf2874f1b696f8992a11d2fa2f8013",
+    "878c6aa117c876b5786b83fb493a22edada8798f6a469b207dbe9327d74448b2",
+    "620ddaefcd15128f2d91c05f1a09676303ae609840d0533264285fa7f1b57eb0",
+    "b57602eacedc43f3d5165c7d715d53bcab8cc8542d7ec3d6c0085999d572c955"
+   ]
+  },
+  {
+   "step": "restore Perch's archived entries (doc compiler instance, doc compiler code, recovery controller instance, recovery controller code)",
+   "ms": 24852,
+   "transactions": [
+    "6b85123a745b7d284323a84342b2f43c1934d32b9d3079c3e74ecf657ff42423",
+    "b39e79d0d692365534c30a73f7f9e0aee77fd685f20016aa711b62ebac624a93",
+    "b9d82df040d8d558fa1780b0c0824e676bd09fbede619765f447a2ae76f5776d",
+    "9806a648675c4b0cfeadb4b501dc2a7c8ae71ad2fa7bc55ad20560d6994bed79"
+   ]
+  },
+  {
+   "step": "enroll: mint, deploy the guardian, apply the recovery document",
+   "ms": 24993,
+   "transactions": [
+    "25bb1939faeca1678387d15bd13eb8e86dd4a59cf8b0d39b79886652dbbad400",
+    "4381a327a06d03ae43310a7d46a6e020c501be4be10fee9d4ef2052d7a1a7ac2",
+    "24c2b9594a6a50493013b986220a9ebf00bea5122eb84bcfb02b9cc4fc969066"
+   ]
+  },
+  {
+   "step": "begin_lost_key",
+   "ms": 5012,
+   "transactions": [
+    "6e3a7e8c0892fa9d54e98e93554c18abf277c7f19d8fc655b5ad8b10218ede82"
+   ]
+  },
+  {
+   "step": "submit_guardian (email vote, real proof)",
+   "ms": 4791,
+   "transactions": [
+    "08cdc915727cc9b569bd4015ea01a33fa5486d2d18cb673d30ab7d393b5810ff"
+   ]
+  },
+  {
+   "step": "submit_guardian (helper vote)",
+   "ms": 5425,
+   "transactions": [
+    "e1e4b757c0833fdad4eea9156853ec6278715c7d81eccf79a2cd8bf0961c16bc"
+   ]
+  },
+  {
+   "step": "the delay",
+   "ms": 57575,
+   "transactions": []
+  },
+  {
+   "step": "complete (apply_doc through the recovery rule)",
+   "ms": 7057,
+   "transactions": [
+    "ff431206c9e3c9ad4d0880fececaec432b95ef159a531bbf58641d7889037be4"
+   ]
+  }
+ ],
+ "transactions": [
+  {
+   "label": "upload nido_email_verifier",
+   "hash": "d4c48e05c842663c2094f5bea4c740cf1f085d51fa69847eabb8e9470deed9f4",
+   "status": "SUCCESS",
+   "ledger": 5512383,
+   "ms": {
+    "simulate": 129,
+    "submit": 52,
+    "confirm": 3405,
+    "total": 3586
+   },
+   "envelopeBytes": 45864,
+   "declared": {
+    "instructions": 40956128,
+    "diskReadBytes": 0,
+    "writeBytes": 0,
+    "readOnly": 1,
+    "readWrite": 0,
+    "resourceFee": 127044
+   },
+   "footprint": {
+    "readOnly": [
+     "code 0e4239ca"
+    ],
+    "readWrite": []
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 127044
+   },
+   "authEntryBytes": 0,
+   "feeCharged": 113050,
+   "feeSplit": {
+    "nonRefundableResource": 112852,
+    "refundableResource": 98,
+    "rent": 0
+   },
+   "metered": {
+    "read_entry": 1,
+    "write_entry": 0,
+    "ledger_read_byte": 0,
+    "ledger_write_byte": 0,
+    "read_key_byte": 0,
+    "write_key_byte": 0,
+    "read_data_byte": 0,
+    "write_data_byte": 0,
+    "read_code_byte": 0,
+    "write_code_byte": 0,
+    "emit_event": 0,
+    "emit_event_byte": 40,
+    "cpu_insn": 39379581,
+    "mem_byte": 4783979,
+    "invoke_time_nsecs": 1018052,
+    "max_rw_key_byte": 0,
+    "max_rw_data_byte": 0,
+    "max_rw_code_byte": 0,
+    "max_emit_event_byte": 0
+   }
+  },
+  {
+   "label": "deploy nido_email_verifier",
+   "hash": "a225fea7f32c099c0de77f8b68624f63de1792f0b30339a9bafdc5426111a4e5",
+   "status": "SUCCESS",
+   "ledger": 5512384,
+   "ms": {
+    "simulate": 64,
+    "submit": 30,
+    "confirm": 1955,
+    "total": 2048
+   },
+   "envelopeBytes": 536,
+   "declared": {
+    "instructions": 670448,
+    "diskReadBytes": 0,
+    "writeBytes": 104,
+    "readOnly": 1,
+    "readWrite": 1,
+    "resourceFee": 21268
+   },
+   "footprint": {
+    "readOnly": [
+     "code 0e4239ca"
+    ],
+    "readWrite": [
+     "data CD7UBC persistent instance"
+    ]
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 21268
+   },
+   "authEntryBytes": 128,
+   "feeCharged": 14842,
+   "feeSplit": {
+    "nonRefundableResource": 3261,
+    "refundableResource": 11481,
+    "rent": 11383
+   },
+   "metered": {
+    "read_entry": 2,
+    "write_entry": 1,
+    "ledger_read_byte": 0,
+    "ledger_write_byte": 104,
+    "read_key_byte": 0,
+    "write_key_byte": 0,
+    "read_data_byte": 0,
+    "write_data_byte": 104,
+    "read_code_byte": 0,
+    "write_code_byte": 0,
+    "emit_event": 0,
+    "emit_event_byte": 40,
+    "cpu_insn": 619073,
+    "mem_byte": 714416,
+    "invoke_time_nsecs": 138090,
+    "max_rw_key_byte": 48,
+    "max_rw_data_byte": 104,
+    "max_rw_code_byte": 0,
+    "max_emit_event_byte": 0
+   }
+  },
+  {
+   "label": "upload nido_dkim_registry",
+   "hash": "1096b46c5fb1a9080e4eea235eae9fd6072399bc4ff226957b8509b0f1ddaa52",
+   "status": "SUCCESS",
+   "ledger": 5512386,
+   "ms": {
+    "simulate": 91,
+    "submit": 73,
+    "confirm": 6838,
+    "total": 7002
+   },
+   "envelopeBytes": 68520,
+   "declared": {
+    "instructions": 60796876,
+    "diskReadBytes": 0,
+    "writeBytes": 0,
+    "readOnly": 1,
+    "readWrite": 0,
+    "resourceFee": 187320
+   },
+   "footprint": {
+    "readOnly": [
+     "code f0a16ccf"
+    ],
+    "readWrite": []
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 187320
+   },
+   "authEntryBytes": 0,
+   "feeCharged": 168386,
+   "feeSplit": {
+    "nonRefundableResource": 168188,
+    "refundableResource": 98,
+    "rent": 0
+   },
+   "metered": {
+    "read_entry": 1,
+    "write_entry": 0,
+    "ledger_read_byte": 0,
+    "ledger_write_byte": 0,
+    "read_key_byte": 0,
+    "write_key_byte": 0,
+    "read_data_byte": 0,
+    "write_data_byte": 0,
+    "read_code_byte": 0,
+    "write_code_byte": 0,
+    "emit_event": 0,
+    "emit_event_byte": 40,
+    "cpu_insn": 58457223,
+    "mem_byte": 6829047,
+    "invoke_time_nsecs": 1569202,
+    "max_rw_key_byte": 0,
+    "max_rw_data_byte": 0,
+    "max_rw_code_byte": 0,
+    "max_emit_event_byte": 0
+   }
+  },
+  {
+   "label": "deploy nido_dkim_registry",
+   "hash": "b9e490ae231885476a1f6ca264e3eb513b5d06532b80804a00faadd15c6e3ff3",
+   "status": "SUCCESS",
+   "ledger": 5512387,
+   "ms": {
+    "simulate": 165,
+    "submit": 24,
+    "confirm": 1776,
+    "total": 1965
+   },
+   "envelopeBytes": 2088,
+   "declared": {
+    "instructions": 1630603,
+    "diskReadBytes": 0,
+    "writeBytes": 1116,
+    "readOnly": 1,
+    "readWrite": 1,
+    "resourceFee": 3234811
+   },
+   "footprint": {
+    "readOnly": [
+     "code f0a16ccf"
+    ],
+    "readWrite": [
+     "data CAMCKD persistent instance"
+    ]
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 3234811
+   },
+   "authEntryBytes": 904,
+   "feeCharged": 2810024,
+   "feeSplit": {
+    "nonRefundableResource": 7363,
+    "refundableResource": 2802561,
+    "rent": 2802463
+   },
+   "metered": {
+    "read_entry": 2,
+    "write_entry": 1,
+    "ledger_read_byte": 0,
+    "ledger_write_byte": 1116,
+    "read_key_byte": 0,
+    "write_key_byte": 0,
+    "read_data_byte": 0,
+    "write_data_byte": 1116,
+    "read_code_byte": 0,
+    "write_code_byte": 0,
+    "emit_event": 0,
+    "emit_event_byte": 40,
+    "cpu_insn": 1565195,
+    "mem_byte": 700721,
+    "invoke_time_nsecs": 352432,
+    "max_rw_key_byte": 48,
+    "max_rw_data_byte": 1116,
+    "max_rw_code_byte": 0,
+    "max_emit_event_byte": 0
+   }
+  },
+  {
+   "label": "upload nido_enclave_image_registry",
+   "hash": "94578fb9ea0d6d4aba53e74c3732d24da72aab4fca4ebc1937c63449edaed0d5",
+   "status": "SUCCESS",
+   "ledger": 5512388,
+   "ms": {
+    "simulate": 195,
+    "submit": 30,
+    "confirm": 2437,
+    "total": 2662
+   },
+   "envelopeBytes": 10400,
+   "declared": {
+    "instructions": 10001477,
+    "diskReadBytes": 0,
+    "writeBytes": 0,
+    "readOnly": 1,
+    "readWrite": 0,
+    "resourceFee": 32729
+   },
+   "footprint": {
+    "readOnly": [
+     "code e23fbc6b"
+    ],
+    "readWrite": []
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 32729
+   },
+   "authEntryBytes": 0,
+   "feeCharged": 26463,
+   "feeSplit": {
+    "nonRefundableResource": 26265,
+    "refundableResource": 98,
+    "rent": 0
+   },
+   "metered": {
+    "read_entry": 1,
+    "write_entry": 0,
+    "ledger_read_byte": 0,
+    "ledger_write_byte": 0,
+    "read_key_byte": 0,
+    "write_key_byte": 0,
+    "read_data_byte": 0,
+    "write_data_byte": 0,
+    "read_code_byte": 0,
+    "write_code_byte": 0,
+    "emit_event": 0,
+    "emit_event_byte": 40,
+    "cpu_insn": 9615493,
+    "mem_byte": 2398856,
+    "invoke_time_nsecs": 425216,
+    "max_rw_key_byte": 0,
+    "max_rw_data_byte": 0,
+    "max_rw_code_byte": 0,
+    "max_emit_event_byte": 0
+   }
+  },
+  {
+   "label": "deploy nido_enclave_image_registry",
+   "hash": "769923dc18640a2b30e46b195ef83d1d977a28190d28cba3c3e6ebd9f4570427",
+   "status": "SUCCESS",
+   "ledger": 5512390,
+   "ms": {
+    "simulate": 347,
+    "submit": 78,
+    "confirm": 6134,
+    "total": 6559
+   },
+   "envelopeBytes": 664,
+   "declared": {
+    "instructions": 902617,
+    "diskReadBytes": 0,
+    "writeBytes": 208,
+    "readOnly": 1,
+    "readWrite": 1,
+    "resourceFee": 611844
+   },
+   "footprint": {
+    "readOnly": [
+     "code e23fbc6b"
+    ],
+    "readWrite": [
+     "data CBHYVB persistent instance"
+    ]
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 611844
+   },
+   "authEntryBytes": 192,
+   "feeCharged": 528537,
+   "feeSplit": {
+    "nonRefundableResource": 3653,
+    "refundableResource": 524784,
+    "rent": 524686
+   },
+   "metered": {
+    "read_entry": 2,
+    "write_entry": 1,
+    "ledger_read_byte": 0,
+    "ledger_write_byte": 208,
+    "read_key_byte": 0,
+    "write_key_byte": 0,
+    "read_data_byte": 0,
+    "write_data_byte": 208,
+    "read_code_byte": 0,
+    "write_code_byte": 0,
+    "emit_event": 0,
+    "emit_event_byte": 40,
+    "cpu_insn": 848131,
+    "mem_byte": 2457638,
+    "invoke_time_nsecs": 324487,
+    "max_rw_key_byte": 48,
+    "max_rw_data_byte": 208,
+    "max_rw_code_byte": 0,
+    "max_emit_event_byte": 0
+   }
+  },
+  {
+   "label": "upload nido_email_guardian",
+   "hash": "86c04faf160c5c934d2b22485909e34cfe36fb1413e091b156d5f4c5173fb3d0",
+   "status": "SUCCESS",
+   "ledger": 5512392,
+   "ms": {
+    "simulate": 385,
+    "submit": 205,
+    "confirm": 6793,
+    "total": 7383
+   },
+   "envelopeBytes": 33728,
+   "declared": {
+    "instructions": 30313161,
+    "diskReadBytes": 0,
+    "writeBytes": 0,
+    "readOnly": 1,
+    "readWrite": 0,
+    "resourceFee": 94755
+   },
+   "footprint": {
+    "readOnly": [
+     "code 9e7f39ef"
+    ],
+    "readWrite": []
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 94755
+   },
+   "authEntryBytes": 0,
+   "feeCharged": 83404,
+   "feeSplit": {
+    "nonRefundableResource": 83206,
+    "refundableResource": 98,
+    "rent": 0
+   },
+   "metered": {
+    "read_entry": 1,
+    "write_entry": 0,
+    "ledger_read_byte": 0,
+    "ledger_write_byte": 0,
+    "read_key_byte": 0,
+    "write_key_byte": 0,
+    "read_data_byte": 0,
+    "write_data_byte": 0,
+    "read_code_byte": 0,
+    "write_code_byte": 0,
+    "emit_event": 0,
+    "emit_event_byte": 40,
+    "cpu_insn": 29145959,
+    "mem_byte": 3588367,
+    "invoke_time_nsecs": 670429,
+    "max_rw_key_byte": 0,
+    "max_rw_data_byte": 0,
+    "max_rw_code_byte": 0,
+    "max_emit_event_byte": 0
+   }
+  },
+  {
+   "label": "registry propose_add gmail.com",
+   "hash": "12b5f3b5c199c40e99c6ce8db8d8f11e04cc8cd731ae0992560a881b2ca8f792",
+   "status": "SUCCESS",
+   "ledger": 5512393,
+   "ms": {
+    "simulate": 85,
+    "submit": 25,
+    "confirm": 1142,
+    "total": 1253
+   },
+   "envelopeBytes": 1324,
+   "declared": {
+    "instructions": 9884886,
+    "diskReadBytes": 0,
+    "writeBytes": 1536,
+    "readOnly": 2,
+    "readWrite": 2,
+    "resourceFee": 1229932
+   },
+   "footprint": {
+    "readOnly": [
+     "data CAMCKD persistent Leaf",
+     "code f0a16ccf"
+    ],
+    "readWrite": [
+     "data CAMCKD persistent Proposal",
+     "data CAMCKD persistent instance"
+    ]
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 1229932
+   },
+   "authEntryBytes": 396,
+   "feeCharged": 1066944,
+   "feeSplit": {
+    "nonRefundableResource": 9603,
+    "refundableResource": 1057241,
+    "rent": 1055385
+   },
+   "metered": {
+    "read_entry": 4,
+    "write_entry": 2,
+    "ledger_read_byte": 0,
+    "ledger_write_byte": 1536,
+    "read_key_byte": 0,
+    "write_key_byte": 0,
+    "read_data_byte": 0,
+    "write_data_byte": 1536,
+    "read_code_byte": 0,
+    "write_code_byte": 0,
+    "emit_event": 2,
+    "emit_event_byte": 760,
+    "cpu_insn": 9496461,
+    "mem_byte": 633629,
+    "invoke_time_nsecs": 1266130,
+    "max_rw_key_byte": 80,
+    "max_rw_data_byte": 1116,
+    "max_rw_code_byte": 0,
+    "max_emit_event_byte": 540
+   }
+  },
+  {
+   "label": "registry approve 1",
+   "hash": "c263b7cae16449e77c723cb3e72e32b39caf2874f1b696f8992a11d2fa2f8013",
+   "status": "SUCCESS",
+   "ledger": 5512394,
+   "ms": {
+    "simulate": 86,
+    "submit": 24,
+    "confirm": 2057,
+    "total": 2167
+   },
+   "envelopeBytes": 592,
+   "declared": {
+    "instructions": 818641,
+    "diskReadBytes": 0,
+    "writeBytes": 420,
+    "readOnly": 2,
+    "readWrite": 1,
+    "resourceFee": 8973
+   },
+   "footprint": {
+    "readOnly": [
+     "data CAMCKD persistent instance",
+     "code f0a16ccf"
+    ],
+    "readWrite": [
+     "data CAMCKD persistent Proposal"
+    ]
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 8973
+   },
+   "authEntryBytes": 116,
+   "feeCharged": 5462,
+   "feeSplit": {
+    "nonRefundableResource": 3562,
+    "refundableResource": 1800,
+    "rent": 1272
+   },
+   "metered": {
+    "read_entry": 3,
+    "write_entry": 1,
+    "ledger_read_byte": 0,
+    "ledger_write_byte": 420,
+    "read_key_byte": 0,
+    "write_key_byte": 0,
+    "read_data_byte": 0,
+    "write_data_byte": 420,
+    "read_code_byte": 0,
+    "write_code_byte": 0,
+    "emit_event": 1,
+    "emit_event_byte": 216,
+    "cpu_insn": 763970,
+    "mem_byte": 401242,
+    "invoke_time_nsecs": 218212,
+    "max_rw_key_byte": 80,
+    "max_rw_data_byte": 420,
+    "max_rw_code_byte": 0,
+    "max_emit_event_byte": 212
+   }
+  },
+  {
+   "label": "registry approve 1",
+   "hash": "878c6aa117c876b5786b83fb493a22edada8798f6a469b207dbe9327d74448b2",
+   "status": "SUCCESS",
+   "ledger": 5512395,
+   "ms": {
+    "simulate": 197,
+    "submit": 37,
+    "confirm": 1737,
+    "total": 1970
+   },
+   "envelopeBytes": 592,
+   "declared": {
+    "instructions": 819735,
+    "diskReadBytes": 0,
+    "writeBytes": 424,
+    "readOnly": 2,
+    "readWrite": 1,
+    "resourceFee": 20474
+   },
+   "footprint": {
+    "readOnly": [
+     "data CAMCKD persistent instance",
+     "code f0a16ccf"
+    ],
+    "readWrite": [
+     "data CAMCKD persistent Proposal"
+    ]
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 20474
+   },
+   "authEntryBytes": 116,
+   "feeCharged": 15463,
+   "feeSplit": {
+    "nonRefundableResource": 3563,
+    "refundableResource": 11800,
+    "rent": 11272
+   },
+   "metered": {
+    "read_entry": 3,
+    "write_entry": 1,
+    "ledger_read_byte": 0,
+    "ledger_write_byte": 424,
+    "read_key_byte": 0,
+    "write_key_byte": 0,
+    "read_data_byte": 0,
+    "write_data_byte": 424,
+    "read_code_byte": 0,
+    "write_code_byte": 0,
+    "emit_event": 1,
+    "emit_event_byte": 216,
+    "cpu_insn": 765064,
+    "mem_byte": 401242,
+    "invoke_time_nsecs": 367979,
+    "max_rw_key_byte": 80,
+    "max_rw_data_byte": 424,
+    "max_rw_code_byte": 0,
+    "max_emit_event_byte": 212
+   }
+  },
+  {
+   "label": "registry attest 1 by 0",
+   "hash": "620ddaefcd15128f2d91c05f1a09676303ae609840d0533264285fa7f1b57eb0",
+   "status": "SUCCESS",
+   "ledger": 5512396,
+   "ms": {
+    "simulate": 68,
+    "submit": 26,
+    "confirm": 1966,
+    "total": 2059
+   },
+   "envelopeBytes": 808,
+   "declared": {
+    "instructions": 1725299,
+    "diskReadBytes": 0,
+    "writeBytes": 436,
+    "readOnly": 2,
+    "readWrite": 1,
+    "resourceFee": 44739
+   },
+   "footprint": {
+    "readOnly": [
+     "data CAMCKD persistent instance",
+     "code f0a16ccf"
+    ],
+    "readWrite": [
+     "data CAMCKD persistent Proposal"
+    ]
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 44739
+   },
+   "authEntryBytes": 0,
+   "feeCharged": 36661,
+   "feeSplit": {
+    "nonRefundableResource": 4312,
+    "refundableResource": 32249,
+    "rent": 31272
+   },
+   "metered": {
+    "read_entry": 3,
+    "write_entry": 1,
+    "ledger_read_byte": 0,
+    "ledger_write_byte": 436,
+    "read_key_byte": 0,
+    "write_key_byte": 0,
+    "read_data_byte": 0,
+    "write_data_byte": 436,
+    "read_code_byte": 0,
+    "write_code_byte": 0,
+    "emit_event": 1,
+    "emit_event_byte": 400,
+    "cpu_insn": 1652268,
+    "mem_byte": 404353,
+    "invoke_time_nsecs": 409570,
+    "max_rw_key_byte": 80,
+    "max_rw_data_byte": 436,
+    "max_rw_code_byte": 0,
+    "max_emit_event_byte": 396
+   }
+  },
+  {
+   "label": "registry attest 1 by 1",
+   "hash": "b57602eacedc43f3d5165c7d715d53bcab8cc8542d7ec3d6c0085999d572c955",
+   "status": "SUCCESS",
+   "ledger": 5512397,
+   "ms": {
+    "simulate": 133,
+    "submit": 35,
+    "confirm": 1584,
+    "total": 1751
+   },
+   "envelopeBytes": 808,
+   "declared": {
+    "instructions": 1727358,
+    "diskReadBytes": 0,
+    "writeBytes": 452,
+    "readOnly": 2,
+    "readWrite": 1,
+    "resourceFee": 56246
+   },
+   "footprint": {
+    "readOnly": [
+     "data CAMCKD persistent instance",
+     "code f0a16ccf"
+    ],
+    "readWrite": [
+     "data CAMCKD persistent Proposal"
+    ]
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 56246
+   },
+   "authEntryBytes": 0,
+   "feeCharged": 46668,
+   "feeSplit": {
+    "nonRefundableResource": 4319,
+    "refundableResource": 42249,
+    "rent": 41272
+   },
+   "metered": {
+    "read_entry": 3,
+    "write_entry": 1,
+    "ledger_read_byte": 0,
+    "ledger_write_byte": 452,
+    "read_key_byte": 0,
+    "write_key_byte": 0,
+    "read_data_byte": 0,
+    "write_data_byte": 452,
+    "read_code_byte": 0,
+    "write_code_byte": 0,
+    "emit_event": 1,
+    "emit_event_byte": 400,
+    "cpu_insn": 1654248,
+    "mem_byte": 404617,
+    "invoke_time_nsecs": 491400,
+    "max_rw_key_byte": 80,
+    "max_rw_data_byte": 452,
+    "max_rw_code_byte": 0,
+    "max_emit_event_byte": 396
+   }
+  },
+  {
+   "label": "restore doc compiler instance",
+   "hash": "6b85123a745b7d284323a84342b2f43c1934d32b9d3079c3e74ecf657ff42423",
+   "status": "SUCCESS",
+   "ledger": 5512398,
+   "ms": {
+    "total": 2040
+   },
+   "envelopeBytes": 252,
+   "declared": {
+    "instructions": 0,
+    "diskReadBytes": 104,
+    "writeBytes": 104,
+    "readOnly": 0,
+    "readWrite": 1,
+    "resourceFee": 20356
+   },
+   "footprint": {
+    "readOnly": [],
+    "readWrite": [
+     "data CAYCPM persistent instance"
+    ]
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 20356
+   },
+   "authEntryBytes": 0,
+   "feeCharged": 14726,
+   "feeSplit": {
+    "nonRefundableResource": 3243,
+    "refundableResource": 11383,
+    "rent": 11383
+   }
+  },
+  {
+   "label": "restore doc compiler code",
+   "hash": "b39e79d0d692365534c30a73f7f9e0aee77fd685f20016aa711b62ebac624a93",
+   "status": "SUCCESS",
+   "ledger": 5512399,
+   "ms": {
+    "total": 1900
+   },
+   "envelopeBytes": 240,
+   "declared": {
+    "instructions": 0,
+    "diskReadBytes": 110048,
+    "writeBytes": 110048,
+    "readOnly": 0,
+    "readWrite": 1,
+    "resourceFee": 90696812
+   },
+   "footprint": {
+    "readOnly": [],
+    "readWrite": [
+     "code 2730a7d3"
+    ]
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 90696812
+   },
+   "authEntryBytes": 0,
+   "feeCharged": 78873057,
+   "feeSplit": {
+    "nonRefundableResource": 74079,
+    "refundableResource": 78798878,
+    "rent": 78798878
+   }
+  },
+  {
+   "label": "restore recovery controller instance",
+   "hash": "b9d82df040d8d558fa1780b0c0824e676bd09fbede619765f447a2ae76f5776d",
+   "status": "SUCCESS",
+   "ledger": 5512400,
+   "ms": {
+    "total": 2076
+   },
+   "envelopeBytes": 252,
+   "declared": {
+    "instructions": 0,
+    "diskReadBytes": 104,
+    "writeBytes": 104,
+    "readOnly": 0,
+    "readWrite": 1,
+    "resourceFee": 20356
+   },
+   "footprint": {
+    "readOnly": [],
+    "readWrite": [
+     "data CBOFO5 persistent instance"
+    ]
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 20356
+   },
+   "authEntryBytes": 0,
+   "feeCharged": 14726,
+   "feeSplit": {
+    "nonRefundableResource": 3243,
+    "refundableResource": 11383,
+    "rent": 11383
+   }
+  },
+  {
+   "label": "restore recovery controller code",
+   "hash": "9806a648675c4b0cfeadb4b501dc2a7c8ae71ad2fa7bc55ad20560d6994bed79",
+   "status": "SUCCESS",
+   "ledger": 5512402,
+   "ms": {
+    "total": 6830
+   },
+   "envelopeBytes": 240,
+   "declared": {
+    "instructions": 0,
+    "diskReadBytes": 68364,
+    "writeBytes": 68364,
+    "readOnly": 0,
+    "readWrite": 1,
+    "resourceFee": 38574034
+   },
+   "footprint": {
+    "readOnly": [],
+    "readWrite": [
+     "code daaf09d9"
+    ]
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 38574034
+   },
+   "authEntryBytes": 0,
+   "feeCharged": 33545398,
+   "feeSplit": {
+    "nonRefundableResource": 47212,
+    "refundableResource": 33498086,
+    "rent": 33498086
+   }
+  },
+  {
+   "label": "mint testnet",
+   "hash": "25bb1939faeca1678387d15bd13eb8e86dd4a59cf8b0d39b79886652dbbad400",
+   "status": "SUCCESS",
+   "ledger": 5512404,
+   "ms": {
+    "simulate": 201,
+    "submit": 34,
+    "confirm": 4788,
+    "total": 5022
+   },
+   "envelopeBytes": 1064,
+   "declared": {
+    "instructions": 3469152,
+    "diskReadBytes": 0,
+    "writeBytes": 1468,
+    "readOnly": 5,
+    "readWrite": 5,
+    "resourceFee": 1549058
+   },
+   "footprint": {
+    "readOnly": [
+     "data CDDIW3 persistent instance",
+     "data CDEV5Y persistent instance",
+     "code 02482b9a",
+     "code 2c976bfd",
+     "code f2e1dfce"
+    ],
+    "readWrite": [
+     "data CCMXZU persistent InstalledRules",
+     "data CCMXZU persistent ContextRuleData",
+     "data CCMXZU persistent SignerData",
+     "data CCMXZU persistent SignerLookup",
+     "data CCMXZU persistent instance"
+    ]
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 1549058
+   },
+   "authEntryBytes": 0,
+   "feeCharged": 1344343,
+   "feeSplit": {
+    "nonRefundableResource": 10832,
+    "refundableResource": 1333411,
+    "rent": 1331243
+   },
+   "metered": {
+    "read_entry": 10,
+    "write_entry": 5,
+    "ledger_read_byte": 0,
+    "ledger_write_byte": 1468,
+    "read_key_byte": 0,
+    "write_key_byte": 0,
+    "read_data_byte": 0,
+    "write_data_byte": 1468,
+    "read_code_byte": 0,
+    "write_code_byte": 0,
+    "emit_event": 3,
+    "emit_event_byte": 888,
+    "cpu_insn": 3303767,
+    "mem_byte": 2192903,
+    "invoke_time_nsecs": 740513,
+    "max_rw_key_byte": 116,
+    "max_rw_data_byte": 492,
+    "max_rw_code_byte": 0,
+    "max_emit_event_byte": 316
+   }
+  },
+  {
+   "label": "deploy guardian testnet",
+   "hash": "4381a327a06d03ae43310a7d46a6e020c501be4be10fee9d4ef2052d7a1a7ac2",
+   "status": "SUCCESS",
+   "ledger": 5512405,
+   "ms": {
+    "simulate": 73,
+    "submit": 27,
+    "confirm": 1696,
+    "total": 1796
+   },
+   "envelopeBytes": 1660,
+   "declared": {
+    "instructions": 1283007,
+    "diskReadBytes": 0,
+    "writeBytes": 644,
+    "readOnly": 3,
+    "readWrite": 1,
+    "resourceFee": 1870141
+   },
+   "footprint": {
+    "readOnly": [
+     "data CD7UBC persistent instance",
+     "code 0e4239ca",
+     "code 9e7f39ef"
+    ],
+    "readWrite": [
+     "data CCLG2C persistent instance"
+    ]
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 1870141
+   },
+   "authEntryBytes": 648,
+   "feeCharged": 1623015,
+   "feeSplit": {
+    "nonRefundableResource": 6124,
+    "refundableResource": 1616791,
+    "rent": 1616693
+   },
+   "metered": {
+    "read_entry": 4,
+    "write_entry": 1,
+    "ledger_read_byte": 0,
+    "ledger_write_byte": 644,
+    "read_key_byte": 0,
+    "write_key_byte": 0,
+    "read_data_byte": 0,
+    "write_data_byte": 644,
+    "read_code_byte": 0,
+    "write_code_byte": 0,
+    "emit_event": 0,
+    "emit_event_byte": 40,
+    "cpu_insn": 1230050,
+    "mem_byte": 961948,
+    "invoke_time_nsecs": 320082,
+    "max_rw_key_byte": 48,
+    "max_rw_data_byte": 644,
+    "max_rw_code_byte": 0,
+    "max_emit_event_byte": 0
+   }
+  },
+  {
+   "label": "apply_doc testnet",
+   "hash": "24c2b9594a6a50493013b986220a9ebf00bea5122eb84bcfb02b9cc4fc969066",
+   "status": "SUCCESS",
+   "ledger": 5512407,
+   "ms": {
+    "simulate": 358,
+    "submit": 47,
+    "confirm": 3452,
+    "total": 3858
+   },
+   "envelopeBytes": 4204,
+   "declared": {
+    "instructions": 17010106,
+    "diskReadBytes": 0,
+    "writeBytes": 3852,
+    "readOnly": 12,
+    "readWrite": 10,
+    "resourceFee": 6569049
+   },
+   "footprint": {
+    "readOnly": [
+     "data CAYCPM persistent instance",
+     "data CBOFO5 persistent Authorized",
+     "data CBOFO5 temporary Completing",
+     "data CBOFO5 persistent instance",
+     "data CCMXZU persistent ContextRuleData",
+     "data CCMXZU persistent Revoked",
+     "data CCMXZU persistent SignerData",
+     "data CDEV5Y persistent instance",
+     "code 2730a7d3",
+     "code 2c976bfd",
+     "code daaf09d9",
+     "code f2e1dfce"
+    ],
+    "readWrite": [
+     "data CBOFO5 persistent Config",
+     "data CBOFO5 persistent Epoch",
+     "data CCMXZU persistent AppliedDocBytes",
+     "data CCMXZU persistent AppliedFingerprints",
+     "data CCMXZU persistent InstalledRules",
+     "data CCMXZU persistent ContextRuleData",
+     "data CCMXZU persistent PolicyData",
+     "data CCMXZU persistent PolicyLookup",
+     "data CCMXZU persistent instance",
+     "data CCMXZU temporary _maxDepth"
+    ]
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 6569049
+   },
+   "authEntryBytes": 1532,
+   "feeCharged": 5711754,
+   "feeSplit": {
+    "nonRefundableResource": 29007,
+    "refundableResource": 5682647,
+    "rent": 5681123
+   },
+   "metered": {
+    "read_entry": 22,
+    "write_entry": 10,
+    "ledger_read_byte": 0,
+    "ledger_write_byte": 3852,
+    "read_key_byte": 0,
+    "write_key_byte": 0,
+    "read_data_byte": 0,
+    "write_data_byte": 3852,
+    "read_code_byte": 0,
+    "write_code_byte": 0,
+    "emit_event": 2,
+    "emit_event_byte": 624,
+    "cpu_insn": 16241550,
+    "mem_byte": 1787372,
+    "invoke_time_nsecs": 3143263,
+    "max_rw_key_byte": 116,
+    "max_rw_data_byte": 872,
+    "max_rw_code_byte": 0,
+    "max_emit_event_byte": 368
+   }
+  },
+  {
+   "label": "begin_lost_key",
+   "hash": "6e3a7e8c0892fa9d54e98e93554c18abf277c7f19d8fc655b5ad8b10218ede82",
+   "status": "SUCCESS",
+   "ledger": 5512408,
+   "ms": {
+    "simulate": 139,
+    "submit": 29,
+    "confirm": 1697,
+    "total": 1864
+   },
+   "envelopeBytes": 1844,
+   "declared": {
+    "instructions": 13690643,
+    "diskReadBytes": 0,
+    "writeBytes": 1236,
+    "readOnly": 14,
+    "readWrite": 2,
+    "resourceFee": 423721
+   },
+   "footprint": {
+    "readOnly": [
+     "data CAYCPM persistent instance",
+     "data CBOFO5 persistent Attempt",
+     "data CBOFO5 persistent Authorized",
+     "data CBOFO5 persistent Config",
+     "data CBOFO5 persistent Epoch",
+     "data CBOFO5 persistent instance",
+     "data CCMXZU persistent AppliedDocBytes",
+     "data CCMXZU persistent Revoked",
+     "data CCMXZU persistent instance",
+     "data CDEV5Y persistent instance",
+     "code 2730a7d3",
+     "code 2c976bfd",
+     "code daaf09d9",
+     "code f2e1dfce"
+    ],
+    "readWrite": [
+     "data CBOFO5 temporary Collecting",
+     "data CBOFO5 persistent NextAttempt"
+    ]
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 423721
+   },
+   "authEntryBytes": 0,
+   "feeCharged": 365909,
+   "feeSplit": {
+    "nonRefundableResource": 11751,
+    "refundableResource": 354058,
+    "rent": 353423
+   },
+   "metered": {
+    "read_entry": 16,
+    "write_entry": 2,
+    "ledger_read_byte": 0,
+    "ledger_write_byte": 1236,
+    "read_key_byte": 0,
+    "write_key_byte": 0,
+    "read_data_byte": 0,
+    "write_data_byte": 1236,
+    "read_code_byte": 0,
+    "write_code_byte": 0,
+    "emit_event": 1,
+    "emit_event_byte": 260,
+    "cpu_insn": 13121774,
+    "mem_byte": 1885016,
+    "invoke_time_nsecs": 2244903,
+    "max_rw_key_byte": 140,
+    "max_rw_data_byte": 1096,
+    "max_rw_code_byte": 0,
+    "max_emit_event_byte": 248
+   }
+  },
+  {
+   "label": "submit_guardian (email)",
+   "hash": "08cdc915727cc9b569bd4015ea01a33fa5486d2d18cb673d30ab7d393b5810ff",
+   "status": "SUCCESS",
+   "ledger": 5512410,
+   "ms": {
+    "simulate": 201,
+    "submit": 46,
+    "confirm": 1468,
+    "total": 1715
+   },
+   "envelopeBytes": 18080,
+   "declared": {
+    "instructions": 126548373,
+    "diskReadBytes": 0,
+    "writeBytes": 1208,
+    "readOnly": 10,
+    "readWrite": 2,
+    "resourceFee": 90555
+   },
+   "footprint": {
+    "readOnly": [
+     "data CBOFO5 persistent Attempt",
+     "data CBOFO5 persistent Config",
+     "data CBOFO5 persistent Epoch",
+     "data CBOFO5 persistent InvalidateBelow",
+     "data CBOFO5 persistent instance",
+     "data CCLG2C persistent instance",
+     "data CD7UBC persistent instance",
+     "code 0e4239ca",
+     "code 9e7f39ef",
+     "code daaf09d9"
+    ],
+    "readWrite": [
+     "data CBOFO5 temporary Collecting",
+     "data CCLG2C temporary _maxDepth"
+    ]
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 90555
+   },
+   "authEntryBytes": 16784,
+   "feeCharged": 82428,
+   "feeSplit": {
+    "nonRefundableResource": 80985,
+    "refundableResource": 1343,
+    "rent": 1333
+   },
+   "metered": {
+    "read_entry": 12,
+    "write_entry": 2,
+    "ledger_read_byte": 0,
+    "ledger_write_byte": 1208,
+    "read_key_byte": 0,
+    "write_key_byte": 0,
+    "read_data_byte": 0,
+    "write_data_byte": 1208,
+    "read_code_byte": 0,
+    "write_code_byte": 0,
+    "emit_event": 0,
+    "emit_event_byte": 4,
+    "cpu_insn": 121639784,
+    "mem_byte": 5565907,
+    "invoke_time_nsecs": 17530387,
+    "max_rw_key_byte": 140,
+    "max_rw_data_byte": 1136,
+    "max_rw_code_byte": 0,
+    "max_emit_event_byte": 0
+   }
+  },
+  {
+   "label": "submit_guardian (helper)",
+   "hash": "e1e4b757c0833fdad4eea9156853ec6278715c7d81eccf79a2cd8bf0961c16bc",
+   "status": "SUCCESS",
+   "ledger": 5512411,
+   "ms": {
+    "simulate": 134,
+    "submit": 33,
+    "confirm": 2255,
+    "total": 2422
+   },
+   "envelopeBytes": 1504,
+   "declared": {
+    "instructions": 2202593,
+    "diskReadBytes": 0,
+    "writeBytes": 1460,
+    "readOnly": 7,
+    "readWrite": 4,
+    "resourceFee": 4217487
+   },
+   "footprint": {
+    "readOnly": [
+     "data CBOFO5 persistent Config",
+     "data CBOFO5 persistent Epoch",
+     "data CBOFO5 persistent NextAttempt",
+     "data CBOFO5 persistent instance",
+     "data CCMXZU persistent instance",
+     "code 2c976bfd",
+     "code daaf09d9"
+    ],
+    "readWrite": [
+     "data CBOFO5 persistent Attempt",
+     "data CBOFO5 persistent Authorized",
+     "data CBOFO5 temporary Collecting",
+     "data CBOFO5 persistent InvalidateBelow"
+    ]
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 4217487
+   },
+   "authEntryBytes": 112,
+   "feeCharged": 3664628,
+   "feeSplit": {
+    "nonRefundableResource": 10159,
+    "refundableResource": 3654369,
+    "rent": 3653812
+   },
+   "metered": {
+    "read_entry": 11,
+    "write_entry": 3,
+    "ledger_read_byte": 0,
+    "ledger_write_byte": 1460,
+    "read_key_byte": 0,
+    "write_key_byte": 0,
+    "read_data_byte": 0,
+    "write_data_byte": 1460,
+    "read_code_byte": 0,
+    "write_code_byte": 0,
+    "emit_event": 1,
+    "emit_event_byte": 228,
+    "cpu_insn": 2064633,
+    "mem_byte": 809245,
+    "invoke_time_nsecs": 518933,
+    "max_rw_key_byte": 136,
+    "max_rw_data_byte": 1176,
+    "max_rw_code_byte": 0,
+    "max_emit_event_byte": 224
+   }
+  },
+  {
+   "label": "complete (apply_doc)",
+   "hash": "ff431206c9e3c9ad4d0880fececaec432b95ef159a531bbf58641d7889037be4",
+   "status": "SUCCESS",
+   "ledger": 5512424,
+   "ms": {
+    "simulate": 251,
+    "submit": 30,
+    "confirm": 3150,
+    "total": 3431
+   },
+   "envelopeBytes": 4256,
+   "declared": {
+    "instructions": 15746781,
+    "diskReadBytes": 0,
+    "writeBytes": 5264,
+    "readOnly": 10,
+    "readWrite": 17,
+    "resourceFee": 680714
+   },
+   "footprint": {
+    "readOnly": [
+     "data CAYCPM persistent instance",
+     "data CBOFO5 persistent instance",
+     "data CCMXZU persistent ContextRuleData",
+     "data CCMXZU persistent PolicyData",
+     "data CCMXZU persistent Revoked",
+     "data CDEV5Y persistent instance",
+     "code 2730a7d3",
+     "code 2c976bfd",
+     "code daaf09d9",
+     "code f2e1dfce"
+    ],
+    "readWrite": [
+     "data CBOFO5 persistent Attempt",
+     "data CBOFO5 persistent Authorized",
+     "data CBOFO5 temporary Collecting",
+     "data CBOFO5 temporary Completing",
+     "data CBOFO5 persistent Config",
+     "data CBOFO5 persistent Epoch",
+     "data CCMXZU persistent AppliedDocBytes",
+     "data CCMXZU persistent AppliedFingerprints",
+     "data CCMXZU persistent InstalledRules",
+     "data CCMXZU persistent ContextRuleData",
+     "data CCMXZU persistent Revoked",
+     "data CCMXZU persistent SignerData",
+     "data CCMXZU persistent SignerData",
+     "data CCMXZU persistent SignerLookup",
+     "data CCMXZU persistent SignerLookup",
+     "data CCMXZU persistent instance",
+     "data CCMXZU temporary _maxDepth"
+    ]
+   },
+   "simulated": {
+    "instructions": 0,
+    "memBytes": 0,
+    "minResourceFee": 680714
+   },
+   "authEntryBytes": 988,
+   "feeCharged": 592637,
+   "feeSplit": {
+    "nonRefundableResource": 38094,
+    "refundableResource": 554443,
+    "rent": 552040
+   },
+   "metered": {
+    "read_entry": 27,
+    "write_entry": 12,
+    "ledger_read_byte": 0,
+    "ledger_write_byte": 5264,
+    "read_key_byte": 0,
+    "write_key_byte": 0,
+    "read_data_byte": 0,
+    "write_data_byte": 5264,
+    "read_code_byte": 0,
+    "write_code_byte": 0,
+    "emit_event": 4,
+    "emit_event_byte": 984,
+    "cpu_insn": 14897208,
+    "mem_byte": 2022927,
+    "invoke_time_nsecs": 3279200,
+    "max_rw_key_byte": 136,
+    "max_rw_data_byte": 1176,
+    "max_rw_code_byte": 0,
+    "max_emit_event_byte": 368
+   }
+  }
+ ],
+ "durationSeconds": 248,
+ "table": "Testnet (`Test SDF Network ; September 2015`, https://soroban-testnet.stellar.org, Stellar RPC 30.0.0-13e53516633c3ce1281c7edbacb607107d3a4e55), run of 2026-11-02 02:16 UTC: one complete email-factor recovery, 23 transactions. Proving (bb.js in Node, on the machine of the proving table): 0.7 s witness, 3.4 s proving.\n\n| Step | Transaction | Instructions (metered) | Instructions (declared) | Read / write entries | Bytes written | Envelope bytes | Fee charged (stroops) | of which rent | Wall clock (ms) |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n| deploy the email contracts (upload nido_email_verifier) | [`d4c48e05c842…`](https://stellar.expert/explorer/testnet/tx/d4c48e05c842663c2094f5bea4c740cf1f085d51fa69847eabb8e9470deed9f4) | 39,379,581 | 40,956,128 | 1 / 0 | 0 | 45,864 | 113,050 | 0 | 3,586 |\n| deploy the email contracts (deploy nido_email_verifier) | [`a225fea7f32c…`](https://stellar.expert/explorer/testnet/tx/a225fea7f32c099c0de77f8b68624f63de1792f0b30339a9bafdc5426111a4e5) | 619,073 | 670,448 | 2 / 1 | 104 | 536 | 14,842 | 11,383 | 2,048 |\n| deploy the email contracts (upload nido_dkim_registry) | [`1096b46c5fb1…`](https://stellar.expert/explorer/testnet/tx/1096b46c5fb1a9080e4eea235eae9fd6072399bc4ff226957b8509b0f1ddaa52) | 58,457,223 | 60,796,876 | 1 / 0 | 0 | 68,520 | 168,386 | 0 | 7,002 |\n| deploy the email contracts (deploy nido_dkim_registry) | [`b9e490ae2318…`](https://stellar.expert/explorer/testnet/tx/b9e490ae231885476a1f6ca264e3eb513b5d06532b80804a00faadd15c6e3ff3) | 1,565,195 | 1,630,603 | 2 / 1 | 1,116 | 2,088 | 2,810,024 | 2,802,463 | 1,965 |\n| deploy the email contracts (upload nido_enclave_image_registry) | [`94578fb9ea0d…`](https://stellar.expert/explorer/testnet/tx/94578fb9ea0d6d4aba53e74c3732d24da72aab4fca4ebc1937c63449edaed0d5) | 9,615,493 | 10,001,477 | 1 / 0 | 0 | 10,400 | 26,463 | 0 | 2,662 |\n| deploy the email contracts (deploy nido_enclave_image_registry) | [`769923dc1864…`](https://stellar.expert/explorer/testnet/tx/769923dc18640a2b30e46b195ef83d1d977a28190d28cba3c3e6ebd9f4570427) | 848,131 | 902,617 | 2 / 1 | 208 | 664 | 528,537 | 524,686 | 6,559 |\n| deploy the email contracts (upload nido_email_guardian) | [`86c04faf160c…`](https://stellar.expert/explorer/testnet/tx/86c04faf160c5c934d2b22485909e34cfe36fb1413e091b156d5f4c5173fb3d0) | 29,145,959 | 30,313,161 | 1 / 0 | 0 | 33,728 | 83,404 | 0 | 7,383 |\n| registry: propose, approve and attest the Gmail mock key (registry propose_add gmail.com) | [`12b5f3b5c199…`](https://stellar.expert/explorer/testnet/tx/12b5f3b5c199c40e99c6ce8db8d8f11e04cc8cd731ae0992560a881b2ca8f792) | 9,496,461 | 9,884,886 | 4 / 2 | 1,536 | 1,324 | 1,066,944 | 1,055,385 | 1,253 |\n| registry: propose, approve and attest the Gmail mock key (registry approve 1) | [`c263b7cae164…`](https://stellar.expert/explorer/testnet/tx/c263b7cae16449e77c723cb3e72e32b39caf2874f1b696f8992a11d2fa2f8013) | 763,970 | 818,641 | 3 / 1 | 420 | 592 | 5,462 | 1,272 | 2,167 |\n| registry: propose, approve and attest the Gmail mock key (registry approve 1) | [`878c6aa117c8…`](https://stellar.expert/explorer/testnet/tx/878c6aa117c876b5786b83fb493a22edada8798f6a469b207dbe9327d74448b2) | 765,064 | 819,735 | 3 / 1 | 424 | 592 | 15,463 | 11,272 | 1,970 |\n| registry: propose, approve and attest the Gmail mock key (registry attest 1 by 0) | [`620ddaefcd15…`](https://stellar.expert/explorer/testnet/tx/620ddaefcd15128f2d91c05f1a09676303ae609840d0533264285fa7f1b57eb0) | 1,652,268 | 1,725,299 | 3 / 1 | 436 | 808 | 36,661 | 31,272 | 2,059 |\n| registry: propose, approve and attest the Gmail mock key (registry attest 1 by 1) | [`b57602eacedc…`](https://stellar.expert/explorer/testnet/tx/b57602eacedc43f3d5165c7d715d53bcab8cc8542d7ec3d6c0085999d572c955) | 1,654,248 | 1,727,358 | 3 / 1 | 452 | 808 | 46,668 | 41,272 | 1,751 |\n| restore Perch's archived entries (doc compiler instance, doc compiler code, recovery controller instance, recovery controller code) (restore doc compiler instance) | [`6b85123a745b…`](https://stellar.expert/explorer/testnet/tx/6b85123a745b7d284323a84342b2f43c1934d32b9d3079c3e74ecf657ff42423) | — | 0 | 1 (footprint) | 104 | 252 | 14,726 | 11,383 | 2,040 |\n| restore Perch's archived entries (doc compiler instance, doc compiler code, recovery controller instance, recovery controller code) (restore doc compiler code) | [`b39e79d0d692…`](https://stellar.expert/explorer/testnet/tx/b39e79d0d692365534c30a73f7f9e0aee77fd685f20016aa711b62ebac624a93) | — | 0 | 1 (footprint) | 110,048 | 240 | 78,873,057 | 78,798,878 | 1,900 |\n| restore Perch's archived entries (doc compiler instance, doc compiler code, recovery controller instance, recovery controller code) (restore recovery controller instance) | [`b9d82df040d8…`](https://stellar.expert/explorer/testnet/tx/b9d82df040d8d558fa1780b0c0824e676bd09fbede619765f447a2ae76f5776d) | — | 0 | 1 (footprint) | 104 | 252 | 14,726 | 11,383 | 2,076 |\n| restore Perch's archived entries (doc compiler instance, doc compiler code, recovery controller instance, recovery controller code) (restore recovery controller code) | [`9806a648675c…`](https://stellar.expert/explorer/testnet/tx/9806a648675c4b0cfeadb4b501dc2a7c8ae71ad2fa7bc55ad20560d6994bed79) | — | 0 | 1 (footprint) | 68,364 | 240 | 33,545,398 | 33,498,086 | 6,830 |\n| enroll: mint, deploy the guardian, apply the recovery document (mint testnet) | [`25bb1939faec…`](https://stellar.expert/explorer/testnet/tx/25bb1939faeca1678387d15bd13eb8e86dd4a59cf8b0d39b79886652dbbad400) | 3,303,767 | 3,469,152 | 10 / 5 | 1,468 | 1,064 | 1,344,343 | 1,331,243 | 5,022 |\n| enroll: mint, deploy the guardian, apply the recovery document (deploy guardian testnet) | [`4381a327a06d…`](https://stellar.expert/explorer/testnet/tx/4381a327a06d03ae43310a7d46a6e020c501be4be10fee9d4ef2052d7a1a7ac2) | 1,230,050 | 1,283,007 | 4 / 1 | 644 | 1,660 | 1,623,015 | 1,616,693 | 1,796 |\n| enroll: mint, deploy the guardian, apply the recovery document (apply_doc testnet) | [`24c2b9594a6a…`](https://stellar.expert/explorer/testnet/tx/24c2b9594a6a50493013b986220a9ebf00bea5122eb84bcfb02b9cc4fc969066) | 16,241,550 | 17,010,106 | 22 / 10 | 3,852 | 4,204 | 5,711,754 | 5,681,123 | 3,858 |\n| begin_lost_key | [`6e3a7e8c0892…`](https://stellar.expert/explorer/testnet/tx/6e3a7e8c0892fa9d54e98e93554c18abf277c7f19d8fc655b5ad8b10218ede82) | 13,121,774 | 13,690,643 | 16 / 2 | 1,236 | 1,844 | 365,909 | 353,423 | 1,864 |\n| submit_guardian (email vote, real proof) | [`08cdc915727c…`](https://stellar.expert/explorer/testnet/tx/08cdc915727cc9b569bd4015ea01a33fa5486d2d18cb673d30ab7d393b5810ff) | 121,639,784 | 126,548,373 | 12 / 2 | 1,208 | 18,080 | 82,428 | 1,333 | 1,715 |\n| submit_guardian (helper vote) | [`e1e4b757c083…`](https://stellar.expert/explorer/testnet/tx/e1e4b757c0833fdad4eea9156853ec6278715c7d81eccf79a2cd8bf0961c16bc) | 2,064,633 | 2,202,593 | 11 / 3 | 1,460 | 1,504 | 3,664,628 | 3,653,812 | 2,422 |\n| the delay | — | | | | | | | | 57,575 |\n| complete (apply_doc through the recovery rule) | [`ff431206c9e3…`](https://stellar.expert/explorer/testnet/tx/ff431206c9e3c9ad4d0880fececaec432b95ef159a531bbf58641d7889037be4) | 14,897,208 | 15,746,781 | 27 / 12 | 5,264 | 4,256 | 592,637 | 552,040 | 3,431 |",
+ "deployedMd": "## Email recovery (evaluation, TEST-ONLY)\n\nThe email-recovery contracts as `research/email-recovery/eval/testnet/run.mjs` deployed them for the evaluation (research/email-recovery/eval/README.md, \"Testnet\"), around Perch's deployment and Nido's factory above. Built from Nido commit `da4450b23cf22f7dd015a0f64cc4f0eea7663bc9` with `just build-contracts`; deployed 2026-11-02 with stellar 27.0.0 (5a7c5fe76530bf4248477ac812fc757146b98cc4). Every governing key is a throwaway testnet key, and the registry's only key is the Gmail provider mock's TEST-ONLY key: these contracts are not for real accounts.\n\n| Contract | Address | Wasm sha256 | Configuration |\n| --- | --- | --- | --- |\n| `nido-email-verifier` | `CD7UBCFQTFSZW4NDESQV53ZD7NL2XLDODRVRI6SRJVCWK4OCTPLJ32QM` | `0e4239ca…` | Constructorless; reports circuit id `2837d0cfd7ddad68…` (read back) |\n| `nido-dkim-registry` | `CAMCKDAC4UIHT4H25GWKSBEXM53PXTYV55HE2Z35LDVDW73I2DJQ5HKE` | `f0a16ccf…` | 5 members, threshold 3, revocation 2; the DNS attester mock's 3 TEST-ONLY keys, threshold 2; grace 17,280 ledgers; the launch allowlist. Proposal 1 (the Gmail mock's key) approved and attested, eligible from ledger 5,564,237 |\n| `nido-enclave-image-registry` | `CBHYVBSWH4GX37PGQYASXL5GM3X3MZY4W3JJTSU4JTBFCFW3XZ2TXECZ` | `e23fbc6b…` | One signer `GAKZZFCJMYQYTS4DUU7VKYQDRTOAM3OAODYPYS6YLAW352WPXEW36OHZ`, threshold 1; no measurement approved |\n| `nido-email-guardian` | wasm uploaded; one instance per account (the run's: `CCLG2C25XQBGVFBR56WJLVNAV7T3XPKZYO2RU5G3UGPIBFXSLKREBRGT`) | `9e7f39ef…` | — |\n\nDeployer `GCPMJ444S4Q7IVRFLDLCCPF4OVX7Q2LPGE4OF4NE7XILXI7L3NQ7LHRE`. Members: `GDXUMUOIFRILZWQLS5OO3OZA4GMBXE734SAXA4J2K6O3ZRYE44IZ43KV`, `GBIBKGD7OBCKXTBG5L5JMRALGZUZAOBNR5B6DCMJAWP6KHAQ55BFFWOG`, `GC7E6LD4ZDGCFMFI6SJFGW27ZCVZT7ZPSL2JYEXPJIVAMH3JQQBWEGOM`, `GAFLWIOMYE6OU2XZPELPHEATA4BLE7Y43L477SERVMXUFEFRBDIN4DGM`, `GCTMJ5PB46MC6DFR6BKGEMRMZMLNIZTVB53Q2UXNVCF7LBEP37KBISGH`."
+}

@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-01T21:01:08.682Z",
+  "generated": "2026-11-02T00:38:38.899Z",
   "browser": "Chrome/151.0.7922.34",
   "host": {
     "cpu": "Apple M5 Max",
@@ -8,26 +8,26 @@
     "efficiency_cores": 12,
     "memory_gib": 128,
     "os": "26.5.2",
-    "load_average_at_start": "4.50 5.14 5.19"
+    "load_average_at_start": "4.59 4.88 5.17"
   },
   "page": "/security/recover/bench/ (packages/frontend), the Gmail fixture of crates/integration-tests/fixtures/email/provider-gmail-com",
-  "warm_runs_per_configuration": 3,
+  "warm_runs_per_configuration": 5,
   "results": [
     {
       "label": "desktop",
       "cpu_throttling": 1,
       "threads": 1,
       "cross_origin_isolated": true,
-      "main_thread_probe_ms": 171,
+      "main_thread_probe_ms": 178,
       "cold_run": {
         "run": 1,
         "threads": 1,
-        "wall_ms": 10237,
+        "wall_ms": 10350,
         "stage_ms": {
-          "download": 957,
-          "witness": 806,
-          "proving": 8450,
-          "verifying": 11
+          "download": 1060,
+          "witness": 814,
+          "proving": 8445,
+          "verifying": 14
         },
         "downloaded_bytes": 18790270,
         "cached_bytes": 0,
@@ -38,11 +38,11 @@
         {
           "run": 1,
           "threads": 1,
-          "wall_ms": 10034,
+          "wall_ms": 9896,
           "stage_ms": {
-            "download": 714,
-            "witness": 808,
-            "proving": 8489,
+            "download": 712,
+            "witness": 799,
+            "proving": 8357,
             "verifying": 11
           },
           "downloaded_bytes": 1760,
@@ -53,11 +53,11 @@
         {
           "run": 2,
           "threads": 1,
-          "wall_ms": 9985,
+          "wall_ms": 9983,
           "stage_ms": {
-            "download": 719,
-            "witness": 809,
-            "proving": 8434,
+            "download": 702,
+            "witness": 802,
+            "proving": 8456,
             "verifying": 11
           },
           "downloaded_bytes": 1760,
@@ -68,12 +68,42 @@
         {
           "run": 3,
           "threads": 1,
-          "wall_ms": 10031,
+          "wall_ms": 9876,
+          "stage_ms": {
+            "download": 709,
+            "witness": 796,
+            "proving": 8348,
+            "verifying": 11
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 738,
+          "proof_bytes": 16224
+        },
+        {
+          "run": 4,
+          "threads": 1,
+          "wall_ms": 9980,
+          "stage_ms": {
+            "download": 705,
+            "witness": 801,
+            "proving": 8451,
+            "verifying": 11
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 738,
+          "proof_bytes": 16224
+        },
+        {
+          "run": 5,
+          "threads": 1,
+          "wall_ms": 9964,
           "stage_ms": {
             "download": 710,
             "witness": 806,
-            "proving": 8492,
-            "verifying": 11
+            "proving": 8423,
+            "verifying": 14
           },
           "downloaded_bytes": 1760,
           "cached_bytes": 18788510,
@@ -82,11 +112,11 @@
         }
       ],
       "warm_median_ms": {
-        "total": 10031,
-        "witness": 808,
-        "proving": 8489
+        "total": 9964,
+        "witness": 801,
+        "proving": 8423
       },
-      "peak_renderer_rss_mib": 1459,
+      "peak_renderer_rss_mib": 1468,
       "bb_wasm_memory_mib": 738
     },
     {
@@ -98,11 +128,11 @@
       "cold_run": {
         "run": 1,
         "threads": 18,
-        "wall_ms": 3094,
+        "wall_ms": 3109,
         "stage_ms": {
-          "download": 757,
-          "witness": 806,
-          "proving": 1506,
+          "download": 761,
+          "witness": 797,
+          "proving": 1527,
           "verifying": 11
         },
         "downloaded_bytes": 18790270,
@@ -114,12 +144,12 @@
         {
           "run": 1,
           "threads": 18,
-          "wall_ms": 3078,
+          "wall_ms": 3062,
           "stage_ms": {
-            "download": 724,
-            "witness": 800,
-            "proving": 1531,
-            "verifying": 11
+            "download": 716,
+            "witness": 798,
+            "proving": 1524,
+            "verifying": 12
           },
           "downloaded_bytes": 1760,
           "cached_bytes": 18788510,
@@ -129,12 +159,12 @@
         {
           "run": 2,
           "threads": 18,
-          "wall_ms": 2855,
+          "wall_ms": 2854,
           "stage_ms": {
-            "download": 639,
-            "witness": 755,
-            "proving": 1442,
-            "verifying": 7
+            "download": 631,
+            "witness": 747,
+            "proving": 1456,
+            "verifying": 8
           },
           "downloaded_bytes": 1760,
           "cached_bytes": 18788510,
@@ -144,11 +174,41 @@
         {
           "run": 3,
           "threads": 18,
-          "wall_ms": 3004,
+          "wall_ms": 3028,
           "stage_ms": {
-            "download": 677,
-            "witness": 789,
-            "proving": 1517,
+            "download": 684,
+            "witness": 795,
+            "proving": 1526,
+            "verifying": 7
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 805,
+          "proof_bytes": 16224
+        },
+        {
+          "run": 4,
+          "threads": 18,
+          "wall_ms": 2921,
+          "stage_ms": {
+            "download": 644,
+            "witness": 773,
+            "proving": 1484,
+            "verifying": 7
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 805,
+          "proof_bytes": 16224
+        },
+        {
+          "run": 5,
+          "threads": 18,
+          "wall_ms": 2896,
+          "stage_ms": {
+            "download": 650,
+            "witness": 760,
+            "proving": 1465,
             "verifying": 7
           },
           "downloaded_bytes": 1760,
@@ -158,11 +218,11 @@
         }
       ],
       "warm_median_ms": {
-        "total": 3004,
-        "witness": 789,
-        "proving": 1517
+        "total": 2921,
+        "witness": 773,
+        "proving": 1484
       },
-      "peak_renderer_rss_mib": 2574,
+      "peak_renderer_rss_mib": 2616,
       "bb_wasm_memory_mib": 805
     },
     {
@@ -170,15 +230,15 @@
       "cpu_throttling": 4,
       "threads": 1,
       "cross_origin_isolated": true,
-      "main_thread_probe_ms": 727,
+      "main_thread_probe_ms": 720,
       "cold_run": {
         "run": 1,
         "threads": 1,
-        "wall_ms": 10136,
+        "wall_ms": 10020,
         "stage_ms": {
-          "download": 747,
-          "witness": 815,
-          "proving": 8547,
+          "download": 736,
+          "witness": 813,
+          "proving": 8440,
           "verifying": 13
         },
         "downloaded_bytes": 18790270,
@@ -190,12 +250,12 @@
         {
           "run": 1,
           "threads": 1,
-          "wall_ms": 10190,
+          "wall_ms": 10003,
           "stage_ms": {
-            "download": 705,
-            "witness": 804,
-            "proving": 8637,
-            "verifying": 33
+            "download": 704,
+            "witness": 802,
+            "proving": 8470,
+            "verifying": 11
           },
           "downloaded_bytes": 1760,
           "cached_bytes": 18788510,
@@ -205,12 +265,12 @@
         {
           "run": 2,
           "threads": 1,
-          "wall_ms": 10166,
+          "wall_ms": 9986,
           "stage_ms": {
-            "download": 763,
-            "witness": 814,
-            "proving": 8558,
-            "verifying": 13
+            "download": 713,
+            "witness": 801,
+            "proving": 8448,
+            "verifying": 11
           },
           "downloaded_bytes": 1760,
           "cached_bytes": 18788510,
@@ -220,11 +280,41 @@
         {
           "run": 3,
           "threads": 1,
-          "wall_ms": 10020,
+          "wall_ms": 10061,
           "stage_ms": {
-            "download": 723,
+            "download": 713,
             "witness": 802,
-            "proving": 8469,
+            "proving": 8520,
+            "verifying": 13
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 738,
+          "proof_bytes": 16224
+        },
+        {
+          "run": 4,
+          "threads": 1,
+          "wall_ms": 10395,
+          "stage_ms": {
+            "download": 711,
+            "witness": 807,
+            "proving": 8853,
+            "verifying": 11
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 738,
+          "proof_bytes": 16224
+        },
+        {
+          "run": 5,
+          "threads": 1,
+          "wall_ms": 10162,
+          "stage_ms": {
+            "download": 751,
+            "witness": 832,
+            "proving": 8552,
             "verifying": 13
           },
           "downloaded_bytes": 1760,
@@ -234,11 +324,11 @@
         }
       ],
       "warm_median_ms": {
-        "total": 10166,
-        "witness": 804,
-        "proving": 8558
+        "total": 10061,
+        "witness": 802,
+        "proving": 8520
       },
-      "peak_renderer_rss_mib": 1690,
+      "peak_renderer_rss_mib": 1694,
       "bb_wasm_memory_mib": 738
     },
     {
@@ -246,15 +336,15 @@
       "cpu_throttling": 4,
       "threads": 18,
       "cross_origin_isolated": true,
-      "main_thread_probe_ms": 717,
+      "main_thread_probe_ms": 720,
       "cold_run": {
         "run": 1,
         "threads": 18,
-        "wall_ms": 3185,
+        "wall_ms": 3113,
         "stage_ms": {
-          "download": 765,
-          "witness": 820,
-          "proving": 1576,
+          "download": 742,
+          "witness": 811,
+          "proving": 1531,
           "verifying": 11
         },
         "downloaded_bytes": 18790270,
@@ -266,12 +356,12 @@
         {
           "run": 1,
           "threads": 18,
-          "wall_ms": 3181,
+          "wall_ms": 3102,
           "stage_ms": {
-            "download": 740,
-            "witness": 819,
-            "proving": 1594,
-            "verifying": 11
+            "download": 719,
+            "witness": 802,
+            "proving": 1551,
+            "verifying": 12
           },
           "downloaded_bytes": 1760,
           "cached_bytes": 18788510,
@@ -281,12 +371,12 @@
         {
           "run": 2,
           "threads": 18,
-          "wall_ms": 2911,
+          "wall_ms": 2892,
           "stage_ms": {
-            "download": 655,
-            "witness": 758,
-            "proving": 1476,
-            "verifying": 7
+            "download": 653,
+            "witness": 760,
+            "proving": 1458,
+            "verifying": 8
           },
           "downloaded_bytes": 1760,
           "cached_bytes": 18788510,
@@ -296,12 +386,42 @@
         {
           "run": 3,
           "threads": 18,
-          "wall_ms": 2875,
+          "wall_ms": 2908,
           "stage_ms": {
-            "download": 643,
-            "witness": 748,
-            "proving": 1456,
-            "verifying": 14
+            "download": 639,
+            "witness": 762,
+            "proving": 1480,
+            "verifying": 7
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 805,
+          "proof_bytes": 16224
+        },
+        {
+          "run": 4,
+          "threads": 18,
+          "wall_ms": 2939,
+          "stage_ms": {
+            "download": 654,
+            "witness": 777,
+            "proving": 1489,
+            "verifying": 7
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 805,
+          "proof_bytes": 16224
+        },
+        {
+          "run": 5,
+          "threads": 18,
+          "wall_ms": 2923,
+          "stage_ms": {
+            "download": 641,
+            "witness": 758,
+            "proving": 1503,
+            "verifying": 8
           },
           "downloaded_bytes": 1760,
           "cached_bytes": 18788510,
@@ -310,11 +430,11 @@
         }
       ],
       "warm_median_ms": {
-        "total": 2911,
-        "witness": 758,
-        "proving": 1476
+        "total": 2923,
+        "witness": 762,
+        "proving": 1489
       },
-      "peak_renderer_rss_mib": 2623,
+      "peak_renderer_rss_mib": 2613,
       "bb_wasm_memory_mib": 805
     },
     {
@@ -322,15 +442,15 @@
       "cpu_throttling": 6,
       "threads": 1,
       "cross_origin_isolated": true,
-      "main_thread_probe_ms": 1073,
+      "main_thread_probe_ms": 1082,
       "cold_run": {
         "run": 1,
         "threads": 1,
-        "wall_ms": 10070,
+        "wall_ms": 9995,
         "stage_ms": {
-          "download": 730,
-          "witness": 799,
-          "proving": 8514,
+          "download": 728,
+          "witness": 808,
+          "proving": 8427,
           "verifying": 11
         },
         "downloaded_bytes": 18790270,
@@ -342,12 +462,12 @@
         {
           "run": 1,
           "threads": 1,
-          "wall_ms": 10055,
+          "wall_ms": 10084,
           "stage_ms": {
-            "download": 721,
-            "witness": 805,
-            "proving": 8499,
-            "verifying": 14
+            "download": 708,
+            "witness": 813,
+            "proving": 8529,
+            "verifying": 16
           },
           "downloaded_bytes": 1760,
           "cached_bytes": 18788510,
@@ -357,12 +477,12 @@
         {
           "run": 2,
           "threads": 1,
-          "wall_ms": 10176,
+          "wall_ms": 9946,
           "stage_ms": {
-            "download": 740,
-            "witness": 839,
-            "proving": 8567,
-            "verifying": 15
+            "download": 706,
+            "witness": 808,
+            "proving": 8405,
+            "verifying": 14
           },
           "downloaded_bytes": 1760,
           "cached_bytes": 18788510,
@@ -372,12 +492,42 @@
         {
           "run": 3,
           "threads": 1,
-          "wall_ms": 10026,
+          "wall_ms": 10012,
           "stage_ms": {
-            "download": 730,
-            "witness": 819,
-            "proving": 8453,
+            "download": 699,
+            "witness": 800,
+            "proving": 8489,
             "verifying": 11
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 738,
+          "proof_bytes": 16224
+        },
+        {
+          "run": 4,
+          "threads": 1,
+          "wall_ms": 10074,
+          "stage_ms": {
+            "download": 732,
+            "witness": 813,
+            "proving": 8500,
+            "verifying": 11
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 738,
+          "proof_bytes": 16224
+        },
+        {
+          "run": 5,
+          "threads": 1,
+          "wall_ms": 10073,
+          "stage_ms": {
+            "download": 714,
+            "witness": 802,
+            "proving": 8528,
+            "verifying": 16
           },
           "downloaded_bytes": 1760,
           "cached_bytes": 18788510,
@@ -386,11 +536,11 @@
         }
       ],
       "warm_median_ms": {
-        "total": 10055,
-        "witness": 819,
-        "proving": 8499
+        "total": 10073,
+        "witness": 808,
+        "proving": 8500
       },
-      "peak_renderer_rss_mib": 1703,
+      "peak_renderer_rss_mib": 1717,
       "bb_wasm_memory_mib": 738
     },
     {
@@ -398,15 +548,15 @@
       "cpu_throttling": 6,
       "threads": 18,
       "cross_origin_isolated": true,
-      "main_thread_probe_ms": 1079,
+      "main_thread_probe_ms": 1078,
       "cold_run": {
         "run": 1,
         "threads": 18,
-        "wall_ms": 3117,
+        "wall_ms": 3108,
         "stage_ms": {
-          "download": 748,
-          "witness": 807,
-          "proving": 1535,
+          "download": 736,
+          "witness": 800,
+          "proving": 1536,
           "verifying": 11
         },
         "downloaded_bytes": 18790270,
@@ -418,11 +568,11 @@
         {
           "run": 1,
           "threads": 18,
-          "wall_ms": 3157,
+          "wall_ms": 3075,
           "stage_ms": {
-            "download": 748,
-            "witness": 821,
-            "proving": 1555,
+            "download": 714,
+            "witness": 795,
+            "proving": 1534,
             "verifying": 11
           },
           "downloaded_bytes": 1760,
@@ -433,11 +583,11 @@
         {
           "run": 2,
           "threads": 18,
-          "wall_ms": 2913,
+          "wall_ms": 2848,
           "stage_ms": {
-            "download": 644,
-            "witness": 756,
-            "proving": 1492,
+            "download": 629,
+            "witness": 749,
+            "proving": 1449,
             "verifying": 7
           },
           "downloaded_bytes": 1760,
@@ -448,11 +598,41 @@
         {
           "run": 3,
           "threads": 18,
-          "wall_ms": 2894,
+          "wall_ms": 2888,
           "stage_ms": {
-            "download": 643,
-            "witness": 757,
-            "proving": 1460,
+            "download": 635,
+            "witness": 750,
+            "proving": 1467,
+            "verifying": 7
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 805,
+          "proof_bytes": 16224
+        },
+        {
+          "run": 4,
+          "threads": 18,
+          "wall_ms": 2973,
+          "stage_ms": {
+            "download": 639,
+            "witness": 763,
+            "proving": 1543,
+            "verifying": 8
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 805,
+          "proof_bytes": 16224
+        },
+        {
+          "run": 5,
+          "threads": 18,
+          "wall_ms": 3021,
+          "stage_ms": {
+            "download": 666,
+            "witness": 789,
+            "proving": 1542,
             "verifying": 7
           },
           "downloaded_bytes": 1760,
@@ -462,11 +642,11 @@
         }
       ],
       "warm_median_ms": {
-        "total": 2913,
-        "witness": 757,
-        "proving": 1492
+        "total": 2973,
+        "witness": 763,
+        "proving": 1534
       },
-      "peak_renderer_rss_mib": 2632,
+      "peak_renderer_rss_mib": 2643,
       "bb_wasm_memory_mib": 805
     },
     {
@@ -474,16 +654,16 @@
       "cpu_throttling": 1,
       "threads": 1,
       "cross_origin_isolated": true,
-      "main_thread_probe_ms": 539,
+      "main_thread_probe_ms": 541,
       "cold_run": {
         "run": 1,
         "threads": 1,
-        "wall_ms": 43823,
+        "wall_ms": 43291,
         "stage_ms": {
-          "download": 4186,
-          "witness": 3114,
-          "proving": 36414,
-          "verifying": 56
+          "download": 4586,
+          "witness": 2792,
+          "proving": 35819,
+          "verifying": 47
         },
         "downloaded_bytes": 18790270,
         "cached_bytes": 0,
@@ -494,12 +674,12 @@
         {
           "run": 1,
           "threads": 1,
-          "wall_ms": 42036,
+          "wall_ms": 41348,
           "stage_ms": {
-            "download": 2564,
-            "witness": 2932,
-            "proving": 36461,
-            "verifying": 38
+            "download": 2635,
+            "witness": 3045,
+            "proving": 35565,
+            "verifying": 53
           },
           "downloaded_bytes": 1760,
           "cached_bytes": 18788510,
@@ -509,12 +689,12 @@
         {
           "run": 2,
           "threads": 1,
-          "wall_ms": 41628,
+          "wall_ms": 41213,
           "stage_ms": {
-            "download": 2594,
-            "witness": 3051,
-            "proving": 35911,
-            "verifying": 46
+            "download": 2703,
+            "witness": 2860,
+            "proving": 35564,
+            "verifying": 45
           },
           "downloaded_bytes": 1760,
           "cached_bytes": 18788510,
@@ -524,12 +704,42 @@
         {
           "run": 3,
           "threads": 1,
-          "wall_ms": 40938,
+          "wall_ms": 42242,
           "stage_ms": {
-            "download": 2306,
-            "witness": 2640,
-            "proving": 35902,
-            "verifying": 51
+            "download": 2492,
+            "witness": 3085,
+            "proving": 36591,
+            "verifying": 35
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 738,
+          "proof_bytes": 16224
+        },
+        {
+          "run": 4,
+          "threads": 1,
+          "wall_ms": 41296,
+          "stage_ms": {
+            "download": 1957,
+            "witness": 2835,
+            "proving": 36420,
+            "verifying": 52
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 738,
+          "proof_bytes": 16224
+        },
+        {
+          "run": 5,
+          "threads": 1,
+          "wall_ms": 42881,
+          "stage_ms": {
+            "download": 2708,
+            "witness": 3114,
+            "proving": 36971,
+            "verifying": 48
           },
           "downloaded_bytes": 1760,
           "cached_bytes": 18788510,
@@ -538,11 +748,11 @@
         }
       ],
       "warm_median_ms": {
-        "total": 41628,
-        "witness": 2932,
-        "proving": 35911
+        "total": 41348,
+        "witness": 3045,
+        "proving": 36420
       },
-      "peak_renderer_rss_mib": 1418,
+      "peak_renderer_rss_mib": 1428,
       "bb_wasm_memory_mib": 738
     },
     {
@@ -550,16 +760,16 @@
       "cpu_throttling": 1,
       "threads": 4,
       "cross_origin_isolated": true,
-      "main_thread_probe_ms": 529,
+      "main_thread_probe_ms": 538,
       "cold_run": {
         "run": 1,
         "threads": 4,
-        "wall_ms": 17585,
+        "wall_ms": 18100,
         "stage_ms": {
-          "download": 2696,
-          "witness": 3012,
-          "proving": 11785,
-          "verifying": 52
+          "download": 2849,
+          "witness": 3129,
+          "proving": 12028,
+          "verifying": 53
         },
         "downloaded_bytes": 18790270,
         "cached_bytes": 0,
@@ -570,12 +780,12 @@
         {
           "run": 1,
           "threads": 4,
-          "wall_ms": 17560,
+          "wall_ms": 18053,
           "stage_ms": {
-            "download": 2674,
-            "witness": 2754,
-            "proving": 12039,
-            "verifying": 53
+            "download": 2669,
+            "witness": 2985,
+            "proving": 12324,
+            "verifying": 33
           },
           "downloaded_bytes": 1760,
           "cached_bytes": 18788510,
@@ -585,12 +795,12 @@
         {
           "run": 2,
           "threads": 4,
-          "wall_ms": 17194,
+          "wall_ms": 17631,
           "stage_ms": {
-            "download": 2236,
-            "witness": 2973,
-            "proving": 11917,
-            "verifying": 26
+            "download": 2307,
+            "witness": 3071,
+            "proving": 12187,
+            "verifying": 30
           },
           "downloaded_bytes": 1760,
           "cached_bytes": 18788510,
@@ -600,12 +810,42 @@
         {
           "run": 3,
           "threads": 4,
-          "wall_ms": 17370,
+          "wall_ms": 16667,
           "stage_ms": {
-            "download": 2127,
-            "witness": 3019,
-            "proving": 12163,
+            "download": 2212,
+            "witness": 2926,
+            "proving": 11456,
             "verifying": 33
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 771,
+          "proof_bytes": 16224
+        },
+        {
+          "run": 4,
+          "threads": 4,
+          "wall_ms": 17031,
+          "stage_ms": {
+            "download": 2194,
+            "witness": 3080,
+            "proving": 11681,
+            "verifying": 34
+          },
+          "downloaded_bytes": 1760,
+          "cached_bytes": 18788510,
+          "bb_wasm_memory_mib": 771,
+          "proof_bytes": 16224
+        },
+        {
+          "run": 5,
+          "threads": 4,
+          "wall_ms": 17510,
+          "stage_ms": {
+            "download": 2471,
+            "witness": 3015,
+            "proving": 11953,
+            "verifying": 29
           },
           "downloaded_bytes": 1760,
           "cached_bytes": 18788510,
@@ -614,11 +854,11 @@
         }
       ],
       "warm_median_ms": {
-        "total": 17370,
-        "witness": 2973,
-        "proving": 12039
+        "total": 17510,
+        "witness": 3015,
+        "proving": 11953
       },
-      "peak_renderer_rss_mib": 2011,
+      "peak_renderer_rss_mib": 2015,
       "bb_wasm_memory_mib": 771
     }
   ]

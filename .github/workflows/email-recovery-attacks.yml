@@ -1,0 +1,85 @@
+name: Email recovery attack suite
+
+# The email factor's attack suite on a local Stellar network
+# (research/email-recovery/eval/network/attacks.mjs): stellar/quickstart in
+# Docker, Perch's stack and Nido's email contracts deployed from wasm, real
+# circuit, real proofs. Every scenario asserts its outcome, so a changed
+# refusal fails the job. The three registry scenarios that need an elapsed
+# timelock run on the integration-test host in Tests' `cargo test
+# --workspace`. Path-filtered: it runs when something the suite exercises
+# changes.
+
+on:
+  pull_request:
+    paths: &paths
+      - '.github/workflows/email-recovery-attacks.yml'
+      - 'circuits/email-recovery/**'
+      - 'contracts/dkim-registry/**'
+      - 'contracts/email-guardian/**'
+      - 'contracts/email-verifier/**'
+      - 'contracts/factory/**'
+      - 'crates/dns-attestation-mock/**'
+      - 'evaluation/fixtures/stateless-deployer/**'
+      - 'evaluation/scripts/local-stack.sh'
+      - 'infra/email-alerts/**'
+      - 'packages/email-mocks/**'
+      - 'packages/email-recovery/**'
+      - 'packages/passkey-sdk/**'
+      - 'research/email-recovery/eval/**'
+      - 'tests/support/emailLocalStack.mjs'
+      - 'tests/e2e/local/fixtures/image-allowlist/**'
+      - 'vendor/perch'
+  push:
+    branches: [main]
+    paths: *paths
+  workflow_dispatch:
+
+jobs:
+  attacks:
+    name: Attack suite (local network)
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      # Pinned to match rust-toolchain.toml, as in Tests.
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@1.96.0
+        with:
+          targets: wasm32v1-none
+
+      - name: Cache cargo registry + target
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: email-attacks
+
+      - name: Install just + Stellar CLI (prebuilt release binaries)
+        uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
+        with:
+          tool: just,stellar-cli@28.1.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Fetch Perch's deployed stack
+        run: just perch-infra
+
+      # Builds what the network runs, starts the pinned quickstart, runs the
+      # suite (attacks.mjs) and rewrites the result file and tables.
+      - name: Attack suite on a local network
+        run: research/email-recovery/eval/network/run-attacks.sh --local-only
+
+      - name: Upload the results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: email-recovery-attacks
+          path: |
+            research/email-recovery/eval/results/attacks-local.json
+            research/email-recovery/eval/README.md

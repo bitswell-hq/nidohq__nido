@@ -1,0 +1,29 @@
+# TEST-ONLY: a contract that is not the guardian's controller and asks the
+# guardian to authorize a statement digest, for the attack suite's
+# "another controller" replay. Its own workspace, so it builds for
+# wasm32v1-none on its own and stays out of `cargo test --workspace`.
+[package]
+name = "nido-eval-foreign-controller"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = "27.0.2"
+
+[profile.release]
+opt-level = "z"
+overflow-checks = true
+debug = 0
+strip = "symbols"
+debug-assertions = false
+panic = "abort"
+codegen-units = 1
+lto = true
+
+[workspace]
