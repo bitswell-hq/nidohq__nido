@@ -19,7 +19,7 @@
 use nido_dkim_registry::hash::Hasher;
 use nido_dkim_registry::{root_of, DkimRegistryError, TIMELOCK_ATTESTED_LEDGERS};
 use nido_email_guardian::{EmailApproval, EmailGuardianError, KeyPin, ALLOW_ALL};
-use nido_integration_tests::email::{with_statement, EmailGuardian, EmailInfra};
+use nido_integration_tests::email::{with_statement, EmailGuardian, EmailInfra, REGISTRY_GRACE};
 use nido_integration_tests::email_proof::{provider_key, Inbox, KeyPath};
 use nido_integration_tests::world::{
     err, world, Account, Mode, Passkey, Profile, Recovery, World, DELAY, EXPIRY,
@@ -662,4 +662,251 @@ fn the_pin_path_works_independently_of_the_registry() {
     let late = with_statement(&w.env, &approval, &w.statement(&s.account, next, Initiate));
     let unknown = EmailGuardianError::UnknownRoot;
     refused(&w, &infra, &s, &s.email, next, Initiate, &late, unknown);
+}
+
+// --- the attack suite's registry scenarios on the test host ----------------
+//
+// research/email-recovery/eval runs the attack suite on a local network,
+// where a ledger closes about once a second, so the registry's timelocks
+// (51,840 and 120,960 ledgers) and its 17,280-ledger grace cannot elapse in
+// a run. The three scenarios whose precondition is an elapsed timelock run
+// here instead, on the registry's production wasm with its real timelocks
+// and grace, the ledger advanced, and a real proof in every approval. With
+// `NIDO_EMAIL_ATTACK_ROWS=<file>` each appends its result row to the file.
+
+/// Append `scenario`'s result row (from test `test`) to
+/// `$NIDO_EMAIL_ATTACK_ROWS`, if set.
+fn attack_row(
+    test: &str,
+    scenario: &str,
+    property: u8,
+    expected: &str,
+    observed: &str,
+    layer: &str,
+    note: &str,
+) {
+    if let Ok(path) = std::env::var("NIDO_EMAIL_ATTACK_ROWS") {
+        use std::io::Write as _;
+        let row = serde_json::json!({
+            "class": "registry",
+            "scenario": scenario,
+            "test": test,
+            "property": property,
+            "expected": expected,
+            "observed": observed,
+            "layer": layer,
+            "network": "test host",
+            "note": note,
+        });
+        let mut f = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+            .expect("the rows file");
+        writeln!(f, "{row}").expect("a row");
+    }
+}
+
+/// `check_auth`'s verdict as the suite's table words it.
+fn verdict(r: Result<(), EmailGuardianError>) -> String {
+    match r {
+        Ok(()) => "accepted".into(),
+        Err(e) => format!("refused: {e:?}"),
+    }
+}
+
+/// A threshold of registry members adds a key the attacker holds (Gmail's
+/// TEST-ONLY previous key stands for it), unattested, so on the 7-day path;
+/// it executes once the timelock has passed. Returns the key.
+fn plant_and_activate(
+    w: &World,
+    infra: &EmailInfra,
+) -> nido_integration_tests::email_proof::ProviderKey {
+    let planted = provider_key("gmail.com", "gmail-previous");
+    let registry = infra.registry.client(w);
+    let id = infra
+        .registry
+        .propose_add(w, 0, "gmail.com", &planted.modulus());
+    infra.registry.approve(w, 1, id);
+    infra.registry.approve(w, 2, id);
+    assert_eq!(
+        registry.eligible_at(&id),
+        Some(w.ledger() + nido_dkim_registry::TIMELOCK_LEDGERS)
+    );
+    w.advance(nido_dkim_registry::TIMELOCK_LEDGERS - 1);
+    assert_eq!(
+        registry.try_execute(&id),
+        Err(Ok(DkimRegistryError::TimelockActive))
+    );
+    w.advance(1);
+    let root = registry.execute(&id);
+    assert!(registry.is_accepted_root(&root));
+    planted
+}
+
+/// A planted key that has activated still cannot approve for an account
+/// whose `account_code` the attacker does not hold: the attacker's real
+/// proof (the victim's address under a guessed code, signed by the planted
+/// key, against the registry's current root) is refused by the verifier.
+#[test]
+fn registry_planted_key_after_activation_without_account_code() {
+    let w = world();
+    let infra = EmailInfra::new(&w);
+    let label = "attack-planted";
+    let s = enroll(&w, &infra, label, Profile::Loss, 1, 2, &gmail(label));
+    let planted = plant_and_activate(&w, &infra);
+    let (attempt, _) = begin(&w, &s, label);
+    let statement = w.statement(&s.account, attempt, Initiate);
+    let path = infra.registry_path(&w, &planted);
+    let guess = Inbox::new(
+        "attack-planted/guess",
+        &s.email.inbox.address,
+        Some("Test User"),
+    )
+    .signed_by("gmail-previous");
+    assert_ne!(guess.account_code, s.email.inbox.account_code);
+    let attacker = EmailGuardian {
+        inbox: guess,
+        ..s.email.clone()
+    };
+    let approval = infra.approval(
+        &w,
+        &attacker,
+        "attack-planted-guess",
+        "the victim's address under a guessed account code, signed by a planted key the registry activated",
+        &statement,
+        &path,
+    );
+    let got = infra.check_auth(&w, &s.account, &s.email, attempt, Initiate, &approval);
+    attack_row(
+        "registry_planted_key_after_activation_without_account_code",
+        "registry-planted-key-after-activation",
+        1,
+        "refused: ProofRejected",
+        &verdict(got),
+        "guardian check 12",
+        "a planted key active after its 7-day timelock; the attacker's proof opens another commitment",
+    );
+    refused(
+        &w,
+        &infra,
+        &s,
+        &s.email,
+        attempt,
+        Initiate,
+        &approval,
+        EmailGuardianError::ProofRejected,
+    );
+    assert!(votes(&w, &s, attempt).is_empty());
+}
+
+/// Revoking a planted key once it is active cuts it off at once: an
+/// approval under it that the guardian accepts (the attacker here also holds
+/// the account code) is refused from the revocation's ledger.
+#[test]
+fn registry_revoked_active_key() {
+    let w = world();
+    let infra = EmailInfra::new(&w);
+    let label = "attack-revoked";
+    let s = enroll(&w, &infra, label, Profile::Loss, 1, 2, &gmail(label));
+    let planted = plant_and_activate(&w, &infra);
+    let (attempt, _) = begin(&w, &s, label);
+    let statement = w.statement(&s.account, attempt, Initiate);
+    let path = infra.registry_path(&w, &planted);
+    let holder = EmailGuardian {
+        inbox: s.email.inbox.clone().signed_by("gmail-previous"),
+        ..s.email.clone()
+    };
+    let approval = infra.approval(
+        &w,
+        &holder,
+        "attack-revoked-active",
+        "an approval under a planted key the registry activated, with the account code",
+        &statement,
+        &path,
+    );
+    assert_eq!(
+        infra.check_auth(&w, &s.account, &s.email, attempt, Initiate, &approval),
+        Ok(())
+    );
+    let kh = BytesN::from_array(&w.env, &planted.key_hash());
+    infra.registry.revoke(&w, "gmail.com", &kh);
+    let got = infra.check_auth(&w, &s.account, &s.email, attempt, Initiate, &approval);
+    attack_row(
+        "registry_revoked_active_key",
+        "registry-revoked-active-key",
+        1,
+        "refused: UnknownRoot",
+        &verdict(got),
+        "guardian check 11 (registry: revocation)",
+        "accepted before; two members revoke the key; refused in the revocation's ledger",
+    );
+    refused(
+        &w,
+        &infra,
+        &s,
+        &s.email,
+        attempt,
+        Initiate,
+        &approval,
+        EmailGuardianError::UnknownRoot,
+    );
+}
+
+/// A superseded root stays acceptable through its grace period, inclusive,
+/// and is refused one ledger after it.
+#[test]
+fn registry_grace_expiry() {
+    let w = world();
+    let infra = EmailInfra::new(&w);
+    let registry = infra.registry.client(&w);
+    let label = "attack-grace";
+    let s = enroll(&w, &infra, label, Profile::Loss, 1, 2, &gmail(label));
+    let previous_root = infra.root.clone();
+    // Another key activates through the attested path: the launch root is superseded at `superseded`.
+    let id = infra
+        .registry
+        .propose_attested_key(&w, &provider_key("gmail.com", "gmail-previous"));
+    w.advance(TIMELOCK_ATTESTED_LEDGERS);
+    registry.execute(&id);
+    let superseded = w.ledger();
+    assert!(registry.is_accepted_root(&previous_root));
+    // An attempt late in the grace period, proven against the previous root.
+    w.advance(REGISTRY_GRACE - 50);
+    let (attempt, _) = begin(&w, &s, label);
+    let statement = w.statement(&s.account, attempt, Initiate);
+    let approval = infra.approval(
+        &w,
+        &s.email,
+        "attack-grace",
+        "an approval proven against a superseded root, near the end of its grace period",
+        &statement,
+        &KeyPath::of(&EmailInfra::launch_leaves(), 0),
+    );
+    w.advance(superseded + REGISTRY_GRACE - w.ledger());
+    assert_eq!(
+        infra.check_auth(&w, &s.account, &s.email, attempt, Initiate, &approval),
+        Ok(())
+    );
+    w.advance(1);
+    let got = infra.check_auth(&w, &s.account, &s.email, attempt, Initiate, &approval);
+    attack_row(
+        "registry_grace_expiry",
+        "registry-grace-expiry",
+        1,
+        "refused: UnknownRoot",
+        &verdict(got),
+        "guardian check 11 (registry: grace)",
+        "accepted on the last ledger of the 17,280-ledger grace; refused on the next",
+    );
+    refused(
+        &w,
+        &infra,
+        &s,
+        &s.email,
+        attempt,
+        Initiate,
+        &approval,
+        EmailGuardianError::UnknownRoot,
+    );
 }

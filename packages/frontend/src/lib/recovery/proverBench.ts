@@ -6,9 +6,13 @@
  * the provider mock's test key) with exactly the prover the recover page
  * uses, and prints the timings as JSON to copy.
  *
- * Parameters: `?threads=1|max&runs=N&cold=1&auto=1`. `cold` empties the
- * prover's cache first, so the first run downloads everything; `auto` starts
- * at load. `research/email-recovery/eval/measure-browser.mjs` drives it.
+ * Parameters: `?threads=1|max&runs=N&cold=1&auto=1&crs=<base>`. `cold`
+ * empties the prover's cache first, so the first run downloads everything;
+ * `auto` starts at load; `crs` reads the CRS from `<base>/g1.dat` and
+ * `<base>/g2.dat` (relative to the page) instead of Barretenberg's host, as
+ * the self-contained build of research/email-recovery/eval/phone/ serves
+ * it; the prover checks it against the same pinned digests.
+ * `research/email-recovery/eval/measure-browser.mjs` drives it.
  */
 
 import { CACHE_NAME, type ProofResult } from '@nidohq/email-recovery';
@@ -33,6 +37,8 @@ export interface BenchReport {
   hardwareConcurrency: number;
   deviceMemoryGiB: number | null;
   requestedThreads: number;
+  /** Where the CRS came from: Barretenberg's host unless the page was given `crs`. */
+  crsBaseUrl: string | null;
   /** A fixed loop on the page's main thread: shows whether the page itself is slowed (DevTools CPU throttling). */
   mainThreadProbeMs: number;
   results: BenchRun[];
@@ -62,7 +68,7 @@ export function benchRun(run: number, r: ProofResult, wallMs: number): BenchRun 
 }
 
 export async function runBench(
-  opts: { threads: number; runs: number; cold: boolean },
+  opts: { threads: number; runs: number; cold: boolean; crsBaseUrl?: string },
   onStatus: (line: string) => void,
 ): Promise<BenchReport> {
   if (opts.cold && typeof caches !== 'undefined') await caches.delete(CACHE_NAME);
@@ -77,7 +83,7 @@ export async function runBench(
     keyPath: { root: BigInt(fixture.key_root), index: fixture.key_index, siblings: fixture.key_siblings.map(BigInt) },
   };
   const expected = fixture.public_inputs.map((x: string) => x.replace(/^0x/, '')).join('');
-  const prover = emailProver();
+  const prover = emailProver(opts.crsBaseUrl);
   const results: BenchRun[] = [];
   for (let i = 1; i <= opts.runs; i++) {
     const t0 = performance.now();
@@ -99,6 +105,7 @@ export async function runBench(
     hardwareConcurrency: navigator.hardwareConcurrency,
     deviceMemoryGiB: (navigator as { deviceMemory?: number }).deviceMemory ?? null,
     requestedThreads: opts.threads,
+    crsBaseUrl: opts.crsBaseUrl ?? null,
     mainThreadProbeMs,
     results,
   };
@@ -107,6 +114,8 @@ export async function runBench(
 /** Wire the page: buttons, URL parameters, the JSON output and its copy button. */
 export function mountBench(root: HTMLElement): void {
   const params = new URLSearchParams(location.search);
+  const crs = params.get('crs');
+  const crsBaseUrl = crs ? new URL(crs, location.href).href : undefined;
   const status = root.querySelector<HTMLElement>('[data-status]')!;
   const out = root.querySelector<HTMLPreElement>('#out')!;
   const copy = root.querySelector<HTMLButtonElement>('[data-copy]')!;
@@ -120,7 +129,7 @@ export function mountBench(root: HTMLElement): void {
     copy.hidden = true;
     out.textContent = 'RUNNING';
     try {
-      const report = await runBench({ threads, runs, cold }, (line) => (status.textContent = line));
+      const report = await runBench({ threads, runs, cold, crsBaseUrl }, (line) => (status.textContent = line));
       out.textContent = `DONE ${JSON.stringify(report)}`;
       status.textContent = 'Done. Copy the JSON below.';
       copy.hidden = false;

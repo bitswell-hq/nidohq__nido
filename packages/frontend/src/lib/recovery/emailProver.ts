@@ -20,16 +20,18 @@ export const EMAIL_CIRCUIT_ID = '2837d0cfd7ddad684006e3eb4eba4ff7f4ed732a9d93423
 /** What a first proof downloads, in octets: the artifact (2,011,102), the key (1,760), and the CRS prefix and G2 point (16,777,408). */
 export const FIRST_PROOF_DOWNLOAD = 2_011_102 + 1_760 + 16_777_408;
 
-export function emailProverAssets(): ProverAssets {
+/** `crsBaseUrl`: where `g1.dat` and `g2.dat` are served, Barretenberg's own host unless set; either way the CRS must match the prover's pinned digests. */
+export function emailProverAssets(crsBaseUrl?: string): ProverAssets {
   return {
     circuitUrl: new URL(circuitUrl, location.href).href,
     vkUrl: new URL(vkUrl, location.href).href,
     circuitId: EMAIL_CIRCUIT_ID,
+    ...(crsBaseUrl ? { crsBaseUrl } : {}),
   };
 }
 
-export function emailProver(): RecoveryProver {
-  return new RecoveryProver(emailProverAssets());
+export function emailProver(crsBaseUrl?: string): RecoveryProver {
+  return new RecoveryProver(emailProverAssets(crsBaseUrl));
 }
 
 /** "18.8 MB" */

@@ -10,6 +10,28 @@ default:
 test-e2e-email-local:
     scripts/email-recovery-e2e.sh
 
+# The email factor's attack suite: every scenario on a local Stellar network
+# (Docker runs stellar/quickstart) with the real circuit, contracts and Node
+# proving, and the registry scenarios that need an elapsed timelock on the
+# integration-test host; rewrites research/email-recovery/eval/results/ and
+# the tables of research/email-recovery/eval/README.md. Needs `just
+# perch-infra` and `just build-contracts` once.
+email-recovery-attacks:
+    research/email-recovery/eval/network/run-attacks.sh
+
+# Proving a recovery email on this machine (native bb, bb.js in Node, and
+# the browser runs of measure-browser.mjs), with one circuit build. Run on an
+# idle machine. See research/email-recovery/eval/README.md.
+email-recovery-proving:
+    research/email-recovery/eval/proving/measure.sh
+
+# Build the prover benchmark page as a self-contained directory and serve it
+# over HTTPS on this machine's network, to open on a phone.
+email-recovery-bench-phone:
+    npx astro build --root packages/frontend
+    node research/email-recovery/eval/phone/build.mjs
+    node research/email-recovery/eval/phone/serve.mjs
+
 # Run all workspace tests. Needs the contract wasm (`just build-contracts`),
 # which the integration tests embed.
 test:
