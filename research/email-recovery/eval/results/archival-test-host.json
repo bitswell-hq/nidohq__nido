@@ -6,9 +6,9 @@
     "networkCostTypes": 86
   },
   "emailVoteMetering": {
-    "builtIn": 131165581,
-    "mainnet": 130020995,
-    "testnet": 130055171
+    "builtIn": 131210419,
+    "mainnet": 130068038,
+    "testnet": 130102214
   },
   "entriesAtRest": 160,
   "live": [
@@ -50,7 +50,7 @@
       "diskReadBytes": 0,
       "envelopeBytes": 18148,
       "eventsBytes": 4,
-      "instructions": 130020995,
+      "instructions": 130068038,
       "ledger": 52840,
       "readOnly": 12,
       "readWrite": 2,
@@ -425,10 +425,10 @@
       "writeBytes": 265292
     },
     {
-      "diskReadBytes": 150684,
+      "diskReadBytes": 151456,
       "envelopeBytes": 18176,
       "eventsBytes": 4,
-      "instructions": 137896749,
+      "instructions": 138053490,
       "ledger": 52840,
       "readOnly": 6,
       "readWrite": 8,
@@ -468,7 +468,7 @@
           "key": "DKIM key registry persistent instance",
           "keyXdr": "AAAABgAAAAG5Y7VR0BQXNxS36oKCo0nYJ3W5YJUDgla2tu0Z7Yy/wAAAABQAAAAB",
           "newLiveUntil": 2126439,
-          "newSize": 2368,
+          "newSize": 2412,
           "oldLiveUntil": 0,
           "oldSize": 0,
           "persistent": true
@@ -495,20 +495,20 @@
         },
         {
           "code": true,
-          "key": "code 9e7f39ef",
-          "keyXdr": "AAAAB55/Oe/x7k2TDavfy45e2HxF3T8C8cC62iz9Fp6Cvo1I",
+          "key": "code 7e115ff9",
+          "keyXdr": "AAAAB34RX/lAkTH5mImgTNK2BYvxqobe8Do8pVdLbqPmAFI9",
           "newLiveUntil": 2126439,
-          "newSize": 264023,
+          "newSize": 920293,
           "oldLiveUntil": 0,
           "oldSize": 0,
           "persistent": true
         },
         {
           "code": true,
-          "key": "code f0a16ccf",
-          "keyXdr": "AAAAB/ChbM9zbEvINkvvTNP1aGEvlcsTzZl75fW+n7QQhOiD",
+          "key": "code e21515ae",
+          "keyXdr": "AAAAB+IVFa707YQ9wyo8BAeqT8Fgnm2UXDTnuLxCr4NaMpiT",
           "newLiveUntil": 2126439,
-          "newSize": 906778,
+          "newSize": 267957,
           "oldLiveUntil": 0,
           "oldSize": 0,
           "persistent": true
@@ -536,8 +536,8 @@
           "key": "DKIM key registry persistent instance",
           "keyXdr": "AAAABgAAAAG5Y7VR0BQXNxS36oKCo0nYJ3W5YJUDgla2tu0Z7Yy/wAAAABQAAAAB",
           "removed": false,
-          "rentBytes": 2368,
-          "xdrBytes": 2368
+          "rentBytes": 2412,
+          "xdrBytes": 2412
         },
         {
           "code": true,
@@ -549,23 +549,23 @@
         },
         {
           "code": true,
-          "key": "code 9e7f39ef",
-          "keyXdr": "AAAAB55/Oe/x7k2TDavfy45e2HxF3T8C8cC62iz9Fp6Cvo1I",
+          "key": "code 7e115ff9",
+          "keyXdr": "AAAAB34RX/lAkTH5mImgTNK2BYvxqobe8Do8pVdLbqPmAFI9",
           "removed": false,
-          "rentBytes": 264023,
-          "xdrBytes": 33580
+          "rentBytes": 920293,
+          "xdrBytes": 69000
         },
         {
           "code": true,
-          "key": "code f0a16ccf",
-          "keyXdr": "AAAAB/ChbM9zbEvINkvvTNP1aGEvlcsTzZl75fW+n7QQhOiD",
+          "key": "code e21515ae",
+          "keyXdr": "AAAAB+IVFa707YQ9wyo8BAeqT8Fgnm2UXDTnuLxCr4NaMpiT",
           "removed": false,
-          "rentBytes": 906778,
-          "xdrBytes": 68372
+          "rentBytes": 267957,
+          "xdrBytes": 33680
         }
       ],
       "step": "submit_guardian (email)",
-      "writeBytes": 151892
+      "writeBytes": 152664
     },
     {
       "diskReadBytes": 928,

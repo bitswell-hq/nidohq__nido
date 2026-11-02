@@ -1,8 +1,26 @@
 {
- "fetched": "2026-11-02T05:10:28.320Z",
+ "fetched": "2026-11-02T06:45:05.783Z",
  "rpc": "https://soroban-testnet.stellar.org",
  "passphrase": "Test SDF Network ; September 2015",
  "protocolVersion": 29,
+ "build": {
+  "nido_email_guardian": {
+   "bytes": 33577,
+   "sha256": "e21515aef4ed843dc32a3c0407aa4fc1609e6d945c34e7b8bc42af835a329893"
+  },
+  "nido_dkim_registry": {
+   "bytes": 68899,
+   "sha256": "7e115ff9409131f99889a04cd2b6058bf1aa86def03a3ca5574b6ea3e600523d"
+  },
+  "nido_email_verifier": {
+   "bytes": 45616,
+   "sha256": "0e4239ca92d3e38a9efc40c24ed2d4237c437253a1d35372c8c6a5aa7c3194b9"
+  },
+  "nido_enclave_image_registry": {
+   "bytes": 10584,
+   "sha256": "27ae9151b0de1807226a01f32125a35692664c480cf401b4c1ceb79393a0c2d4"
+  }
+ },
  "entries": [
   {
    "name": "Perch doc compiler",
@@ -102,39 +120,39 @@
   {
    "name": "email guardian",
    "file": "nido_email_guardian.wasm",
-   "hash": "9e7f39eff1ee4d930dabdfcb8e5ed87c45dd3f02f1c0bada2cfd169e82be8d48",
+   "hash": "e21515aef4ed843dc32a3c0407aa4fc1609e6d945c34e7b8bc42af835a329893",
    "onNetwork": true,
-   "dataBytes": 33572,
+   "dataBytes": 33672,
    "costInputs": {
-    "nInstructions": 3276,
-    "nFunctions": 30,
+    "nInstructions": 3313,
+    "nFunctions": 31,
     "nGlobals": 4,
     "nTableEntries": 0,
     "nTypes": 21,
     "nDataSegments": 8,
     "nElemSegments": 0,
-    "nImports": 26,
+    "nImports": 28,
     "nExports": 9,
-    "nDataSegmentBytes": 26078
+    "nDataSegmentBytes": 26094
    }
   },
   {
    "name": "DKIM key registry",
    "file": "nido_dkim_registry.wasm",
-   "hash": "f0a16ccf736c4bc8364bef4cd3f568612f95cb13cd997be5f5be9fb41084e883",
+   "hash": "7e115ff9409131f99889a04cd2b6058bf1aa86def03a3ca5574b6ea3e600523d",
    "onNetwork": true,
-   "dataBytes": 68364,
+   "dataBytes": 68992,
    "costInputs": {
-    "nInstructions": 14203,
-    "nFunctions": 104,
+    "nInstructions": 14387,
+    "nFunctions": 108,
     "nGlobals": 4,
     "nTableEntries": 0,
-    "nTypes": 29,
+    "nTypes": 33,
     "nDataSegments": 12,
     "nElemSegments": 0,
     "nImports": 40,
     "nExports": 24,
-    "nDataSegmentBytes": 38182
+    "nDataSegmentBytes": 38302
    }
   }
  ]
