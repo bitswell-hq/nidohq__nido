@@ -40,6 +40,7 @@ import {
   type Contact,
   type Deliveries,
   type WatchedAttempt,
+  type PendingChange,
   sealDeliveries,
   sealRecord,
   unsealDeliveries,
@@ -51,8 +52,9 @@ import { type PushOutcome, pushMessage } from './webpush.js';
 
 const { equal, toHex, fromHex, toBase64Url } = bytes;
 
-/** 14 days at 5-second ledgers: replacing or removing a contact waits this long. */
-export const CONTACT_CHANGE_DELAY_LEDGERS = 241_920;
+/** Replacing or removing a contact waits this long, in seconds of ledger
+ *  close time: 14 days, whatever the network's target ledger close time. */
+export const CONTACT_CHANGE_DELAY_SECONDS = 14 * 86_400;
 export const CONFIRMATION_TTL_MS = 72 * 3600_000;
 export const CONFIRMATION_ATTEMPTS = 5;
 export const NONCE_TTL_MS = 10 * 60_000;
@@ -88,10 +90,23 @@ export interface VaultConfig {
 /** Chain state the host relays for one account (spec §10.3). */
 export interface ChainView {
   ledger: number;
+  /** The latest ledger's close time, Unix seconds: the clock contact changes mature on. */
+  closeTime: number;
   /** P-256 keys (uncompressed) of the account's passkey signers. */
   signers: Uint8Array[];
   /** Whether a recovery attempt is authorized for the account. */
   authorized: boolean;
+}
+
+/** Where the chain is: the latest ledger and its close time (Unix seconds). */
+export type ChainTime = Pick<ChainView, 'ledger' | 'closeTime'>;
+
+/** A pending change is due once the close time reaches `maturesAt`. A change
+ *  sealed with only `maturesLedger` (a ledger number) is due once that
+ *  ledger has closed. */
+export function changeDue(ch: PendingChange, at: ChainTime): boolean {
+  if (ch.maturesAt !== undefined) return ch.maturesAt <= at.closeTime;
+  return ch.maturesLedger !== undefined && ch.maturesLedger <= at.ledger;
 }
 
 /** Sealed blobs to persist: lookup hex → record (or `null` to delete), and the delivery log. */
@@ -126,12 +141,14 @@ export interface ChannelStatus {
   /** When the push service last accepted a push or probe for it (ms). */
   pushCheckedAt?: number;
   lapsedAt?: number;
-  /** A pending replacement or removal of this contact. */
-  change?: { kind: 'replace' | 'remove'; maturesLedger: number };
+  /** A pending replacement or removal of this contact: from when it applies, a
+   *  close time (`maturesAt`), or a ledger number for a change sealed with
+   *  only `maturesLedger`. */
+  change?: { kind: 'replace' | 'remove'; maturesAt?: number; maturesLedger?: number };
 }
 
 export type ContactResult =
-  | { ok: true; status: 'pending-confirmation' | 'change-pending' | 'confirmed' | 'push-updated'; maturesLedger?: number }
+  | { ok: true; status: 'pending-confirmation' | 'change-pending' | 'confirmed' | 'push-updated'; maturesAt?: number }
   | { ok: true; status: 'channels'; channels: ChannelStatus[] }
   | { ok: false; error: string };
 
@@ -254,7 +271,7 @@ export class Vault {
     chain: ChainView,
     writes: Writes,
   ): Promise<
-    | { status: 'pending-confirmation' | 'change-pending' | 'confirmed' | 'push-updated'; maturesLedger?: number }
+    | { status: 'pending-confirmation' | 'change-pending' | 'confirmed' | 'push-updated'; maturesAt?: number }
     | { status: 'channels'; channels: ChannelStatus[] }
   > {
     const account = contractIdFromStrkey(req.account);
@@ -297,11 +314,11 @@ export class Vault {
       if (!record || !target) throw new ContactRefused('no such active contact');
       if (record.change) throw new ContactRefused('another change is pending');
       if (chain.authorized) throw new ContactRefused('removal is refused while a recovery attempt is authorized');
-      const maturesLedger = chain.ledger + CONTACT_CHANGE_DELAY_LEDGERS;
+      const maturesAt = chain.closeTime + CONTACT_CHANGE_DELAY_SECONDS;
       await this.notifyChange(record, 'remove');
-      record.change = { kind: 'remove', target: inner.contact, requestedLedger: chain.ledger, maturesLedger, authorizer };
+      record.change = { kind: 'remove', target: inner.contact, requestedLedger: chain.ledger, requestedAt: chain.closeTime, maturesAt, authorizer };
       await this.write(account, record, writes);
-      return { status: 'change-pending', maturesLedger };
+      return { status: 'change-pending', maturesAt };
     }
 
     if (inner.emailGuardian && !inner.push) {
@@ -344,7 +361,7 @@ export class Vault {
       throw new ContactRefused('no such active contact to replace');
     }
     if (record.contacts.some((c) => equal(c.id, inner.contact))) throw new ContactRefused('contact id in use');
-    const maturesLedger = chain.ledger + CONTACT_CHANGE_DELAY_LEDGERS;
+    const maturesAt = chain.closeTime + CONTACT_CHANGE_DELAY_SECONDS;
     await this.notifyChange(record, 'replace');
     await this.sendConfirmation(contact, code, inner.contact);
     record.contacts.push(contact);
@@ -353,11 +370,12 @@ export class Vault {
       target: inner.replaces!,
       replacement: inner.contact,
       requestedLedger: chain.ledger,
-      maturesLedger,
+      requestedAt: chain.closeTime,
+      maturesAt,
       authorizer,
     };
     await this.write(account, record, writes);
-    return { status: 'change-pending', maturesLedger };
+    return { status: 'change-pending', maturesAt };
   }
 
   private async confirm(record: AccountRecord | undefined, id: Uint8Array, code: string, writes: Writes) {
@@ -619,10 +637,10 @@ export class Vault {
     return { status: retry ? 'retry' : 'done', writes };
   }
 
-  /** Accounts (C... addresses) whose pending change is due at `ledger`. */
-  due(ledger: number): string[] {
+  /** Accounts (C... addresses) whose pending change is due at `at`. */
+  due(at: ChainTime): string[] {
     return [...this.records.values()]
-      .filter((r) => r.change && r.change.maturesLedger <= ledger)
+      .filter((r) => r.change && changeDue(r.change, at))
       .map((r) => strkeyFromContractId(r.account));
   }
 
@@ -640,7 +658,7 @@ export class Vault {
       const strkey = strkeyFromContractId(r.account);
       const view = views[strkey];
       const ch = r.change;
-      if (!ch || !view || ch.maturesLedger > view.ledger) continue;
+      if (!ch || !view || !changeDue(ch, view)) continue;
       const stillSigner = view.signers.some((s) => equal(s, ch.authorizer));
       const replacement = ch.replacement ? r.contacts.find((c) => equal(c.id, ch.replacement!)) : undefined;
       if (!stillSigner || (ch.kind === 'replace' && replacement?.state !== 'active')) {
@@ -672,7 +690,13 @@ function channelStatus(record: AccountRecord | undefined): ChannelStatus[] {
     ...(c.pushCheckedAt !== undefined ? { pushCheckedAt: c.pushCheckedAt } : {}),
     ...(c.lapsedAt !== undefined ? { lapsedAt: c.lapsedAt } : {}),
     ...(record?.change && equal(record.change.target, c.id)
-      ? { change: { kind: record.change.kind, maturesLedger: record.change.maturesLedger } }
+      ? {
+          change: {
+            kind: record.change.kind,
+            ...(record.change.maturesAt !== undefined ? { maturesAt: record.change.maturesAt } : {}),
+            ...(record.change.maturesLedger !== undefined ? { maturesLedger: record.change.maturesLedger } : {}),
+          },
+        }
       : {}),
   }));
 }

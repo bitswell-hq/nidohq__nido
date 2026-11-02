@@ -55,7 +55,7 @@ network is deployed from wasm by the suite itself (`network/lib/stack.mjs`):
   its own instance), and a DKIM key registry governed as spec §7.6 proposes:
   five members, threshold 3, revocation threshold 2, three DNS attesters
   (the TEST-ONLY attester mock, `crates/dns-attestation-mock`), attestation
-  threshold 2, a 17,280-ledger grace period, the launch allowlist. Every
+  threshold 2, a 24-hour grace period, the launch allowlist. Every
   launch domain's TEST-ONLY key is proposed, approved by three members and
   attested live in DNS by two attesters, so each addition waits in its
   72-hour timelock for the whole run;
@@ -126,9 +126,9 @@ inbox's address (raw, lower and upper case, hex, base64), its packed 31-byte
 limbs as field words, its account code, and its pin's salt leaf.
 
 Three registry scenarios need a registry timelock or grace period to have
-elapsed (51,840, 120,960 and 17,280 ledgers). A local network closes about
-one ledger a second, so they run on the integration-test host instead: the
-registry's production wasm, its real timelocks and grace, the ledger
+elapsed (72 hours, 7 days and 24 hours of ledger close time), which a run
+cannot wait out, so they run on the integration-test host instead: the
+registry's production wasm, its real timelocks and grace, the clock
 advanced, a real proof in every approval
 (`crates/integration-tests/tests/it/email_guardian.rs`, `registry_*`; their
 rows say "test host").
@@ -143,7 +143,7 @@ and that workflow re-proves their fixtures.
 ### Results
 
 <!-- BEGIN GENERATED attacks by report.mjs; do not edit -->
-Local network: `stellar/quickstart --local` (stellar/quickstart@sha256:487fe637ba48c972d5be0ed8965f8df1dcbc3e8e1ee53d24d915b25b6f2b6d99), protocol 28, Stellar RPC 29.0.1 with captive core v29.0.0; run of 2026-11-02 05:12 UTC, 11 minutes, 213 transactions.
+Local network: `stellar/quickstart --local` (stellar/quickstart@sha256:487fe637ba48c972d5be0ed8965f8df1dcbc3e8e1ee53d24d915b25b6f2b6d99), protocol 28, Stellar RPC 29.0.1 with captive core v29.0.0; run of 2026-11-02 06:02 UTC, 11 minutes, 213 transactions.
 Test host: 3 rows from `crates/integration-tests/tests/it/email_guardian.rs` (`registry_*`).
 
 | Class | Scenario | Expected | Observed | Refusing layer | Test | Property | Where |
@@ -169,32 +169,32 @@ Test host: 3 rows from `crates/integration-tests/tests/it/email_guardian.rs` (`r
 | Replayed emails and proofs | replay-another-network: an approval of the statement with the testnet network id | refused: DigestMismatch | refused: DigestMismatch | guardian check 2 | `attacks.mjs` replay-another-network | 3 | local |
 | Replayed emails and proofs | replay-another-network-spliced: this network's statement with that proof | refused: ProofRejected | refused: ProofRejected | guardian check 12 | `attacks.mjs` replay-another-network | 3 | local |
 | Replayed emails and proofs | replay-another-controller: A's approval, asked for by a contract that is not A's controller | refused: UnexpectedContext | refused: UnexpectedContext | guardian check 1 | `attacks.mjs` replay-another-controller | 3 | local |
-| Replayed emails and proofs | replay-expired-statement: proved before, submitted after the evidence deadline (ledger 244, the statement's valid_until_ledger) | refused: AttemptNotLive | refused: AttemptNotLive | Perch controller | `attacks.mjs` replay-expired-statement | 3 | local |
+| Replayed emails and proofs | replay-expired-statement: proved before, submitted after the evidence deadline (ledger 226, the statement's valid_until_ledger) | refused: AttemptNotLive | refused: AttemptNotLive | Perch controller | `attacks.mjs` replay-expired-statement | 3 | local |
 | Replayed emails and proofs | replay-email-circuit: an honest email presented for another statement of A, and for B | refused: 2 of 2 | refused: 2 of 2 | circuit | `attacks.mjs` forged-emails-circuit | 1 | local |
 | Wrong account or new key in the statement | statement-other-new-key: the owner's approval (owner's new key) presented for the attacker's attempt (attacker's key) | refused: DigestMismatch | refused: DigestMismatch | guardian check 2 | `attacks.mjs` statement-other-new-key | 1 | local |
 | Wrong account or new key in the statement | statement-other-new-key-spliced: the attacker's statement with the owner's proof | refused: ProofRejected | refused: ProofRejected | guardian check 12 | `attacks.mjs` statement-other-new-key | 1 | local |
 | Wrong account or new key in the statement | statement-other-account: B's approval presented to A's guardian for A's attempt | refused: DigestMismatch | refused: DigestMismatch | guardian check 2 | `attacks.mjs` statement-other-account | 1 | local |
 | Wrong account or new key in the statement | statement-other-account-spliced: A's statement with B's proof and key root: B's salted pin root, which A's guardian does not accept | refused: UnknownRoot | refused: UnknownRoot | guardian check 11 | `attacks.mjs` statement-other-account | 1 | local |
 | Wrong account or new key in the statement | statement-other-account-rooted: A's statement and A's pin root with B's proof (another commitment) | refused: ProofRejected | refused: ProofRejected | guardian check 12 | `attacks.mjs` statement-other-account | 1 | local |
-| Stale or malicious registry keys | registry-planted-key-timelock: not seen in DNS: the 72-hour path is closed, eligible at ledger 121281 (approved at 321, +120,960) | refused: TimelockActive | refused: TimelockActive | registry | `attacks.mjs` registry-planted-key-in-timelock | 1 | local |
+| Stale or malicious registry keys | registry-planted-key-timelock: not seen in DNS: the 72-hour path is closed, eligible at close time 1794203737 (approved at 1793598937, +604,800 s) | refused: TimelockActive | refused: TimelockActive | registry | `attacks.mjs` registry-planted-key-in-timelock | 1 | local |
 | Stale or malicious registry keys | registry-planted-key-proof: a real proof against the root the planted addition would produce, during its timelock | refused: UnknownRoot | refused: UnknownRoot | guardian check 11 | `attacks.mjs` registry-planted-key-in-timelock | 1 | local |
 | Stale or malicious registry keys | registry-planted-key-revoked: revoke_threshold (2) members stop the pending addition | refused: KeyRevoked | refused: KeyRevoked | registry | `attacks.mjs` registry-planted-key-in-timelock | 1 | local |
-| Stale or malicious registry keys | registry-pin-live: pin valid until ledger 425 | accepted | accepted | — | `attacks.mjs` registry-pin-expiry | 1 | local |
+| Stale or malicious registry keys | registry-pin-live: pin valid until close time 1793599041 | accepted | accepted | — | `attacks.mjs` registry-pin-expiry | 1 | local |
 | Stale or malicious registry keys | registry-pin-expiry: proved inside the pin window, submitted after it; the registry still holds the key only as a pending addition | refused: UnknownRoot | refused: UnknownRoot | guardian check 11 | `attacks.mjs` registry-pin-expiry | 1 | local |
-| Stale or malicious registry keys | registry-grace-expiry: accepted on the last ledger of the 17,280-ledger grace; refused on the next | refused: UnknownRoot | refused: UnknownRoot | guardian check 11 (registry: grace) | `email_guardian.rs` registry_grace_expiry | 1 | test host |
+| Stale or malicious registry keys | registry-grace-expiry: accepted at the last second of the 24-hour grace; refused one second later | refused: UnknownRoot | refused: UnknownRoot | guardian check 11 (registry: grace) | `email_guardian.rs` registry_grace_expiry | 1 | test host |
 | Stale or malicious registry keys | registry-planted-key-after-activation: a planted key active after its 7-day timelock; the attacker's proof opens another commitment | refused: ProofRejected | refused: ProofRejected | guardian check 12 | `email_guardian.rs` registry_planted_key_after_activation_without_account_code | 1 | test host |
 | Stale or malicious registry keys | registry-revoked-active-key: accepted before; two members revoke the key; refused in the revocation's ledger | refused: UnknownRoot | refused: UnknownRoot | guardian check 11 (registry: revocation) | `email_guardian.rs` registry_revoked_active_key | 1 | test host |
 | Compromised inbox | inbox-without-account-code: a provider-signed email from A's inbox for the attacker's attempt, A's commitment, a guessed account code | refused: recovery: the From address does not open the commitment | refused: recovery: the From address does not open the commitment | circuit | `attacks.mjs` inbox-without-account-code | 4 | local |
 | Compromised inbox | inbox-without-account-code-proof: the attacker's real proof for its own guess; without the code it cannot build the salted pin's path, and the registry has no accepted root yet | refused: UnknownRoot | refused: UnknownRoot | guardian check 11 | `attacks.mjs` inbox-without-account-code | 4 | local |
 | Compromised inbox | inbox-backup-without-passphrase: the backup block in the Sent folder, opened with another passphrase | refused: BackupError | refused: BackupError | account code backup (Argon2id, AES-256-GCM) | `attacks.mjs` inbox-without-account-code | 4 | local |
 | Compromised inbox | inbox-with-code-quorum: the email vote counted (attempt still Collecting, 1 of 2 votes); completion refused: no authorized attempt | refused: AttemptNotLive | refused: AttemptNotLive | Perch controller | `attacks.mjs` inbox-with-account-code-quorum | 4 | local |
-| Compromised inbox | inbox-email-plus-delay-authorizes: quorum 1, delay 120,960 ledgers: the attempt is Authorized, executable after ledger 121419 | accepted | accepted | — | `attacks.mjs` inbox-email-plus-delay | 4 | local |
+| Compromised inbox | inbox-email-plus-delay-authorizes: quorum 1, delay 120,960 ledgers: the attempt is Authorized, executable after ledger 121388 | accepted | accepted | — | `attacks.mjs` inbox-email-plus-delay | 4 | local |
 | Compromised inbox | inbox-email-plus-delay-completion: completion inside the delay | refused: NotExecutableYet | refused: NotExecutableYet | Perch controller | `attacks.mjs` inbox-email-plus-delay | 4 | local |
-| Compromised inbox | inbox-email-plus-delay-alerts: attempt_authorized: 1 email to the enrolled inbox, deleted by the thief; the push carries the code 562 261 and leads with cancelling | owner alerted: push only | owner alerted: push only | alert path | `attacks.mjs` inbox-email-plus-delay | 4 | local |
+| Compromised inbox | inbox-email-plus-delay-alerts: attempt_authorized: 1 email to the enrolled inbox, deleted by the thief; the push carries the code 845 170 and leads with cancelling | owner alerted: push only | owner alerted: push only | alert path | `attacks.mjs` inbox-email-plus-delay | 4 | local |
 | Compromised inbox | inbox-email-plus-delay-owner-cancels: the owner's passkey cancels within the delay | accepted | accepted | — | `attacks.mjs` inbox-email-plus-delay | 4 | local |
 | Compromised inbox | inbox-email-plus-delay-cancelled: completion of the cancelled attempt | refused: AttemptNotLive | refused: AttemptNotLive | Perch controller | `attacks.mjs` inbox-email-plus-delay | 4 | local |
 | Compromised inbox | inbox-email-plus-delay-new-attempt: a new attempt needs a new email | refused: DigestMismatch | refused: DigestMismatch | guardian check 2 | `attacks.mjs` inbox-email-plus-delay | 4 | local |
-| Compromised inbox | inbox-email-vote-alerted: the email vote recorded below quorum (attempt Collecting, 1 of 2): read from the watched attempt, alerted in 22 ms after the read | alerted: email and push | alerted: email and push | alert path | `attacks.mjs` inbox-email-vote-alerted | 4 | local |
+| Compromised inbox | inbox-email-vote-alerted: the email vote recorded below quorum (attempt Collecting, 1 of 2): read from the watched attempt, alerted in 23 ms after the read | alerted: email and push | alerted: email and push | alert path | `attacks.mjs` inbox-email-vote-alerted | 4 | local |
 | Compromised inbox | inbox-email-vote-owner-cancels: the owner's passkey cancels the collecting attempt | accepted | accepted | — | `attacks.mjs` inbox-email-vote-alerted | 4 | local |
 | Alert path | alerts-watcher-outage: attempt_authorized never read from the event stream; reconciliation from the controller's state found it (3 accounts read, 1 alert found) | alerted after the restart: email and push | alerted after the restart: email and push | alert path (reconciliation) | `attacks.mjs` alerts-watcher-outage | 4 | local |
 | Alert path | alerts-lapsed-push: residual risk: the push service answers 404 for the expired subscription, the vault marks it lapsed and emails the enrolled inbox, which the thief deletes; unless the owner opens the wallet, the attempt completes after the delay | owner alerted: nothing | owner alerted: nothing | alert path | `attacks.mjs` alerts-lapsed-push | 4 | local |
@@ -378,9 +378,9 @@ Local network: every accepted email vote of the attack run, each `submit_guardia
 
 | Figure | Vote, attempt still collecting: median (range), 20 | Vote that authorizes the attempt |
 | --- | --- | --- |
-| Instructions (metered) | 120,033,543 (119,948,955 to 120,081,003) | 120,911,540 |
-| Instructions (declared in the transaction) | 124,908,370 (124,822,347 to 124,959,677) | 125,868,498 |
-| Memory bytes (metered) | 5,511,336 (5,508,900 to 5,512,554) | 5,593,647 |
+| Instructions (metered) | 120,051,498 (119,993,200 to 120,090,525) | 120,889,761 |
+| Instructions (declared in the transaction) | 124,927,679 (124,868,360 to 124,969,110) | 125,845,429 |
+| Memory bytes (metered) | 5,517,130 (5,515,506 to 5,518,409) | 5,598,426 |
 | Ledger entries read (metered) | 12 (12 to 12) | 16 |
 | Ledger entries written (metered) | 2 (2 to 2) | 4 |
 | Ledger bytes read from disk (metered) | 0 (0 to 0) | 0 |
@@ -388,26 +388,26 @@ Local network: every accepted email vote of the attack run, each `submit_guardia
 | Footprint entries (read-only + read-write) | 12 (12 to 12) | 16 |
 | Signed envelope bytes | 18,080 (18,080 to 18,080) | 18,396 |
 | Authorization entry bytes | 16,784 (16,784 to 16,784) | 16,784 |
-| Fee charged (stroops) | 176,219 (176,158 to 176,254) | 3,734,691 |
-| of which rent (stroops) | 2,604 (2,600 to 2,604) | 3,550,194 |
-| Resource fee declared (stroops) | 192,567 (192,506 to 192,602) | 4,283,482 |
-| Wall clock, simulation to confirmation (ms) | 1,363 (578 to 1,872) | 1,072 |
+| Fee charged (stroops) | 176,232 (176,190 to 176,260) | 3,734,675 |
+| of which rent (stroops) | 2,604 (2,601 to 2,604) | 3,550,194 |
+| Resource fee declared (stroops) | 192,580 (192,538 to 192,608) | 4,283,466 |
+| Wall clock, simulation to confirmation (ms) | 1,119 (826 to 1,872) | 843 |
 
 The same call, the email vote with a real proof, in each environment (instructions; footprint as read-only + read-write entries). Test host from `onchain.md`; local network from this run; testnet from `results/testnet.json` (Gmail only).
 
 | Domain | Test host invocation | Test host transaction | Test host footprint | Local network, metered | Local network, declared | Local footprint | Testnet, metered |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| fastmail.com | 121,857,413 | 131,203,427 | 12 + 2 | 120,072,887 | 124,948,616 | 10 + 2 |  |
-| gmail.com | 121,817,031 | 131,165,581 | 12 + 2 | 120,044,323 | 124,921,530 | 10 + 2 | 121,639,784 |
-| gmx.de | 121,873,343 | 131,218,607 | 12 + 2 | 120,066,331 | 124,944,418 | 10 + 2 |  |
-| gmx.net | 121,855,989 | 131,203,739 | 12 + 2 | 119,992,971 | 124,868,124 | 10 + 2 |  |
-| hotmail.com | 121,916,929 | 131,256,349 | 12 + 2 | 120,036,207 | 124,910,468 | 10 + 2 |  |
-| icloud.com | 121,863,515 | 131,203,635 | 12 + 2 | 120,081,003 | 124,959,677 | 10 + 2 |  |
-| outlook.com | 121,834,651 | 131,176,986 | 12 + 2 | 120,029,651 | 124,906,271 | 10 + 2 |  |
-| proton.me | 121,801,947 | 131,149,797 | 12 + 2 | 120,007,643 | 124,883,383 | 10 + 2 |  |
-| protonmail.com | 121,833,559 | 131,173,379 | 12 + 2 | 120,044,273 | 124,921,010 | 10 + 2 |  |
-| web.de | 121,817,039 | 131,165,789 | 12 + 2 | 120,036,987 | 124,913,900 | 10 + 2 |  |
-| yahoo.com | 121,806,163 | 131,142,707 | 12 + 2 | 120,014,199 | 124,887,580 | 10 + 2 |  |
+| fastmail.com | 121,878,185 | 131,248,265 | 12 + 2 | 120,044,502 | 124,921,246 | 10 + 2 |  |
+| gmail.com | 121,837,803 | 131,210,419 | 12 + 2 | 120,029,100 | 124,903,075 | 10 + 2 | 121,639,784 |
+| gmx.de | 121,894,115 | 131,263,445 | 12 + 2 | 120,073,896 | 124,952,284 | 10 + 2 |  |
+| gmx.net | 121,876,761 | 131,248,577 | 12 + 2 | 120,029,880 | 124,906,507 | 10 + 2 |  |
+| hotmail.com | 121,937,701 | 131,301,187 | 12 + 2 | 120,088,568 | 124,967,542 | 10 + 2 |  |
+| icloud.com | 121,884,287 | 131,248,473 | 12 + 2 | 120,066,560 | 124,944,654 | 10 + 2 |  |
+| outlook.com | 121,855,423 | 131,221,824 | 12 + 2 | 120,044,552 | 124,921,766 | 10 + 2 |  |
+| proton.me | 121,822,719 | 131,194,635 | 12 + 2 | 120,037,216 | 124,914,136 | 10 + 2 |  |
+| protonmail.com | 121,854,331 | 131,218,217 | 12 + 2 | 120,073,896 | 124,952,284 | 10 + 2 |  |
+| web.de | 121,837,811 | 131,210,627 | 12 + 2 | 119,993,200 | 124,868,360 | 10 + 2 |  |
+| yahoo.com | 121,826,935 | 131,187,545 | 12 + 2 | 120,029,880 | 124,906,507 | 10 + 2 |  |
 
 The registry is in the footprint of 0 of the 21 local votes: each local approval is proven against its guardian's key pin (no registry key activates during a local run), so the guardian accepts the root without calling the registry. The test host's approvals use a registry root, and its footprints include the registry's instance and code.
 
@@ -451,7 +451,7 @@ call everywhere; three things differ, and only the first is attributed.
   Gmail fixture, read from what `nido_integration_tests::transaction::measure`
   records, lists the registry's instance and code among its 12 read-only
   entries, the two the local footprints (10 + 2) do not have, and the
-  registry's `is_accepted_root` costs about 564,000 instructions there (spec §12).
+  registry's `is_accepted_root` costs about 565,000 instructions there (spec §12).
 - *Metering.* The local network's metered count is below the test host's
   invocation count by more than the registry call. The rest is not
   attributed here: each host meters with its own cost parameters (the SDK's
@@ -545,14 +545,19 @@ the runs).
   the alert path's sending services, push service, enclave and custodians are
   mocks. A provider whose real mail differs from its mock (spec §13
   question 6) is not covered.
-- **The local network's registry state.** A local network closes about one
-  ledger per second, so no key addition leaves its 72-hour or 7-day timelock
-  during a run: the local scenarios run with every launch key pending and
-  the accounts' pins carrying their keys. The three scenarios that need an
-  activated key or an elapsed grace period run on the integration-test host
-  with the registry's production wasm and real timelocks, where the ledger is
-  advanced rather than waited for; that host runs the same contracts but is
-  not a network.
+- **The local network's registry state.** The registry's timelocks are 72
+  hours and 7 days of ledger close time, so no key addition leaves its
+  timelock during a run: the local scenarios run with every launch key
+  pending and the accounts' pins carrying their keys. The three scenarios
+  that need an activated key or an elapsed grace period run on the
+  integration-test host with the registry's production wasm and real
+  timelocks, where the clock is advanced rather than waited for; that host
+  runs the same contracts but is not a network.
+- **The local network's ledger rate.** It reports the 5,000 ms target close
+  time of testnet and mainnet but closes about one ledger a second, so the
+  wallet sizes the email-plus-delay floor at 120,960 ledgers there, about 34
+  hours of wall-clock time (spec §11.1 A9). Close-time windows (the
+  registry's, the pin's) are unaffected.
 - **The enclave-image registry stand-in.** The alert vault's custodians read
   image activation from a TEST-ONLY allowlist contract on the local network
   (as in the email end-to-end test), because the enclave-image registry's

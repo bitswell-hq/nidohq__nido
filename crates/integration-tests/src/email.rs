@@ -30,7 +30,7 @@ use crate::email_proof::{self, Inbox, KeyPath, ProviderKey};
 use crate::world::{contract_at, Account, RecoveryResult, World};
 use crate::{DKIM_REGISTRY_WASM, EMAIL_GUARDIAN_WASM, EMAIL_VERIFIER_WASM};
 use nido_dkim_registry::{
-    DkimRegistryClient, RegistryConfig, LAUNCH_DOMAINS, TIMELOCK_ATTESTED_LEDGERS,
+    DkimRegistryClient, RegistryConfig, LAUNCH_DOMAINS, TIMELOCK_ATTESTED_SECONDS,
 };
 use nido_dns_attestation_mock::{
     fixture, key_hash, modulus_2048, observe, FixtureRecord, TestAttester,
@@ -84,7 +84,7 @@ impl TestRegistry {
             revoke_threshold: 2,
             attesters: keys,
             attest_threshold: 2,
-            grace_ledgers: REGISTRY_GRACE,
+            grace_seconds: REGISTRY_GRACE,
             domains,
         };
         let address = contract_at(&w.env, &format!("email/dkim-registry/{label}"));
@@ -222,8 +222,8 @@ impl TestRegistry {
     }
 }
 
-/// The test registry's grace period: 24 hours.
-pub const REGISTRY_GRACE: u32 = 17_280;
+/// The test registry's grace period: 24 hours, in seconds.
+pub const REGISTRY_GRACE: u64 = 86_400;
 
 /// One account's email guardian and the inbox it commits to.
 #[derive(Clone)]
@@ -255,7 +255,7 @@ impl EmailInfra {
             .iter()
             .map(|d| registry.propose_attested_key(w, &email_proof::provider_key(d, "current")))
             .collect();
-        w.advance(TIMELOCK_ATTESTED_LEDGERS);
+        w.advance_seconds(TIMELOCK_ATTESTED_SECONDS);
         let mut root = None;
         for id in ids {
             root = Some(registry.client(w).execute(&id));

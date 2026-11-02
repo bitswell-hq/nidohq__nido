@@ -94,7 +94,7 @@ export class Enrolled {
 
 /**
  * Mint an account, deploy its email guardian for `inbox` (pinning `key`
- * for `pinLedgers`), and enroll recovery: `helpers` more guardians (funded
+ * for `pinSeconds` of ledger close time), and enroll recovery: `helpers` more guardians (funded
  * `G…` accounts), `quorum`, `profile`, timing. `walletPolicy: false` lists
  * the guardian as a plain address, so the wallet's email rules (spec §9.3)
  * do not apply: a configuration the chain accepts and Nido's wallet refuses.
@@ -110,7 +110,7 @@ export async function enroll({
   profile = 'loss',
   delayLedgers,
   expiryLedgers,
-  pinLedgers = 518_400,
+  pinSeconds = 30 * 86_400,
   allowedActions = ALLOW_ALL,
   registry = stack.registry.address,
   apex = { scheme: 'http:', host: 'localhost', port: 4399 },
@@ -122,7 +122,7 @@ export async function enroll({
   const owner = new Passkey(`${label}/owner/${Date.now()}`);
   const account = await NidoAccount.mint({ chain, factory: d.factory, payer, owner, verifier: d.webauthnVerifier, apex, label });
   const pin = pinFor(inbox.accountCode, [key]);
-  const deployedAt = await chain.ledger();
+  const deployedAt = await chain.closeTime();
   const guardian = await deployGuardian(
     chain,
     payer,
@@ -132,7 +132,7 @@ export async function enroll({
       controller: d.recoveryController,
       commitment: inbox.commitment,
       registry,
-      pin: pinLedgers === null ? undefined : { root: pin.root, validUntilLedger: deployedAt + pinLedgers },
+      pin: pinSeconds === null ? undefined : { root: pin.root, validUntil: deployedAt + pinSeconds },
       allowedActions,
       verifier: stack.email.verifier,
     },
@@ -149,6 +149,7 @@ export async function enroll({
     replaceable: ['admin'],
     delayLedgers,
     expiryLedgers,
+    ledgerCloseMs: await chain.targetCloseMs(),
   });
   const doc = documentFor({ network: chain.passphrase, verifier: d.webauthnVerifier, owner, recovery });
   await account.applyDoc(payer, canonicalJson(doc), `apply_doc ${label}`);
@@ -159,7 +160,7 @@ export async function enroll({
     inbox,
     key,
     pin,
-    pinValidUntil: pinLedgers === null ? undefined : deployedAt + pinLedgers,
+    pinValidUntil: pinSeconds === null ? undefined : deployedAt + pinSeconds,
     account,
     owner,
     guardian,

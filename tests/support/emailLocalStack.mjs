@@ -159,7 +159,7 @@ export async function deployStack({ base = 'http://127.0.0.1:8000', imageMeasure
       ['attest_threshold', xdr.ScVal.scvU32(1)],
       ['attesters', xdr.ScVal.scvVec([xdr.ScVal.scvBytes(ATTESTER.rawPublicKey())])],
       ['domains', xdr.ScVal.scvVec(domains.map((d) => xdr.ScVal.scvBytes(Buffer.from(d))))],
-      ['grace_ledgers', xdr.ScVal.scvU32(17_280)],
+      ['grace_seconds', xdr.ScVal.scvU64(new xdr.Uint64(86_400n))],
       ['members', xdr.ScVal.scvVec([Address.fromString(REGISTRY_MEMBER.publicKey()).toScVal()])],
       ['revoke_threshold', xdr.ScVal.scvU32(1)],
       ['threshold', xdr.ScVal.scvU32(1)],

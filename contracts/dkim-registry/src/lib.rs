@@ -46,19 +46,24 @@ pub use tree::{empty_root, root_of, REGISTRY_CAPACITY, REGISTRY_DEPTH};
 /// therefore a new registry address.
 pub const VERSION: u32 = 1;
 
-/// Timelock of an addition the attester threshold saw live in DNS: 72 hours
-/// at 5-second ledgers, counted from the later of its approval and the
-/// attestation that reached the threshold.
-pub const TIMELOCK_ATTESTED_LEDGERS: u32 = 51_840;
+/// Timelock of an addition the attester threshold saw live in DNS: 72 hours,
+/// counted from the later of its approval and the attestation that reached
+/// the threshold.
+///
+/// Every duration in this contract is in seconds of ledger close time
+/// (`env.ledger().timestamp()`), never a count of ledgers, so the windows
+/// keep their wall-clock length if the network changes its target ledger
+/// close time (spec §7.6 "Clock").
+pub const TIMELOCK_ATTESTED_SECONDS: u64 = 72 * 3_600;
 
 /// Timelock of any other addition: 7 days, counted from its approval.
-pub const TIMELOCK_LEDGERS: u32 = 120_960;
+pub const TIMELOCK_SECONDS: u64 = 7 * 86_400;
 
 /// Largest grace period the constructor accepts: the 7-day timelock.
-pub const MAX_GRACE_LEDGERS: u32 = 120_960;
+pub const MAX_GRACE_SECONDS: u64 = TIMELOCK_SECONDS;
 
 /// A proposal must be executed within 30 days of its creation, or it lapses.
-pub const PROPOSAL_LIFETIME_LEDGERS: u32 = 518_400;
+pub const PROPOSAL_LIFETIME_SECONDS: u64 = 30 * 86_400;
 
 /// An attestation is refused when its observation is more than 24 hours
 /// older than the ledger's close time.
@@ -116,9 +121,9 @@ pub struct RegistryConfig {
     /// Attestations of the same observation an addition needs for the 72-hour
     /// timelock, and a retirement needs at all.
     pub attest_threshold: u32,
-    /// How long a superseded root stays acceptable, in ledgers, at most
-    /// [`MAX_GRACE_LEDGERS`].
-    pub grace_ledgers: u32,
+    /// How long a superseded root stays acceptable, in seconds, at most
+    /// [`MAX_GRACE_SECONDS`].
+    pub grace_seconds: u64,
     /// The domains leaves may name: lowercase, 1 to 62 bytes, at least two
     /// LDH labels, distinct, at most [`MAX_DOMAINS`].
     pub domains: Vec<Bytes>,
@@ -146,12 +151,13 @@ pub struct Proposal {
     pub kind: ProposalKind,
     pub domain: Bytes,
     pub key_hash: BytesN<32>,
-    /// The ledger the proposal was created in.
-    pub created_at: u32,
+    /// The close time of the ledger the proposal was created in.
+    pub created_at: u64,
     /// Bit `i` set: `members[i]` approved.
     pub approvals: u32,
-    /// The ledger the approvals reached the proposal's threshold.
-    pub approved_at: Option<u32>,
+    /// The close time of the ledger the approvals reached the proposal's
+    /// threshold in.
+    pub approved_at: Option<u64>,
     /// Bit `i` set: `attesters[i]`'s latest observation saw the key
     /// published.
     pub live: u32,
@@ -161,10 +167,11 @@ pub struct Proposal {
     /// `observed_at[i]`: the time of `attesters[i]`'s latest recorded
     /// observation, meaningful where bit `i` of `live` or `blank` is set.
     pub observed_at: Vec<u64>,
-    /// The ledger since which the latest observations that count for this
-    /// kind (`live` for an addition, `blank` for a retirement) have numbered
-    /// at least `attest_threshold`; `None` while they number fewer.
-    pub attested_at: Option<u32>,
+    /// The close time of the ledger since which the latest observations that
+    /// count for this kind (`live` for an addition, `blank` for a retirement)
+    /// have numbered at least `attest_threshold`; `None` while they number
+    /// fewer.
+    pub attested_at: Option<u64>,
     pub executed: bool,
 }
 
@@ -205,8 +212,9 @@ pub struct LiveRoot {
     pub root: BytesN<32>,
     /// Its root sequence number: the count of tree changes that produced it.
     pub seq: u32,
-    /// The ledger a newer root superseded it in; `None` for the current root.
-    pub superseded_at: Option<u32>,
+    /// The close time of the ledger a newer root superseded it in; `None`
+    /// for the current root.
+    pub superseded_at: Option<u64>,
 }
 
 /// The registry's mutable state.

@@ -110,7 +110,7 @@ would leave out the guardian's checks and the proof verification.
 
 \begin{table*}[t]
   \caption{One \texttt{submit\_guardian} with an email approval and a real
-    proof. Test host: range over the 12 fixtures. Local network: the 18 votes
+    proof. Test host: range over the 12 fixtures. Local network: the 20 votes
     that leave their attempt collecting (median, range). Testnet: one vote.}
   \label{tab:cost}
   \small
@@ -118,11 +118,11 @@ would leave out the guardian's checks and the proof verification.
     \toprule
     & Test host, invocation & Test host, transaction & Local network & Testnet \\
     \midrule
-    Instructions (millions) & 121.80--121.92 & 131.14--131.26 & 120.05 (119.97--120.09) metered & 121.64 metered \\
+    Instructions (millions) & 121.82--121.94 & 131.19--131.30 & 120.05 (119.99--120.09) metered & 121.64 metered \\
     Ledger entries read / written & 14 / 2 & 12 + 2 footprint & 12 / 2 & 12 / 2 \\
     Bytes written & 1{,}208 & 1{,}208 & 1{,}208 & 1{,}208 \\
     Signed transaction (bytes) & --- & 18{,}148 & 18{,}080 & 18{,}080 \\
-    Fee (stroops) & 94{,}421--94{,}501, no rent & 178{,}175--178{,}255, no rent & 176{,}230 charged, 2{,}604 rent & 82{,}428 charged, 1{,}333 rent \\
+    Fee (stroops) & 94{,}435--94{,}516, no rent & 178{,}207--178{,}286, no rent & 176{,}232 charged, 2{,}604 rent & 82{,}428 charged, 1{,}333 rent \\
     Key path & registry root & registry root & pin & pin \\
     \bottomrule
   \end{tabularx}
@@ -132,7 +132,7 @@ would leave out the guardian's checks and the proof verification.
 attributed. \emph{Key path}: network approvals use the pin, so the guardian
 never calls the registry, whereas the test host's use a registry root,
 putting the registry's instance and code in the footprint and costing about
-564{,}000 instructions for \texttt{is\_accepted\_root}\claim{registry-costs}.
+565{,}000 instructions for \texttt{is\_accepted\_root}\claim{registry-costs}.
 \emph{Metering}: each host meters with its own cost parameters, which are not
 compared here; the local count is below the test host's by more than the
 registry call, testnet's (a newer protocol) about 1.6 million above the local
@@ -140,7 +140,7 @@ one, and the test host's transaction reading about 7.6\% above its invocation
 reading, which the SDK documents omits some production work. \emph{Fees}:
 each environment prices with its own settings; testnet charged about half of
 what the local network did. The vote that authorizes an attempt also writes the authorized
-attempt and pays its rent: 3{,}734{,}680 stroops on the local network, of
+attempt and pays its rent: 3{,}734{,}675 stroops on the local network, of
 which 3{,}550{,}194 are rent\claim{authorizing-vote-cost}. Bytes written and
 the 16{,}784-byte authorization entry around the 16{,}224-byte
 proof\claim{onchain-verification-cost} are the same everywhere.

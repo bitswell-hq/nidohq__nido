@@ -4,7 +4,7 @@ use crate::statement::{self, MAX_STATEMENT_LEN};
 use crate::verifier::VerifierIdentityClient;
 use crate::{
     EmailApproval, GuardianConfig, ALLOW_ALL, ALLOW_CANCEL, ALLOW_COMPROMISE, ALLOW_LOST_KEY,
-    ALLOW_RECONFIGURE, ALLOW_UPGRADE, MAX_PIN_LIFETIME_LEDGERS, VERSION,
+    ALLOW_RECONFIGURE, ALLOW_UPGRADE, MAX_PIN_LIFETIME_SECONDS, VERSION,
 };
 use perch_recovery_interface::zk::{
     is_canonical_field, split_hi_lo, ProofVerifierClient, ProofVerifierError,
@@ -47,11 +47,11 @@ fn validate(e: &Env, config: &GuardianConfig) -> Result<(), Error> {
         return Err(Error::InvalidPin);
     }
     if let Some(pin) = config.key_pin.first() {
-        let now = e.ledger().sequence();
-        let latest = now.saturating_add(MAX_PIN_LIFETIME_LEDGERS);
+        let now = e.ledger().timestamp();
+        let latest = now.saturating_add(MAX_PIN_LIFETIME_SECONDS);
         if !is_canonical_field(&pin.root.to_array())
-            || pin.valid_until_ledger < now
-            || pin.valid_until_ledger > latest
+            || pin.valid_until < now
+            || pin.valid_until > latest
         {
             return Err(Error::InvalidPin);
         }
@@ -170,7 +170,7 @@ fn check(
         return Err(Error::NonCanonicalRoot);
     }
     let pinned = config.key_pin.first().is_some_and(|pin| {
-        pin.root == approval.key_root && e.ledger().sequence() <= pin.valid_until_ledger
+        pin.root == approval.key_root && e.ledger().timestamp() <= pin.valid_until
     });
     if !pinned {
         match DkimRegistryClient::new(e, &config.registry).try_is_accepted_root(&approval.key_root)
@@ -196,7 +196,7 @@ impl EmailGuardian {
     /// Fix the configuration. Refuses (see [`Error`]'s construction
     /// variants) unless every address has the right kind, `C` and the pin
     /// root are canonical field elements, the pin expires within
-    /// [`MAX_PIN_LIFETIME_LEDGERS`], the action set is valid, and the
+    /// [`MAX_PIN_LIFETIME_SECONDS`], the action set is valid, and the
     /// verifier reports `circuit_id`.
     // `#[contractimpl]` entry point: the SDK ABI takes owned arguments.
     #[allow(clippy::needless_pass_by_value)]

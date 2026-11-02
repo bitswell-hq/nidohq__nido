@@ -65,7 +65,7 @@ pub struct KeyActivated {
 }
 
 /// A key left the tree. `previous_root` (which holds it) stays acceptable
-/// through ledger `previous_accepted_until`.
+/// through ledger close time `previous_accepted_until` (Unix seconds).
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct KeyRetired {
@@ -76,7 +76,7 @@ pub struct KeyRetired {
     pub index: u32,
     pub root: BytesN<32>,
     pub previous_root: BytesN<32>,
-    pub previous_accepted_until: u32,
+    pub previous_accepted_until: u64,
 }
 
 /// A key was revoked. `refused_roots` are the roots containing it that were

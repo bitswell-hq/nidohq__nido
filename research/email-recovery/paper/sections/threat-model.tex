@@ -65,6 +65,11 @@ them (\S\ref{sec:properties}).
          and pins only keys it checked\claim{honest-enrollment}. \\
     A8 & The enclave keeps its memory from its host, and at most one of the
          three key custodians is malicious\claim{enclave-isolation}. \\
+    A9 & Ledger close time tracks wall-clock time, and ledgers close on
+         average no faster than the network's target close time, which
+         validators can lower by vote: the registry's timelocks, the key pin
+         and the contact-change delay are close time; Perch's delay is a
+         ledger count the wallet sizes from the target\claim{ledger-timing}. \\
     \bottomrule
   \end{tabularx}
 \end{table}

@@ -131,9 +131,13 @@ info: 'EmailRecovery.Perch.email_only_authorizes_only_at_quorum_one' depends on 
 #guard_msgs in
 #print axioms EmailRecovery.Perch.owner_can_cancel
 
-/-- info: 'EmailRecovery.Perch.wallet_policy_email_alone' depends on axioms: [propext] -/
+/-- info: 'EmailRecovery.Perch.wallet_policy_email_alone' depends on axioms: [propext, Quot.sound] -/
 #guard_msgs in
 #print axioms EmailRecovery.Perch.wallet_policy_email_alone
+
+/-- info: 'EmailRecovery.Perch.emailOnlyFloor_lasts' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms EmailRecovery.Perch.emailOnlyFloor_lasts
 
 /-- info: 'EmailRecovery.Perch.one_factor_under_wallet_policy' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in

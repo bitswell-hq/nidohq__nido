@@ -20,9 +20,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { InProcessVault } from '../src/channel.js';
 import { accountSigners } from '../src/rpc.js';
 import { AlertService } from '../src/service.js';
-import { CONTACT_CHANGE_DELAY_LEDGERS, Vault } from '../src/vault/vault.js';
+import { CONTACT_CHANGE_DELAY_SECONDS, Vault, changeDue } from '../src/vault/vault.js';
 import { IMAGE, Wallet, type WalletApi, type World, alertsTo, loadFixture, startWorld } from './harness.js';
 import { attemptAuthorized } from './synthetic.js';
+
+/** The mock's ledgers close every 5 seconds unless a test says otherwise. */
+const DELAY_LEDGERS = CONTACT_CHANGE_DELAY_SECONDS / 5;
 
 let w: World;
 let service: AlertService;
@@ -203,7 +206,11 @@ describe('replacement and removal', () => {
     const oldId = await confirmed(owner, 'old@proton.me');
     const requestedAt = service.state.latestLedger;
     const r = await owner.contact('new@proton.me', { replaces: oldId });
-    expect(r.result).toEqual({ ok: true, status: 'change-pending', maturesLedger: requestedAt + CONTACT_CHANGE_DELAY_LEDGERS });
+    expect(r.result).toEqual({
+      ok: true,
+      status: 'change-pending',
+      maturesAt: w.rpcMock.closeTimeAt(requestedAt) + CONTACT_CHANGE_DELAY_SECONDS,
+    });
     const notice = alertsTo(w, 'old@proton.me');
     expect(notice).toHaveLength(1);
     expect(notice[0]!.text).toMatch(/being moved to another address\. The change takes effect in 14 days/);
@@ -217,8 +224,8 @@ describe('replacement and removal', () => {
     expect(alertsTo(w, 'old@proton.me')).toHaveLength(2);
     expect(alertsTo(w, 'new@proton.me')).toHaveLength(1);
 
-    expect((await advanceTo(requestedAt + CONTACT_CHANGE_DELAY_LEDGERS - 1)).matured.applied).toEqual([]);
-    const maturity = requestedAt + CONTACT_CHANGE_DELAY_LEDGERS;
+    expect((await advanceTo(requestedAt + DELAY_LEDGERS - 1)).matured.applied).toEqual([]);
+    const maturity = requestedAt + DELAY_LEDGERS;
     expect((await advanceTo(maturity)).matured.applied).toEqual([w.fixture.account]);
     w.rpcMock.add([attemptAuthorized(w.fixture.controller, w.fixture.account, maturity + 1, 8, maturity + 200)]);
     await service.drain();
@@ -232,7 +239,7 @@ describe('replacement and removal', () => {
     const r = await owner.contact('thief@gmail.com', { replaces: oldId });
     await owner.confirm(r.id, 'thief@gmail.com');
     w.rules.stage = 'after';
-    const report = await advanceTo(service.state.latestLedger + CONTACT_CHANGE_DELAY_LEDGERS);
+    const report = await advanceTo(service.state.latestLedger + DELAY_LEDGERS);
     expect(report.matured.dropped).toEqual([w.fixture.account]);
     const record = Object.keys(service.state.sealed.records);
     expect(record).toHaveLength(1);
@@ -242,7 +249,7 @@ describe('replacement and removal', () => {
     const owner = new Wallet(w, api);
     const oldId = await confirmed(owner, 'old@proton.me');
     await owner.contact('typo@proton.me', { replaces: oldId });
-    const report = await advanceTo(service.state.latestLedger + CONTACT_CHANGE_DELAY_LEDGERS);
+    const report = await advanceTo(service.state.latestLedger + DELAY_LEDGERS);
     expect(report.matured.dropped).toEqual([w.fixture.account]);
   });
 
@@ -265,11 +272,11 @@ describe('replacement and removal', () => {
     expect(await owner.remove(id)).toEqual({
       ok: true,
       status: 'change-pending',
-      maturesLedger: requestedAt + CONTACT_CHANGE_DELAY_LEDGERS,
+      maturesAt: w.rpcMock.closeTimeAt(requestedAt) + CONTACT_CHANGE_DELAY_SECONDS,
     });
     expect(alertsTo(w, 'owner@proton.me').at(-1)!.text).toMatch(/being turned off\. The change takes effect in 14 days/);
 
-    const maturity = requestedAt + CONTACT_CHANGE_DELAY_LEDGERS;
+    const maturity = requestedAt + DELAY_LEDGERS;
     expect((await advanceTo(maturity - 10)).matured).toEqual({ applied: [], dropped: [], postponed: [] });
     w.rpcMock.add([attemptAuthorized(w.fixture.controller, w.fixture.account, maturity - 5, 7, maturity + 100)]);
     await service.drain();
@@ -278,5 +285,30 @@ describe('replacement and removal', () => {
     expect(Object.keys(service.state.sealed.records)).toHaveLength(1);
     expect((await advanceTo(maturity + 100)).matured.applied).toEqual([w.fixture.account]);
     expect(Object.keys(service.state.sealed.records)).toHaveLength(0);
+  });
+});
+
+describe('the clock contact changes mature on', () => {
+  it('is ledger close time: ledgers closing every second do not shorten the 14 days', async () => {
+    const owner = new Wallet(w, api);
+    const id = await confirmed(owner, 'owner@proton.me');
+    // From here on, one ledger a second.
+    const from = w.rpcMock.latestLedger;
+    const base = w.rpcMock.closeTimeAt(from);
+    w.rpcMock.closeTimeAt = (l) => (l <= from ? base - (from - l) * 5 : base + (l - from));
+    const r = await owner.remove(id);
+    expect(r).toEqual({ ok: true, status: 'change-pending', maturesAt: base + CONTACT_CHANGE_DELAY_SECONDS });
+    // Five times the 5-second ledgers of 14 days would be 1,209,600 ledgers; one short of 14 days of seconds still waits.
+    expect((await advanceTo(from + CONTACT_CHANGE_DELAY_SECONDS - 1)).matured.applied).toEqual([]);
+    expect((await advanceTo(from + CONTACT_CHANGE_DELAY_SECONDS)).matured.applied).toEqual([w.fixture.account]);
+  });
+
+  it('a change sealed with only a ledger number matures by ledger', () => {
+    const base = { kind: 'remove' as const, target: new Uint8Array(32), requestedLedger: 10, authorizer: new Uint8Array(65) };
+    expect(changeDue({ ...base, maturesAt: 1_000 }, { ledger: 0, closeTime: 999 })).toBe(false);
+    expect(changeDue({ ...base, maturesAt: 1_000 }, { ledger: 0, closeTime: 1_000 })).toBe(true);
+    expect(changeDue({ ...base, maturesLedger: 50 }, { ledger: 49, closeTime: 10 ** 10 })).toBe(false);
+    expect(changeDue({ ...base, maturesLedger: 50 }, { ledger: 50, closeTime: 0 })).toBe(true);
+    expect(changeDue(base, { ledger: 10 ** 9, closeTime: 10 ** 10 })).toBe(false);
   });
 });

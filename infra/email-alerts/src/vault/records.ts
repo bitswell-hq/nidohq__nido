@@ -39,7 +39,13 @@ export interface PendingChange {
   /** The replacement contact (`replace` only). */
   replacement?: Uint8Array;
   requestedLedger: number;
-  maturesLedger: number;
+  /** Close time (Unix seconds) of the latest ledger when the change was requested. */
+  requestedAt?: number;
+  /** The close time from which the change applies: `requestedAt` plus 14 days. */
+  maturesAt?: number;
+  /** A ledger number from which the change applies, for a change sealed
+   *  without `maturesAt`; such a change keeps maturing by ledger. */
+  maturesLedger?: number;
   /** The passkey that authorized the change; re-checked at maturity. */
   authorizer: Uint8Array;
 }

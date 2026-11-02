@@ -20,7 +20,7 @@ const repo = new URL('../../../../../', import.meta.url).pathname;
 const sha256 = (b) => createHash('sha256').update(b).digest();
 
 export const LAUNCH_DOMAINS = ['gmail.com', 'outlook.com', 'hotmail.com', 'icloud.com', 'yahoo.com', 'proton.me', 'protonmail.com', 'fastmail.com', 'gmx.net', 'gmx.de', 'web.de'];
-export const REGISTRY = { members: 5, threshold: 3, revokeThreshold: 2, attesters: 3, attestThreshold: 2, graceLedgers: 17_280 };
+export const REGISTRY = { members: 5, threshold: 3, revokeThreshold: 2, attesters: 3, attestThreshold: 2, graceSeconds: 86_400 };
 
 /** The DNS attester mock (`crates/dns-attestation-mock`), TEST-ONLY attester `index`. */
 export class Attester {
@@ -55,12 +55,12 @@ export class Registry {
     Object.assign(this, { chain, address, members, attesters, submitter });
   }
 
-  static configScVal({ members, attesters, graceLedgers = REGISTRY.graceLedgers, domains = LAUNCH_DOMAINS }) {
+  static configScVal({ members, attesters, graceSeconds = REGISTRY.graceSeconds, domains = LAUNCH_DOMAINS }) {
     return sc.struct({
       attest_threshold: sc.u32(REGISTRY.attestThreshold),
       attesters: sc.vec(attesters.map((a) => sc.bytes(a.publicKey))),
       domains: sc.vec(domains.map((d) => sc.bytes(Buffer.from(d)))),
-      grace_ledgers: sc.u32(graceLedgers),
+      grace_seconds: sc.u64(graceSeconds),
       members: sc.vec(members.map((m) => sc.address(m.publicKey()))),
       revoke_threshold: sc.u32(REGISTRY.revokeThreshold),
       threshold: sc.u32(REGISTRY.threshold),

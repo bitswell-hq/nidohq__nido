@@ -91,6 +91,12 @@ export class StellarRpcMock {
   onSimulate?: (transaction: string) => string;
   /** Answers `getLedgerEntries`: given one base64 `LedgerKey`, its base64 `LedgerEntryData`, or `undefined`. */
   onLedgerEntry?: (key: string) => string | undefined;
+  /**
+   * The close time (Unix seconds) the mock reports for a ledger. Default:
+   * [`ledgerCloseTime`], 5 seconds per ledger. A test sets it to make
+   * ledgers close at another rate.
+   */
+  closeTimeAt: (ledger: number) => number = (ledger) => Math.floor(ledgerCloseTime(ledger).getTime() / 1000);
   url = '';
 
   constructor(
@@ -183,8 +189,8 @@ export class StellarRpcMock {
       events: page,
       latestLedger: this.latestLedger,
       oldestLedger: this.oldestLedger,
-      latestLedgerCloseTime: String(Math.floor(ledgerCloseTime(this.latestLedger).getTime() / 1000)),
-      oldestLedgerCloseTime: String(Math.floor(ledgerCloseTime(this.oldestLedger).getTime() / 1000)),
+      latestLedgerCloseTime: String(this.closeTimeAt(this.latestLedger)),
+      oldestLedgerCloseTime: String(this.closeTimeAt(this.oldestLedger)),
       cursor,
     };
   }
@@ -234,7 +240,14 @@ export class StellarRpcMock {
           });
         }
         if (msg.method === 'getLatestLedger') {
-          return reply({ result: { id: '0'.repeat(64), protocolVersion: 25, sequence: this.latestLedger } });
+          return reply({
+            result: {
+              id: '0'.repeat(64),
+              protocolVersion: 25,
+              sequence: this.latestLedger,
+              closeTime: String(this.closeTimeAt(this.latestLedger)),
+            },
+          });
         }
         return reply({ error: { code: -32601, message: 'method not found' } });
       } catch (e) {

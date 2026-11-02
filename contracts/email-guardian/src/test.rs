@@ -11,7 +11,7 @@ extern crate std;
 
 use crate::{
     parse_statement, EmailApproval, EmailGuardian, EmailGuardianClient, EmailGuardianError,
-    GuardianConfig, KeyPin, ALLOW_ALL, ALLOW_CANCEL, ALLOW_LOST_KEY, MAX_PIN_LIFETIME_LEDGERS,
+    GuardianConfig, KeyPin, ALLOW_ALL, ALLOW_CANCEL, ALLOW_LOST_KEY, MAX_PIN_LIFETIME_SECONDS,
     PUBLIC_INPUTS_LEN,
 };
 use perch_recovery_interface::zk::{split_hi_lo, ProofVerifierError, BN254_SCALAR_MODULUS};
@@ -27,6 +27,7 @@ use soroban_sdk::{
 
 const NETWORK: &str = "Test SDF Network ; September 2015";
 const START: u32 = 1_000;
+const START_TS: u64 = 1_793_500_000;
 /// The size of a zero-knowledge `UltraHonk` proof, so payload sizes are real.
 const TEST_PROOF_LEN: usize = 16_224;
 
@@ -138,6 +139,7 @@ fn env() -> Env {
         .to_array();
     e.ledger().with_mut(|l| {
         l.sequence_number = START;
+        l.timestamp = START_TS;
         l.network_id = network_id;
     });
     e
@@ -547,7 +549,7 @@ fn accepts_the_pin_root_without_the_registry_until_it_expires() {
     let pin_root = fe(&p.e, 0x50);
     let pin = KeyPin {
         root: pin_root.clone(),
-        valid_until_ledger: START + 200,
+        valid_until: START_TS + 1_000,
     };
     let s = deploy(p, ALLOW_ALL, Some(pin));
     // The registry is down and has never heard of the pin root.
@@ -555,11 +557,14 @@ fn accepts_the_pin_root_without_the_registry_until_it_expires() {
     let mut st = statement_for(&s, &s.account, 1, START + 1_000);
     let bytes = st.clone().encode(&s.e).unwrap();
     let a = approval(&s, &bytes, &pin_root);
-    s.e.ledger().set_sequence_number(START + 200);
-    assert_eq!(check(&s, &a), Ok(()));
+    // The pin's expiry is close time: the ledger count in between does not
+    // matter (the statement's own expiry stays Perch's ledger number).
+    s.e.ledger().set_sequence_number(START + 1);
+    s.e.ledger().set_timestamp(START_TS + 1_000);
+    assert_eq!(check(&s, &a), Ok(()), "valid through valid_until");
 
     // Past the pin's expiry the root must come from the registry.
-    s.e.ledger().set_sequence_number(START + 201);
+    s.e.ledger().set_timestamp(START_TS + 1_001);
     assert_eq!(check(&s, &a), Err(EmailGuardianError::RegistryUnavailable));
     TestOnlyRegistryClient::new(&s.e, &s.registry).set_broken(&false);
     assert_eq!(check(&s, &a), Err(EmailGuardianError::UnknownRoot));
@@ -575,7 +580,7 @@ fn refuses_a_proof_against_another_pin() {
     let p = parts();
     let pin = KeyPin {
         root: fe(&p.e, 0x50),
-        valid_until_ledger: START + 200,
+        valid_until: START_TS + 1_000,
     };
     let s = deploy(p, ALLOW_ALL, Some(pin));
     // A proof made against some other key tree (another account's pin, or a
@@ -668,7 +673,7 @@ fn construction_refuses_a_pin_longer_than_the_maximum_lifetime() {
     let p = parts();
     let pin = KeyPin {
         root: fe(&p.e, 0x50),
-        valid_until_ledger: START + MAX_PIN_LIFETIME_LEDGERS + 1,
+        valid_until: START_TS + MAX_PIN_LIFETIME_SECONDS + 1,
     };
     let _ = deploy(p, ALLOW_ALL, Some(pin));
 }
@@ -678,7 +683,7 @@ fn construction_accepts_a_pin_of_exactly_the_maximum_lifetime() {
     let p = parts();
     let pin = KeyPin {
         root: fe(&p.e, 0x50),
-        valid_until_ledger: START + MAX_PIN_LIFETIME_LEDGERS,
+        valid_until: START_TS + MAX_PIN_LIFETIME_SECONDS,
     };
     let _ = deploy(p, ALLOW_ALL, Some(pin));
 }
@@ -689,7 +694,7 @@ fn construction_refuses_an_expired_pin() {
     let p = parts();
     let pin = KeyPin {
         root: fe(&p.e, 0x50),
-        valid_until_ledger: START - 1,
+        valid_until: START_TS - 1,
     };
     let _ = deploy(p, ALLOW_ALL, Some(pin));
 }

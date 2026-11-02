@@ -22,6 +22,7 @@ import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { configHash as perchConfigHash, parsePolicyDoc } from '@stellar-registry/perch';
 import type { PolicyDoc, RecoveryModeSpec, RecoverySpec, ZkFactorSpec } from '@stellar-registry/perch';
 import type { PerchDeployment } from './deployment.js';
+import { emailOnlyMinDelayLedgers } from './ledgerTiming.js';
 import type { Bytes32 } from './statement.js';
 
 export type RecoveryProfile = 'loss' | 'protected';
@@ -89,6 +90,11 @@ export interface RecoveryChoice {
   delayLedgers?: number;
   expiryLedgers?: number;
   maxCancels?: number;
+  /** The network's target ledger close time in milliseconds, as
+   *  `ledgerTargetCloseMs` reads it. Required when the email vote alone
+   *  authorizes a recovery: the delay is a ledger count, and rule 3 sizes
+   *  its floor from this. */
+  ledgerCloseMs?: number;
 }
 
 /** The `recovery` member for `choice` against `deployment`. Throws when the
@@ -141,10 +147,6 @@ export function recoverySpec(deployment: PerchDeployment, choice: RecoveryChoice
   };
 }
 
-/** The shortest delay under which the email vote alone may authorize an
- *  attempt: seven days. */
-export const EMAIL_ONLY_MIN_DELAY_LEDGERS = 120_960;
-
 /** The wallet's email-recovery rules (docs/email-recovery/spec.md §9.3).
  *  Perch's validator accepts every configuration these refuse; the rules
  *  keep the email factor one factor in what Nido builds. */
@@ -159,13 +161,21 @@ function checkEmailGuardian(choice: RecoveryChoice): void {
   if (choice.secondAlertChannel === undefined) {
     throw new Error('an email guardian needs a second alert channel registered');
   }
-  // Rule 3: in combined mode the ZK factor is always needed as well.
+  // Rule 3: in combined mode the ZK factor is always needed as well. The
+  // floor is seven days of wall-clock time, so its ledger count follows the
+  // network's target close time.
   const quorum = choice.quorum!;
   if (choice.mode === 'guardian-only' && quorum === 1) {
-    const delay = choice.delayLedgers ?? RECOVERY_DEFAULTS.delayLedgers;
-    if (choice.profile !== 'loss' || delay < EMAIL_ONLY_MIN_DELAY_LEDGERS) {
+    if (choice.ledgerCloseMs === undefined) {
       throw new Error(
-        `the email vote alone authorizes this recovery, so it needs the loss profile and a delay of at least ${EMAIL_ONLY_MIN_DELAY_LEDGERS} ledgers`,
+        "the email vote alone authorizes this recovery, so its delay needs the network's target ledger close time",
+      );
+    }
+    const floor = emailOnlyMinDelayLedgers(choice.ledgerCloseMs);
+    const delay = choice.delayLedgers ?? RECOVERY_DEFAULTS.delayLedgers;
+    if (choice.profile !== 'loss' || delay < floor) {
+      throw new Error(
+        `the email vote alone authorizes this recovery, so it needs the loss profile and a delay of at least ${floor} ledgers (7 days at ${choice.ledgerCloseMs} ms per ledger)`,
       );
     }
   }

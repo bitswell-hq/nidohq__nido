@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import type { ContactRequest } from '@nidohq/email-recovery';
 import type { InboundResult } from './vault/inbound.js';
 import type {
+  ChainTime,
   ChainView,
   ContactResult,
   DispatchRequest,
@@ -34,7 +35,7 @@ export interface VaultApi {
   nonce(): Promise<Uint8Array>;
   contact(req: ContactRequest, chain: ChainView): Promise<{ result: ContactResult; writes: Writes }>;
   dispatch(ev: DispatchRequest): Promise<{ status: 'done' | 'retry'; writes: Writes }>;
-  due(ledger: number): Promise<string[]>;
+  due(at: ChainTime): Promise<string[]>;
   mature(views: Record<string, ChainView>): Promise<{ applied: string[]; dropped: string[]; postponed: string[]; writes: Writes }>;
   /** A browser's sealed inbound registration (spec §4.6). */
   inbound(envelope: Uint8Array): Promise<InboundResult>;
@@ -62,8 +63,8 @@ export class InProcessVault implements VaultApi {
   dispatch(ev: DispatchRequest) {
     return this.vault.dispatch(ev);
   }
-  async due(ledger: number) {
-    return this.vault.due(ledger);
+  async due(at: ChainTime) {
+    return this.vault.due(at);
   }
   mature(views: Record<string, ChainView>) {
     return this.vault.mature(views);
@@ -152,8 +153,8 @@ export class ProcessVault implements VaultApi {
   dispatch(ev: DispatchRequest) {
     return this.request('dispatch', ev) as Promise<{ status: 'done' | 'retry'; writes: Writes }>;
   }
-  due(ledger: number) {
-    return this.request('due', { ledger }) as Promise<string[]>;
+  due(at: ChainTime) {
+    return this.request('due', { at }) as Promise<string[]>;
   }
   mature(views: Record<string, ChainView>) {
     return this.request('mature', { views }) as Promise<{ applied: string[]; dropped: string[]; postponed: string[]; writes: Writes }>;

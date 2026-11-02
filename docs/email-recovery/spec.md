@@ -93,9 +93,16 @@ Quorum, delay, cancellation, and completion are Perch's, unchanged.
   is unambiguous.
 - `hex(x)` is the 64 lowercase hexadecimal characters of the 32-byte
   big-endian encoding of field element `x`.
-- Ledger counts assume 5-second ledgers where durations are given in days
-  (Perch §4 "Timing"): 1 day = 17,280 ledgers, 72 hours = 51,840, 7 days =
-  120,960.
+- **Two clocks.** The windows this design adds are measured on ledger close
+  time (`env.ledger().timestamp()`, Unix seconds): the registry's timelocks,
+  grace period, and proposal lifetime (§7.3, §7.6), the key pin (§7.4), and
+  the enclave-image registry's timelock (§10.4). Perch's windows are ledger
+  counts and Perch is used unchanged: the recovery delay, the evidence
+  window, and the statement's expiry (Perch §4 "Timing"). Where a ledger
+  count stands for days, it is at the 5-second target close time testnet and
+  mainnet set (1 day = 17,280 ledgers, 7 days = 120,960); the wallet sizes
+  the one ledger count that carries a security floor from the network's
+  current target (§9.3 rule 3). §11.1 A9 states what each clock assumes.
 
 **Domain tags.** Each tag is `BE(sha256(label)) mod r`, the rule Perch's own
 tags follow (Perch statement.md). The values below are pinned by
@@ -137,8 +144,8 @@ Perch's statement as the single source:
 
 - **Expiry is a ledger sequence, not a wall-clock time.** Perch's statement
   carries no timestamp field (Perch §4 "Timing"), so neither the guardian nor
-  the circuit compares a timestamp. The DKIM `t=` tag is not used either
-  (§4.4).
+  the circuit compares the statement with a timestamp. The DKIM `t=` tag is
+  not used either (§4.4).
 - **The action is inside the digest.** The Subject phrase is the same for
   every action (§4.2), and the circuit needs no action input. The guardian
   reads the action from the statement bytes and checks it against its
@@ -744,23 +751,26 @@ proves against **[built, tested]**.
 ### 7.3 Registry root acceptance
 
 The guardian asks one question of the registry:
-`is_accepted_root(root) -> bool`, at the current ledger
+`is_accepted_root(root) -> bool`, at the current ledger's close time
 (`DkimRegistryInterface`, `contracts/email-guardian/src/registry.rs`). The
 registry contract (`contracts/dkim-registry`, §7.6) answers it from its own
 state as follows **[built, tested]**:
 
 1. **Activation.** A root that adds a key becomes acceptable only when that
    addition executes, and an addition executes only after its timelock:
-   51,840 ledgers (72 hours) after the later of its approval and the
-   ledger since which at least `attest_threshold` attesters' latest
-   observations see the key live in DNS (`attested_at`, §7.5), or 120,960
-   ledgers (7 days) after its approval, whichever comes first. Additions are proposed and approved by the
-   registry's multisig. The 72-hour path is closed to a key that was ever
-   revoked (rule 3).
-2. **Grace.** A root superseded at ledger `S` stays acceptable through ledger
-   `S + grace_ledgers` inclusive, so a proof generated against the previous
-   root still verifies and a key the provider has just retired keeps working
-   briefly. The registry keeps at most `MAX_LIVE_ROOTS = 16` roots (the
+   `TIMELOCK_ATTESTED_SECONDS = 259,200` (72 hours) of ledger close time
+   after the later of its approval and the moment since which at least
+   `attest_threshold` attesters' latest observations see the key live in
+   DNS (`attested_at`, §7.5), or `TIMELOCK_SECONDS = 604,800` (7 days) after
+   its approval, whichever comes first. Each moment is the close time of the
+   ledger the event happened in, and the addition executes in the first
+   ledger whose close time is at or past the deadline. Additions are
+   proposed and approved by the registry's multisig. The 72-hour path is
+   closed to a key that was ever revoked (rule 3).
+2. **Grace.** A root superseded in a ledger with close time `S` stays
+   acceptable while the close time is at most `S + grace_seconds`, so a
+   proof generated against the previous root still verifies and a key the
+   provider has just retired keeps working briefly. The registry keeps at most `MAX_LIVE_ROOTS = 16` roots (the
    current one and those in grace); when more changes than that fall inside
    one grace period, the oldest superseded root loses the rest of its grace.
 3. **Revocation.** Revoking a key for compromise refuses, from the ledger the
@@ -800,11 +810,11 @@ pin tree: depth 16, same hashing as §7.2
   leaf 0      = P2(DOM_PIN_SALT, account_code)
   leaf 1..k   = registry-format leaves (§7.2) of the pinned keys, k ≥ 1
   other leaves = 0
-pin = { root, valid_until_ledger }
+pin = { root, valid_until }    // valid_until: a ledger close time, Unix seconds
 ```
 
 - **Additive.** The guardian accepts `key_root` if it is the pin root and
-  the current ledger is at most `valid_until_ledger`, or if the registry
+  the current ledger's close time is at most `valid_until`, or if the registry
   accepts it (§8.3 check 10). The pin covers the window while a key is
   pending in the registry's timelock and keeps the enrolled key usable if
   the registry drops or stops serving it. Ordinarily the pin holds the key
@@ -823,13 +833,19 @@ pin = { root, valid_until_ledger }
   accepting it, still accepting it after the registry revokes it, and the
   pin root refused once the pin expires **[built, tested]**.
 - **Bounded.** The constructor refuses a pin that has already expired or
-  whose `valid_until_ledger` is more than `MAX_PIN_LIFETIME_LEDGERS =
-  6,307,200` (365 days) past the deployment ledger **[built, tested]**.
+  whose `valid_until` is more than `MAX_PIN_LIFETIME_SECONDS = 31,536,000`
+  (365 days) past the deployment ledger's close time **[built, tested]**.
+- **On the registry's clock.** The pin's expiry is a close time, like the
+  registry's timelocks and grace, so the window it keeps a key usable for
+  has the same wall-clock length whatever the network's target ledger close
+  time, and the guardian compares one clock for every key-trust window. The
+  statement's expiry, which check 9 compares, stays Perch's ledger number
+  (§3.1). The circuit and the proof do not depend on the pin's expiry.
 - **The revocation bound.** The pin is the one path the registry cannot
-  close. If the registry revokes a pinned key for compromise at ledger
-  `L_r`, a guardian whose pin tree holds that key still accepts it through
-  the pin until its `valid_until_ledger`, at most 6,307,200 ledgers after
-  the guardian was deployed, whatever `L_r` is. During that window, forging
+  close. If the registry revokes a pinned key for compromise at close time
+  `T_r`, a guardian whose pin tree holds that key still accepts it through
+  the pin until its `valid_until`, at most 365 days after the guardian was
+  deployed, whatever `T_r` is. During that window, forging
   an approval needs the leaked provider key **and** the victim's exact
   address **and** `account_code`, and the approval is still one vote that
   must clear the rest of the quorum and the delay with alerts. The owner
@@ -884,10 +900,11 @@ Each attester's latest observation for a proposal is the one that counts: a
 newer one replaces it, so an older signed reading (for instance from before
 DNS propagation) cannot hold an attester's place. An addition counts latest
 observations with `observed_live = 1`; a retirement counts those with
-`observed_live = 0`. The proposal's `attested_at` is the ledger since which
-the counted observations have numbered at least `attest_threshold`; a newer
-observation that drops the count below the threshold clears it, and reaching
-the threshold again sets it to that ledger. Every observation is published
+`observed_live = 0`. The proposal's `attested_at` is the close time of the
+ledger since which the counted observations have numbered at least
+`attest_threshold`; a newer observation that drops the count below the
+threshold clears it, and reaching the threshold again sets it to that
+ledger's close time. Every observation is published
 (`dns_attested`), so an attester that does not see a proposed key in DNS is
 visible to everyone watching.
 
@@ -919,6 +936,19 @@ parameter means deploying a new registry, and a guardian moves to it only by
 being replaced through Perch's reconfiguration gate (§5.5), because the
 registry's address is fixed in the guardian.
 
+**Clock.** Every duration the registry keeps is in seconds of ledger close
+time (`env.ledger().timestamp()`), never a count of ledgers: the two
+timelocks, the grace period, the proposal lifetime, and the attestation age
+and skew (§7.5). Validators set the close time by consensus; stellar-core
+accepts a ledger only if its close time is later than the previous ledger's
+and at most 60 seconds past the validating node's own clock
+(`HerderSCPDriver::checkCloseTime`, `MAX_TIME_SLIP_SECONDS`). A timelock
+therefore lasts its wall-clock length whatever the network's target ledger
+close time, which validators can change by vote (§11.1 A9), and a quorum of
+validators with honest clocks cannot end it more than a minute early. The
+registry is immutable, so a duration stated in ledgers would be fixed for
+its lifetime.
+
 **Construction.** `__constructor(config: RegistryConfig)` refuses
 (`DkimRegistryError`) unless:
 
@@ -928,7 +958,7 @@ registry's address is fixed in the guardian.
 | `threshold`, `revoke_threshold` | `1 ≤ revoke_threshold ≤ threshold ≤ members` | `InvalidThreshold` (2) |
 | `attesters: Vec<BytesN<32>>` (Ed25519 keys) | 1 to `MAX_ATTESTERS = 20`, distinct | `InvalidAttesters` (3) |
 | `attest_threshold` | `1 ≤ attest_threshold ≤ attesters` | `InvalidAttestThreshold` (4) |
-| `grace_ledgers` | at most `MAX_GRACE_LEDGERS = 120,960` | `InvalidGrace` (5) |
+| `grace_seconds: u64` | at most `MAX_GRACE_SECONDS = 604,800` (7 days) | `InvalidGrace` (5) |
 | `domains: Vec<Bytes>` | 1 to `MAX_DOMAINS = 32`, distinct, each a lowercase domain of 1 to 62 bytes (§4.5 `domain`) | `InvalidDomains` (6) |
 
 The registry starts with the empty tree. Every key, the launch keys
@@ -945,8 +975,8 @@ proposer's own approval counts, and each member approves once
 | Retire | `propose_retire(member, domain, key_hash)`, for a key in the tree | `threshold` approvals and `attest_threshold` attestations that the key is gone from DNS | `execute(id)`, by anyone: the leaf is emptied; earlier roots keep their grace |
 | Revoke | `propose_revoke(member, domain, key_hash)`, for a key in the tree, pending, or never seen | `revoke_threshold` approvals | the approval that reaches the threshold executes it (§7.3 rule 3) |
 
-A proposal lapses `PROPOSAL_LIFETIME_LEDGERS = 518,400` ledgers (30 days)
-after it was created: it can no longer be approved, attested, or executed
+A proposal lapses `PROPOSAL_LIFETIME_SECONDS = 2,592,000` (30 days) of
+ledger close time after it was created: it can no longer be approved, attested, or executed
 (`ProposalExpired`, 16). The other refusals are `DomainNotAllowed` (11),
 `KeyNotRsa2048` (12), `KeyAlreadyPresent` (13), `KeyNotPresent` (14),
 `UnknownProposal` (15), `ProposalClosed` (17), `NotApproved` (19),
@@ -962,7 +992,7 @@ part of the ABI (`contracts/dkim-registry/src/error.rs`).
 | `execute(id) -> root` | as above; returns the new root |
 | `is_accepted_root(root) -> bool` | §7.3; extends the instance's TTL when it is below half the network maximum |
 | `root()`, `state()`, `config()` | the current root; the root sequence number, next leaf index, next proposal id, and the roots that may still be acceptable; the configuration |
-| `proposal(id)`, `eligible_at(id)` | a proposal with its approvals, attestations, and execution; an approved addition's first eligible ledger |
+| `proposal(id)`, `eligible_at(id)` | a proposal with its approvals, attestations, and execution; an approved addition's earliest eligible close time (Unix seconds) |
 | `leaf(domain, key_hash)`, `leaf_at(index)` | a leaf's index, presence, root spans, and latest revocation; the leaf at an index |
 | `siblings(index)` | the 16 siblings of a leaf's path in the current tree: the circuit's witness (§6.2 C6) |
 | `key_hash(modulus)` | §7.1, as an addition computes it |
@@ -986,7 +1016,7 @@ topic 1 the domain (the proposal id for approvals).
 | `proposal_approved` | id; member, approval count, whether the threshold is reached |
 | `dns_attested` | domain; id, attester, selector, key hash, `observed_live`, `observed_at`, resolvers |
 | `key_activated` | domain; id, key hash, index, new root, previous root, whether the 72-hour path applied |
-| `key_retired` | domain; id, key hash, index, new root, previous root, the last ledger the previous root is accepted |
+| `key_retired` | domain; id, key hash, index, new root, previous root, the last close time the previous root is accepted at |
 | `key_revoked` | domain; id, key hash, current root, every root the revocation refused |
 
 **Parameters.** Fixed in the contract: the two timelocks, the proposal
@@ -999,17 +1029,19 @@ proposed defaults:
 | `members`, `threshold` | 5 members, threshold 3 | Two members can be unavailable without stalling an addition, and two compromised or colluding members cannot add a key. Who the members are is open (§13 item 5). |
 | `revoke_threshold` | 2 | An emergency threshold below `threshold`: two members can cut off a leaked key at once, or stop a key a threshold of members planted while its timelock runs. Open (§13 item 5). |
 | `attesters`, `attest_threshold` | 3 independent operators, threshold 2 | One attester can be down without closing the 72-hour path, and one attester cannot open it alone. |
-| `grace_ledgers` | 17,280 (24 hours) | Covers phone proving (up to about two minutes), mail delivery, and a proof made the same day against the previous root. Open (§13 item 5). |
+| `grace_seconds` | 86,400 (24 hours) | Covers phone proving (up to about two minutes), mail delivery, and a proof made the same day against the previous root. Open (§13 item 5). |
 | `domains` | `nido_dkim_registry::LAUNCH_DOMAINS`: `gmail.com`, `outlook.com`, `hotmail.com`, `icloud.com`, `yahoo.com`, `proton.me`, `protonmail.com`, `fastmail.com`, `gmx.net`, `gmx.de`, `web.de` | The launch providers' primary address domains. Each must also be the `d=` its provider signs with (§4.3 rule 7); open per provider (§13 item 6). |
 
 **Tests [built, tested].** `contracts/dkim-registry/src/test.rs` covers
 every construction refusal; allowlist and key-size refusals; the key hash
 being computed, never supplied (`the_key_hash_is_computed_never_supplied`);
-k-of-n approval and member authorization; both timelocks one ledger before
+k-of-n approval and member authorization; both timelocks one second before
 and at their boundary
 (`an_attested_addition_activates_after_exactly_72_hours`,
 `any_other_addition_activates_after_exactly_7_days`) and where the 72-hour
-clock starts; grace expiry; the live-root cap; retirement; revocation
+clock starts; grace expiry one second past its end; the timelocks and grace holding in
+seconds when four times as many ledgers close in them
+(`timelocks_and_grace_follow_close_time_not_ledger_count`); the live-root cap; retirement; revocation
 refusing roots in grace, sparing roots without the key, reaching an already
 retired key, stopping a pending addition, and the 7-day-only return; every
 attestation refusal and malformed encoding; an attester's latest
@@ -1019,7 +1051,7 @@ integration tests run the registry from its wasm, fed by the mock:
 
 | Test | What it shows |
 | --- | --- |
-| `email_guardian.rs::a_key_added_through_the_attested_path_is_refused_before_72_hours_and_accepted_after` | An approval proven against the root a pending addition will produce is refused by the guardian (`UnknownRoot`) one ledger before the 72 hours end, and counted from the ledger the addition executes in |
+| `email_guardian.rs::a_key_added_through_the_attested_path_is_refused_before_72_hours_and_accepted_after` | An approval proven against the root a pending addition will produce is refused by the guardian (`UnknownRoot`) one second before the 72 hours end, and counted from the ledger the addition executes in |
 | `email_guardian.rs::a_revoked_keys_root_is_refused_at_once` | An approval the guardian accepted is refused in the ledger its key is revoked |
 | `email_guardian.rs::the_pin_path_works_independently_of_the_registry` | §7.4 |
 | `dkim_registry.rs::the_registry_has_no_upgrade_path` | No code-changing host import; exactly the entry points above |
@@ -1102,7 +1134,7 @@ struct GuardianConfig {
     verifier: Address,         // ProofVerifierInterface with the email circuit's VK
     circuit_id: BytesN<32>,    // sha256 of that VK, as verifier.circuit_id() reports
 }
-struct KeyPin { root: BytesN<32>, valid_until_ledger: u32 }
+struct KeyPin { root: BytesN<32>, valid_until: u64 }   // a ledger close time, Unix seconds
 
 // The signature in the guardian's authorization entry.
 struct EmailApproval {
@@ -1130,7 +1162,7 @@ storage, extends it and the code to the network's maximum TTL, and refuses
 | `controller` is a contract and not the account | `ControllerNotContract` (2) |
 | `registry` and `verifier` are contracts | `DependencyNotContract` (3) |
 | `commitment` is non-zero and below `r` | `NonCanonicalCommitment` (4) |
-| at most one pin; its root below `r`; deployment ledger `≤ valid_until_ledger ≤` deployment ledger + 6,307,200 | `InvalidPin` (5) |
+| at most one pin; its root below `r`; deployment close time `≤ valid_until ≤` deployment close time + 31,536,000 | `InvalidPin` (5) |
 | `allowed_actions` non-zero and within `ALLOW_ALL` | `InvalidAllowedActions` (6) |
 | `verifier.circuit_id()` succeeds and equals `circuit_id` | `CircuitMismatch` (7) |
 
@@ -1159,7 +1191,7 @@ The guardian runs these checks in order and returns the first failure:
 | 8 | The call is the action's entry point: `submit_guardian` for actions 1 to 3, `approve_change` for 4 and 5 | `WrongEntryPoint` (17) |
 | 9 | Current ledger `≤ valid_until_ledger` | `StatementExpired` (18) |
 | 10 | `key_root < r` | `NonCanonicalRoot` (19) |
-| 11 | `key_root` equals the pin root with the current ledger `≤` the pin's `valid_until_ledger`; otherwise `registry.is_accepted_root(key_root)` returns `true` | `UnknownRoot` (20), or `RegistryUnavailable` (21) if the call fails |
+| 11 | `key_root` equals the pin root with the current ledger's close time `≤` the pin's `valid_until`; otherwise `registry.is_accepted_root(key_root)` returns `true` | `UnknownRoot` (20), or `RegistryUnavailable` (21) if the call fails |
 | 12 | `verifier.verify_proof(C ‖ digest_hi ‖ digest_lo ‖ key_root, proof)` succeeds, with every input taken from the configuration, the context's `digest`, and the root accepted in check 11 | `ProofRejected` (22) when the verifier refuses the proof, `VerifierUnavailable` (23) when its key does not parse or the call fails |
 
 **Why one guardian per account.** Perch binds guardian addresses into the
@@ -1300,8 +1332,20 @@ exactly what that validator refuses.)
    save a configuration that keeps the email guardian until it does.
 3. **Email plus delay.** If the email vote alone authorizes an attempt
    (`guardian-only` mode with `quorum = 1`), the member must use the `loss`
-   profile and `delay-ledgers ≥ 120,960` (7 days). In `combined` mode the
-   ZK factor is always needed as well, so this case does not arise there.
+   profile and a delay of at least 7 days of ledgers at the network's target
+   ledger close time: `delay-ledgers ≥ ⌈604,800,000 / t⌉`, where `t` is
+   `scp_timing.ledger_target_close_time_milliseconds` (CAP-0070), which the
+   wallet reads through Stellar RPC `getLedgerEntries` (`ledgerTargetCloseMs`
+   in `packages/passkey-sdk/src/perch/ledgerTiming.ts`) when it builds the
+   member, and passes as `RecoveryChoice.ledgerCloseMs`. At the 5,000 ms
+   testnet and mainnet set (read from both networks), the floor is 120,960
+   ledgers; at 4,000 ms, the lowest target protocol 23 allows, it is
+   151,200. Without `t`, or with a `t` that is not a positive integer, the
+   builder refuses the member. The delay itself is Perch's ledger count, so
+   a target lowered after the member was built shortens it in wall-clock
+   time until the owner rebuilds the member (§11.1 A9). In `combined` mode
+   the ZK factor is always needed as well, so this case does not arise
+   there.
 4. **Allowed actions.** The guardian is deployed with `ALLOW_ALL`. A
    narrower set is refused whenever the email vote is needed to reach the
    quorum (the member's other guardians number fewer than `quorum`),
@@ -1321,10 +1365,11 @@ email-guardian contact without it (§10.3) **[built, tested]**.
 | --- | --- |
 | `rule 1: accepts one email guardian and refuses a second` | One email guardian is accepted; two are refused |
 | `rule 2: an email guardian needs a second alert channel` | With `secondAlertChannel` accepted, without it refused |
-| `rule 3: email alone needs the loss profile and a delay of at least 120960 ledgers` | `guardian-only`, quorum 1: delay 120,959 refused, 120,960 and the default accepted, `protected` refused; also with other guardians listed at quorum 1 |
+| `rule 3: email alone needs the loss profile and a delay of at least 7 days of ledgers at the network close time` | `guardian-only`, quorum 1, 5,000 ms ledgers: delay 120,959 refused, 120,960 and the default accepted, `protected` refused; also with other guardians listed at quorum 1. At 4,000 ms: the default refused, 151,199 refused, 151,200 accepted. At 4,096 ms the floor rounds up (147,656 refused, 147,657 accepted). No close time, or 0, negative, fractional, or `NaN`, refused |
 | `rule 3: does not apply when the email vote alone cannot authorize` | Quorum 2, and `combined` with quorum 1, accept `protected` and a 24-ledger delay |
 | `rule 4: refuses narrower allowed actions when the quorum needs the email vote` | A narrower set is refused with two other guardians at quorum 3 and in `combined` with quorum 1, accepted with two other guardians at quorum 2; `ALLOW_ALL` is accepted at quorum 3 |
 | `leaves configurations without an email guardian unaffected` | Without an email guardian, quorum 1, `protected`, a 24-ledger delay, and no second channel are accepted |
+| `ledgerTiming.test.ts` | `ledgerTargetCloseMs` asks for exactly the SCP timing setting (ledger key `AAAACAAAABA=`, the key testnet and mainnet RPC return for it) and refuses a network without it; `emailOnlyMinDelayLedgers` is 120,960 at 5,000 ms and rounds up so the count never lasts less than 7 days |
 
 Every save on the recovery settings page lists the account's email guardian
 (found by its wasm hash, as at recovery) with its typed marker, so these
@@ -1340,7 +1385,8 @@ approvals alone never complete a recovery without the delay passing, and
 with `quorum ≥ 2` (or in `combined` mode) they never authorize one. The
 wallet rules add that Nido never produces a configuration in which the
 email vote alone authorizes, except under `loss` with a delay of at least 7
-days and a second alert channel. The chain accepts any configuration the owner applies, so a
+days at the network's target close time when the member is built, and a
+second alert channel. The chain accepts any configuration the owner applies, so a
 different wallet could build one Nido would refuse.
 
 `crates/integration-tests/tests/it/email_guardian.rs` pins the on-chain part
@@ -1594,8 +1640,17 @@ so the check defends against third parties, not against the host.
    vault mails a 6-digit code, valid 72 hours, five attempts.
 2. Registration is refused while the account has a live contact; changing
    it is a replacement.
-3. Replacing or removing a contact takes effect 241,920 ledgers (14 days,
-   longer than the 7-day minimum delay of §9.3 rule 3) after the request.
+3. Replacing or removing a contact takes effect `CONTACT_CHANGE_DELAY_SECONDS
+   = 1,209,600` (14 days, longer than the 7-day minimum delay of §9.3 rule
+   3) of ledger close time after the request. The host relays the latest
+   ledger's close time as Stellar RPC `getEvents` reports it
+   (`latestLedgerCloseTime`), so the window keeps its length whatever the
+   network's target ledger close time; a change sealed with only a ledger
+   number (`maturesLedger`) still matures by that ledger number
+   (`changeDue` in `infra/email-alerts/src/vault/vault.ts`). With ledgers
+   closing every second, a removal still waits the full 14 days: one second
+   short it is pending, at the deadline it applies (`test/contacts.test.ts`,
+   "the clock contact changes mature on").
    Until then the old contact keeps receiving alerts, and it is told about
    the change at once, by email and push. A replacement whose new contact
    was not confirmed by then is dropped.
@@ -1649,7 +1704,7 @@ another account's contact **[built, tested]** (`relyingPartyFor` in
 
 `contracts/enclave-image-registry` (crate `nido-enclave-image-registry`) is
 the public record of which enclave images may hold the vault key
-**[built, tested]** (`src/test.rs`, 14 tests; wasm 10,152 bytes optimized
+**[built, tested]** (`src/test.rs`, 15 tests; wasm 10,584 bytes optimized
 **[measured]**):
 
 - A fixed multisig (1 to 10 signers, `threshold` set at construction; no
@@ -1657,9 +1712,17 @@ the public record of which enclave images may hold the vault key
   The first vote is the proposal (`measurement_proposed`); every vote emits
   `measurement_approved`.
 - The vote that reaches the threshold queues the measurement with
-  `active_from = L + 241,920` (14 days) and emits `measurement_queued`.
-- From `active_from`, anyone may call `activate` (`measurement_activated`).
-  `is_active(measurement)` is true only from then.
+  `active_from = T + TIMELOCK_SECONDS`, where `T` is the ledger's close time
+  and `TIMELOCK_SECONDS = 1,209,600` (14 days), and emits
+  `measurement_queued`. Every time the registry records (`proposed_at`,
+  `active_from`, `activated_at`, `revoked_at`) is a close time in Unix
+  seconds, measured on the clock of §7.6 "Clock".
+- From a ledger whose close time is at or past `active_from`, anyone may
+  call `activate` (`measurement_activated`). `is_active(measurement)` is
+  true only from then. The unit tests pin the boundary one second before and
+  at `active_from`, and show the timelock holding in seconds when five times
+  the ledgers of 14 days at 5-second ledgers close inside it
+  (`the_timelock_follows_close_time_not_ledger_count`).
 - `threshold` signers may `revoke` at any stage; it takes effect at once and
   is final (`measurement_revocation_voted`, `measurement_revoked`).
 
@@ -1670,12 +1733,18 @@ measurement = sha256("nido/email-recovery/v1/enclave-image" || PCR0 || PCR1 || P
 over the 48-byte SHA-384 registers `nitro-cli build-enclave` reports for the
 image. PCR3, PCR4, and PCR8 are not part of it, so a release policy never
 trusts only a signing certificate. The integration-test host runs the
-registry's whole lifecycle from its wasm (`email_alerts.rs`), and the
-custodian mocks read activation and revocation from its events.
+registry's whole lifecycle from its wasm (`email_alerts.rs`), advancing
+the close time 14 days, and the custodian mocks read activation and
+revocation from its events: a custodian trusts `measurement_activated`,
+which the contract emits only once the timelock has passed, and does not
+recompute the timelock itself (`infra/email-alerts/src/registryView.ts`).
 
 The 14-day public timelock is a contract rather than a policy of the
 custodians so that every approval is visible on chain, to anyone, before it
-can take effect, and so that no custodian can shorten it.
+can take effect, and so that no custodian can shorten it. It is measured on
+ledger close time rather than in ledgers so that a lower target ledger
+close time cannot shorten it either: the contract has no setter, and a
+ledger count would be fixed for its lifetime.
 
 ### 10.5 The sealed vault
 
@@ -1825,7 +1894,7 @@ Every one is emitted **[built, tested]**; the announcements are
 
 | Event (topic 0) | Topic 1 | Announcement |
 | --- | --- | --- |
-| `key_proposed` | domain | **Required:** a key was proposed for the domain, with its modulus, so anyone can compare it with DNS; for an addition, the earliest ledger it can activate (`eligible_at` once approved) |
+| `key_proposed` | domain | **Required:** a key was proposed for the domain, with its modulus, so anyone can compare it with DNS; for an addition, the earliest close time it can activate at (`eligible_at` once approved) |
 | `proposal_approved` | proposal id | Informational: approvals collected; when `approved`, the addition's timelock is running |
 | `dns_attested` | domain | Informational; **required** when `observed_live = 0` on an addition: an attester did not see the proposed key in DNS |
 | `key_activated` | domain | **Required:** the key is now accepted |
@@ -1842,9 +1911,10 @@ Every one is emitted **[built, tested]**; the announcements are
 | A2 | SHA-256 is collision resistant. |
 | A3 | `P2` is collision resistant, and no input is known that it maps to `0` (the empty leaf); for the hiding claims (privacy, the blinded Subject, the salted pin) it is modelled as a random function. |
 | A4 | The UltraHonk proof system with Perch's zero-knowledge flavor is knowledge sound and zero-knowledge, and the verifier contract embeds the email circuit's key. |
-| A5 | The registry holds a leaf `(domain, key_hash)` only for a key that domain's operator controls. The registry contract reduces this to its governance (§7.6): a key enters only with `threshold` member approvals, after a public timelock (72 hours if `attest_threshold` attesters vouched it live in DNS, 7 days otherwise) during which `revoke_threshold` members can stop it; revocation is applied when a compromise is known. |
+| A5 | The registry holds a leaf `(domain, key_hash)` only for a key that domain's operator controls. The registry contract reduces this to its governance (§7.6): a key enters only with `threshold` member approvals, after a public timelock of ledger close time (72 hours if `attest_threshold` attesters vouched it live in DNS, 7 days otherwise; wall-clock time under A9 (a)) during which `revoke_threshold` members can stop it; revocation is applied when a compromise is known. |
 | A6 | `account_code` and `rho` come from a secure generator and stay with the user and the user's browser. |
 | A7 | The enrolling wallet is honest at enrollment (it computes `C` and the pin from the real enrollment email). |
+| A9 | **Timing.** (a) *Close time.* A ledger's close time tracks wall-clock time: stellar-core accepts a ledger only if its close time is later than the previous ledger's and at most 60 seconds past the validating node's clock (§7.6 "Clock"), and a quorum of validators keeps an honest clock. The registry's timelocks, grace, and proposal lifetime, the key pin, the enclave-image registry's timelock, and the vault's contact-change delay rest on (a) only, whatever the target close time. (b) *Ledger counts.* Perch's recovery delay, evidence window, and statement expiry are ledger counts, and Perch is used unchanged. Where one carries a security floor (the 7-day email-plus-delay delay, §9.3 rule 3), the wallet sizes it from the network's target ledger close time, `scp_timing.ledger_target_close_time_milliseconds` (CAP-0070; 5,000 ms on testnet and mainnet, read from both; at least 4,000 ms in protocol 23, a bound a later protocol may lower), and assumes ledgers close on average no faster than that target over the delay, since validators schedule each ledger that target after the previous one. A target lowered after a member was built shortens that member's delay in wall-clock time in proportion until it is rebuilt (§13 item 22); a core that closes faster than its target breaks (b): the local `stellar/quickstart --local` network reports 5,000 ms and closes about one ledger a second (measured: 30 ledgers in 30 seconds of close time), so there a 120,960-ledger delay lasts about 34 hours. |
 
 ### 11.2 Statements
 
@@ -1853,12 +1923,12 @@ Let `G` be an email guardian with configuration
 
 1. **Soundness of the email factor.** If `G.__check_auth` succeeds on
    `(statement S, key_root R, proof)` in the context
-   `controller.f((d,))` at ledger `L`, then, except with negligible
+   `controller.f((d,))` at ledger `L` with close time `T`, then, except with negligible
    probability, there is an email whose signed header block `H` carries a
    valid DKIM RSA-2048 signature (§4.3) under a key `n` with
    `leaf(domain, key_hash(n))` in the tree with root `R`; `R` is the pin
-   root with `L ≤ pin.valid_until_ledger`, or a root the registry accepts at
-   `L`; the `From` address of `H` is the address committed in `C`, and its
+   root with `T ≤ pin.valid_until`, or a root the registry accepts at
+   `T`; the `From` address of `H` is the address committed in `C`, and its
    domain is the leaf's domain and `d=`; and the Subject of `H` opens to
    `d = sha256(S)`, where `S` names `G`'s account, controller, and network,
    an allowed action, and a `valid_until_ledger ≥ L`. Through `S` the email
@@ -1887,7 +1957,10 @@ Let `G` be an email guardian with configuration
    authorization, and if `quorum ≥ 2` or the mode is `combined`, none
    authorizes an attempt. Under
    Nido's wallet policy, `G` alone reaches the quorum only under `loss` with
-   `delay_ledgers ≥ 120,960` and a second alert channel.
+   a delay lasting at least 7 days at the network's target ledger close time
+   when the member was built (`t · delay_ledgers ≥ 604,800,000` ms; 120,960
+   ledgers at 5,000 ms) and a second alert channel. In wall-clock time the
+   delay lasts 7 days under A9 (b).
 
 ### 11.3 Obligation table
 
@@ -1928,7 +2001,7 @@ How the assumptions enter the theorems:
 | 1 Soundness | C1, C2, C3, C4, C5, C6 | §8.3 checks 1 to 12; §8.2 wiring check; registry: §7.3 rules 1 to 5 and the same tree hashing as C6 (§7.2, §7.6 cross-check) | Statement construction from controller state (Perch §4) | A1, A2, A3 (collision), A4 (soundness), A5, A7 | Proven with A5 and A7 as hypotheses, A4's break named per accepted proof, and A3's breaks named on computed inputs (`EmailRecovery.soundness`); the conclusion fixes the `From` address, the account code and the key `(domain, modulus)`; A1 assumed; guardian checks and registry rules tested; registry hashing tested against Noir; circuit built, C1 to C6 tested (§6.2, §6.4), not proven; real proofs verified on chain (§8.6) |
 | 2 Privacy | Public inputs are exactly §6.1; nothing else is exposed | Stores `C` and a salted pin root, never an address or key hash; emits nothing | — | A3 (random function), A4 (zero-knowledge), A6 | Proven in the ideal model: an adaptive adversary's view, proofs included, equals a simulator's computed from the handles and the public statements, so any two addresses give the same view (`EmailRecovery.privacy_simulation`, `privacy_two_runs`); the step from the ideal model to Poseidon2 and UltraHonk rests on A3, A4, A6, assumed; structural lemma proven (the contracts store and emit nothing about the address beyond `C` and the pin root, `EmailRecovery.structural_noninterference`); guardian storage tested; the circuit's public inputs are exactly §6.1 (built, tested) |
 | 3 Replay | C5 binds `d` | Checks 1, 2, 5, 6, 8, 12 | One vote per guardian per attempt and domain, or per change digest (Perch §6.3 T2, §5); attempt ids never reused (T1); epochs only grow (§3.3) | A2, A3, A4 | Proven with A2's break named on the two statements' encodings (`EmailRecovery.Perch.email_vote_replay`); tested (unit and integration) |
-| 4 One-factor safety | — | The guardian is one address | Quorum (T4), delay (T5), cancellation (T6, T7) | — | Proven over all controller traces (`EmailRecovery.Perch.one_factor_safety`) and for the wallet policy (`one_factor_under_wallet_policy`); on-chain part tested; wallet policy tested (§9.3) |
+| 4 One-factor safety | — | The guardian is one address | Quorum (T4), delay (T5), cancellation (T6, T7) | A9 (b), for the wallet's delay floor in wall-clock time | Proven over all controller traces (`EmailRecovery.Perch.one_factor_safety`) and for the wallet policy (`one_factor_under_wallet_policy`, with the floor lasting 7 days at the target close time, `emailOnlyFloor_lasts`); on-chain part tested; wallet policy tested (§9.3); A9 assumed |
 
 ### 11.4 Adversaries beyond the protocol, and residual risks
 
@@ -2009,8 +2082,8 @@ network's.
 
 | Figure | Value | Source |
 | --- | --- | --- |
-| Guardian wasm, optimized | 33,479 bytes | `just build-contracts` output for `nido_email_guardian.wasm` (local build; the CLI version recorded in the wasm metadata can change it by a few bytes) **[measured]** |
-| Registry wasm, optimized | 68,269 bytes | `just build-contracts` output for `nido_dkim_registry.wasm` (same caveat) **[measured]** |
+| Guardian wasm, optimized | 33,577 bytes | `just build-contracts` output for `nido_email_guardian.wasm` (local build; the CLI version recorded in the wasm metadata can change it by a few bytes) **[measured]** |
+| Registry wasm, optimized | 68,899 bytes | `just build-contracts` output for `nido_dkim_registry.wasm` (same caveat) **[measured]** |
 | Verifier wasm, optimized | 45,616 bytes | `just build-contracts` output for `nido_email_verifier.wasm` (same caveat) **[measured]** |
 | Recovery circuit | 251,561 UltraHonk gates (117,491 ACIR opcodes), padded to 2^18; at a 1024-byte header bound 189,503, also 2^18 | `circuits/email-recovery/scripts/measure.sh` (`bb gates`), `circuits/email-recovery/MEASUREMENTS.md` **[measured]** |
 | Proving one recovery email, native (`bb prove --zk`) | every core (18): 0.64 s witness (`nargo execute`), 0.94 s proving (0.93 to 1.00), 879 MiB peak; one thread: 4.67 s proving; the efficiency cores: 18.2 s on one thread, 6.25 s on four; at 1024 bytes 534 ms, 840 ms, 832 MiB | `research/email-recovery/eval/results/proving.json` (`just email-recovery-proving`): one circuit build (the committed artifact, its key checked against the verifier's circuit id), median and range of 5 runs, shared machine (load average about 5); the 1024-byte figures `circuits/email-recovery/scripts/measure.sh`, median of 3 **[measured]** |
@@ -2022,18 +2095,18 @@ network's.
 | Phones | **Not measured.** No phone was available. `/security/recover/bench/` runs the same benchmark on any device, with no account, and prints copyable JSON; `just email-recovery-bench-phone` builds it as a self-contained directory (the page, its assets, the circuit and key, and the CRS prefix checked against the prover's pinned digests, read by the page through `?crs=`) and serves it over HTTPS on this machine's network addresses with the recovery routes' headers. `research/email-recovery/eval/phone/check.mjs` runs that build in headless Chrome (cross-origin isolated, the CRS from the build, both proofs verified); that is a check of the build, not a phone figure | — |
 | Enrollment and recovery end to end on a local network | Passes in 1.7 minutes: in Chromium, the owner's Nido turns on recovery, enrolls an inbox (two groups of the recovery code typed back; the Gmail mock signs the enrollment email; the vault seals it back; the page checks it, warns when the alert address is the enrolled inbox, registers an alert contact at another address with Web Push, deploys the guardian with its pin, and lists it with a quorum of two); a new device opens a lost-key attempt, the page warns where the code is typed, prefills the warning line in the email's body and shows the pickup deadline, the vault seals the recovery email back, the page proves it in the browser and submits `submit_guardian`, the alert service alerts the email vote, the other helper approves, the alert email and push carry the code the page showed, and after the delay the page completes the recovery | `tests/e2e/local/email-recovery.local.spec.ts` (`just test-e2e-email-local`) on `stellar/quickstart --local` (core and RPC v29, protocol 28) with Perch's stack built for that network and Nido's contracts from source. Mocked (TEST-ONLY): the mail provider and MX, DNS, the sending services, the push service, the Nitro enclave and its custodians, and the enclave-image registry (a stand-in answering `is_active`, since its 14-day timelock cannot elapse locally); the test's passkeys are the repository's test authenticator. Not in CI **[built, tested]** |
 | Attack suite on a local network | 65 scenario rows in eleven classes (forged emails, replayed emails and proofs, a wrong account or new key in the statement, stale or malicious registry keys, a compromised inbox, the alert path, phishing and social engineering, repeated attempts, provider header quirks, front-running, privacy on chain), each outcome as expected and each refusal named by its layer (circuit assertion, guardian check number, registry rule, Perch controller error, alert path); the three registry scenarios that need an elapsed timelock or grace period on the test host with the registry's real timelocks | `research/email-recovery/eval/README.md` (`just email-recovery-attacks`; `network/attacks.mjs` on `stellar/quickstart --local`, every approval a real proof by bb.js in Node; `email_guardian.rs::registry_*`). Mocked (TEST-ONLY): the mail providers, DNS, the sending services, the push service, the enclave and its custodians, and the enclave-image registry (the end-to-end test's stand-in). In CI (`email-recovery-attacks.yml`) **[built, tested]** |
-| One `submit_guardian` with an email approval on a local network | metered: 120.0 million instructions (119,948,955 to 120,081,003 across 20 votes), 12 entries read, 2 entries and 1,208 bytes written; 125 million instructions declared after simulation; 18,080-byte transaction around a 16,784-byte authorization entry; 176,219 stroops charged (median), 2,604 of them rent. The vote that authorizes an attempt with a 7-day delay also writes the authorized attempt: 120.9 million instructions, 4 entries and 1,488 bytes written, 3,734,691 stroops charged, 3,550,194 of them rent | `research/email-recovery/eval/results/attacks-local.json`, read from each transaction's result and the host's `core_metrics` events; the approvals use the guardian's pin, so the registry is not called (spec §7.4) **[measured]** |
+| One `submit_guardian` with an email approval on a local network | metered: 120.0 million instructions (119,993,200 to 120,090,525 across 20 votes), 12 entries read, 2 entries and 1,208 bytes written; 125 million instructions declared after simulation; 18,080-byte transaction around a 16,784-byte authorization entry; 176,232 stroops charged (median), 2,604 of them rent. The vote that authorizes an attempt with a 7-day delay also writes the authorized attempt: 120.9 million instructions, 4 entries and 1,488 bytes written, 3,734,675 stroops charged, 3,550,194 of them rent | `research/email-recovery/eval/results/attacks-local.json`, read from each transaction's result and the host's `core_metrics` events; the approvals use the guardian's pin, so the registry is not called (spec §7.4) **[measured]** |
 | One `submit_guardian` with an email approval on testnet | metered: 121,639,784 instructions, 12 entries read, 2 entries and 1,208 bytes written; 126,548,373 instructions declared; 18,080-byte transaction; 82,428 stroops charged, 1,333 of them rent; 1,715 ms from simulation to confirmation | `research/email-recovery/eval/results/testnet.json` (`testnet/run.sh`): transaction `08cdc915727c…`, read back from Stellar RPC 30.0.0 (protocol 29); the approval uses the guardian's pin **[measured]** |
 | One complete email-factor recovery on testnet | every step succeeded: mint, guardian deployment, the recovery document, `begin_lost_key`, the email vote, the helper's vote (which authorizes the attempt and pays its record's rent: 3,664,628 stroops charged, 3,653,812 rent), a 12-ledger delay (57,575 ms), and completion; 13,384,714 stroops charged over those 7 transactions; the account's document then holds the new passkey and not the lost one. Perch's doc compiler and recovery controller were archived on testnet and were restored first, one transaction per entry | same; deployment in `DEPLOYED.md`, "Email recovery (evaluation, TEST-ONLY)". Mocked (TEST-ONLY): the mail provider, DNS **[measured]** |
-| One `submit_guardian` with an email approval and a real proof, whole invocation on the test host | 121,801,947 to 121,916,929 instructions (30.5% of 400,000,000); 5.6 MB of memory; 14 entries read; 2 entries and 1,208 bytes written; resource fee without rent 94,421 to 94,501 stroops, across the 12 fixtures | `email_proofs.rs` (every launch domain and the 124-byte address), `cost_estimate()`; table in `research/email-recovery/eval/onchain.md` (`measure-onchain.py`) **[measured]** |
-| The same call as a signed transaction | 131,142,707 to 131,256,349 instructions; footprint 12 read-only and 2 read-write entries; 18,148-byte envelope with a 16,784-byte authorization entry around the 16,224-byte proof; resource fee without rent 178,175 to 178,255 stroops | `nido_integration_tests::transaction::measure` in the same tests **[measured]** |
-| `is_accepted_root`, accepted or refused | 563,910 / 566,522 instructions; 286,086 bytes of memory; 2 entries read; nothing written; no events; fee without rent 395 / 397 stroops | `dkim_registry_costs` **[measured]** |
-| `propose_add` (computes the key hash over the 2048-bit modulus) | 9,346,166 instructions; 532,381 bytes of memory; 6 entries read; 3 entries and 1,588 bytes written; 744 event bytes; fee without rent 23,722 stroops | same test **[measured]** |
-| `approve` | 666,250 instructions; 300,285 bytes of memory; 5 entries read; 2 entries and 492 bytes written; 208 event bytes; fee without rent 10,030 stroops | same test **[measured]** |
-| `attest` (parse, checks, Ed25519 verification) | 1,158,648 instructions; 290,885 bytes of memory; 3 entries read; 1 entry and 436 bytes written; 412 event bytes; fee without rent 7,260 stroops | same test **[measured]** |
-| `execute` of an addition (the leaf and the 16-level root recomputation) | 22,772,568 instructions; 1,067,600 bytes of memory; 37 entries read; 20 entries and 4,384 bytes written; 348 event bytes; fee without rent 102,648 stroops | same test **[measured]** |
-| The approval that executes a revocation (removal, root recomputation, refusals) | 20,044,810 instructions; 880,286 bytes of memory; 39 entries read; 21 entries and 1,944 bytes written; 516 event bytes; fee without rent 103,537 stroops | same test **[measured]** |
-| Enclave-image registry wasm, optimized | 10,152 bytes | `just build-contracts` output for `nido_enclave_image_registry.wasm` **[measured]** |
+| One `submit_guardian` with an email approval and a real proof, whole invocation on the test host | 121,822,719 to 121,937,701 instructions (30.5% of 400,000,000); 5.6 MB of memory; 14 entries read; 2 entries and 1,208 bytes written; resource fee without rent 94,435 to 94,516 stroops, across the 12 fixtures | `email_proofs.rs` (every launch domain and the 124-byte address), `cost_estimate()`; table in `research/email-recovery/eval/onchain.md` (`measure-onchain.py`) **[measured]** |
+| The same call as a signed transaction | 131,187,545 to 131,301,187 instructions; footprint 12 read-only and 2 read-write entries; 18,148-byte envelope with a 16,784-byte authorization entry around the 16,224-byte proof; resource fee without rent 178,207 to 178,286 stroops | `nido_integration_tests::transaction::measure` in the same tests **[measured]** |
+| `is_accepted_root`, accepted or refused | 565,410 / 568,054 instructions; 286,542 bytes of memory; 2 entries read; nothing written; no events; fee without rent 396 / 398 stroops | `dkim_registry_costs` **[measured]** |
+| `propose_add` (computes the key hash over the 2048-bit modulus) | 9,347,998 instructions; 532,837 bytes of memory; 6 entries read; 3 entries and 1,596 bytes written; 744 event bytes; fee without rent 23,730 stroops | same test **[measured]** |
+| `approve` | 669,842 instructions; 300,741 bytes of memory; 5 entries read; 2 entries and 496 bytes written; 208 event bytes; fee without rent 10,035 stroops | same test **[measured]** |
+| `attest` (parse, checks, Ed25519 verification) | 1,163,336 instructions; 291,341 bytes of memory; 3 entries read; 1 entry and 444 bytes written; 412 event bytes; fee without rent 7,270 stroops | same test **[measured]** |
+| `execute` of an addition (the leaf and the 16-level root recomputation) | 22,774,204 instructions; 1,068,056 bytes of memory; 37 entries read; 20 entries and 4,400 bytes written; 348 event bytes; fee without rent 102,662 stroops | same test **[measured]** |
+| The approval that executes a revocation (removal, root recomputation, refusals) | 20,048,562 instructions; 880,742 bytes of memory; 39 entries read; 21 entries and 1,956 bytes written; 516 event bytes; fee without rent 103,549 stroops | same test **[measured]** |
+| Enclave-image registry wasm, optimized | 10,584 bytes | `just build-contracts` output for `nido_enclave_image_registry.wasm` **[measured]** |
 | `attempt_authorized` to the email accepted by the sending mock | 11 to 62 ms, median 16.5 (10 runs) | `infra/email-alerts/test/e2e.test.ts` (`NIDO_ALERT_MEASUREMENTS`), from the start of the watcher's poll to the Lettermint mock's receipt; Node 24.18.0, darwin arm64, a shared machine (load average about 45) **[measured on mocks]** |
 | `attempt_authorized` to the push accepted by the push mock | 13 to 66 ms, median 19 (10 runs) | same **[measured on mocks]** |
 | Reading the event to the vault's answer (email and push sent) | 13.7 to 27.7 ms, median 17.3 (10 runs) | same, `PollReport.latencyMs` **[measured on mocks]** |
@@ -2089,10 +2162,11 @@ providers' own delivery to these figures.
    rotation problem; a pin the owner can change after deployment, which
    would let anyone holding the owner key and `account_code` pin a key of
    their own and approve without the inbox.
-2. **Pin lifetime.** The cap is 365 days (`MAX_PIN_LIFETIME_LEDGERS`).
-   The wallet deploys guardians with a 30-day pin (518,400 ledgers,
-   `PIN_LIFETIME_LEDGERS` in `packages/frontend/src/lib/recovery/emailConfig.ts`,
-   one constant, applied by `pinValidUntil`) **[built, tested]**
+2. **Pin lifetime.** The cap is 365 days (`MAX_PIN_LIFETIME_SECONDS`).
+   The wallet deploys guardians with a 30-day pin (2,592,000 seconds of
+   close time past the latest ledger's, `PIN_LIFETIME_SECONDS` in
+   `packages/frontend/src/lib/recovery/emailConfig.ts`, one constant, applied
+   by `pinValidUntil`) **[built, tested]**
    (`emailModel.test.ts`, "the key pin the wallet deploys"). Alternatives: 30 days, which covers the registry's 7-day
    timelock with margin and keeps the revocation window of §7.4 short; 365
    days, the cap, which keeps the enrolled key usable through the pin longest
@@ -2111,12 +2185,12 @@ providers' own delivery to these figures.
    kit is lost).
 5. **Registry parameters.** The registry is built with the defaults of §7.6;
    each is a constructor parameter.
-   - *Grace period.* Built with 17,280 ledgers (24 hours), capped at
-     120,960. Alternatives: 120,960 ledgers (7 days), which strands fewer
-     proofs made against a previous root but keeps a key its provider has
-     blanked in DNS acceptable for a week unless it is revoked; or 720
-     ledgers (1 hour), which shortens that window but can strand a user whose
-     proof was made against the previous root.
+   - *Grace period.* Built with 86,400 seconds (24 hours), capped at
+     604,800 (7 days). Alternatives: 7 days, which strands fewer proofs made
+     against a previous root but keeps a key its provider has blanked in DNS
+     acceptable for a week unless it is revoked; or 1 hour, which shortens
+     that window but can strand a user whose proof was made against the
+     previous root.
    - *Revocation threshold.* Built with an emergency threshold of 2 of 5
      members, paired with the rule that a revoked key returns only through a
      new full-threshold addition on the 7-day path. Alternative: the full
@@ -2205,3 +2279,12 @@ providers' own delivery to these figures.
     code can also approve cancellations of the owner's own attempts
     (`cancel_guardians`); alerting those, and the default allowed actions
     (question 3), are open.
+22. **A lower target ledger close time.** The windows of this design are
+    close time and keep their length (§2 "Two clocks"); Perch's delay is a
+    ledger count fixed in each recovery member. If validators lower
+    `ledger_target_close_time_milliseconds`, an email-plus-delay member
+    built at the old target lasts less than 7 days (at 4,000 ms, 5.6 days)
+    until its owner rebuilds it, which the wallet then sizes at the new
+    target (§9.3 rule 3). Not built: the wallet noticing a lower target
+    and asking those owners to rebuild, and whether to leave a margin above
+    the floor for that case.

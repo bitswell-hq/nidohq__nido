@@ -58,6 +58,10 @@ use stellar_accounts::verifiers::webauthn::WebAuthnSigData;
 pub const NETWORK: &str = "Test SDF Network ; September 2015";
 /// The ledger the world starts at.
 pub const START: u32 = 1_000;
+/// Seconds per ledger the world closes at: the target close time testnet
+/// and mainnet set (`scp_timing.ledger_target_close_time_milliseconds =
+/// 5000`).
+pub const LEDGER_SECONDS: u64 = 5;
 /// Default recovery timing for test documents, in ledgers.
 pub const DELAY: u32 = 10;
 pub const EXPIRY: u32 = 100;
@@ -549,8 +553,33 @@ impl World {
         self.env.ledger().sequence()
     }
 
+    /// Close `ledgers` more ledgers at [`LEDGER_SECONDS`] each.
     pub fn advance(&self, ledgers: u32) {
-        self.env.ledger().with_mut(|l| l.sequence_number += ledgers);
+        self.env.ledger().with_mut(|l| {
+            l.sequence_number += ledgers;
+            l.timestamp += LEDGER_SECONDS * u64::from(ledgers);
+        });
+    }
+
+    /// Move the clock forward by exactly `seconds`, closing every ledger due
+    /// on the world's [`LEDGER_SECONDS`] grid in that interval; the current
+    /// ledger's close time is the clock, as if it closed late by the
+    /// remainder. For windows measured on close time: the DKIM registry's
+    /// timelocks and grace, the key pin, and the enclave-image registry's
+    /// timelock. Ledger numbers stay those [`Self::advance`] would reach, so
+    /// statements (and the proofs replayed for them) do not move.
+    pub fn advance_seconds(&self, seconds: u64) {
+        self.env.ledger().with_mut(|l| {
+            let due = (l.timestamp + seconds) / LEDGER_SECONDS - l.timestamp / LEDGER_SECONDS;
+            l.sequence_number += u32::try_from(due).expect("fits a ledger number");
+            l.timestamp += seconds;
+        });
+    }
+
+    /// The current ledger's close time, in Unix seconds.
+    #[must_use]
+    pub fn now(&self) -> u64 {
+        self.env.ledger().timestamp()
     }
 
     // --- accounts ----------------------------------------------------------

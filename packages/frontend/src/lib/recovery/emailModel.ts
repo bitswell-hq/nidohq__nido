@@ -8,7 +8,7 @@
 
 import { bytes, fieldHex, recoverySubject } from '@nidohq/email-recovery';
 import { StrKey } from '@stellar/stellar-sdk';
-import { PIN_LIFETIME_LEDGERS } from './emailConfig.js';
+import { PIN_LIFETIME_SECONDS } from './emailConfig.js';
 import { ledgersToText, SECONDS_PER_LEDGER } from './model.js';
 
 /** The privacy claim the pages make, scoped as the spec states it (§10.7). */
@@ -210,22 +210,22 @@ export type KeyPathChoice =
 
 /**
  * The key path a proof should use: the guardian's pin when it holds this
- * key and has not expired at `ledger` (the pin is accepted without asking
- * the registry), else the registry's current tree when the key is a leaf of
- * a root the registry accepts.
+ * key and has not expired at close time `now` (Unix seconds; the pin is
+ * accepted without asking the registry), else the registry's current tree
+ * when the key is a leaf of a root the registry accepts.
  */
 export function chooseKeyPath(opts: {
-  ledger: number;
-  pin?: { root: bigint; validUntilLedger: number; path?: { index: number; siblings: bigint[]; root: bigint } };
+  now: number;
+  pin?: { root: bigint; validUntil: number; path?: { index: number; siblings: bigint[]; root: bigint } };
   registry?: { root: bigint; accepted: boolean; path?: { index: number; siblings: bigint[]; root: bigint } };
 }): KeyPathChoice | { kind: 'none'; why: string } {
   const pin = opts.pin;
-  if (pin?.path && pin.path.root === pin.root && opts.ledger <= pin.validUntilLedger) {
+  if (pin?.path && pin.path.root === pin.root && opts.now <= pin.validUntil) {
     return { kind: 'pin', ...pin.path };
   }
   const reg = opts.registry;
   if (reg?.path && reg.accepted && reg.path.root === reg.root) return { kind: 'registry', ...reg.path };
-  if (pin?.path && opts.ledger > pin.validUntilLedger && !reg?.path) {
+  if (pin?.path && opts.now > pin.validUntil && !reg?.path) {
     return { kind: 'none', why: 'Your email guardian’s key pin has expired and the key registry does not list your provider’s key yet.' };
   }
   return {
@@ -301,7 +301,8 @@ export function nextEnrollStep(done: Partial<Record<EnrollStep, boolean>>): Enro
   return 'done';
 }
 
-/** The `valid_until_ledger` of a pin the wallet deploys at `ledger` (spec §7.4, §13 question 2). */
-export function pinValidUntil(ledger: number): number {
-  return ledger + PIN_LIFETIME_LEDGERS;
+/** The `valid_until` of a pin the wallet deploys when the latest ledger closed
+ *  at `now` (Unix seconds; spec §7.4, §13 question 2). */
+export function pinValidUntil(now: number): number {
+  return now + PIN_LIFETIME_SECONDS;
 }

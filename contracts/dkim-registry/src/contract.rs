@@ -8,8 +8,8 @@ use crate::tree::{self, empty_root, REGISTRY_CAPACITY};
 use crate::{
     LeafId, LeafRecord, LiveRoot, Proposal, ProposalKind, RegistryConfig, RegistryState, RootSpan,
     MAX_ATTESTATION_AGE_SECONDS, MAX_ATTESTERS, MAX_CLOCK_SKEW_SECONDS, MAX_DOMAINS,
-    MAX_GRACE_LEDGERS, MAX_LIVE_ROOTS, MAX_MEMBERS, PROPOSAL_LIFETIME_LEDGERS,
-    TIMELOCK_ATTESTED_LEDGERS, TIMELOCK_LEDGERS, VERSION,
+    MAX_GRACE_SECONDS, MAX_LIVE_ROOTS, MAX_MEMBERS, PROPOSAL_LIFETIME_SECONDS,
+    TIMELOCK_ATTESTED_SECONDS, TIMELOCK_SECONDS, VERSION,
 };
 use perch_zk_primitives::contract_id;
 use soroban_sdk::{
@@ -115,7 +115,7 @@ fn validate(c: &RegistryConfig) -> Result<(), Error> {
     if c.attest_threshold == 0 || c.attest_threshold > attesters {
         return Err(Error::InvalidAttestThreshold);
     }
-    if c.grace_ledgers > MAX_GRACE_LEDGERS {
+    if c.grace_seconds > MAX_GRACE_SECONDS {
         return Err(Error::InvalidGrace);
     }
     let domains = c.domains.len();
@@ -145,8 +145,10 @@ fn check_domain(c: &RegistryConfig, domain: &Bytes) -> Result<(), Error> {
     }
 }
 
-fn now(e: &Env) -> u32 {
-    e.ledger().sequence()
+/// The ledger's close time, in Unix seconds: the clock every timelock,
+/// grace period, and proposal lifetime is measured on.
+fn now(e: &Env) -> u64 {
+    e.ledger().timestamp()
 }
 
 /// A proposal can still be approved, attested, or executed.
@@ -154,7 +156,7 @@ fn check_open(e: &Env, p: &Proposal) -> Result<(), Error> {
     if p.executed {
         return Err(Error::ProposalClosed);
     }
-    if now(e) > p.created_at.saturating_add(PROPOSAL_LIFETIME_LEDGERS) {
+    if now(e) > p.created_at.saturating_add(PROPOSAL_LIFETIME_SECONDS) {
         return Err(Error::ProposalExpired);
     }
     Ok(())
@@ -166,18 +168,18 @@ fn check_open(e: &Env, p: &Proposal) -> Result<(), Error> {
 /// after both approval and the attester threshold's live observations if the
 /// leaf was never revoked. The flag says whether the 72-hour path is the
 /// earlier one.
-fn eligibility(p: &Proposal, rec: Option<&LeafRecord>) -> Option<(u32, bool)> {
+fn eligibility(p: &Proposal, rec: Option<&LeafRecord>) -> Option<(u64, bool)> {
     if p.kind != ProposalKind::Add {
         return None;
     }
     let approved = p.approved_at?;
-    let slow = approved.saturating_add(TIMELOCK_LEDGERS);
+    let slow = approved.saturating_add(TIMELOCK_SECONDS);
     let never_revoked = rec.is_none_or(|r| r.revoked_by == 0);
     match p.attested_at {
         Some(attested) if never_revoked => {
             let fast = approved
                 .max(attested)
-                .saturating_add(TIMELOCK_ATTESTED_LEDGERS);
+                .saturating_add(TIMELOCK_ATTESTED_SECONDS);
             Some((slow.min(fast), fast < slow))
         }
         _ => Some((slow, false)),
@@ -201,7 +203,7 @@ fn change_root(
     let mut live = Vec::new(e);
     for r in st.live_roots.iter() {
         let superseded_at = r.superseded_at.unwrap_or(at);
-        if at <= superseded_at.saturating_add(c.grace_ledgers) {
+        if at <= superseded_at.saturating_add(c.grace_seconds) {
             live.push_back(LiveRoot {
                 superseded_at: Some(superseded_at),
                 ..r
@@ -408,7 +410,7 @@ impl DkimRegistry {
     /// Fix the configuration and start from the empty tree. Refuses (see
     /// [`Error`]'s construction variants) unless the member and attester
     /// sets are non-empty, bounded, and duplicate-free, the thresholds are in
-    /// range, the grace period is at most [`MAX_GRACE_LEDGERS`], and every
+    /// range, the grace period is at most [`MAX_GRACE_SECONDS`], and every
     /// allowlisted domain is a well-formed lowercase domain.
     pub fn __constructor(e: Env, config: RegistryConfig) {
         if let Err(err) = validate(&config) {
@@ -581,7 +583,7 @@ impl DkimRegistry {
         if Bytes::from_slice(e, a.domain) != p.domain || a.key_hash != p.key_hash.to_array() {
             return Err(Error::AttestationMismatch);
         }
-        let ts = e.ledger().timestamp();
+        let ts = now(e);
         if a.observed_at > ts.saturating_add(MAX_CLOCK_SKEW_SECONDS)
             || ts.saturating_sub(a.observed_at) > MAX_ATTESTATION_AGE_SECONDS
         {
@@ -708,7 +710,7 @@ impl DkimRegistry {
                     index: rec.index,
                     root: st.root.clone(),
                     previous_root,
-                    previous_accepted_until: now(e).saturating_add(c.grace_ledgers),
+                    previous_accepted_until: now(e).saturating_add(c.grace_seconds),
                 }
                 .publish(e);
             }
@@ -723,13 +725,13 @@ impl DkimRegistry {
     }
 
     /// `DkimRegistryInterface::is_accepted_root` (spec §7.3): `root` is the
-    /// current root, or a root superseded no more than `grace_ledgers` ago,
+    /// current root, or a root superseded no more than `grace_seconds` ago,
     /// and no key it contains has been revoked. The empty tree's root is
     /// never accepted. Reads instance storage only.
     #[must_use]
     pub fn is_accepted_root(e: &Env, root: BytesN<32>) -> bool {
         let st = state(e);
-        let grace = config(e).grace_ledgers;
+        let grace = config(e).grace_seconds;
         let at = now(e);
         let accepted = root != empty_root(e)
             && st.live_roots.iter().any(|r| {
@@ -767,10 +769,10 @@ impl DkimRegistry {
         e.storage().persistent().get(&Key::Proposal(id))
     }
 
-    /// The first ledger an approved addition may execute in; `None` for
-    /// anything else.
+    /// The earliest ledger close time at which an approved addition may
+    /// execute; `None` for anything else.
     #[must_use]
-    pub fn eligible_at(e: &Env, id: u32) -> Option<u32> {
+    pub fn eligible_at(e: &Env, id: u32) -> Option<u64> {
         let p: Proposal = e.storage().persistent().get(&Key::Proposal(id))?;
         let rec = leaf_record(
             e,

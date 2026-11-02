@@ -10,8 +10,9 @@
 //!    ([`MeasurementProposed`]); each signer's vote, the proposer's included,
 //!    is recorded ([`MeasurementApproved`]).
 //! 2. When `threshold` signers have voted, the measurement is queued with
-//!    `active_from = L + TIMELOCK_LEDGERS` ([`MeasurementQueued`]): 14 days in
-//!    which anyone can inspect the image before it can receive a share.
+//!    `active_from = T + TIMELOCK_SECONDS` ([`MeasurementQueued`]), where `T`
+//!    is the ledger's close time: 14 days in which anyone can inspect the
+//!    image before it can receive a share.
 //! 3. After `active_from`, anyone may call [`activate`](EnclaveImageRegistry::activate)
 //!    ([`MeasurementActivated`]).
 //!
@@ -36,9 +37,10 @@ pub use error::RegistryError;
 /// Version of this contract's semantics.
 pub const VERSION: u32 = 1;
 
-/// Ledgers between the multisig reaching its threshold and the earliest
-/// activation: 14 days at 5-second ledgers.
-pub const TIMELOCK_LEDGERS: u32 = 241_920;
+/// Seconds of ledger close time (`env.ledger().timestamp()`) between the
+/// multisig reaching its threshold and the earliest activation: 14 days,
+/// whatever the network's target ledger close time.
+pub const TIMELOCK_SECONDS: u64 = 14 * 86_400;
 
 /// Largest signer set the constructor accepts.
 pub const MAX_SIGNERS: u32 = 10;
@@ -67,14 +69,14 @@ pub struct Measurement {
     pub approvals: Vec<Address>,
     /// Signers who voted to revoke, in voting order.
     pub revocations: Vec<Address>,
-    /// Ledger of the proposal.
-    pub proposed_at: u32,
-    /// First ledger `activate` succeeds at; `0` until queued.
-    pub active_from: u32,
-    /// Ledger of activation; `0` until active.
-    pub activated_at: u32,
-    /// Ledger of revocation; `0` unless revoked.
-    pub revoked_at: u32,
+    /// Close time (Unix seconds) of the proposal's ledger.
+    pub proposed_at: u64,
+    /// Earliest close time `activate` succeeds at; `0` until queued.
+    pub active_from: u64,
+    /// Close time of the activation's ledger; `0` until active.
+    pub activated_at: u64,
+    /// Close time of the revocation's ledger; `0` unless revoked.
+    pub revoked_at: u64,
 }
 
 /// A signer proposed a measurement for approval.
@@ -104,7 +106,7 @@ pub struct MeasurementApproved {
 pub struct MeasurementQueued {
     #[topic]
     pub measurement: BytesN<32>,
-    pub active_from: u32,
+    pub active_from: u64,
 }
 
 /// A measurement became active.

@@ -82,8 +82,9 @@ claims:
   - id: wallet-policy-one-factor
     statement: >-
       Under the wallet policy, the email guardian alone reaches the quorum only
-      under the loss profile, with a delay of at least seven days (120,960
-      ledgers) and a second alert channel.
+      under the loss profile, with a delay lasting at least seven days at the
+      network's target ledger close time when the configuration was built
+      (120,960 ledgers at 5-second ledgers), and a second alert channel.
     status: proven
     evidence:
       lean: EmailRecovery.Perch.one_factor_under_wallet_policy
@@ -134,11 +135,16 @@ claims:
     statement: >-
       The wallet builds a configuration in which the email vote alone
       authorizes a recovery only under the lost-key profile with a delay of
-      at least seven days (120,960 ledgers).
+      at least seven days of ledgers at the network's target ledger close
+      time, which it reads from the network (120,960 ledgers at the 5-second
+      target of testnet and mainnet, 151,200 at 4 seconds), and refuses to
+      build one without that close time.
     status: tested
     evidence:
-      test: "rule 3: email alone needs the loss profile and a delay of at least 120960 ledgers"
-      file: packages/passkey-sdk/src/perch/recoverySpec.test.ts
+      - test: "rule 3: email alone needs the loss profile and a delay of at least 7 days of ledgers at the network close time"
+        file: packages/passkey-sdk/src/perch/recoverySpec.test.ts
+      - test: sizes the email-plus-delay floor to seven days
+        file: packages/passkey-sdk/src/perch/ledgerTiming.test.ts
 
   - id: wallet-email-allowed-actions
     statement: >-
@@ -223,14 +229,14 @@ claims:
     statement: >-
       One submit_guardian carrying an email approval with a real proof, for
       each of the 12 fixtures (every launch domain and a 124-byte address), uses
-      121,801,947 to 121,916,929 instructions on the test host, 30.5% of the
+      121,822,719 to 121,937,701 instructions on the test host, 30.5% of the
       400 million a Soroban transaction may use, with the approval proven
       against a registry root; it reads 14 ledger entries and writes 2 (1,208
-      bytes), with an invocation resource fee of 94,421 to 94,501
+      bytes), with an invocation resource fee of 94,435 to 94,516
       stroops before rent; re-executed as a signed transaction it uses
-      131,142,707 to 131,256,349 instructions in an 18,148-byte envelope, whose
+      131,187,545 to 131,301,187 instructions in an 18,148-byte envelope, whose
       16,784-byte authorization entry holds the 16,224-byte proof, with a
-      resource fee of 178,175 to 178,255 stroops before rent, at the mainnet fee
+      resource fee of 178,207 to 178,286 stroops before rent, at the mainnet fee
       rates the Soroban SDK records. Measured on the test host, not on a
       network.
     status: measured
@@ -356,10 +362,10 @@ claims:
     statement: >-
       On a local Stellar network, the 20 email votes with a real proof that
       leave their attempt collecting, each proven against its guardian's key
-      pin, are metered at 119,948,955 to 120,081,003
-      instructions (median 120,033,543) and declare about 124.9 million; each
+      pin, are metered at 119,993,200 to 120,090,525
+      instructions (median 120,051,498) and declare about 124.9 million; each
       reads 12 ledger entries and writes 2 (1,208 bytes) in an 18,080-byte
-      transaction, and is charged a median of 176,219 stroops, 2,604 of them
+      transaction, and is charged a median of 176,232 stroops, 2,604 of them
       rent.
     status: measured
     evidence:
@@ -696,12 +702,13 @@ claims:
 
   - id: registry-timelocks
     statement: >-
-      A registry addition attested live in DNS activates exactly 51,840
-      ledgers (72 hours) after the later of its approval and its attestation,
-      and any other addition exactly 120,960 ledgers (7 days) after approval;
-      a superseded root stays accepted through its grace period; the empty
+      A registry addition attested live in DNS activates exactly 72 hours of
+      ledger close time after the later of its approval and its attestation,
+      and any other addition exactly 7 days after approval; a superseded root
+      stays accepted through its grace period; these windows are measured in
+      seconds and do not shorten when more ledgers close in them; the empty
       tree and unknown roots are never accepted. On the integration-test host
-      a proof against a pending addition's root is refused one ledger before
+      a proof against a pending addition's root is refused one second before
       the 72 hours end and counted once the addition executes.
     status: tested
     evidence:
@@ -712,6 +719,8 @@ claims:
       - test: any_other_addition_activates_after_exactly_7_days
         file: contracts/dkim-registry/src/test.rs
       - test: a_superseded_root_is_accepted_through_its_grace_period
+        file: contracts/dkim-registry/src/test.rs
+      - test: timelocks_and_grace_follow_close_time_not_ledger_count
         file: contracts/dkim-registry/src/test.rs
       - test: the_empty_tree_and_unknown_roots_are_never_accepted
         file: contracts/dkim-registry/src/test.rs
@@ -747,7 +756,7 @@ claims:
       The registry's proposed governance, which its constructor accepts and
       the evaluation deploys, is five members with threshold three, an
       emergency revocation threshold of two, three DNS attesters with
-      threshold two, and a 17,280-ledger (24-hour) grace period.
+      threshold two, and a 24-hour (86,400-second) grace period.
     status: tested
     evidence:
       test: construction_accepts_the_proposed_defaults
@@ -755,11 +764,11 @@ claims:
 
   - id: wallet-pin-lifetime
     statement: >-
-      The wallet deploys each guardian with a key pin valid for 30 days
-      (518,400 ledgers).
+      The wallet deploys each guardian with a key pin valid for 30 days of
+      ledger close time.
     status: tested
     evidence:
-      test: "lasts 30 days (518,400 ledgers): past the registry 7-day timelock, within the guardian 365-day cap"
+      test: "lasts 30 days of close time: past the registry 7-day timelock, within the guardian 365-day cap"
       file: packages/frontend/src/lib/recovery/emailModel.test.ts
 
   - id: registry-revocation
@@ -805,7 +814,8 @@ claims:
 
   - id: key-pin
     statement: >-
-      The guardian accepts its pin's root until the pin expires, for a key
+      The guardian accepts its pin's root until the pin expires, a ledger
+      close time rather than a ledger number, for a key
       the registry never admitted and after the registry revokes it, and
       refuses the root once the pin has expired; another account's pin root
       is refused.
@@ -1058,7 +1068,7 @@ claims:
     statement: >-
       On the local network, the email vote that authorizes an attempt with a
       seven-day delay also writes the authorized attempt: about 121 million
-      instructions, 1,488 bytes written, and 3,734,691 stroops charged, of
+      instructions, 1,488 bytes written, and 3,734,675 stroops charged, of
       which 3,550,194 are rent.
     status: measured
     evidence:
@@ -1104,19 +1114,19 @@ claims:
 
   - id: contract-sizes
     statement: >-
-      The optimized WebAssembly of the guardian is 33,479 bytes, of the key
-      registry 68,269, of the verifier 45,616, and of the enclave-image
-      registry 10,152.
+      The optimized WebAssembly of the guardian is 33,577 bytes, of the key
+      registry 68,899, of the verifier 45,616, and of the enclave-image
+      registry 10,584.
     status: measured
     evidence:
       file: docs/email-recovery/spec.md
 
   - id: registry-costs
     statement: >-
-      On the test host, is_accepted_root uses 563,910 instructions when it
-      accepts and 566,522 when it refuses, propose_add 9,346,166, the execute
-      of an addition 22,772,568, and the approval that executes a revocation
-      20,044,810.
+      On the test host, is_accepted_root uses 565,410 instructions when it
+      accepts and 568,054 when it refuses, propose_add 9,347,998, the execute
+      of an addition 22,774,204, and the approval that executes a revocation
+      20,048,562.
     status: measured
     evidence:
       - file: docs/email-recovery/spec.md
@@ -1166,6 +1176,28 @@ claims:
         Fewer than the registry multisig's threshold of signers are
         malicious, and a key added without the provider's publication is
         noticed and vetoed before its timelock ends.
+
+  - id: ledger-timing
+    statement: >-
+      The registry's timelocks, grace and proposal lifetime, the key pin, the
+      enclave-image registry's timelock and the vault's contact-change delay
+      are measured on ledger close time and last their wall-clock length
+      whatever the network's target ledger close time; Perch's recovery
+      delay and statement expiry stay ledger counts, and the email-plus-delay
+      floor, sized by the wallet from the target close time when it builds a
+      configuration, lasts seven days of wall-clock time only while ledgers
+      close no faster than that target.
+    status: assumed
+    evidence:
+      assumption: >-
+        Validators keep an honest clock, so a ledger's close time, which
+        stellar-core accepts only if it is later than the previous one and at
+        most 60 seconds past the validating node's clock, tracks wall-clock
+        time; and ledgers close on average no faster than the network's
+        target close time (scp_timing.ledger_target_close_time_milliseconds,
+        CAP-0070), which validators can lower by vote, shortening in
+        proportion the delay of a configuration built at the old target
+        until it is rebuilt.
 
   - id: proof-system-security
     statement: >-

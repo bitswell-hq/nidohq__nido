@@ -38,7 +38,7 @@ import { esc } from '../html.js';
 import { submitPermissionlessOp } from '../recoverySubmit.js';
 import { getSubmitter } from '../primaryPasskeySigner.js';
 import { toast } from '../toast.js';
-import { currentOrFirstDoc, latestLedger, readRecoveryState } from './chain.js';
+import { currentOrFirstDoc, latestCloseTime, readRecoveryState, targetCloseMs } from './chain.js';
 import { perchDeployment, requireDeployment } from './deployment.js';
 import { backupPanel } from './emailBackup.js';
 import { CONSENT_TEXT, confirmAlertContact, pushSubscription, registerAlertContact } from './emailAlerts.js';
@@ -56,7 +56,7 @@ import {
 } from './emailModel.js';
 import { fetchInbound, registerInbound, resolveEnrollmentKey, vaultKey } from './emailRecovery.js';
 import { confirmDnsLookup } from './emailStep.js';
-import { adminSignerIds, ledgersToText } from './model.js';
+import { adminSignerIds } from './model.js';
 import { apply } from './settingsPage.js';
 import { busy, card, el, errorText } from './ui.js';
 
@@ -285,14 +285,14 @@ export async function mountEmailEnroll(root: HTMLElement, accountOrNull: string 
           busy(go, status, 'Creating it…', async () => {
             const perchD = requireDeployment();
             const chk = progress.checked!;
-            const ledger = await latestLedger();
+            const now = await latestCloseTime();
             const pin = pinTree(bytesToBigInt(accountCode), [{ domain: chk.domain, modulus: BigInt(`0x${chk.modulus}`) }]);
             const config: GuardianConfig = {
               account,
               controller: perchD.recoveryController,
               commitment: fromHex(chk.commitment),
               registry: d!.registry,
-              keyPin: [{ root: bigIntToBytes(pin.root, 32), validUntilLedger: pinValidUntil(ledger) }],
+              keyPin: [{ root: bigIntToBytes(pin.root, 32), validUntil: pinValidUntil(now) }],
               allowedActions: ALLOW_ALL,
               verifier: d!.verifier,
               circuitId: fromHex(d!.circuitId),
@@ -315,7 +315,7 @@ export async function mountEmailEnroll(root: HTMLElement, accountOrNull: string 
               a.allowedActions === b.allowedActions &&
               a.keyPin.length === 1 &&
               toHex(a.keyPin[0]!.root) === toHex(b.keyPin[0]!.root) &&
-              a.keyPin[0]!.validUntilLedger === b.keyPin[0]!.validUntilLedger;
+              a.keyPin[0]!.validUntil === b.keyPin[0]!.validUntil;
             if (!got || !same(got, config)) throw new Error('The deployed helper is not configured as intended.');
             progress.guardian = address;
             step('deploy');
@@ -351,7 +351,7 @@ export async function mountEmailEnroll(root: HTMLElement, accountOrNull: string 
         <label class="pol-input-label">Helpers needed to approve a recovery (your email counts as one)
           <input name="quorum" class="input" type="number" min="1" max="${others.length + 1}" value="${Math.min(s?.quorum ?? 2, others.length + 1)}">
         </label>
-        <div class="mut" style="font-size:12.5px;">With only your email needed, a recovery must wait at least ${esc(ledgersToText(perch.EMAIL_ONLY_MIN_DELAY_LEDGERS))} and protect against a lost passkey only. Nido refuses anything weaker.</div>`;
+        <div class="mut" style="font-size:12.5px;">With only your email needed, a recovery must wait at least ${esc(`${perch.EMAIL_ONLY_MIN_DELAY_SECONDS / 86_400} days`)} and protect against a lost passkey only. Nido refuses anything weaker.</div>`;
       const go = el('button', { class: 'btn primary', type: 'button' }, 'Save') as HTMLButtonElement;
       body.append(go, status);
       go.addEventListener('click', () =>
@@ -371,6 +371,7 @@ export async function mountEmailEnroll(root: HTMLElement, accountOrNull: string 
             delayLedgers: s?.delayLedgers ?? perch.RECOVERY_DEFAULTS.delayLedgers,
             expiryLedgers: s?.expiryLedgers ?? perch.RECOVERY_DEFAULTS.expiryLedgers,
             maxCancels: s?.maxCancels,
+            ledgerCloseMs: await targetCloseMs(),
           });
           await apply(account, state, perch.withRecovery(base, spec), status);
           toast({ msg: 'Email recovery is on', icon: 'check' });

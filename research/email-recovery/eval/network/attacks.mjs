@@ -118,7 +118,8 @@ before(async () => {
     { label: 'Q', inbox: new Inbox('q.quirks@gmail.com'), key: gmail, helpers: 1, quorum: 2, delayLedgers: 20, expiryLedgers: 2_000 },
   ]);
   // L: the lost-key profile with email plus delay: the email guardian is the only guardian,
-  // quorum 1, so the wallet requires the loss profile and at least 120,960 ledgers.
+  // quorum 1, so the wallet requires the loss profile and seven days of ledgers at the
+  // network's target close time (120,960 at the 5,000 ms this network reports).
   L = await enroll({ chain, stack, apex: APEX, label: 'L', inbox: new Inbox('ada.lovelace@proton.me'), key: keys.find((k) => k.domain === 'proton.me'), helpers: 0, quorum: 1, delayLedgers: 120_960 });
   const proton = keys.find((k) => k.domain === 'proton.me');
   const lossDelay = { key: proton, helpers: 0, quorum: 1, delayLedgers: 120_960 };
@@ -415,8 +416,8 @@ describe('stale or malicious registry keys', () => {
     const eligible = await reg.eligibleAt(id);
     const approvedAt = Number(proposal.approved_at ?? proposal.approved);
     const exec = outcome(await chain.attempt(reg.submitter, Operation.invokeContractFunction({ contract: reg.address, function: 'execute', args: [sc.u32(id)] }), { label: 'execute planted key' }));
-    record('registry', 'registry-planted-key-timelock', 1, 'refused: TimelockActive', exec.observed, exec.layer, { note: `not seen in DNS: the 72-hour path is closed, eligible at ledger ${eligible} (approved at ${approvedAt}, +120,960)`, eligibleAt: Number(eligible), approvedAt });
-    assert.equal(Number(eligible) - approvedAt, 120_960);
+    record('registry', 'registry-planted-key-timelock', 1, 'refused: TimelockActive', exec.observed, exec.layer, { note: `not seen in DNS: the 72-hour path is closed, eligible at close time ${eligible} (approved at ${approvedAt}, +604,800 s)`, eligibleAt: Number(eligible), approvedAt });
+    assert.equal(Number(eligible) - approvedAt, 604_800);
     // The attacker, holding A's address and account code, proves against the root the addition would produce.
     const leaf = registryLeaf('gmail.com', keyHash(attacker.modulus));
     // Its path: the current tree's siblings at the index the addition would take.
@@ -438,17 +439,17 @@ describe('stale or malicious registry keys', () => {
 
   scenario('registry-pin-expiry', async () => {
     // Within the pin's window an approval counts; after it, the pin root is refused and the registry has not admitted the key.
-    P = await enroll({ chain, stack, apex: APEX, label: 'P', inbox: new Inbox('p.pinned@gmail.com'), key: gmail, helpers: 1, quorum: 2, delayLedgers: 20, expiryLedgers: 2_000, pinLedgers: 90 });
+    P = await enroll({ chain, stack, apex: APEX, label: 'P', inbox: new Inbox('p.pinned@gmail.com'), key: gmail, helpers: 1, quorum: 2, delayLedgers: 20, expiryLedgers: 2_000, pinSeconds: 90 });
     roles.set(P.guardian, 'guardian');
     roles.set(P.account.address, 'account');
     const p1 = await P.beginLostKey(P.payer, newOwner('P1'));
     const h1 = await honest(P, p1.attemptId);
     const before = outcome(await P.submitEmail(P.payer, { attemptId: p1.attemptId, approval: h1.approval, digest: h1.st.digest }));
-    assert.ok((await chain.ledger()) <= P.pinValidUntil, 'the first approval landed inside the pin window');
-    record('registry', 'registry-pin-live', 1, 'accepted', before.observed, before.layer, { note: `pin valid until ledger ${P.pinValidUntil}` });
+    assert.ok((await chain.closeTime()) <= P.pinValidUntil, 'the first approval landed inside the pin window');
+    record('registry', 'registry-pin-live', 1, 'accepted', before.observed, before.layer, { note: `pin valid until close time ${P.pinValidUntil}` });
     const p2 = await P.beginLostKey(P.payer, newOwner('P2'));
     const h2 = await honest(P, p2.attemptId);
-    await chain.untilLedger(P.pinValidUntil + 1);
+    await chain.untilCloseTime(P.pinValidUntil + 1);
     const r = outcome(await P.submitEmail(P.payer, { attemptId: p2.attemptId, approval: h2.approval, digest: h2.st.digest }));
     record('registry', 'registry-pin-expiry', 1, 'refused: UnknownRoot', r.observed, r.layer, { note: 'proved inside the pin window, submitted after it; the registry still holds the key only as a pending addition' });
   });

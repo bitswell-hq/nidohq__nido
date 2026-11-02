@@ -17,12 +17,12 @@
 //! tests.
 
 use nido_dkim_registry::hash::Hasher;
-use nido_dkim_registry::{root_of, DkimRegistryError, TIMELOCK_ATTESTED_LEDGERS};
+use nido_dkim_registry::{root_of, DkimRegistryError, TIMELOCK_ATTESTED_SECONDS, TIMELOCK_SECONDS};
 use nido_email_guardian::{EmailApproval, EmailGuardianError, KeyPin, ALLOW_ALL};
 use nido_integration_tests::email::{with_statement, EmailGuardian, EmailInfra, REGISTRY_GRACE};
 use nido_integration_tests::email_proof::{provider_key, Inbox, KeyPath};
 use nido_integration_tests::world::{
-    err, world, Account, Mode, Passkey, Profile, Recovery, World, DELAY, EXPIRY,
+    err, world, Account, Mode, Passkey, Profile, Recovery, World, DELAY, EXPIRY, LEDGER_SECONDS,
 };
 use perch_account::PerchAccountError;
 use perch_recovery::EvidenceDomain::{self, Cancel, Initiate};
@@ -497,7 +497,7 @@ fn a_key_added_through_the_attested_path_is_refused_before_72_hours_and_accepted
     let next_root = BytesN::from_array(&w.env, &next.root);
     assert!(!registry.is_accepted_root(&next_root));
 
-    w.advance(TIMELOCK_ATTESTED_LEDGERS - 1);
+    w.advance_seconds(TIMELOCK_ATTESTED_SECONDS - 1);
     assert_eq!(
         registry.try_execute(&id),
         Err(Ok(DkimRegistryError::TimelockActive))
@@ -517,7 +517,7 @@ fn a_key_added_through_the_attested_path_is_refused_before_72_hours_and_accepted
         &w, &infra, &s, &s.email, attempt, Initiate, &approval, unknown,
     );
 
-    w.advance(1);
+    w.advance_seconds(1);
     assert_eq!(registry.execute(&id), next_root);
     infra
         .try_submit(&w, &s.account, &s.email, attempt, Initiate, &approval)
@@ -634,10 +634,12 @@ fn the_pin_path_works_independently_of_the_registry() {
         pin_root.to_array(),
         "the wallet's pin tree is the registry's formula"
     );
-    let until = w.ledger() + 1_000;
+    // Through the close time of the 1,000th ledger from now, and one second
+    // after it was due.
+    let until = w.now() + 1_000 * LEDGER_SECONDS + 4;
     let pin = KeyPin {
         root: pin_root.clone(),
-        valid_until_ledger: until,
+        valid_until: until,
     };
     let s = enroll_with_pin(&w, &infra, label, Profile::Loss, 1, 2, &inbox, Some(pin));
     let registry = infra.registry.client(&w);
@@ -659,7 +661,7 @@ fn the_pin_path_works_independently_of_the_registry() {
         .expect("the pin accepts a key the registry revoked");
     assert_eq!(votes(&w, &s, attempt), vec![s.email.address.clone()]);
 
-    w.advance(until + 1 - w.ledger());
+    w.advance_seconds(until + 1 - w.now());
     let (next, _) = begin(&w, &s, &format!("{label}/next"));
     let late = with_statement(&w.env, &approval, &w.statement(&s.account, next, Initiate));
     let unknown = EmailGuardianError::UnknownRoot;
@@ -669,11 +671,11 @@ fn the_pin_path_works_independently_of_the_registry() {
 // --- the attack suite's registry scenarios on the test host ----------------
 //
 // research/email-recovery/eval runs the attack suite on a local network,
-// where a ledger closes about once a second, so the registry's timelocks
-// (51,840 and 120,960 ledgers) and its 17,280-ledger grace cannot elapse in
-// a run. The three scenarios whose precondition is an elapsed timelock run
-// here instead, on the registry's production wasm with its real timelocks
-// and grace, the ledger advanced, and a real proof in every approval. With
+// where the registry's timelocks (72 hours and 7 days of close time) and its
+// 24-hour grace cannot elapse in a run. The three scenarios whose
+// precondition is an elapsed timelock run here instead, on the registry's
+// production wasm with its real timelocks and grace, the clock advanced, and
+// a real proof in every approval. With
 // `NIDO_EMAIL_ATTACK_ROWS=<file>` each appends its result row to the file.
 
 /// Append `scenario`'s result row (from test `test`) to
@@ -731,16 +733,13 @@ fn plant_and_activate(
         .propose_add(w, 0, "gmail.com", &planted.modulus());
     infra.registry.approve(w, 1, id);
     infra.registry.approve(w, 2, id);
-    assert_eq!(
-        registry.eligible_at(&id),
-        Some(w.ledger() + nido_dkim_registry::TIMELOCK_LEDGERS)
-    );
-    w.advance(nido_dkim_registry::TIMELOCK_LEDGERS - 1);
+    assert_eq!(registry.eligible_at(&id), Some(w.now() + TIMELOCK_SECONDS));
+    w.advance_seconds(TIMELOCK_SECONDS - 1);
     assert_eq!(
         registry.try_execute(&id),
         Err(Ok(DkimRegistryError::TimelockActive))
     );
-    w.advance(1);
+    w.advance_seconds(1);
     let root = registry.execute(&id);
     assert!(registry.is_accepted_root(&root));
     planted
@@ -869,12 +868,12 @@ fn registry_grace_expiry() {
     let id = infra
         .registry
         .propose_attested_key(&w, &provider_key("gmail.com", "gmail-previous"));
-    w.advance(TIMELOCK_ATTESTED_LEDGERS);
+    w.advance_seconds(TIMELOCK_ATTESTED_SECONDS);
     registry.execute(&id);
-    let superseded = w.ledger();
+    let superseded = w.now();
     assert!(registry.is_accepted_root(&previous_root));
     // An attempt late in the grace period, proven against the previous root.
-    w.advance(REGISTRY_GRACE - 50);
+    w.advance_seconds(REGISTRY_GRACE - 250);
     let (attempt, _) = begin(&w, &s, label);
     let statement = w.statement(&s.account, attempt, Initiate);
     let approval = infra.approval(
@@ -885,12 +884,12 @@ fn registry_grace_expiry() {
         &statement,
         &KeyPath::of(&EmailInfra::launch_leaves(), 0),
     );
-    w.advance(superseded + REGISTRY_GRACE - w.ledger());
+    w.advance_seconds(superseded + REGISTRY_GRACE - w.now());
     assert_eq!(
         infra.check_auth(&w, &s.account, &s.email, attempt, Initiate, &approval),
         Ok(())
     );
-    w.advance(1);
+    w.advance_seconds(1);
     let got = infra.check_auth(&w, &s.account, &s.email, attempt, Initiate, &approval);
     attack_row(
         "registry_grace_expiry",
@@ -899,7 +898,7 @@ fn registry_grace_expiry() {
         "refused: UnknownRoot",
         &verdict(got),
         "guardian check 11 (registry: grace)",
-        "accepted on the last ledger of the 17,280-ledger grace; refused on the next",
+        "accepted at the last second of the 24-hour grace; refused one second later",
     );
     refused(
         &w,

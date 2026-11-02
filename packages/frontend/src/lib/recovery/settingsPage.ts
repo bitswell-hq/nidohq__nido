@@ -27,6 +27,7 @@ import {
   readRecoveryState,
   recoveryClient,
   submitOpen,
+  targetCloseMs,
   type RecoveryState,
 } from './chain.js';
 import { perchDeployment, requireDeployment } from './deployment.js';
@@ -506,6 +507,7 @@ function configureCard(account: string, state: RecoveryState, email?: { address:
         baselineDocHash: field('baseline').checked ? docHash(withoutRecovery) : undefined,
         delayLedgers: timing.delayLedgers,
         expiryLedgers: timing.expiryLedgers,
+        ledgerCloseMs: await targetCloseMs(),
       });
       const next = perch.withRecovery(base, spec);
       await apply(account, state, next, status);

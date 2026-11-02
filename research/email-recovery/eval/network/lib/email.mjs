@@ -119,7 +119,7 @@ export function guardianConfigScVal(c) {
     controller: sc.address(c.controller),
     commitment: sc.bytes(bigIntToBytes(c.commitment, 32)),
     registry: sc.address(c.registry),
-    key_pin: sc.vec(c.pin ? [sc.struct({ root: sc.bytes(bigIntToBytes(c.pin.root, 32)), valid_until_ledger: sc.u32(c.pin.validUntilLedger) })] : []),
+    key_pin: sc.vec(c.pin ? [sc.struct({ root: sc.bytes(bigIntToBytes(c.pin.root, 32)), valid_until: sc.u64(c.pin.validUntil) })] : []),
     allowed_actions: sc.u32(c.allowedActions ?? ALLOW_ALL),
     verifier: sc.address(c.verifier),
     circuit_id: sc.bytes(CIRCUIT_ID),

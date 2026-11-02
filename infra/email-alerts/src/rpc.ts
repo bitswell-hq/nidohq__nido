@@ -22,6 +22,8 @@ import type { RpcEvent } from './events.js';
 export interface GetEventsResult {
   events: RpcEvent[];
   latestLedger: number;
+  /** The latest ledger's close time, Unix seconds, as a decimal string. */
+  latestLedgerCloseTime?: string;
   oldestLedger?: number;
   cursor: string;
 }
