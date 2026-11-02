@@ -25,7 +25,10 @@ Each build, in order:
 1. runs the checker's self-tests (`tests/check-claims/run.sh`);
 2. checks the claim ledger (`check-claims.pl`);
 3. generates `build/gen/claims.tex` from `claims.yaml` (`claims-to-tex.pl`);
-4. builds both documents with `latexmk -Werror` (settings in `latexmkrc`),
+4. generates `build/gen/attacks.tex`, the paper's attack tables, from the
+   evaluation's results in `eval/results/` (`attacks-to-tex.pl`), and fails
+   if any scenario's observed outcome differs from its expected one;
+5. builds both documents with `latexmk -Werror` (settings in `latexmkrc`),
    then scans the logs, so an undefined reference or citation, or a missing
    bibliography entry, fails the build.
 
@@ -45,11 +48,12 @@ artifacts, `email-recovery-paper` and `email-recovery-slides`. On a push to
 | `paper/references.bib` | Bibliography, shared with the slides |
 | `slides/main.tex` | The slide deck |
 | `shared/macros.tex` | Notation used by both documents |
-| `shared/claims.sty` | `\claim`, `\claimstatement`, `\ClaimTable` |
+| `shared/claims.sty` | `\claim`, `\claimstatement`, `\ClaimTable`, `\ClaimList` |
 | `shared/figures/` | TikZ figures used by both documents |
 | `formal/` | The Lean model and proofs of the four properties (`formal/README.md`) |
 | `claims.yaml` | The claim ledger |
 | `check-claims.pl`, `claims-to-tex.pl` | Ledger checker and LaTeX generator |
+| `attacks-to-tex.pl` | The paper's attack tables, from `eval/results/` |
 | `tests/check-claims/` | Checker self-tests |
 | `tools/build-in-container.sh` | The build steps `build.sh` runs in the container |
 
@@ -80,7 +84,8 @@ evidence mappings of its status's shape, and the checker verifies each one.
 In LaTeX, `\claim{id}` prints the claim's status as a coloured tag such as
 **[unproven]**, and `\claimstatement{id}` prints its statement, so both
 documents state a claim in the ledger's words. The paper's appendix prints
-every claim with its status and evidence (`\ClaimTable`).
+every claim with its status and evidence (`\ClaimList`, a list that breaks
+across pages; `\ClaimTable` gives the same as a table).
 
 `check-claims.pl` also requires that every `\claim{id}` and
 `\claimstatement{id}` in a `.tex` file under `paper/`, `slides/` or `shared/`
@@ -97,8 +102,9 @@ the evidence; the tag in both documents follows on the next build.
 The four properties of the email factor are `proven` in Lean
 (`formal/`, built by `just email-recovery-formal`), about a model whose
 agreement with the contracts is `tested`; the assumptions they rest on are
-`assumed`. The implementation and evaluation sections state what will be
-built and measured; they contain no results.
+`assumed`. The implementation and evaluation claims are `tested` or
+`measured` against the code and the results in `eval/`; proving on a phone
+is `unproven`, because no phone was measured.
 
 Bibliography entries were checked against their primary sources: the IETF
 datatracker for the RFCs, the IACR ePrint and arXiv records and Crossref for

@@ -1,38 +1,78 @@
 \section{Introduction}\label{sec:intro}
 
 A smart account that authenticates with a passkey is lost when every device
-holding the passkey is lost. Recovery schemes answer this with guardians,
-delays and secondary credentials. An email inbox is the credential most users
-already keep for years and can regain through their provider, which makes it
-an attractive recovery factor. Using it naively, however, puts the address in
-a database or on a public chain, and turns whoever runs the email check into a
-party that can recover any account.
+holding the passkey is lost. Account-abstraction wallets answer this with
+recovery: guardians who approve a key change, a delay during which the owner
+can object, and secondary credentials~\cite{buterin-social-recovery,argent-spec,erc4337}.
+An email inbox is the secondary credential most people already have, keep for
+years, and can regain through their provider, and large services have long
+used it to recover accounts~\cite{bonneau-recovery}. Using it naively,
+however, puts the address in someone's database and makes whoever runs the
+email check a party that can recover any account: a server that mails a
+one-time code, or a recovery server that holds signing keys for its
+users~\cite{sep30}, is trusted with every account it serves. Checking the
+DKIM signature~\cite{rfc6376} on chain instead removes the server but
+publishes the signed \texttt{From} header.
 
-This paper describes email recovery for Soroban smart accounts in which no
-party stores the address or a secret derived from it in the clear. The
-account commits to a salted hash of the exact address. The user, on a new
-device, sends one recovery email from that inbox to a fixed address. The
-provider signs the email with DKIM~\cite{rfc6376}; the user's browser proves
-in zero knowledge that the signature verifies under a registered key, that
-the sender opens the commitment, and that the Subject binds the pending
-recovery statement. A per-account email-guardian contract verifies the proof
-on chain and counts as one guardian approval in Perch's
-recovery~\cite{perch-recovery-spec}. The delay, the policy quorum and the
-owner's ability to cancel still apply, so the email factor never completes a
-recovery on its own.
+This paper shows that a smart account can use control of an inbox as one
+recovery factor without anyone storing the address or a secret in plaintext.
+The account commits to a salted hash of the exact address,
+$\Commit$, where $\code$ is an account code that only the user holds. To
+recover, the user sends one email from the inbox to a fixed address. Its
+Subject carries a blinded copy of the digest of the pending recovery
+statement, so the mail provider cannot tell which account or attempt it
+approves. The user's browser proves in zero knowledge that the provider
+DKIM-signed the email under a registered key, that its sender opens the
+commitment, and that its Subject opens to the statement's digest. A
+per-account email-guardian contract verifies the proof on Soroban and counts
+it as one guardian approval in Perch's recovery~\cite{perch-recovery-spec},
+which is used unchanged. Perch's quorum, its delay and the owner's ability to
+cancel still apply, alerts reach the owner on a second channel, and so the
+email factor never completes a recovery on its own.
+
+Four problems shape the design. \emph{Binding}: an email must approve exactly
+one recovery statement (one account, one new key, one attempt, one deadline),
+and a copy of the approval must be worth nothing more than the original.
+\emph{Parsing soundness}: a circuit that reads a header must read it the way
+the provider signed it; public audits of open-source email circuits have
+repeatedly found sender spoofing and header-confusion
+flaws~\cite{audit-zksecurity-2024,audit-yacademy,audit-veridise-2024,audit-consensys-2024,audit-matterlabs-2024,audit-zellic-2024}.
+\emph{Key trust}: someone must say which RSA key signs for
+\texttt{gmail.com}, and that someone must not be able to plant a key and
+recover accounts with it. \emph{Privacy from the operator}: the wallet's
+operator must not learn the address, at enrollment, at recovery, or when it
+sends recovery alerts.
 
 \paragraph{Contributions.}
 \begin{itemize}
-  \item A recovery-factor design that keeps the address off chain and out of
-    every operator's hands, built on Perch's recovery without changing it
-    (\S\ref{sec:design}).
-  \item Lean statements and proofs of four properties: soundness of the email
-    factor, privacy of the address, replay and front-running resistance, and
-    one-factor safety, with the cryptographic steps stated as assumptions
-    (\S\ref{sec:properties}).
-  \item A claim ledger that tags every claim in this paper with its status
-    (Appendix~\ref{app:claims}).
+  \item A design for email as one recovery factor on Perch, unchanged: a
+    per-account guardian committing to the address, a Subject that binds a
+    blinded statement digest, a DKIM key registry with public timelocks and a
+    per-account pin, and alerts through a sealed vault
+    (\S\ref{sec:design})\claim{guardian-on-perch}.
+  \item Soundness, privacy, replay resistance and one-factor safety, each
+    proven in Lean over a model of the guardian, the circuit's relation and
+    Perch's controller, with every cryptographic step a named hypothesis and
+    every obligation listed
+    (\S\ref{sec:properties})\claim{email-factor-soundness}\claim{address-privacy}\claim{replay-resistance}\claim{one-factor-safety}.
+  \item A Noir circuit that refuses each publicly documented soundness issue
+    class of open-source email circuits at a named assertion
+    (\S\ref{sec:design-circuit},
+    \S\ref{sec:hardening})\claim{circuit-issue-classes}, and every
+    adversarial provider-mock email whose claim must not be
+    provable\claim{circuit-refuses-attacks}.
+  \item An implementation and an evaluation on the test host, a local
+    network and testnet: 56 attack scenarios, the cost of an email vote in
+    each environment, proving time natively, in Node and in a browser, and a
+    complete recovery on testnet (\S\ref{sec:impl}, \S\ref{sec:eval}).
+  \item A claim ledger giving every claim a status and evidence, checked by
+    the build (Appendix~\ref{app:claims}).
 \end{itemize}
-The hardened circuit, the contracts, the browser prover and their evaluation
-are described in \S\ref{sec:impl} and \S\ref{sec:eval}; their results are
-pending.
+
+\paragraph{Claim tags.} Each statement about the system carries a tag:
+\claimtag{proven} for a Lean theorem, \claimtag{tested} for a named test,
+\claimtag{measured} for a recorded measurement, \claimtag{assumed} for a
+stated assumption, and \claimtag{unproven} for a statement made without
+evidence. Appendix~\ref{app:claims} lists each claim with its evidence, and
+the build fails if a tag names no ledger entry or an entry names a theorem,
+test or file that does not exist.

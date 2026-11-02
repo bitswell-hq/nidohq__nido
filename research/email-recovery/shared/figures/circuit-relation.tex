@@ -1,0 +1,47 @@
+% The recovery circuit's relation: private inputs, obligations C1 to C6, and
+% the four public inputs. Shared by the paper and the slides.
+\begin{tikzpicture}[
+    x=1cm, y=1cm,
+    inp/.style={draw, rounded corners=2pt, align=center, font=\sffamily\figfont,
+                minimum width=19mm, minimum height=6mm, inner sep=2pt},
+    priv/.style={inp, fill=gray!12},
+    pub/.style={inp, fill=white, very thick},
+    obl/.style={draw, align=left, font=\sffamily\figfont, text width=33mm, inner sep=2.5pt},
+    edge/.style={-{Stealth[length=1.4mm]}, gray!70!black},
+    head/.style={font=\sffamily\figfont\bfseries},
+  ]
+  \node[head] at (0, 0.75) {private};
+  \node[head] at (3.45, 0.75) {obligations};
+  \node[head] at (6.9, 0.75) {public};
+
+  \node[priv] (H)    at (0, 0)     {$H$ (signed header\\block, $\le$ 1536 B)};
+  \node[priv] (sn)   at (0, -1.5)  {$s$, $n$\\(RSA-2048)};
+  \node[priv] (code) at (0, -2.7)  {$\code$};
+  \node[priv] (rho)  at (0, -3.7)  {$\blind$};
+  \node[priv] (path) at (0, -4.9)  {leaf index,\\16 siblings};
+
+  \node[obl] (c12) at (3.45, -0.25) {C1 $s^{65537} \bmod n$ encodes $\Sha(H)$; $s<n$; $|n|=2048$\\C2 $H$ well formed, relaxed, $h\ni$ from, subject};
+  \node[obl] (c3)  at (3.45, -1.55) {C3 one From; its address $a$:\\$\Cm = \commitf(a, \code)$};
+  \node[obl] (c4)  at (3.45, -2.55) {C4 domain($a$) $=$ \texttt{d=} $=$ leaf domain};
+  \node[obl] (c5)  at (3.45, -3.55) {C5 one Subject: phrase $\|$\\$\mathrm{hex}(\blindf(\digest_{hi}, \digest_{lo}, \blind))$};
+  \node[obl] (c6)  at (3.45, -4.85) {C6 leaf(\texttt{d=}, keyhash($n$))\\has a path to $\mathit{root}$};
+
+  \node[pub] (C)    at (6.9, -1.55) {$\Cm$};
+  \node[pub] (dhi)  at (6.9, -3.25) {$\digest_{hi}$};
+  \node[pub] (dlo)  at (6.9, -3.95) {$\digest_{lo}$};
+  \node[pub] (root) at (6.9, -4.85) {$\mathit{root}$};
+
+  \draw[edge] (H.east) -- (c12.west);
+  \draw[edge] (H.east) -- (c3.west);
+  \draw[edge] (H.east) -- (c4.west);
+  \draw[edge] (H.east) -- (c5.west);
+  \draw[edge] (sn.east) -- (c12.west);
+  \draw[edge] (sn.east) -- (c6.west);
+  \draw[edge] (code.east) -- (c3.west);
+  \draw[edge] (rho.east) -- (c5.west);
+  \draw[edge] (path.east) -- (c6.west);
+  \draw[edge] (c3.east) -- (C.west);
+  \draw[edge] (c5.east) -- (dhi.west);
+  \draw[edge] (c5.east) -- (dlo.west);
+  \draw[edge] (c6.east) -- (root.west);
+\end{tikzpicture}

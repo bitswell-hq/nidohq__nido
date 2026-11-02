@@ -17,6 +17,10 @@ mkdir -p "$build/gen"
 perl claims-to-tex.pl claims.yaml >"$build/gen/claims.tex.tmp"
 mv "$build/gen/claims.tex.tmp" "$build/gen/claims.tex"
 
+echo "==> attack tables"
+perl attacks-to-tex.pl >"$build/gen/attacks.tex.tmp"
+mv "$build/gen/attacks.tex.tmp" "$build/gen/attacks.tex"
+
 # Both documents find the shared macros and figures, the generated ledger,
 # and the paper's references.bib.
 export TEXINPUTS=".:$here/shared//:$build/gen//:"

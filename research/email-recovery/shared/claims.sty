@@ -2,7 +2,8 @@
 %
 %   \claim{id}           the claim's status as a tag, e.g. [unproven]
 %   \claimstatement{id}  the claim's statement as the ledger words it
-%   \ClaimTable          the appendix table of every claim (paper only)
+%   \ClaimTable          the appendix table of every claim
+%   \ClaimList           the same claims as a list that breaks across pages
 %
 % An id missing from the ledger is a LaTeX error; check-claims.pl reports it
 % first, with the file and line.
@@ -58,6 +59,24 @@
     \ClaimTableRows
     \hline
   \end{tabularx}}
+
+% The same claims as a list, which unlike a table breaks across columns and
+% pages (paper only).
+\newcommand\ClaimItem[2]{%
+  \item \texttt{#2}\nobreak\hskip.3em\relax
+  \edef\claim@s{\csname claim@status@#1\endcsname}\expandafter\claimtag\expandafter{\claim@s}\enskip
+  \claimstatement{#1}\par
+  {\itshape Evidence:} \csname claim@evidence@#1\endcsname}
+
+\newcommand\ClaimList{%
+  \begingroup
+  \let\ClaimRow\ClaimItem
+  \begin{list}{}{\setlength\leftmargin{0pt}\setlength\itemindent{0pt}%
+      \setlength\itemsep{3pt plus 2pt minus 1pt}\setlength\parsep{0pt}\setlength\topsep{3pt}}%
+    \raggedright
+    \ClaimTableRows
+  \end{list}%
+  \endgroup}
 
 \InputIfFileExists{claims.tex}{}{%
   \PackageError{claims}{claims.tex not found}{Build with research/email-recovery/build.sh,

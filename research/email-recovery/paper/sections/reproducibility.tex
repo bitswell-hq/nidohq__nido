@@ -1,0 +1,40 @@
+\section{Reproducibility}\label{app:repro}
+
+Every artifact builds from the repository with one command, run from its
+root after \texttt{git submodule update --init}, which fetches Perch at the
+pinned commit. Table~\ref{tab:repro} lists them. The circuit commands install
+Perch's pinned nargo and Barretenberg, checking each download against a
+pinned SHA-256, and fail if the active versions differ from the pins. The
+Lean model pins its Lean release in \texttt{lean-toolchain} and has no
+library dependencies. The document build runs \texttt{latexmk} inside a TeX
+Live image pinned by digest, checks the claim ledger, and fails on any
+undefined reference or citation; continuous integration runs it on every
+change, and runs the Lean build, the circuit tests, the contracts' tests and
+the local-network attack suite on the changes that touch them.
+
+\begin{table*}[t]
+  \caption{One command per artifact. Needs: what the host must provide
+    beyond the repository.}
+  \label{tab:repro}
+  \small
+  \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.25\textwidth}>{\raggedright\arraybackslash}p{0.47\textwidth}>{\raggedright\arraybackslash}X@{}}
+    \toprule
+    Artifact & Command & Needs \\
+    \midrule
+    Paper and slides & \texttt{just email-recovery-docs} & Docker \\
+    Lean model and proofs & \texttt{just email-recovery-formal} & elan \\
+    Circuit tests & \texttt{just test-email-circuits} & --- \\
+    Circuit artifact, key, real proofs & \texttt{just gen-email-proofs} & Stellar CLI, Node \\
+    Circuit sizes and native proving & \texttt{circuits/email-recovery/scripts/measure.sh} & Node \\
+    Registry hashing against Noir & \texttt{just dkim-registry-vectors} & --- \\
+    Contracts & \texttt{just perch-infra}, then \texttt{just build-contracts} & Stellar CLI \\
+    Contract and integration tests & \texttt{just test} & the contracts above \\
+    Cost on the test host & \texttt{python3 research/email-recovery/eval/measure-onchain.py} & the contracts above \\
+    Attack suite (local network, test host) & \texttt{just email-recovery-attacks} & Docker, Stellar CLI, Node \\
+    Testnet deployment and recovery & \texttt{research/email-recovery/eval/testnet/run.sh} & network access \\
+    Proving (native, Node, browser) & \texttt{just email-recovery-proving} & Node, Chrome \\
+    Benchmark page for a phone & \texttt{just email-recovery-bench-phone} & a phone on the same network \\
+    End to end on a local network & \texttt{just test-e2e-email-local} & Docker, Playwright's Chromium \\
+    \bottomrule
+  \end{tabularx}
+\end{table*}

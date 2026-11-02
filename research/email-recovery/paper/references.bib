@@ -164,15 +164,15 @@
   title        = {Perch: Composable policy layer for {Soroban} smart accounts},
   howpublished = {\url{https://github.com/stellar-registry/perch}},
   year         = {2026},
-  note         = {Commit 603f7d5},
+  note         = {Commit 2258433},
 }
 
 @misc{perch-recovery-spec,
   author       = {{stellar-registry}},
   title        = {Perch Recovery Specification},
-  howpublished = {\url{https://github.com/stellar-registry/perch/blob/603f7d5504f2d4d9338c135771cea18ac70dbe0c/docs/recovery/spec.md}},
+  howpublished = {\url{https://github.com/stellar-registry/perch/blob/2258433aa340428d65676cd269c8e4240674deb1/docs/recovery/spec.md}},
   year         = {2026},
-  note         = {Normative; with the statement byte layouts in \texttt{docs/recovery/statement.md}. Commit 603f7d5},
+  note         = {Normative; with the statement byte layouts in \texttt{docs/recovery/statement.md}. Commit 2258433},
 }
 
 @misc{oz-stellar-contracts,
@@ -181,4 +181,360 @@
   howpublished = {\url{https://github.com/OpenZeppelin/stellar-contracts}},
   year         = {2026},
   note         = {Accessed 2026-11-01},
+}
+
+@misc{audit-matterlabs-2024,
+  author       = {{Matter Labs}},
+  title        = {{ZK Email} Account Recovery: Security Review Report},
+  year         = {2024},
+  month        = oct,
+  howpublished = {\url{https://docs.zk.email/files/matterlabs-zkemail-audit-report.pdf}},
+  note         = {Dated October 25, 2024},
+}
+
+@misc{audit-zellic-2024,
+  author       = {Jade Han and Allen Roh},
+  title        = {{ZK Email}: Comprehensive Security Assessment},
+  year         = {2024},
+  month        = aug,
+  howpublished = {\url{https://docs.zk.email/files/zkemail-zellic-audit-report.pdf}},
+  note         = {Zellic, prepared for ZK Email, August 30, 2024},
+}
+
+@misc{zkemailnr-issue57,
+  author       = {{johnson86tw}},
+  title        = {Bug: \texttt{constrain\_header\_field\_detect\_last\_angle\_bracket} skips validation of first bytes in header field value},
+  year         = {2025},
+  howpublished = {\url{https://github.com/zkemail/zkemail.nr/issues/57}},
+  note         = {zkemail.nr issue 57},
+}
+
+@misc{zkemailnr-pr68,
+  author       = {{Divide-By-0}},
+  title        = {fix(lib): match first-tag \texttt{bh=} prefixes whole and anchored; add \texttt{bh=} injection tests},
+  year         = {2026},
+  howpublished = {\url{https://github.com/zkemail/zkemail.nr/pull/68}},
+  note         = {zkemail.nr pull request 68},
+}
+
+@misc{zkregex-issue119,
+  author       = {{Flecart}},
+  title        = {Small bug in starting anchor in alpha},
+  year         = {2026},
+  howpublished = {\url{https://github.com/zkemail/zk-regex/issues/119}},
+  note         = {zk-regex issue 119},
+}
+
+@misc{emailwallet-issue80,
+  author       = {{Divide-By-0}},
+  title        = {Fix onmicrosoft domains},
+  year         = {2024},
+  howpublished = {\url{https://github.com/zkemail/email-wallet/issues/80}},
+  note         = {email-wallet issue 80},
+}
+
+@misc{archive-issue88,
+  author       = {{Divide-By-0}},
+  title        = {Deal with \texttt{d=} not matching @ sender domain},
+  year         = {2024},
+  howpublished = {\url{https://github.com/zkemail/old.archive.zk.email/issues/88}},
+  note         = {old.archive.zk.email issue 88},
+}
+
+@misc{enscontracts-pr38,
+  author       = {{Divide-By-0}},
+  title        = {fix(circuits): bound regex matches to the {DKIM}-signed lengths},
+  year         = {2026},
+  howpublished = {\url{https://github.com/zkemail/ens-contracts/pull/38}},
+  note         = {ens-contracts pull request 38},
+}
+
+@misc{zkemailverify-issue166,
+  author       = {{Divide-By-0}},
+  title        = {Use body hash from regex instead of idx passed in},
+  year         = {2024},
+  howpublished = {\url{https://github.com/zkemail/zk-email-verify/issues/166}},
+  note         = {zk-email-verify issue 166},
+}
+
+@misc{zkemail-recovery,
+  author       = {{ZK Email}},
+  title        = {email-recovery: Use {ZK Email} to do account recovery for any smart wallet, including 7579 and 4337 support},
+  howpublished = {\url{https://github.com/zkemail/email-recovery}},
+  year         = {2026},
+  note         = {Accessed 2026-11-01},
+}
+
+@misc{zkemail-tx-builder,
+  author       = {{ZK Email}},
+  title        = {email-tx-builder: authenticate the holder of an email address in {Solidity}},
+  howpublished = {\url{https://github.com/zkemail/email-tx-builder}},
+  year         = {2026},
+  note         = {Formerly ether-email-auth. Accessed 2026-11-01},
+}
+
+@inproceedings{suegami-email-wallet,
+  author       = {Sora Suegami and Kyohei Shibano},
+  title        = {Contract Wallet Using Emails},
+  booktitle    = {2023 IEEE International Conference on Blockchain and Cryptocurrency (ICBC)},
+  pages        = {1--2},
+  publisher    = {IEEE},
+  year         = {2023},
+  doi          = {10.1109/ICBC56567.2023.10174932},
+}
+
+@misc{aptos-aip61,
+  author       = {Alin Tomescu},
+  title        = {{AIP-61}: Keyless accounts},
+  howpublished = {\url{https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-061-keyless-accounts.md}},
+  year         = {2024},
+  note         = {Aptos Improvement Proposal, status Accepted},
+}
+
+@misc{erc4337,
+  author       = {Vitalik Buterin and Yoav Weiss and Dror Tirosh and Shahaf Nacson and Alex Forshtat and Kristof Gazso and Tjaden Hess},
+  title        = {{ERC-4337}: Account Abstraction Using Alt Mempool},
+  howpublished = {\url{https://eips.ethereum.org/EIPS/eip-4337}},
+  year         = {2021},
+  note         = {Ethereum Request for Comments, status Final},
+}
+
+@misc{erc7579,
+  author       = {zeroknots and Konrad Kopp and Taek Lee and Fil Makarov and Elim Poon and Lyu Min},
+  title        = {{ERC-7579}: Minimal Modular Smart Accounts},
+  howpublished = {\url{https://eips.ethereum.org/EIPS/eip-7579}},
+  year         = {2023},
+  note         = {Ethereum Request for Comments, status Draft},
+}
+
+@misc{buterin-social-recovery,
+  author       = {Vitalik Buterin},
+  title        = {Why we need wide adoption of social recovery wallets},
+  howpublished = {\url{https://vitalik.eth.limo/general/2021/01/11/recovery.html}},
+  year         = {2021},
+  month        = jan,
+}
+
+@misc{argent-spec,
+  author       = {{Argent}},
+  title        = {Argent Smart Wallet Specification, v2.5},
+  howpublished = {\url{https://github.com/argentlabs/argent-contracts/blob/develop/specifications/specifications.pdf}},
+  year         = {2021},
+  month        = apr,
+}
+
+@misc{sep30,
+  author       = {Leigh McCulloch and Lindsay Lin},
+  title        = {{SEP-0030}: Account Recovery: multi-party recovery of {Stellar} accounts},
+  howpublished = {\url{https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0030.md}},
+  year         = {2019},
+  note         = {Stellar Ecosystem Proposal, version 0.8.1, status Draft},
+}
+
+@inproceedings{bonneau-recovery,
+  author       = {Joseph Bonneau and Elie Bursztein and Ilan Caron and Rob Jackson and Mike Williamson},
+  title        = {Secrets, Lies, and Account Recovery: Lessons from the Use of Personal Knowledge Questions at {Google}},
+  booktitle    = {Proceedings of the 24th International Conference on World Wide Web},
+  series       = {WWW '15},
+  pages        = {141--150},
+  year         = {2015},
+  doi          = {10.1145/2736277.2741691},
+}
+
+@inproceedings{bursztein-hijacking,
+  author       = {Elie Bursztein and Borbala Benko and Daniel Margolis and Tadek Pietraszek and Andy Archer and Allan Aquino and Andreas Pitsillidis and Stefan Savage},
+  title        = {Handcrafted Fraud and Extortion: Manual Account Hijacking in the Wild},
+  booktitle    = {Proceedings of the 2014 Conference on Internet Measurement Conference},
+  series       = {IMC '14},
+  pages        = {347--358},
+  publisher    = {ACM},
+  year         = {2014},
+  doi          = {10.1145/2663716.2663749},
+}
+
+@inproceedings{specter-keyforge,
+  author       = {Michael A. Specter and Sunoo Park and Matthew Green},
+  title        = {{KeyForge}: Non-Attributable Email from Forward-Forgeable Signatures},
+  booktitle    = {30th USENIX Security Symposium (USENIX Security 21)},
+  publisher    = {USENIX Association},
+  year         = {2021},
+  url          = {https://www.usenix.org/conference/usenixsecurity21/presentation/specter-keyforge},
+}
+
+@inproceedings{chaliasos-sok-snark,
+  author       = {Stefanos Chaliasos and Jens Ernstberger and David Theodore and David Wong and Mohammad Jahanara and Benjamin Livshits},
+  title        = {{SoK}: What Don't We Know? Understanding Security Vulnerabilities in {SNARKs}},
+  booktitle    = {33rd USENIX Security Symposium (USENIX Security 24)},
+  publisher    = {USENIX Association},
+  year         = {2024},
+  url          = {https://www.usenix.org/conference/usenixsecurity24/presentation/chaliasos},
+}
+
+@inproceedings{deco,
+  author       = {Fan Zhang and Deepak Maram and Harjasleen Malvai and Steven Goldfeder and Ari Juels},
+  title        = {{DECO}: Liberating Web Data Using Decentralized Oracles for {TLS}},
+  booktitle    = {Proceedings of the 2020 ACM SIGSAC Conference on Computer and Communications Security},
+  series       = {CCS '20},
+  pages        = {1919--1938},
+  publisher    = {ACM},
+  year         = {2020},
+  doi          = {10.1145/3372297.3417239},
+}
+
+@inproceedings{zkcreds,
+  author       = {Michael Rosenberg and Jacob White and Christina Garman and Ian Miers},
+  title        = {zk-creds: Flexible Anonymous Credentials from {zkSNARKs} and Existing Identity Infrastructure},
+  booktitle    = {2023 IEEE Symposium on Security and Privacy (SP)},
+  pages        = {790--808},
+  publisher    = {IEEE},
+  year         = {2023},
+  doi          = {10.1109/SP46215.2023.10179430},
+}
+
+@inproceedings{lean4,
+  author       = {Leonardo de Moura and Sebastian Ullrich},
+  title        = {The {Lean 4} Theorem Prover and Programming Language},
+  booktitle    = {Automated Deduction -- CADE 28},
+  series       = {Lecture Notes in Computer Science},
+  pages        = {625--635},
+  publisher    = {Springer},
+  year         = {2021},
+  doi          = {10.1007/978-3-030-79876-5_37},
+}
+
+@inproceedings{poseidon2,
+  author       = {Lorenzo Grassi and Dmitry Khovratovich and Markus Schofnegger},
+  title        = {{Poseidon2}: A Faster Version of the {Poseidon} Hash Function},
+  booktitle    = {Progress in Cryptology -- AFRICACRYPT 2023},
+  series       = {Lecture Notes in Computer Science},
+  pages        = {177--203},
+  publisher    = {Springer},
+  year         = {2023},
+  doi          = {10.1007/978-3-031-37679-5_8},
+}
+
+@article{shamir,
+  author       = {Adi Shamir},
+  title        = {How to Share a Secret},
+  journal      = {Communications of the ACM},
+  volume       = {22},
+  number       = {11},
+  pages        = {612--613},
+  year         = {1979},
+  doi          = {10.1145/359168.359176},
+}
+
+@misc{webauthn3,
+  author       = {Tim Cappalli and Akshay Kumar and Emil Lundberg and Matthew Miller and Pascoe and Nina Satragno},
+  title        = {Web Authentication: An {API} for accessing Public Key Credentials, Level 3},
+  howpublished = {\url{https://www.w3.org/TR/webauthn-3/}},
+  year         = {2026},
+  note         = {W3C Recommendation, 25 August 2026},
+}
+
+@misc{aws-nitro-attestation,
+  author       = {{Amazon Web Services}},
+  title        = {Verifying the root of trust ({AWS} Nitro Enclaves User Guide)},
+  howpublished = {\url{https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html}},
+  year         = {2026},
+  note         = {Accessed 2026-11-01},
+}
+
+@misc{rfc7489,
+  author       = {M. Kucherawy and E. Zwicky},
+  title        = {{Domain-based Message Authentication, Reporting, and Conformance (DMARC)}},
+  howpublished = {RFC 7489},
+  publisher    = {RFC Editor},
+  year         = {2015},
+  month        = mar,
+  doi          = {10.17487/RFC7489},
+  url          = {https://www.rfc-editor.org/info/rfc7489/},
+}
+
+@misc{rfc2047,
+  author       = {K. Moore},
+  title        = {{MIME (Multipurpose Internet Mail Extensions) Part Three: Message Header Extensions for Non-ASCII Text}},
+  howpublished = {RFC 2047},
+  publisher    = {RFC Editor},
+  year         = {1996},
+  month        = nov,
+  doi          = {10.17487/RFC2047},
+  url          = {https://www.rfc-editor.org/info/rfc2047/},
+}
+
+@misc{rfc9180,
+  author       = {R. Barnes and K. Bhargavan and B. Lipp and C. Wood},
+  title        = {{Hybrid Public Key Encryption}},
+  howpublished = {RFC 9180},
+  publisher    = {RFC Editor},
+  year         = {2022},
+  month        = feb,
+  doi          = {10.17487/RFC9180},
+  url          = {https://www.rfc-editor.org/info/rfc9180/},
+}
+
+@misc{rfc9106,
+  author       = {A. Biryukov and D. Dinu and D. Khovratovich and S. Josefsson},
+  title        = {{Argon2 Memory-Hard Function for Password Hashing and Proof-of-Work Applications}},
+  howpublished = {RFC 9106},
+  publisher    = {RFC Editor},
+  year         = {2021},
+  month        = sep,
+  doi          = {10.17487/RFC9106},
+  url          = {https://www.rfc-editor.org/info/rfc9106/},
+}
+
+@misc{rfc8032,
+  author       = {S. Josefsson and I. Liusvaara},
+  title        = {{Edwards-Curve Digital Signature Algorithm (EdDSA)}},
+  howpublished = {RFC 8032},
+  publisher    = {RFC Editor},
+  year         = {2017},
+  month        = jan,
+  doi          = {10.17487/RFC8032},
+  url          = {https://www.rfc-editor.org/info/rfc8032/},
+}
+
+@misc{rfc5869,
+  author       = {H. Krawczyk and P. Eronen},
+  title        = {{HMAC-based Extract-and-Expand Key Derivation Function (HKDF)}},
+  howpublished = {RFC 5869},
+  publisher    = {RFC Editor},
+  year         = {2010},
+  month        = may,
+  doi          = {10.17487/RFC5869},
+  url          = {https://www.rfc-editor.org/info/rfc5869/},
+}
+
+@misc{rfc8030,
+  author       = {M. Thomson and E. Damaggio and B. Raymor},
+  title        = {{Generic Event Delivery Using HTTP Push}},
+  howpublished = {RFC 8030},
+  publisher    = {RFC Editor},
+  year         = {2016},
+  month        = dec,
+  doi          = {10.17487/RFC8030},
+  url          = {https://www.rfc-editor.org/info/rfc8030/},
+}
+
+@misc{rfc8291,
+  author       = {M. Thomson},
+  title        = {{Message Encryption for Web Push}},
+  howpublished = {RFC 8291},
+  publisher    = {RFC Editor},
+  year         = {2017},
+  month        = nov,
+  doi          = {10.17487/RFC8291},
+  url          = {https://www.rfc-editor.org/info/rfc8291/},
+}
+
+@misc{rfc8292,
+  author       = {M. Thomson and P. Beverloo},
+  title        = {{Voluntary Application Server Identification (VAPID) for Web Push}},
+  howpublished = {RFC 8292},
+  publisher    = {RFC Editor},
+  year         = {2017},
+  month        = nov,
+  doi          = {10.17487/RFC8292},
+  url          = {https://www.rfc-editor.org/info/rfc8292/},
 }

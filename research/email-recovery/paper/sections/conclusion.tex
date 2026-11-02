@@ -1,8 +1,12 @@
 \section{Conclusion}\label{sec:conclusion}
 
-Email can be a recovery factor for a smart account without anyone storing
-the address: a salted commitment on chain, a DKIM proof generated in the
-user's browser, and a per-account guardian that counts the proof as one
-approval in an existing delayed recovery. Its four properties are proven in
-Lean about a model of the guardian, the circuit's relation and Perch's
-controller, under the stated assumptions; the measurements are pending.
+Control of an inbox can be one recovery factor for a smart account without
+anyone holding the address: a salted commitment on chain, a DKIM proof made in
+the browser over an email whose Subject blinds the recovery statement, and a
+per-account guardian that counts it as one approval in Perch's delayed
+recovery. Its four properties are proven over a model whose agreement with the
+code is tested, under stated assumptions; an email vote fits within a third
+of a Soroban transaction\claim{onchain-verification-cost}, and a desktop
+browser proves in seconds\claim{browser-proving-cost}. What remains is the
+production enclave, phone measurements, real provider mail, and an external
+audit before mainnet.

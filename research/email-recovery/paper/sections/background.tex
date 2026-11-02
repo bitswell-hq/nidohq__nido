@@ -3,41 +3,74 @@
 \subsection{DKIM}
 DomainKeys Identified Mail~\cite{rfc6376} lets the organisation that owns a
 signing domain take responsibility for a message. The signer adds a
-\texttt{DKIM-Signature} header naming the signing domain (\texttt{d=}), a
-selector (\texttt{s=}) under which the public key is published in DNS, the
-list of signed header fields (\texttt{h=}), a hash of the canonicalised body
-(\texttt{bh=}), the canonicalisation (\texttt{c=}), and an optional body
-length limit (\texttt{l=}). RFC~8301~\cite{rfc8301} requires signers to use
-\texttt{rsa-sha256}, forbids \texttt{rsa-sha1} for signing, and requires
-RSA keys of at least 1024 bits, recommending 2048. RFC~8463~\cite{rfc8463}
-adds Ed25519-SHA256. A DKIM signature attests to the signing domain, not to
-the author: binding it to a sender requires checking that \texttt{d=}
-matches the domain of the \texttt{From} address, whose syntax, including
-display names, quoting and header folding, is defined by
-RFC~5322~\cite{rfc5322}.
+\texttt{DKIM-Signature} header field naming the signing domain
+(\texttt{d=}), a selector (\texttt{s=}) under which the public key is
+published in DNS at \texttt{s.\_domainkey.d}, the list of signed header
+fields (\texttt{h=}), a hash of the canonicalized body (\texttt{bh=}), the
+canonicalization (\texttt{c=}) and an optional body length limit
+(\texttt{l=}). The signature covers the selected header fields, each taken
+from the bottom of the header block upward, followed by the
+\texttt{DKIM-Signature} field itself with its \texttt{b=} value empty. Under
+\emph{simple} header canonicalization the fields are signed as they are;
+under \emph{relaxed} canonicalization names are lowercased, folded lines are
+unfolded, and runs of whitespace become one space. Naming a field in
+\texttt{h=} more often than it occurs (``oversigning'') makes later
+additions of that field break the signature. RFC~8301~\cite{rfc8301} requires
+\texttt{rsa-sha256} with keys of at least 1024 bits, recommending 2048;
+RFC~8463~\cite{rfc8463} adds Ed25519. A DKIM signature attests to the signing
+domain, not to the author: DMARC~\cite{rfc7489} calls a signature
+\emph{aligned} when \texttt{d=} matches the domain of the \texttt{From}
+address, whose syntax, with display names, quoting, comments and folding, is
+RFC~5322's~\cite{rfc5322}. Signatures stay verifiable as long as the key
+remains published, which makes email
+attributable~\cite{specter-keyforge}.
 
 \subsection{Smart-account recovery on Perch}
 Soroban is the smart-contract platform of the Stellar
-network~\cite{soroban-docs}; a contract account authorizes through its own
-\texttt{\_\_check\_auth}. Perch~\cite{perch-repo} builds smart accounts on
-OpenZeppelin's Stellar contracts~\cite{oz-stellar-contracts} and specifies
-their recovery~\cite{perch-recovery-spec}. An account enrolls a recovery
-configuration naming guardians and a quorum, an optional ZK factor, and a
-delay. A recovery attempt binds one \emph{recovery statement}, a fixed-width
-encoding of the action, network, account, controller, configuration epoch
-and hash, timing (delay, expiry and a validity deadline in ledgers) and the
-subject; for a lost-key recovery the subject names the attempt and the
-source and target documents. Guardians authorize $\digest =
-\Sha(\text{statement})$. After the quorum is reached the attempt waits out
-the delay, during which the owner may cancel under the lost-key profile, and
-then completes by applying the target document.
+network~\cite{soroban-docs}. A contract account authorizes through its own
+\texttt{\_\_check\_auth}, which the host calls when a contract it is invoked
+by requires its authorization; the call receives the signature payload, the
+account's signature value from the transaction's authorization entry, and
+the contexts being authorized. Perch~\cite{perch-repo} builds smart accounts
+on OpenZeppelin's Stellar contracts~\cite{oz-stellar-contracts} and specifies
+their recovery~\cite{perch-recovery-spec}.
 
-\subsection{Noir and UltraHonk}
+An account's policy document may carry a \emph{recovery member}: a profile,
+a mode, a controller, the replaceable signers, and timing in ledgers. Under
+the \texttt{Loss} profile the owner key may be lost but not stolen, so the
+owner can veto any recovery; under \texttt{Protected} it may be stolen, so
+changes to recovery also need the recovery condition. A
+\texttt{guardian-only} mode lists guardians and a quorum, \texttt{zk-only}
+enrolls one zero-knowledge credential, and \texttt{combined} needs both.
+Perch binds the member, guardian addresses included, into a
+\texttt{config\_hash}.
+
+Anyone may open a recovery attempt, which grants nothing by itself. Each
+attempt binds one \emph{recovery statement}, a fixed-width encoding of the
+action (lost-key, compromise, cancel, reconfigure or upgrade), the network,
+the account, the controller, the configuration epoch and hash, timing, and
+an action-specific subject; for a lost-key recovery the subject names the
+attempt id and commits to the replacement credentials and the target
+document. Guardians authorize the statement's digest
+$\digest = \Sha(\text{statement})$ through the controller's
+\texttt{submit\_guardian}, which calls
+\texttt{guardian.require\_auth\_for\_args((d,))} and counts each guardian at
+most once per attempt and evidence domain (initiation or cancellation);
+reconfigurations and upgrades collect approvals of a change digest the same
+way through \texttt{approve\_change}. When the quorum is reached the attempt is authorized;
+it completes only after the delay, during which a \texttt{Loss} owner may
+cancel it. Every configuration change and completion bumps the epoch, which
+invalidates older attempts and evidence.
+
+\subsection{Noir, UltraHonk and Soroban verification}
 Noir~\cite{noir-docs} is a language for zero-knowledge circuits.
 Barretenberg~\cite{barretenberg-docs} proves Noir circuits with UltraHonk, a
 Plonk-family~\cite{plonk} proof system whose verifier runs a sumcheck, as in
 HyperPlonk~\cite{hyperplonk}, over commitments under a universal reference
 string, so a new circuit needs a new verification key but no trusted setup of
 its own. Perch's ZK recovery backend proves its circuit with UltraHonk in
-Barretenberg's zero-knowledge flavor and verifies it on Soroban; the email
-circuit targets the same verifier with its own verification key.
+Barretenberg's zero-knowledge flavor with a Keccak transcript and verifies it
+in a Soroban contract; its proofs are 16{,}224 bytes whatever the circuit's
+size\claim{circuit-size}. The email circuit targets the same verifier code
+with its own verification key. Poseidon2~\cite{poseidon2} is the algebraic
+hash shared by Perch's circuit and Soroban's host.
