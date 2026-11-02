@@ -116,7 +116,7 @@ and domain; the unmasked rows stay under `target/`.
 ### Results
 
 <!-- BEGIN GENERATED real-mail by report.mjs; do not edit -->
-Corpus: 5,154 posts from 18 lists at https://lists.gnu.org/archive/mbox, months 2025-10, 2026-05, 2026-06, 2026-07, 2026-08, 2026-09, 2026-10 (manifest built 2026-11-02); 0 no longer served. 5,327 DKIM-Signature fields, 10,320 circuit executions (harness and recovery artifact), 493 s, Python 3.14.4.
+Corpus: 5,154 posts from 18 lists at https://lists.gnu.org/archive/mbox, months 2025-10, 2026-05, 2026-06, 2026-07, 2026-08, 2026-09, 2026-10 (manifest built 2026-11-02); 0 no longer served. 5,327 DKIM-Signature fields, 10,320 circuit executions (harness and recovery artifact), 380 s, Python 3.14.4.
 
 | From domain | Posts | Signatures (aligned) | Reference accepts | Circuit accepts | Posts in agreement |
 | --- | --- | --- | --- | --- | --- |
@@ -206,17 +206,17 @@ circuit's address is that mailbox, and the circuit's domain is the lowercase
 ### Results
 
 <!-- BEGIN GENERATED fuzz by report.mjs; do not edit -->
-Seed `nido-email-recovery-parser-fuzz-v1`, cases 0 to 49,999: 50,000 cases, 49,779 DKIM-Signature fields (221 cases have none the reference recognizes), 51,814 circuit executions, 2338 s, Python 3.14.4. Signed over the reference's octets: 49,157; over the encoder's (fields the reference does not process): 617.
+Seed `nido-email-recovery-parser-fuzz-v1`, cases 0 to 49,999: 50,000 cases, 49,779 DKIM-Signature fields (221 cases have none the reference recognizes), 51,814 circuit executions, 2123 s, Python 3.14.4. Signed over the reference's octets: 49,157; over the encoder's (fields the reference does not process): 617.
 
 | Verdict | Signatures |
 | --- | --- |
-| agree-accept | 23,002 |
-| agree-refuse | 20,619 |
-| soundness | 5,193 |
-| spec-deviation | 251 |
-| completeness | 714 |
+| agree-accept | 22,409 |
+| agree-refuse | 23,967 |
+| soundness | 2,692 |
+| spec-deviation | 0 |
+| completeness | 711 |
 
-Invariant (circuit accepts ⇒ the reference DKIM verifier accepts, Python reads exactly the circuit's address, and the circuit's domain is the lowercase d=): **violated in 5193 signatures**. Every 25th case also ran the recovery artifact: 1,994 signatures, 0 disagreements with the harness. The encoder's signed block differed from the reference's on 267 signatures; the reference does not verify the signature: 266 (smallest case 237); the reference verifies the signature: 1 (smallest case 1114).
+Invariant (circuit accepts ⇒ the reference DKIM verifier accepts, Python reads exactly the circuit's address, and the circuit's domain is the lowercase d=): **violated in 2692 signatures**. Every 25th case also ran the recovery artifact: 1,994 signatures, 0 disagreements with the harness. The encoder's signed block differed from the reference's on 267 signatures; the reference does not verify the signature: 266 (smallest case 237); the reference verifies the signature: 1 (smallest case 1114).
 <!-- END GENERATED fuzz -->
 
 By family:
@@ -225,11 +225,11 @@ By family:
 | Family | Cases | Signatures | Circuit accepts | Reference and spec accept | Soundness | Spec deviation | Completeness |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | baseline | 1,053 | 1,053 | 1,030 | 1,030 | 0 | 0 | 0 |
-| from-display | 4,897 | 4,897 | 4,034 | 2,429 | 1,458 | 147 | 0 |
+| from-display | 4,897 | 4,897 | 2,070 | 2,070 | 0 | 0 | 0 |
 | from-address | 4,069 | 4,069 | 802 | 802 | 0 | 0 | 0 |
-| from-structure | 5,029 | 5,029 | 1,193 | 817 | 352 | 24 | 0 |
-| encoded-words | 2,494 | 2,494 | 1,144 | 1,144 | 0 | 0 | 0 |
-| folding | 3,008 | 3,008 | 2,711 | 2,237 | 422 | 52 | 0 |
+| from-structure | 5,029 | 5,029 | 779 | 779 | 0 | 0 | 0 |
+| encoded-words | 2,494 | 2,494 | 1,103 | 1,103 | 0 | 0 | 0 |
+| folding | 3,008 | 3,008 | 2,141 | 2,141 | 0 | 0 | 0 |
 | duplicated-fields | 4,032 | 4,032 | 2,487 | 2,487 | 0 | 0 | 0 |
 | field-names | 1,943 | 1,809 | 1,039 | 1,039 | 0 | 0 | 0 |
 | h-list | 3,947 | 3,947 | 2,265 | 2,265 | 0 | 0 | 0 |
@@ -237,7 +237,7 @@ By family:
 | tag-values | 4,104 | 4,104 | 2,214 | 1,878 | 723 | 0 | 387 |
 | lengths | 2,966 | 2,966 | 2,350 | 2,350 | 0 | 0 | 0 |
 | octets | 2,015 | 2,015 | 1,709 | 1,709 | 0 | 0 | 0 |
-| mixed | 5,469 | 5,382 | 1,759 | 1,302 | 501 | 28 | 72 |
+| mixed | 5,469 | 5,382 | 1,403 | 1,240 | 232 | 0 | 69 |
 <!-- END GENERATED fuzz-families -->
 
 The one block divergence on a signature the reference verifies is case
@@ -251,24 +251,17 @@ Counterexamples to the invariant, by class (one example each; `node fuzz.mjs
 <!-- BEGIN GENERATED fuzz-counterexamples by report.mjs; do not edit -->
 | Kind | Class | Signatures | Example case | Example field | Python reads | Circuit binds |
 | --- | --- | --- | --- | --- | --- | --- |
-| dkim | signature syntax error | 1,856 | 12 | `DKIM-Signature:v=1; a=rsa-sha256; xf; c=relaxed/relaxed; d=icloud.com; s=fuzz; t=1793613600; h=from:to:subject` | — | `dn3u.zp4l8@icloud.com` |
-| from | unquoted `@` (an address in the display name) | 1,181 | 14 | `from:jx90 @ ky3p <w8utgn2.3mdly87k@icloud.com>` | `["jx90@ky3p"]` | `w8utgn2.3mdly87k@icloud.com` |
-| dkim | unsupported query method | 517 | 27 | `DKIM-Signature:v=1; a=rsa-sha256; c=relaxed/relaxed; q=d=protonmail.com; d=web.de; s=fuzz; t=1793613600; h=fro` | — | `0x97th.h1w0gm@web.de` |
-| from | unbalanced `"` in the display name | 507 | 0 | `from:"ij8 <wh1gv.eajo0z@fastmail.com>` | `["\"ij8 <wh1gv.eajo0z@fastmail.com>\""]` | `wh1gv.eajo0z@fastmail.com` |
-| from | unquoted `\` | 271 | 212 | `from:rsm\9z7 <y82wvin.ak65uxjq@gmail.com>` | `["\"rsm\\\\9z7\""]` | `y82wvin.ak65uxjq@gmail.com` |
-| from | unquoted `,` (an address list) | 255 | 51 | `from:myo, odv4 <yoq1xwj1.4qrc@protonmail.com>` | `["myo","yoq1xwj1.4qrc@protonmail.com"]` | `yoq1xwj1.4qrc@protonmail.com` |
-| from | unquoted `;` | 246 | 33 | `from:mp2d; okdr <45fx.1wzle@hotmail.com>` | `["mp2d"]` | `45fx.1wzle@hotmail.com` |
-| dkim | signature missing required tag | 237 | 613 | `DKIM-Signature:v=1; a=rsa-sha256; c=relaxed/relaxed; d=gmx.de; t=1793613600; h=from:to:subject:date:message-id` | — | `1y4c0d6r.imlw4d@gmx.de` |
-| dkim | domain mismatch | 123 | 67 | `DKIM-Signature:v=1; a=rsa-sha256; i=@gmail.com; c=relaxed/relaxed; d=outlook.com; s=fuzz; t=1793613600; h=from` | — | `dln554wo.hs1z12l4@outlook.com` |
+| dkim | signature syntax error | 1,826 | 12 | `DKIM-Signature:v=1; a=rsa-sha256; xf; c=relaxed/relaxed; d=icloud.com; s=fuzz; t=1793613600; h=from:to:subject` | — | `dn3u.zp4l8@icloud.com` |
+| dkim | unsupported query method | 511 | 27 | `DKIM-Signature:v=1; a=rsa-sha256; c=relaxed/relaxed; q=d=protonmail.com; d=web.de; s=fuzz; t=1793613600; h=fro` | — | `0x97th.h1w0gm@web.de` |
+| dkim | signature missing required tag | 234 | 613 | `DKIM-Signature:v=1; a=rsa-sha256; c=relaxed/relaxed; d=gmx.de; t=1793613600; h=from:to:subject:date:message-id` | — | `1y4c0d6r.imlw4d@gmx.de` |
+| dkim | domain mismatch | 121 | 67 | `DKIM-Signature:v=1; a=rsa-sha256; i=@gmail.com; c=relaxed/relaxed; d=outlook.com; s=fuzz; t=1793613600; h=from` | — | `dln554wo.hs1z12l4@outlook.com` |
 <!-- END GENERATED fuzz-counterexamples -->
 
 Spec deviations (the circuit binds the address Python reads, but the spec
 says it refuses the value):
 
 <!-- BEGIN GENERATED fuzz-deviations by report.mjs; do not edit -->
-| Spec rule the circuit does not apply | Signatures | Example case | Signed From line |
-| --- | --- | --- | --- |
-| 4.5: From names N mailboxes (N groups) | 251 | 1 | `From: 96yf: 6uxg <7dil3.m46qk@icloud.com>` |
+None.
 <!-- END GENERATED fuzz-deviations -->
 
 Completeness gaps (the reference and the spec's rules accept, the circuit
@@ -277,9 +270,9 @@ refuses):
 <!-- BEGIN GENERATED fuzz-gaps by report.mjs; do not edit -->
 | Circuit refusal | Signatures | Example case | Example DKIM-Signature (start) |
 | --- | --- | --- | --- |
-| `DKIM: v= must be 1` | 230 | 459 | `DKIM-Signature:v=1 ; a=rsa-sha256; c=relaxed/relaxed; d=yahoo.com; s=fuzz; t=1793613600; h=from:to:subject:date:message-` |
+| `DKIM: v= must be 1` | 228 | 459 | `DKIM-Signature:v=1 ; a=rsa-sha256; c=relaxed/relaxed; d=yahoo.com; s=fuzz; t=1793613600; h=from:to:subject:date:message-` |
 | `DKIM: d= must equal the From domain` | 186 | 173 | `DKIM-Signature:v=1; a=rsa-sha256; c=relaxed/relaxed; d= icloud.com; s=fuzz; t=1793613600; h=from:to:subject:date:message` |
-| `DKIM: a= must be rsa-sha256` | 140 | 761 | `DKIM-Signature:v=1; a=rsa-sha256 ; c=relaxed/relaxed; d=outlook.com; s=fuzz; t=1793613600; h=from:to:subject:date:messag` |
+| `DKIM: a= must be rsa-sha256` | 139 | 761 | `DKIM-Signature:v=1; a=rsa-sha256 ; c=relaxed/relaxed; d=outlook.com; s=fuzz; t=1793613600; h=from:to:subject:date:messag` |
 | `DKIM: header canonicalization must be relaxed` | 61 | 405 | `DKIM-Signature:v=1; a=rsa-sha256; c = relaxed/relaxed; d=web.de; s=fuzz; t=1793613600; h=from:to:subject:date:message-id` |
 | `DKIM: b= must be empty in the signed field` | 53 | 610 | `DKIM-Signature:v=1; a=rsa-sha256; c=relaxed/relaxed; d=gmx.de; s=fuzz; t=1793613600; h=from:to:subject:date:message-id; ` |
 | `DKIM: h= must list from` | 44 | 117 | `DKIM-Signature:v=1; a=rsa-sha256; c=relaxed/relaxed; d=hotmail.com; s=fuzz; t=1793613600; h ␍␊ = ␍␊ from:to:subject:date` |
@@ -287,41 +280,42 @@ refuses):
 
 ## Findings
 
-**The From display name (open, spec §13 question 23).** Spec §4.5 allows any
-printable ASCII but `<` and `>` in the display name, so the circuit accepts
-From values whose display name holds an unquoted `,`, `;`, `:`, `@` or `\`,
-or an unbalanced `"`, and binds the angle-addr that ends the field. RFC 5322
-readers read the same value as an address list, a group, another mailbox, or
-no mailbox. [`from-finding.mjs`](from-finding.mjs) builds each of these as a
-full recovery email (the real recovery Subject, a commitment, a key-tree
-path) signed with the TEST-ONLY Yahoo key and executes the committed
-recovery artifact:
+**The From display name (spec §4.5).** The circuit accepts a display name
+only as `atext`, `.`, SP and closed quoted strings, with `\` only as a
+quoted-pair inside one and no `<` or `>`, so it refuses From values whose
+display name holds an unquoted `,`, `;`, `:`, `@`, `\` or parenthesis, or
+an unbalanced `"`: values RFC 5322 readers read as an address list, a group,
+another mailbox, or no mailbox. [`from-finding.mjs`](from-finding.mjs)
+builds such values as full recovery emails (the real recovery Subject, a
+commitment, a key-tree path) signed with the TEST-ONLY Yahoo key and executes
+the committed recovery artifact; the first row is a plain display name for
+comparison:
 
 <!-- BEGIN GENERATED from-finding by report.mjs; do not edit -->
 | Signed From value | Python reads | mailauth reads | Recovery artifact |
 | --- | --- | --- | --- |
 | `Ann Lee <t5w6.i9otz@yahoo.com>` | `["t5w6.i9otz@yahoo.com"]` | `["t5w6.i9otz@yahoo.com"]` (valid) | accepts, opens the commitment with `t5w6.i9otz@yahoo.com` |
-| `b4ionwm6.ajw@yahoo.com, x <t5w6.i9otz@yahoo.com>` | `["b4ionwm6.ajw@yahoo.com","t5w6.i9otz@yahoo.com"]` | `["b4ionwm6.ajw@yahoo.com","t5w6.i9otz@yahoo.com"]` (valid) | accepts, opens the commitment with `t5w6.i9otz@yahoo.com` |
-| `b4ionwm6.ajw@yahoo.com <t5w6.i9otz@yahoo.com>` | `["b4ionwm6.ajw@yahoo.com"]` (defects) | `["b4ionwm6.ajw@yahoo.com","t5w6.i9otz@yahoo.com"]` (lax) | accepts, opens the commitment with `t5w6.i9otz@yahoo.com` |
-| `"q97" b4ionwm6.ajw@yahoo.com <t5w6.i9otz@yahoo.com>` | `["\"q97 b4ionwm6.ajw\"@yahoo.com"]` (defects) | `[]` (invalid) | accepts, opens the commitment with `t5w6.i9otz@yahoo.com` |
-| `"x <t5w6.i9otz@yahoo.com>` | `["\"x <t5w6.i9otz@yahoo.com>\""]` (defects) | `[]` (invalid) | accepts, opens the commitment with `t5w6.i9otz@yahoo.com` |
+| `b4ionwm6.ajw@yahoo.com, x <t5w6.i9otz@yahoo.com>` | `["b4ionwm6.ajw@yahoo.com","t5w6.i9otz@yahoo.com"]` | `["b4ionwm6.ajw@yahoo.com","t5w6.i9otz@yahoo.com"]` (valid) | refuses: `From: invalid display name` |
+| `b4ionwm6.ajw@yahoo.com <t5w6.i9otz@yahoo.com>` | `["b4ionwm6.ajw@yahoo.com"]` (defects) | `["b4ionwm6.ajw@yahoo.com","t5w6.i9otz@yahoo.com"]` (lax) | refuses: `From: invalid display name` |
+| `"q97" b4ionwm6.ajw@yahoo.com <t5w6.i9otz@yahoo.com>` | `["\"q97 b4ionwm6.ajw\"@yahoo.com"]` (defects) | `[]` (invalid) | refuses: `From: invalid display name` |
+| `"x <t5w6.i9otz@yahoo.com>` | `["\"x <t5w6.i9otz@yahoo.com>\""]` (defects) | `[]` (invalid) | refuses: `From: invalid display name` |
 <!-- END GENERATED from-finding -->
 
-The second row is a valid RFC 5322 address list, which §4.5 says is
-refused. Whether the difference can be used depends on which address a
-provider authenticates when a user submits such a From (A1b, condition 1):
-in 2020, Yahoo's and iCloud's submission paths accepted several addresses in
-`From` and checked only the first
-([sender-authentication.md](sender-authentication.md)). A forger would also
-need the victim's `account_code` to open the commitment. No real post in
-part 1 has such a display name: of the signatures the circuit accepts, every
-display name is a quoted string, encoded-words, or plain atoms. Spec §4.5
-specifies the restriction that closes it (outside balanced quoted strings
-only `atext`, `.` and WSP; `\` only as a quoted-pair inside one); the circuit
-is not yet built with it. After that change, `just gen-email-proofs` and
-`just email-recovery-parser-check` rerun every check here against the new
-circuit (the harness compiles from `circuits/email-recovery/lib`, and
-`PARSER_CHECK_ARTIFACT` selects another recovery artifact).
+The second row is a valid RFC 5322 address list. A provider that
+authenticates only the first address of such a From (in 2020, Yahoo's and
+iCloud's submission paths accepted several addresses and checked only the
+first, [sender-authentication.md](sender-authentication.md)) would sign
+mail for the attacker's account that names the victim's address
+last; the circuit refuses it at the display-name check. In part 2 no From
+class remains among the counterexamples, and no spec deviation: every From
+value the circuit accepts, Python reads as exactly the mailbox it binds.
+Among the values both refuse are 600 that Python reads as one mailbox but
+whose display name the grammar excludes; of the 596 that nothing else
+refuses, 498 hold a comment and 98 an RFC 2047 encoded-word with an `@`,
+which a reader that decodes before parsing would read as an address. In
+part 1 no real post's From is outside the grammar: of the signatures the
+circuit accepts, every display name is a quoted string, encoded-words, or
+plain atoms.
 
 **Tag-list rules (stated in spec §4.3).** The
 circuit checks `v=`, `a=`, `c=`, `d=`, `h=` and `b=` and the boundaries of
@@ -337,7 +331,7 @@ after `=`, accepted) and in `d= messagingengine.com` (Fastmail's second
 signature, refused for its `d=` in any case). Both are counted above as
 `dkim` counterexamples and completeness gaps.
 
-**Sender authentication (open, §13 question 24).** Which `from` instance and
+**Sender authentication (open, §13 question 23).** Which `from` instance and
 which address each provider authenticates on submission today is unknown
 for every launch provider; [sender-authentication.md](sender-authentication.md)
 gives the evidence per provider and what would settle each unknown.

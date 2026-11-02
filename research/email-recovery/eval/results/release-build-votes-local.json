@@ -1,6 +1,6 @@
 {
  "about": "The attack suite's email votes on the local network (protocol 29, mainnet's settings) with the email contracts built as the end-to-end test builds them (stellar contract build --package <p>, the release profile without spec shaking, then stellar contract optimize); written by network/run-release-build.sh.",
- "generated": "2026-11-02T07:01:56.902Z",
+ "generated": "2026-11-02T10:11:49.637Z",
  "network": {
   "kind": "stellar/quickstart --local",
   "image": "stellar/quickstart@sha256:e05d68bb3b2629a829310dc3434fc0ee3f801854bdfa1a7c8c362d2f1c9060f8",
@@ -20,7 +20,7 @@
  },
  "wasm": {
   "nido-email-verifier": {
-   "sha256": "efdc30c89a7dfa31f3d6c822ea06bf5c0fb191672191026760383405775f9c7b",
+   "sha256": "f9652211f0c4a4687ad7af95cc48c782a4b64c6c7ba7df026d38c2472df7d822",
    "bytes": 77889
   },
   "nido-email-guardian": {
@@ -35,24 +35,24 @@
  "votes": [
   {
    "label": "submit_guardian (email)",
-   "hash": "9dd6204b8a67ac90107783fb672436ce2d617839ceb5ef6a8e856a8bca781215",
-   "ledger": 229,
+   "hash": "e464b954ed5074fd86eb5e0827347fc2a44f057e945ddecd886420a57d19cf02",
+   "ledger": 178,
    "metered": {
-    "cpu_insn": 120114092,
-    "mem_byte": 5589140
+    "cpu_insn": 120099470,
+    "mem_byte": 5588734
    },
    "declared": {
-    "instructions": 124964971,
+    "instructions": 124949972,
     "diskReadBytes": 0,
     "writeBytes": 1208,
     "readOnly": 10,
     "readWrite": 2,
-    "resourceFee": 90903,
+    "resourceFee": 90898,
     "archivedEntries": 0
    },
-   "feeCharged": 82669,
+   "feeCharged": 82664,
    "feeSplit": {
-    "nonRefundableResource": 80510,
+    "nonRefundableResource": 80505,
     "refundableResource": 2059,
     "rent": 2049
    },
@@ -60,24 +60,24 @@
   },
   {
    "label": "submit_guardian (email)",
-   "hash": "31877c0b98e0acd3421194ef83a08ed5a0e45f3218c9c258a4e6368c61cb5c38",
-   "ledger": 264,
+   "hash": "25d5066683d7c4413a155ca7bd32b92fdf8daeadff7b228b44f6d4af6cb617ff",
+   "ledger": 206,
    "metered": {
-    "cpu_insn": 120024103,
-    "mem_byte": 5586440
+    "cpu_insn": 120090077,
+    "mem_byte": 5588267
    },
    "declared": {
-    "instructions": 124871590,
+    "instructions": 124939995,
     "diskReadBytes": 0,
     "writeBytes": 1208,
     "readOnly": 10,
     "readWrite": 2,
-    "resourceFee": 90875,
+    "resourceFee": 90895,
     "archivedEntries": 0
    },
-   "feeCharged": 82641,
+   "feeCharged": 82661,
    "feeSplit": {
-    "nonRefundableResource": 80482,
+    "nonRefundableResource": 80502,
     "refundableResource": 2059,
     "rent": 2049
    },
@@ -85,24 +85,24 @@
   },
   {
    "label": "submit_guardian (email, wrong-body-hash)",
-   "hash": "0595954f2bc870d209b37f9053a48f9f995a40152998f64eb266493e2a41f4b6",
-   "ledger": 315,
+   "hash": "38a87bb1f5764ebbc116712328090734988ea6530dfa5045f225e11c9958197e",
+   "ledger": 238,
    "metered": {
-    "cpu_insn": 120046061,
-    "mem_byte": 5587049
+    "cpu_insn": 119993979,
+    "mem_byte": 5585628
    },
    "declared": {
-    "instructions": 124894218,
+    "instructions": 124838160,
     "diskReadBytes": 0,
     "writeBytes": 1208,
     "readOnly": 10,
     "readWrite": 2,
-    "resourceFee": 90882,
+    "resourceFee": 90865,
     "archivedEntries": 0
    },
-   "feeCharged": 82648,
+   "feeCharged": 82631,
    "feeSplit": {
-    "nonRefundableResource": 80489,
+    "nonRefundableResource": 80472,
     "refundableResource": 2059,
     "rent": 2049
    },
@@ -110,208 +110,8 @@
   },
   {
    "label": "submit_guardian (email)",
-   "hash": "593f94e64b16634847f6d1d504948de5b379b2d77b891f447fe8eea62f3cad4f",
-   "ledger": 348,
-   "metered": {
-    "cpu_insn": 120104799,
-    "mem_byte": 5588673
-   },
-   "declared": {
-    "instructions": 124955514,
-    "diskReadBytes": 0,
-    "writeBytes": 1208,
-    "readOnly": 10,
-    "readWrite": 2,
-    "resourceFee": 90900,
-    "archivedEntries": 0
-   },
-   "feeCharged": 82666,
-   "feeSplit": {
-    "nonRefundableResource": 80507,
-    "refundableResource": 2059,
-    "rent": 2049
-   },
-   "envelopeBytes": 18080
-  },
-  {
-   "label": "submit_guardian (email)",
-   "hash": "91ac324a4b0c27339c53913b5c8d5739be8a6b3d58054bbfecf4c307e6d4d14c",
-   "ledger": 438,
-   "metered": {
-    "cpu_insn": 120084748,
-    "mem_byte": 5588328
-   },
-   "declared": {
-    "instructions": 124934453,
-    "diskReadBytes": 0,
-    "writeBytes": 1208,
-    "readOnly": 10,
-    "readWrite": 2,
-    "resourceFee": 90891,
-    "archivedEntries": 0
-   },
-   "feeCharged": 82657,
-   "feeSplit": {
-    "nonRefundableResource": 80501,
-    "refundableResource": 2056,
-    "rent": 2046
-   },
-   "envelopeBytes": 18080
-  },
-  {
-   "label": "submit_guardian (email, authorizes)",
-   "hash": "c45f580804638512f732ac37c65157c8d98a245df5d7c12f5a236c91730ee968",
-   "ledger": 444,
-   "metered": {
-    "cpu_insn": 120875841,
-    "mem_byte": 5668142
-   },
-   "declared": {
-    "instructions": 125789210,
-    "diskReadBytes": 0,
-    "writeBytes": 1488,
-    "readOnly": 11,
-    "readWrite": 5,
-    "resourceFee": 4171471,
-    "archivedEntries": 0
-   },
-   "feeCharged": 3631555,
-   "feeSplit": {
-    "nonRefundableResource": 85316,
-    "refundableResource": 3546139,
-    "rent": 3545582
-   },
-   "envelopeBytes": 18396
-  },
-  {
-   "label": "submit_guardian (email)",
-   "hash": "d73b39f35772474833c4d88a3d64e152cc7d637aa64e5cd26e883a3f819d3b25",
-   "ledger": 452,
-   "metered": {
-    "cpu_insn": 120037995,
-    "mem_byte": 5586846
-   },
-   "declared": {
-    "instructions": 124883937,
-    "diskReadBytes": 0,
-    "writeBytes": 1208,
-    "readOnly": 10,
-    "readWrite": 2,
-    "resourceFee": 90879,
-    "archivedEntries": 0
-   },
-   "feeCharged": 82645,
-   "feeSplit": {
-    "nonRefundableResource": 80486,
-    "refundableResource": 2059,
-    "rent": 2049
-   },
-   "envelopeBytes": 18080
-  },
-  {
-   "label": "submit_guardian (email)",
-   "hash": "454013ff36b7e8ac57d96e1be9a16825acb49193fdd028b2cab6e8f957a127d3",
-   "ledger": 508,
-   "metered": {
-    "cpu_insn": 120112135,
-    "mem_byte": 5588876
-   },
-   "declared": {
-    "instructions": 124963143,
-    "diskReadBytes": 0,
-    "writeBytes": 1208,
-    "readOnly": 10,
-    "readWrite": 2,
-    "resourceFee": 90902,
-    "archivedEntries": 0
-   },
-   "feeCharged": 82668,
-   "feeSplit": {
-    "nonRefundableResource": 80509,
-    "refundableResource": 2059,
-    "rent": 2049
-   },
-   "envelopeBytes": 18080
-  },
-  {
-   "label": "submit_guardian (email, gmail.com)",
-   "hash": "4c96563aee77c846bb644dce4b34f363376ff063bc248b19e81847f9cb9a90cf",
-   "ledger": 527,
-   "metered": {
-    "cpu_insn": 120068119,
-    "mem_byte": 5587658
-   },
-   "declared": {
-    "instructions": 124917367,
-    "diskReadBytes": 0,
-    "writeBytes": 1208,
-    "readOnly": 10,
-    "readWrite": 2,
-    "resourceFee": 90889,
-    "archivedEntries": 0
-   },
-   "feeCharged": 82655,
-   "feeSplit": {
-    "nonRefundableResource": 80496,
-    "refundableResource": 2059,
-    "rent": 2049
-   },
-   "envelopeBytes": 18080
-  },
-  {
-   "label": "submit_guardian (email, outlook.com)",
-   "hash": "8d01e1c10088f3872871debc840880ea4fc9f5bf1a30540439e3226263d133c7",
-   "ledger": 533,
-   "metered": {
-    "cpu_insn": 120053447,
-    "mem_byte": 5587252
-   },
-   "declared": {
-    "instructions": 124902108,
-    "diskReadBytes": 0,
-    "writeBytes": 1208,
-    "readOnly": 10,
-    "readWrite": 2,
-    "resourceFee": 90884,
-    "archivedEntries": 0
-   },
-   "feeCharged": 82650,
-   "feeSplit": {
-    "nonRefundableResource": 80491,
-    "refundableResource": 2059,
-    "rent": 2049
-   },
-   "envelopeBytes": 18080
-  },
-  {
-   "label": "submit_guardian (email, hotmail.com)",
-   "hash": "f85825185eb08ba1e9d3c03ac21ff6fb181527a2177bc7712bc8779e3427fbaf",
-   "ledger": 539,
-   "metered": {
-    "cpu_insn": 120096683,
-    "mem_byte": 5588470
-   },
-   "declared": {
-    "instructions": 124944972,
-    "diskReadBytes": 0,
-    "writeBytes": 1208,
-    "readOnly": 10,
-    "readWrite": 2,
-    "resourceFee": 90897,
-    "archivedEntries": 0
-   },
-   "feeCharged": 82663,
-   "feeSplit": {
-    "nonRefundableResource": 80504,
-    "refundableResource": 2059,
-    "rent": 2049
-   },
-   "envelopeBytes": 18080
-  },
-  {
-   "label": "submit_guardian (email, icloud.com)",
-   "hash": "8dde3345c519caadc620b4382eeac624f79c89df24a77fa9dd2ac304c498d17d",
-   "ledger": 545,
+   "hash": "618e76be2842c440e68ab1692c6c2bcb6970ebda9f6ab3e767a9f47952d49c1e",
+   "ledger": 260,
    "metered": {
     "cpu_insn": 120075455,
     "mem_byte": 5587861
@@ -334,59 +134,159 @@
    "envelopeBytes": 18080
   },
   {
-   "label": "submit_guardian (email, yahoo.com)",
-   "hash": "e432c55635eb475aa70f29ef3f078eb29c8292b7ad42121ea82ef2d76d4d7626",
-   "ledger": 551,
+   "label": "submit_guardian (email)",
+   "hash": "19d7a38c638e2ab58d56305c4a6dc534c82217dbfe4dee519c16234bff56545d",
+   "ledger": 355,
    "metered": {
-    "cpu_insn": 120046061,
-    "mem_byte": 5587049
+    "cpu_insn": 120040782,
+    "mem_byte": 5587110
    },
    "declared": {
-    "instructions": 124894218,
+    "instructions": 124888936,
     "diskReadBytes": 0,
     "writeBytes": 1208,
     "readOnly": 10,
     "readWrite": 2,
-    "resourceFee": 90882,
+    "resourceFee": 90878,
     "archivedEntries": 0
    },
-   "feeCharged": 82648,
+   "feeCharged": 82644,
    "feeSplit": {
-    "nonRefundableResource": 80489,
+    "nonRefundableResource": 80487,
+    "refundableResource": 2057,
+    "rent": 2047
+   },
+   "envelopeBytes": 18080
+  },
+  {
+   "label": "submit_guardian (email, authorizes)",
+   "hash": "615920658c434c8ae7631ebad1ac5ab98fa5d26f957ebe9427302884b80dfc74",
+   "ledger": 362,
+   "metered": {
+    "cpu_insn": 120927193,
+    "mem_byte": 5669563
+   },
+   "declared": {
+    "instructions": 125843084,
+    "diskReadBytes": 0,
+    "writeBytes": 1488,
+    "readOnly": 11,
+    "readWrite": 5,
+    "resourceFee": 4171487,
+    "archivedEntries": 0
+   },
+   "feeCharged": 3631571,
+   "feeSplit": {
+    "nonRefundableResource": 85332,
+    "refundableResource": 3546139,
+    "rent": 3545582
+   },
+   "envelopeBytes": 18396
+  },
+  {
+   "label": "submit_guardian (email)",
+   "hash": "87ed6efcddd74469f3867711fc08af82c4e0568a9a289e9b0604d2cf95fe0a61",
+   "ledger": 370,
+   "metered": {
+    "cpu_insn": 120074675,
+    "mem_byte": 5587861
+   },
+   "declared": {
+    "instructions": 124922084,
+    "diskReadBytes": 0,
+    "writeBytes": 1208,
+    "readOnly": 10,
+    "readWrite": 2,
+    "resourceFee": 90890,
+    "archivedEntries": 0
+   },
+   "feeCharged": 82656,
+   "feeSplit": {
+    "nonRefundableResource": 80497,
     "refundableResource": 2059,
     "rent": 2049
    },
    "envelopeBytes": 18080
   },
   {
-   "label": "submit_guardian (email, proton.me)",
-   "hash": "5efd060f537572e9012f798788ac347b3c18f13df450a1d8807a17ac67d50a1d",
-   "ledger": 557,
+   "label": "submit_guardian (email)",
+   "hash": "4a0e051aeb4d28fb42ec8712d1005f58bfc536bcfeab3d9966886d236f2d5d2b",
+   "ledger": 426,
    "metered": {
-    "cpu_insn": 120068119,
-    "mem_byte": 5587658
+    "cpu_insn": 120031439,
+    "mem_byte": 5586643
    },
    "declared": {
-    "instructions": 124917367,
+    "instructions": 124879219,
     "diskReadBytes": 0,
     "writeBytes": 1208,
     "readOnly": 10,
     "readWrite": 2,
-    "resourceFee": 90889,
+    "resourceFee": 90877,
     "archivedEntries": 0
    },
-   "feeCharged": 82655,
+   "feeCharged": 82643,
    "feeSplit": {
-    "nonRefundableResource": 80496,
+    "nonRefundableResource": 80484,
     "refundableResource": 2059,
     "rent": 2049
    },
    "envelopeBytes": 18080
   },
   {
-   "label": "submit_guardian (email, protonmail.com)",
-   "hash": "f183b3f66ff595839bc393deeeef51a28c31026cbba539fb7cf75c68aeaccb11",
-   "ledger": 563,
+   "label": "submit_guardian (email, gmail.com)",
+   "hash": "d0600cd1b81ff7b8bf42af2e2f2b3e4e7ed481f1183f824fc5a1b11dbe5a37ea",
+   "ledger": 444,
+   "metered": {
+    "cpu_insn": 120119471,
+    "mem_byte": 5589079
+   },
+   "declared": {
+    "instructions": 124970773,
+    "diskReadBytes": 0,
+    "writeBytes": 1208,
+    "readOnly": 10,
+    "readWrite": 2,
+    "resourceFee": 90905,
+    "archivedEntries": 0
+   },
+   "feeCharged": 82671,
+   "feeSplit": {
+    "nonRefundableResource": 80512,
+    "refundableResource": 2059,
+    "rent": 2049
+   },
+   "envelopeBytes": 18080
+  },
+  {
+   "label": "submit_guardian (email, outlook.com)",
+   "hash": "9b45d411bbccd448e6fb994ae036ae012a9da0e83c030c50e17553ffb6f4b519",
+   "ledger": 450,
+   "metered": {
+    "cpu_insn": 120060733,
+    "mem_byte": 5587455
+   },
+   "declared": {
+    "instructions": 124909477,
+    "diskReadBytes": 0,
+    "writeBytes": 1208,
+    "readOnly": 10,
+    "readWrite": 2,
+    "resourceFee": 90886,
+    "archivedEntries": 0
+   },
+   "feeCharged": 82652,
+   "feeSplit": {
+    "nonRefundableResource": 80493,
+    "refundableResource": 2059,
+    "rent": 2049
+   },
+   "envelopeBytes": 18080
+  },
+  {
+   "label": "submit_guardian (email, hotmail.com)",
+   "hash": "df80c6525c82bcbe67a24429d09efdef5e5e5bee178d69dcd885a267993d5343",
+   "ledger": 456,
    "metered": {
     "cpu_insn": 120060783,
     "mem_byte": 5587455
@@ -409,84 +309,9 @@
    "envelopeBytes": 18080
   },
   {
-   "label": "submit_guardian (email, fastmail.com)",
-   "hash": "431bd25aabda32215744d04dfde95aa75a39c3034aa1579c4ee3e9c64772fcbd",
-   "ledger": 569,
-   "metered": {
-    "cpu_insn": 120038725,
-    "mem_byte": 5586846
-   },
-   "declared": {
-    "instructions": 124886589,
-    "diskReadBytes": 0,
-    "writeBytes": 1208,
-    "readOnly": 10,
-    "readWrite": 2,
-    "resourceFee": 90879,
-    "archivedEntries": 0
-   },
-   "feeCharged": 82645,
-   "feeSplit": {
-    "nonRefundableResource": 80486,
-    "refundableResource": 2059,
-    "rent": 2049
-   },
-   "envelopeBytes": 18080
-  },
-  {
-   "label": "submit_guardian (email, gmx.net)",
-   "hash": "939609a9b93b23ccf92c28d74ab43d17c6b38ad29917cf6c21dd77379d998f38",
-   "ledger": 576,
-   "metered": {
-    "cpu_insn": 120082011,
-    "mem_byte": 5588064
-   },
-   "declared": {
-    "instructions": 124929714,
-    "diskReadBytes": 0,
-    "writeBytes": 1208,
-    "readOnly": 10,
-    "readWrite": 2,
-    "resourceFee": 90892,
-    "archivedEntries": 0
-   },
-   "feeCharged": 82658,
-   "feeSplit": {
-    "nonRefundableResource": 80499,
-    "refundableResource": 2059,
-    "rent": 2049
-   },
-   "envelopeBytes": 18080
-  },
-  {
-   "label": "submit_guardian (email, gmx.de)",
-   "hash": "7b92d118571d0623105fd3eb1fc28f9cfd93772a5b1de7e7d1ab4c9d96801610",
-   "ledger": 583,
-   "metered": {
-    "cpu_insn": 120046111,
-    "mem_byte": 5587049
-   },
-   "declared": {
-    "instructions": 124894478,
-    "diskReadBytes": 0,
-    "writeBytes": 1208,
-    "readOnly": 10,
-    "readWrite": 2,
-    "resourceFee": 90882,
-    "archivedEntries": 0
-   },
-   "feeCharged": 82648,
-   "feeSplit": {
-    "nonRefundableResource": 80489,
-    "refundableResource": 2059,
-    "rent": 2049
-   },
-   "envelopeBytes": 18080
-  },
-  {
-   "label": "submit_guardian (email, web.de)",
-   "hash": "5dce31f2bfec53ddd2122515837521839e971981db70ec9f409459d9147b9c36",
-   "ledger": 590,
+   "label": "submit_guardian (email, icloud.com)",
+   "hash": "30d1e7a4cd7c9af84b5b31dbbace8361b3d5671e3049e2fc963202370c5bf5c7",
+   "ledger": 462,
    "metered": {
     "cpu_insn": 120067339,
     "mem_byte": 5587658
@@ -509,9 +334,34 @@
    "envelopeBytes": 18080
   },
   {
-   "label": "submit_guardian (email, subject-folded-at-space)",
-   "hash": "bb1280e4e9b5604ff887eaaa4044db2c0398762db134dfba5bb2d94f0cc63ae6",
-   "ledger": 597,
+   "label": "submit_guardian (email, yahoo.com)",
+   "hash": "b3b8a8f1369e56fd2d7a2bcd3c1b40d6aad1863358e02bfad2718c3776043483",
+   "ledger": 468,
+   "metered": {
+    "cpu_insn": 120053447,
+    "mem_byte": 5587252
+   },
+   "declared": {
+    "instructions": 124902108,
+    "diskReadBytes": 0,
+    "writeBytes": 1208,
+    "readOnly": 10,
+    "readWrite": 2,
+    "resourceFee": 90884,
+    "archivedEntries": 0
+   },
+   "feeCharged": 82650,
+   "feeSplit": {
+    "nonRefundableResource": 80491,
+    "refundableResource": 2059,
+    "rent": 2049
+   },
+   "envelopeBytes": 18080
+  },
+  {
+   "label": "submit_guardian (email, proton.me)",
+   "hash": "19283b8e1867448d6d422620a3dbd49f016dfebb31afa055998823ebe358f400",
+   "ledger": 474,
    "metered": {
     "cpu_insn": 120053397,
     "mem_byte": 5587252
@@ -534,25 +384,175 @@
    "envelopeBytes": 18080
   },
   {
-   "label": "submit_guardian (email, subject-extra-whitespace)",
-   "hash": "c00f2beb089b45e16ed0eefb2bf4ac746835f68e375c521fed7b4f99dd2ac8d0",
-   "ledger": 604,
+   "label": "submit_guardian (email, protonmail.com)",
+   "hash": "27319b2d6894a7a7eab12e35b931c0ed01385e13a06afb85a6e87e33596e6f80",
+   "ledger": 480,
    "metered": {
-    "cpu_insn": 120038725,
-    "mem_byte": 5586846
+    "cpu_insn": 120068069,
+    "mem_byte": 5587658
    },
    "declared": {
-    "instructions": 124886589,
+    "instructions": 124917107,
     "diskReadBytes": 0,
     "writeBytes": 1208,
     "readOnly": 10,
     "readWrite": 2,
-    "resourceFee": 90879,
+    "resourceFee": 90889,
     "archivedEntries": 0
    },
-   "feeCharged": 82645,
+   "feeCharged": 82655,
    "feeSplit": {
-    "nonRefundableResource": 80486,
+    "nonRefundableResource": 80496,
+    "refundableResource": 2059,
+    "rent": 2049
+   },
+   "envelopeBytes": 18080
+  },
+  {
+   "label": "submit_guardian (email, fastmail.com)",
+   "hash": "3d4f983862960c0fb4e19d1e7a1c6dc630acafe83eb3a33759eb942fb759ac16",
+   "ledger": 486,
+   "metered": {
+    "cpu_insn": 120053447,
+    "mem_byte": 5587252
+   },
+   "declared": {
+    "instructions": 124902108,
+    "diskReadBytes": 0,
+    "writeBytes": 1208,
+    "readOnly": 10,
+    "readWrite": 2,
+    "resourceFee": 90884,
+    "archivedEntries": 0
+   },
+   "feeCharged": 82650,
+   "feeSplit": {
+    "nonRefundableResource": 80491,
+    "refundableResource": 2059,
+    "rent": 2049
+   },
+   "envelopeBytes": 18080
+  },
+  {
+   "label": "submit_guardian (email, gmx.net)",
+   "hash": "9dcdbba84798da9fc1b2305e3adbdfd018cb720f335c0022d905231534e82219",
+   "ledger": 492,
+   "metered": {
+    "cpu_insn": 120046111,
+    "mem_byte": 5587049
+   },
+   "declared": {
+    "instructions": 124894478,
+    "diskReadBytes": 0,
+    "writeBytes": 1208,
+    "readOnly": 10,
+    "readWrite": 2,
+    "resourceFee": 90882,
+    "archivedEntries": 0
+   },
+   "feeCharged": 82648,
+   "feeSplit": {
+    "nonRefundableResource": 80489,
+    "refundableResource": 2059,
+    "rent": 2049
+   },
+   "envelopeBytes": 18080
+  },
+  {
+   "label": "submit_guardian (email, gmx.de)",
+   "hash": "d46d84670cb35eadc653f2682e137e4b6e5e2550944f4116b7731f4c85f2b3de",
+   "ledger": 498,
+   "metered": {
+    "cpu_insn": 120075455,
+    "mem_byte": 5587861
+   },
+   "declared": {
+    "instructions": 124924996,
+    "diskReadBytes": 0,
+    "writeBytes": 1208,
+    "readOnly": 10,
+    "readWrite": 2,
+    "resourceFee": 90891,
+    "archivedEntries": 0
+   },
+   "feeCharged": 82657,
+   "feeSplit": {
+    "nonRefundableResource": 80498,
+    "refundableResource": 2059,
+    "rent": 2049
+   },
+   "envelopeBytes": 18080
+  },
+  {
+   "label": "submit_guardian (email, web.de)",
+   "hash": "86e009fe1767797883e325e2304855a57eaa194df2b74965d51a4e2aec0be67d",
+   "ledger": 504,
+   "metered": {
+    "cpu_insn": 120097413,
+    "mem_byte": 5588470
+   },
+   "declared": {
+    "instructions": 124947624,
+    "diskReadBytes": 0,
+    "writeBytes": 1208,
+    "readOnly": 10,
+    "readWrite": 2,
+    "resourceFee": 90898,
+    "archivedEntries": 0
+   },
+   "feeCharged": 82664,
+   "feeSplit": {
+    "nonRefundableResource": 80505,
+    "refundableResource": 2059,
+    "rent": 2049
+   },
+   "envelopeBytes": 18080
+  },
+  {
+   "label": "submit_guardian (email, subject-folded-at-space)",
+   "hash": "f5887cf5dcea7d65ee7405e5a91f6f6412beaa67e47064acebc2dabaf60e4aaa",
+   "ledger": 510,
+   "metered": {
+    "cpu_insn": 120067339,
+    "mem_byte": 5587658
+   },
+   "declared": {
+    "instructions": 124914455,
+    "diskReadBytes": 0,
+    "writeBytes": 1208,
+    "readOnly": 10,
+    "readWrite": 2,
+    "resourceFee": 90888,
+    "archivedEntries": 0
+   },
+   "feeCharged": 82654,
+   "feeSplit": {
+    "nonRefundableResource": 80495,
+    "refundableResource": 2059,
+    "rent": 2049
+   },
+   "envelopeBytes": 18080
+  },
+  {
+   "label": "submit_guardian (email, subject-extra-whitespace)",
+   "hash": "968c94783ed3764b7243e1f3d0c5271cf46ca5d8d0038cdcc5f77f294e452e41",
+   "ledger": 516,
+   "metered": {
+    "cpu_insn": 120067339,
+    "mem_byte": 5587658
+   },
+   "declared": {
+    "instructions": 124914455,
+    "diskReadBytes": 0,
+    "writeBytes": 1208,
+    "readOnly": 10,
+    "readWrite": 2,
+    "resourceFee": 90888,
+    "archivedEntries": 0
+   },
+   "feeCharged": 82654,
+   "feeSplit": {
+    "nonRefundableResource": 80495,
     "refundableResource": 2059,
     "rent": 2049
    },

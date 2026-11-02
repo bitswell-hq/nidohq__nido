@@ -44,6 +44,61 @@ Source URLs:
 - zk-email-verify issue #166: https://github.com/zkemail/zk-email-verify/issues/166
 - RFC 6376: https://www.rfc-editor.org/rfc/rfc6376; RFC 7489: https://www.rfc-editor.org/rfc/rfc7489
 
+### Hardening: address-list `From` parsing
+
+A provider DKIM-signs mail after authenticating its sender, and the
+soundness of the email factor rests on that: the address the circuit binds
+must be the one the provider authenticated. Chen, Paxson and Jiang,
+"Composition Kills: A Case Study of Email Sender Authentication" (USENIX
+Security 2020, section 6.2,
+https://www.usenix.org/system/files/sec20-chen-jianjun.pdf), report sending
+servers, Yahoo's and iCloud's among them, that "accept multiple addresses and
+only check the first address" of a `From` address list. A circuit that binds
+the angle-addr ending the field and admits any display name before it would
+read `attacker@yahoo.com, x <victim@yahoo.com>` as from the victim, while
+such a provider authenticated the attacker. The same holds for values that
+RFC 5322 readers read as another single mailbox
+(`attacker@yahoo.com <victim@yahoo.com>`,
+`"q97" attacker@yahoo.com <victim@yahoo.com>`) or as no mailbox
+(`"x <victim@yahoo.com>`).
+
+The circuit restricts the display name to RFC 5322's phrase without
+comments or folding (spec §4.5): outside quoted strings only `atext`, `.` and
+SP; every quoted string closed, with `\` only as a quoted-pair inside one;
+no `<` or `>` before the angle-addr. A per-line automaton in the structural
+scan (`lib/src/tables.nr`, `PHRASE_NEXT` and `PHRASE_FAULT`) marks every
+byte that breaks the grammar in the state the line has reached, and
+`parse_from` requires no such byte between the start of the value and the
+`<` that opens the angle-addr (`From: invalid display name`). An RFC 5322
+reader then finds no address list, group, comment, second address or
+unclosed quoted string before the address, so it reads the value as the one
+mailbox the circuit binds.
+
+Tests (`tests/src/display_name_tests.nr`): the four values above
+(`address_list_is_refused`, `address_before_the_angle_addr_is_refused`,
+`quoted_word_then_address_is_refused`, `unbalanced_quote_is_refused`); each
+special outside a quoted string (`@`, `,`, `;`, `:`, a group-shaped value,
+`\`, parentheses, `>`, a second angle-addr) and a quoted string left open by
+an escaped closing quote, each refused at the display-name assertion; and,
+accepted, quoted display names holding specials and quoted-pairs, B and Q
+encoded-words, a phrase mixing atoms, a quoted string and `.`, a bare
+address, and a quote left open in an earlier field, which does not reach
+`From`. The provider mocks' attack builders sign the four values at Yahoo
+(`from-address-list`, `from-address-before-angle-addr`,
+`from-quoted-word-then-address`, `from-unbalanced-quote`), and the committed
+circuit refuses each through noir_js (`packages/email-recovery/test/attacks.test.ts`).
+
+Whether each launch provider authenticates only the first address of a list
+is not known. With this grammar the circuit accepts only `From` values that
+an RFC 5322 reader reads as one mailbox, so the assumption that the provider
+authenticated the sender (`provider-authenticates-sender` in
+`research/email-recovery/claims.yaml`) is needed only for such values. A
+provider whose own parser reads a single-mailbox value differently (for
+example, takes an address inside a quoted display name as the sender, or
+decodes an RFC 2047 encoded-word in the display name before reading the
+address) is outside what the grammar can rule out and stays under that
+assumption.
+
 Classes from the same reports that do not arise here: partial-SHA state
 aliasing (Consensys Diligence 5.5 to 5.8; no partial hashing is used), an
 unbound Barrett parameter (Veridise V-ZEML-VUL-002; `redc` enters no
@@ -169,7 +224,7 @@ compiler's heuristic under-constrained-value check, and both are expected:
 
 **Proven:** nothing formally.
 
-**Tested** (`nargo test --workspace`, 123 tests): the recovery relation
+**Tested** (`nargo test --workspace`, 143 tests): the recovery relation
 (`tests/src/recovery_tests.nr`): the honest witness at any leaf index, and
 a commitment to another address, to a case variant of it or under another
 account code, another digest, swapped digest limbs, another `rho`, a root
@@ -182,8 +237,10 @@ signed values; the Subject opening to the statement digest; every class in
 section 1; RSA with valid signatures under two keys, `σ + N`, `σ = N`,
 another key, another digest, a 1024-bit modulus, and four non-conforming
 encodings; the From grammar (every `atext` symbol, digit-leading labels,
-the 124-byte maximum, hyphen and length limits on labels, printable display
-names); the body hash; the spec's `P2` formulas spelled out against the
+the 124-byte maximum, hyphen and length limits on labels, and the display
+name: the address-list values and specials of section 1's hardening refused,
+quoted, encoded-word and bare forms accepted, and a non-ASCII display name
+refused); the body hash; the spec's `P2` formulas spelled out against the
 library's helpers; and the key hash, registry leaf, Merkle roots and empty
 root equal to the values the DKIM key registry contract computes with the
 host's Poseidon2 (`tests/src/registry_parity.nr`, against the values
@@ -212,12 +269,16 @@ bind (spec §4.4). Real proofs of each launch domain's email verify on chain
 
 The parsing is also checked against reference implementations on real
 launch-provider mail from public archives and on grammar-based fuzzed
-headers (`research/email-recovery/eval/parser/`, spec §12). That found one
-open issue: the display name of spec §4.5 admits unquoted `,` `;` `:` `@`
-`\` and an unbalanced `"`, so the circuit binds the angle-addr of values
-RFC 5322 readers read as an address list, a group, another mailbox, or none
-(spec §4.5, §13 item 23).
+headers (`research/email-recovery/eval/parser/`, spec §12). With the
+display-name grammar of section 1's hardening, no fuzzed `From` value the
+circuit accepts is read by Python's RFC 5322 reader as anything but the
+bound mailbox, the four address-list values above are refused on the
+committed recovery artifact (`from-finding.mjs`), and every real post gets
+the same verdict from the circuit as from the reference. The fuzzer's
+remaining counterexamples are fields with a defect in a DKIM-Signature tag
+the circuit does not read, which only the key's holder can write (spec
+§4.3).
 
-**Open:** no external audit; the display-name issue above; `HEADER_MAX` is
+**Open:** no external audit; `HEADER_MAX` is
 confirmed against the provider mocks' formats, not against the providers'
 own recovery mail (spec §13 item 6, `README.md` "Header bound").

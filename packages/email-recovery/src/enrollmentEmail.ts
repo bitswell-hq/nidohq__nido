@@ -50,7 +50,10 @@ export function enrollmentSubject(accountId: Uint8Array, rhoE: bigint): string {
 const ATEXT = "[A-Za-z0-9!#$%&'*+\\-/=?^_`{|}~]+";
 const LABEL = '[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?';
 const ADDR_SPEC = new RegExp(`^${ATEXT}(?:\\.${ATEXT})*@${LABEL}(?:\\.${LABEL})+$`);
-const DISPLAY_NAME = /^[\x20-\x3b\x3d\x3f-\x7e]*$/;
+// The display name (spec §4.5): outside quoted strings `atext`, `.` and SP;
+// inside one, printable ASCII except `"`, `\`, `<` and `>`, or a quoted-pair
+// (`\` and printable ASCII except `<` and `>`).
+const DISPLAY_NAME = /^(?:[A-Za-z0-9!#$%&'*+\-/=?^_`{|}~. ]|"(?:[\x20\x21\x23-\x3b\x3d\x3f-\x5b\x5d-\x7e]|\\[\x20-\x3b\x3d\x3f-\x7e])*")*$/;
 
 /** Whether `value` (a relaxed `From` value) has one of the two forms the circuit's parser accepts (spec §4.5). */
 export function fromGrammarOk(value: string): boolean {

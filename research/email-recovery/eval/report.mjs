@@ -417,7 +417,7 @@ function archivalBlock() {
     const sum = (p) => p.reduce((x, t) => x + t.fee, 0);
     const lim = limits(s);
     out.push('');
-    out.push(`Every entry archived, at mainnet's settings: the test host's recovery (\`email_archival.rs\`: begin, the email vote, the helper's vote, completion) with every one of the ${n(a.entriesAtRest)} ledger entries archived when it starts, each step re-executed under mainnet's cost model and entry lifetimes with the host restoring what it reads. A step whose restorations do not fit one transaction (mainnet allows ${n(lim.diskReadBytes)} bytes read from disk and ${n(lim.writeBytes)} written) restores its largest entries first in their own RestoreFootprint transactions. Fees are fees/model.mjs at mainnet's settings; the rent sizes of code entries are the network's (\`codeRentBytes\` over the entries testnet holds, \`results/code-entries.json\`), 2 to 20% above the test host's own.`);
+    out.push(`Every entry archived, at mainnet's settings: the test host's recovery (\`email_archival.rs\`: begin, the email vote, the helper's vote, completion) with every one of the ${n(a.entriesAtRest)} ledger entries archived when it starts, each step re-executed under mainnet's cost model and entry lifetimes with the host restoring what it reads. A step whose restorations do not fit one transaction (mainnet allows ${n(lim.diskReadBytes)} bytes read from disk and ${n(lim.writeBytes)} written) restores its largest entries first in their own RestoreFootprint transactions. Fees are fees/model.mjs at mainnet's settings; the rent sizes of code entries are the network's (\`codeRentBytes\` over the entries testnet holds, \`results/code-entries.json\`), 2 to 20% above the test host's own${offNetwork(code)}.`);
     out.push('');
     out.push('| Transaction | Restores | Bytes restored | Fee (stroops) | of which rent |');
     out.push('| --- | --- | --- | --- | --- |');
@@ -478,6 +478,12 @@ function archivalBlock() {
     out.push(`A year of rent at mainnet's settings: ${n(nidoShared)} stroops (${xlm(nidoShared)}) for the email verifier, the DKIM key registry (instance and code) and the guardian's code, shared by every account; ${n(perAccount)} (${xlm(perAccount)}) per enrolled account for its guardian's instance; ${n(perch)} (${xlm(perch)}) for the Perch contracts a recovery runs (instances and code), which Perch's operator keeps; and ${n(wallet)} (${xlm(wallet)}) for an account's instance, without its other data entries.`);
   }
   return out.length ? out.join('\n') : 'No archival measurement is recorded.';
+}
+
+/** The build's code that the network does not hold, whose rent size is the test host's own. */
+function offNetwork(code) {
+  const off = (code?.entries ?? []).filter((e) => !e.onNetwork).map((e) => e.name);
+  return off.length ? `; testnet does not hold this build's ${off.join(', ')} code, whose rent size is the test host's` : '';
 }
 
 function proving() {

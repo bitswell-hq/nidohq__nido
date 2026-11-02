@@ -170,6 +170,10 @@ export async function readFrom(rawValue) {
 
 const ATEXT = "A-Za-z0-9!#$%&'*+\\-/=?^_`{|}~";
 const ADDR_SPEC = new RegExp(`^[${ATEXT}]+(\\.[${ATEXT}]+)*@([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(\\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$`);
+// Spec section 4.5's display name: `atext`, `.`, SP and closed quoted
+// strings, whose content is printable ASCII but `"`, `\`, `<` and `>`, or a
+// quoted-pair of `\` and printable ASCII but `<` and `>`.
+const DISPLAY_NAME = new RegExp(`^([${ATEXT}. ]|"([\\x20\\x21\\x23-\\x3b\\x3d\\x3f-\\x5b\\x5d-\\x7e]|\\\\[\\x20-\\x3b\\x3d\\x3f-\\x7e])*")*$`);
 
 /**
  * The spec's rules a signature and its From must meet for the circuit to
@@ -192,9 +196,9 @@ export function profileViolation(sig, key, from) {
   if (sig.signedData.length > HEADER_MAX) return `6.3: the signed data is ${sig.signedData.length} octets, above ${HEADER_MAX}`;
   if (lines.at(-1).length > DKIM_FIELD_MAX) return `6.3: the DKIM-Signature field is ${lines.at(-1).length} octets, above ${DKIM_FIELD_MAX}`;
   if (sig.tags.length > DKIM_TAGS_MAX) return `6.3: ${sig.tags.length} tags, above ${DKIM_TAGS_MAX}`;
-  // Section 4.5 on the reference's reading. The section's display name is
-  // any printable ASCII but "<" and ">", wider than RFC 5322's phrase, so a
-  // defect Python records is not by itself a violation; the reading is.
+  // Section 4.5 on the reference's reading, then its display-name grammar.
+  // A defect Python records (an obsolete-syntax ".", for example) is not by
+  // itself a violation; the reading and the grammar are.
   const mbx = from.python.mailboxes;
   if (from.python.groups !== 0 || mbx.length !== 1) return `4.5: From names ${mbx.length} mailboxes (${from.python.groups} groups)`;
   const address = mbx[0];
@@ -204,6 +208,7 @@ export function profileViolation(sig, key, from) {
   if (!/^[\x20-\x7e]*$/.test(value)) return '4.5: the From value is not printable ASCII';
   const named = value.endsWith(`<${address}>`) && !/[<>]/.test(value.slice(0, -address.length - 2));
   if (value !== address && !named) return '4.5: the From value is neither the address nor a display name and the address in angle brackets';
+  if (named && !DISPLAY_NAME.test(value.slice(0, -address.length - 2))) return '4.5: the display name is not atext, ".", SP and closed quoted strings';
   const domain = address.slice(address.lastIndexOf('@') + 1).toLowerCase();
   if ((one('d') ?? '').toLowerCase() !== domain) return '4.3 rule 7: d= is not the From domain';
   if (domain.length > DOMAIN_MAX) return `7.2: the domain is ${domain.length} octets, above ${DOMAIN_MAX}`;

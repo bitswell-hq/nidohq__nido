@@ -365,6 +365,46 @@ const VECTORS = {
   ADDR_TOO_LONG: gmail({ fields: gmailFields(` <${ADDR_125}>`), tags: withTags("d=gmail.com", `d=${DOMAIN_62}`) }),
   NON_ASCII_DISPLAY_NAME: gmail({ fields: gmailFields(" Zo\u00c3\u00ab <alice.example@gmail.com>") }),
 
+  // The display-name grammar (spec section 4.5). Values an RFC 5322 reader
+  // reads as an address list, another mailbox or none, signed by a key for
+  // the bound address's domain.
+  FROM_ADDRESS_LIST: gmail({
+    fields: gmailFields(" b4ionwm6.ajw@yahoo.com, x <t5w6.i9otz@yahoo.com>"),
+    tags: withTags("d=gmail.com", "d=yahoo.com"),
+  }),
+  FROM_ADDRESS_BEFORE_ANGLE_ADDR: gmail({
+    fields: gmailFields(" b4ionwm6.ajw@yahoo.com <t5w6.i9otz@yahoo.com>"),
+    tags: withTags("d=gmail.com", "d=yahoo.com"),
+  }),
+  FROM_QUOTED_WORD_THEN_ADDRESS: gmail({
+    fields: gmailFields(' "q97" b4ionwm6.ajw@yahoo.com <t5w6.i9otz@yahoo.com>'),
+    tags: withTags("d=gmail.com", "d=yahoo.com"),
+  }),
+  FROM_UNBALANCED_QUOTE: gmail({
+    fields: gmailFields(' "x <t5w6.i9otz@yahoo.com>'),
+    tags: withTags("d=gmail.com", "d=yahoo.com"),
+  }),
+  // One special outside a quoted string per vector.
+  DISPLAY_NAME_COMMA: gmail({ fields: gmailFields(" Doe, John <victim@gmail.com>") }),
+  DISPLAY_NAME_SEMICOLON: gmail({ fields: gmailFields(" a;b <victim@gmail.com>") }),
+  DISPLAY_NAME_COLON: gmail({ fields: gmailFields(" a:b <victim@gmail.com>") }),
+  DISPLAY_NAME_GROUP: gmail({ fields: gmailFields(" friends: attacker <victim@gmail.com>") }),
+  DISPLAY_NAME_BACKSLASH: gmail({ fields: gmailFields(" a\\b <victim@gmail.com>") }),
+  DISPLAY_NAME_COMMENT: gmail({ fields: gmailFields(" x (y) <victim@gmail.com>") }),
+  DISPLAY_NAME_ESCAPED_CLOSING_QUOTE: gmail({ fields: gmailFields(' "x\\" <victim@gmail.com>') }),
+  DISPLAY_NAME_GREATER_THAN: gmail({ fields: gmailFields(" a>b <victim@gmail.com>") }),
+  DISPLAY_NAME_TWO_ANGLE_ADDRS: gmail({ fields: gmailFields(" <attacker@gmail.com> <victim@gmail.com>") }),
+  // Accepted shapes.
+  DISPLAY_NAME_QUOTED_SPECIALS: gmail({
+    fields: gmailFields(' "Doe, John (x) a@b; c:d \\"JD\\" \\\\" <alice.example@gmail.com>'),
+  }),
+  DISPLAY_NAME_ENCODED_WORD_B: gmail({ fields: gmailFields(" =?UTF-8?B?Wm/DqyBFeGFtcGxl?= <alice.example@gmail.com>") }),
+  DISPLAY_NAME_ENCODED_WORD_Q: gmail({ fields: gmailFields(" =?UTF-8?Q?Zo=C3=AB_Example?= <alice.example@gmail.com>") }),
+  DISPLAY_NAME_MIXED_PHRASE: gmail({ fields: gmailFields(' Alice "the Great" Q. Example <alice.example@gmail.com>') }),
+  QUOTE_OPEN_IN_EARLIER_FIELD: gmail({
+    fields: gmailFields(ALICE).map(([n, v]) => (n === "To" ? [n, ' "Recovery <recover@nido.example'] : [n, v])),
+  }),
+
   // DKIM-Signature tags.
   L_TAG: gmail({ tags: withTags("c=relaxed/relaxed;", "c=relaxed/relaxed; l=20;") }),
   L_TAG_SPACED: gmail({ tags: withTags("c=relaxed/relaxed;", "c=relaxed/relaxed; l =20;") }),

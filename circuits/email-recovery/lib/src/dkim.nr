@@ -11,7 +11,8 @@
 //!   and `subject`, and a `d=` equal to the From domain when both are
 //!   lowercased;
 //! - exactly one From field names `from_address`, the address that closes
-//!   the field;
+//!   the field, after a display name in the phrase grammar of spec section
+//!   4.5, or the whole value;
 //! - exactly one Subject field is `phrase` followed by `subject_value`.
 //!
 //! `domain` is the lowercase `d=`, the registry-leaf domain. The caller binds

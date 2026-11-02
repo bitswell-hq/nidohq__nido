@@ -31,7 +31,7 @@ export interface AttackCase {
   claim: Claim;
   /** Each signature's expected standard-verifier result, top-most first. */
   dkim: Array<'pass' | 'fail'>;
-  /** A public report of this issue class in open-source email circuits. */
+  /** A public report of this issue class, in open-source email circuits or in mail providers. */
   source?: string;
 }
 

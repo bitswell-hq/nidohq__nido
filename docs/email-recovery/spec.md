@@ -269,45 +269,48 @@ circuit with mailauth's strict RFC 6376 verifier.
 ### 4.5 The `From` grammar
 
 The value of the single signed `from` field (after relaxed canonicalization,
-so without leading or trailing whitespace) must have one of two forms:
+so without leading or trailing whitespace, and with every run of whitespace
+one SP) must have one of two forms:
 
 ```text
-from-value   = addr-spec
-             / display-name "<" addr-spec ">"      ; ">" is the last byte
-display-name = *( %x20-3B / %x3D / %x3F-7E )        ; printable ASCII except "<" and ">"
-addr-spec    = local-part "@" domain
-local-part   = atom *( "." atom )                   ; RFC 5322 dot-atom, no quoting
-atom         = 1*( ALPHA / DIGIT / "!" / "#" / "$" / "%" / "&" / "'" / "*" / "+"
-                   / "-" / "/" / "=" / "?" / "^" / "_" / "`" / "{" / "|" / "}" / "~" )
-domain       = label 1*( "." label )                ; at least two labels
-label        = let-dig [ *61( let-dig / "-" ) let-dig ]   ; RFC 1123 §2.1, 1 to 63 bytes
-let-dig      = ALPHA / DIGIT
+from-value    = addr-spec
+              / display-name "<" addr-spec ">"     ; ">" is the last byte
+display-name  = *( atext / "." / SP / quoted-string )
+quoted-string = DQUOTE *( qtext / SP / quoted-pair ) DQUOTE
+qtext         = %x21 / %x23-3B / %x3D / %x3F-5B / %x5D-7E   ; printable except SP " < > \
+quoted-pair   = "\" ( %x20-3B / %x3D / %x3F-7E )            ; printable except < >
+atext         = ALPHA / DIGIT / "!" / "#" / "$" / "%" / "&" / "'" / "*" / "+"
+              / "-" / "/" / "=" / "?" / "^" / "_" / "`" / "{" / "|" / "}" / "~"
+addr-spec     = local-part "@" domain
+local-part    = atom *( "." atom )                 ; RFC 5322 dot-atom, no quoting
+atom          = 1*atext
+domain        = label 1*( "." label )              ; at least two labels
+label         = let-dig [ *61( let-dig / "-" ) let-dig ]   ; RFC 1123 §2.1, 1 to 63 bytes
+let-dig       = ALPHA / DIGIT
 ```
 
+- The display name is RFC 5322's `phrase` without comments or folding:
+  words of `atext`, quoted strings, and `.`, separated by SP or adjacent.
+  RFC 2047 encoded-words (`=?charset?B?...?=`, `=?charset?Q?...?=`) are
+  `atext` and are allowed. Outside a quoted string it holds none of
+  `( ) , : ; @ \ [ ] < >`; every quoted string is closed; `\` occurs only
+  inside a quoted string, as the first byte of a quoted-pair; and no `<` or
+  `>` occurs inside a quoted string, as `qtext` or in a quoted-pair.
+  RFC 5322 also allows comments, folding, and `<` or `>` inside quoted
+  strings; the circuit refuses them. RFC 5322 allows `.` in a phrase only
+  in its obsolete syntax, after a first word (§4.1); the circuit allows it
+  anywhere in the display name.
+- So an RFC 5322 reader finds in the display name no address list (`,`),
+  no group (`:` and `;`), no comment (`(`), no second address (`@` or `<`)
+  and no unclosed quoted string, and reads the value as exactly one mailbox:
+  the address the circuit binds.
 - If the value contains `<`, it contains exactly one `<` and exactly one `>`,
   `>` is its last byte, and the address is the bytes between them. Otherwise
   the whole value is the address. No input has two candidate addresses, and
   the address is never taken from the display name.
-- Quoted local parts and comments are refused. Groups and address lists are
-  refused except where their syntax falls inside the display name, as the
-  next point describes.
-- The display name above is wider than RFC 5322's phrase: it admits an
-  unquoted `,`, `;`, `:`, `@` or `\` and an unbalanced `"`. RFC 5322 readers
-  read such a value as an address list, a group, another mailbox, or none,
-  while the circuit binds the angle-addr that ends it: `b@yahoo.com, x
-  <a@yahoo.com>` is a valid RFC 5322 address list whose first mailbox is
-  `b@yahoo.com`, and the circuit binds `a@yahoo.com`. A provider that
-  authenticates the first address of such a value (A1b, §11.1) would sign
-  mail the circuit reads as another user's. **[built, tested]**:
-  `research/email-recovery/eval/parser/` (`from-finding.mjs` on the
-  committed recovery artifact, and the fuzzing). Open, §13 question 23.
-- **[specified]**, to be built by a change to the circuit: outside balanced
-  quoted strings the display name holds only `atext`, `.` and WSP (RFC 2047
-  encoded-words consist of these); `\` appears only as a quoted-pair inside
-  a quoted string; `<` and `>` appear nowhere in it. Every value accepted
-  under this rule is, in RFC 5322 terms, exactly the one mailbox the circuit
-  binds. None of the From values of the 4,619 real signatures the circuit
-  accepts (§12) is outside it.
+- Quoted local parts, comments, groups, and address lists are refused: a
+  quoted local part fails `local-part`, and a comment, a group or a list
+  puts a byte the display name excludes before the address.
 - `1 ≤ len(addr-spec) ≤ 124` bytes (`ADDR_MAX`).
 - The address is used **exactly as these bytes**: case, dots, and `+` tags
   are preserved, and nothing is normalized.
@@ -315,11 +318,25 @@ let-dig      = ALPHA / DIGIT
   digit (`123mail.org`). Which domains are usable is decided by the registry
   allowlist (§7.3), not by this grammar.
 
-The circuit's `From` parser implements this grammar, with the wider
-display name **[built, tested]**
-(`circuits/email-recovery/lib/src/from_address.nr`; tests in
-`circuits/email-recovery/tests/`; its reading of real and fuzzed headers
-against RFC 5322 readers in `research/email-recovery/eval/parser/`).
+Why the display name is restricted: a provider authenticates the sender of
+mail it signs (A1b, §11.1), and an approval is evidence of inbox control
+only when the `From` address the circuit binds (§11.2, property 1) is the
+one the provider authenticated. A value such as
+`attacker@yahoo.com, x <victim@yahoo.com>` is a valid address list whose
+first mailbox is the attacker's, and Chen, Paxson and Jiang report servers
+(Yahoo and iCloud among them) that "accept multiple addresses and only check
+the first address" ("Composition Kills", USENIX Security 2020, §6.2,
+<https://www.usenix.org/system/files/sec20-chen-jianjun.pdf>). With this
+grammar the circuit accepts a value only when an RFC 5322 reader reads the
+bound address as its one mailbox, so A1b needs the provider to authenticate
+that mailbox and not the first address of a list.
+
+The circuit's `From` parser implements this grammar **[built, tested]**
+(`circuits/email-recovery/lib/src/from_address.nr`, with the display-name
+automaton in `header.nr` and `tables.nr`; tests in
+`circuits/email-recovery/tests/`, the display name in
+`display_name_tests.nr`; its reading of real and fuzzed headers against
+RFC 5322 readers in `research/email-recovery/eval/parser/`, §12).
 
 ### 4.6 Getting the email to the browser
 
@@ -627,7 +644,7 @@ construction.
 
 **[built, tested]**: `circuits/email-recovery/lib/src/recovery.nr`
 (`verify_recovery_email`, composing the components of
-`circuits/email-recovery/lib`), compiled to 251,561 UltraHonk gates
+`circuits/email-recovery/lib`), compiled to 248,996 UltraHonk gates
 (padded to 2^18) with Perch's pinned nargo 1.0.0-beta.9 and proven with bb
 0.87.0 in the zero-knowledge flavor with the keccak transcript, which
 Perch's verifier accepts. The tests:
@@ -635,9 +652,9 @@ Perch's verifier accepts. The tests:
 | Tests | What they show |
 | --- | --- |
 | `circuits/email-recovery/tests/src/recovery_tests.nr` (19) | The honest witness at any leaf index is accepted; a commitment to another address, to a case variant of it, or under another code, another digest limb, swapped limbs, another `rho`, a root without the key, the key under another domain, another key for the domain, a wrong or 16-bit-overflowing leaf index, the leaf as root, and a signature under another key are each refused at their obligation |
-| the rest of `circuits/email-recovery/tests/` (104) | Each component, and one negative test per publicly documented soundness issue class of open-source email circuits (`circuits/email-recovery/SECURITY.md`) |
+| the rest of `circuits/email-recovery/tests/` (124) | Each component, one negative test per publicly documented soundness issue class of open-source email circuits (`circuits/email-recovery/SECURITY.md`), and the display-name grammar of §4.5 (`display_name_tests.nr`: address lists, a second mailbox, an unclosed quoted string, each special outside a quoted string; quoted, encoded-word and bare forms accepted) |
 | `packages/email-recovery/test/recoveryInputs.test.ts` | The committed circuit (`circuits/email-recovery/artifacts/recovery.json`, run with noir_js) accepts an honest recovery email from each domain the provider mocks sign for, and a 124-byte address with a 500-byte display name at each launch domain; the encoder's signed header block equals the octets every mock provider's key signed |
-| `packages/email-recovery/test/attacks.test.ts` (56 cases) | Every adversarial email of `packages/email-mocks` with the strongest witness for its claim: each case a standard DKIM verifier passes but whose claim must not be provable is refused at a named assertion (§6.4) |
+| `packages/email-recovery/test/attacks.test.ts` (60 cases) | Every adversarial email of `packages/email-mocks` with the strongest witness for its claim: each case a standard DKIM verifier passes but whose claim must not be provable is refused at a named assertion (§6.4) |
 | `crates/integration-tests/tests/it/email_proofs.rs` | A real proof of each launch domain's recovery email verifies on chain and counts as one vote (§8.6) |
 
 ### 6.3 Header bound
@@ -669,12 +686,13 @@ the claimed account's guardian would build. It pins each outcome
 
 - every case a standard DKIM verifier passes but whose claim must not be
   provable is refused: display-name, angle-addr, comment, quoted-local-part
-  and folded `From` spoofing; unsigned `From` or `Subject` fields above or
-  below the signed one; a second, invalid signature under the claimed `d=`
-  above a valid one by another domain; misaligned `d=`; an RSA-1024 key;
-  `l=` with appended text; encoded-word, folded-value and split-phrase
-  Subjects; the recovery value in the display name or body; and replay for
-  another statement or account;
+  and folded `From` spoofing; `From` values an RFC 5322 reader reads as an
+  address list, as another mailbox, or as no mailbox (§4.5); unsigned `From`
+  or `Subject` fields above or below the signed one; a second, invalid
+  signature under the claimed `d=` above a valid one by another domain;
+  misaligned `d=`; an RSA-1024 key; `l=` with appended text; encoded-word,
+  folded-value and split-phrase Subjects; the recovery value in the display
+  name or body; and replay for another statement or account;
 - every case no signature of verifies is refused too, except a body
   replaced after signing: the header signature is the provider's own and the
   proof does not bind the body (§4.4);
@@ -706,10 +724,10 @@ proof in the keccak flavor (§6.2) **[built, tested]**:
 - **Threads.** Barretenberg runs on `navigator.hardwareConcurrency` threads
   (at most 32) when the page is cross-origin isolated, on one thread
   otherwise. The recovery routes are cross-origin isolated (below).
-- **What it downloads, once.** The circuit artifact (2,011,102 octets), its
+- **What it downloads, once.** The circuit artifact (1,885,167 octets), its
   verification key (1,760), and the prefix of Barretenberg's BN254 CRS the
   2^18 circuit needs (262,145 G1 points, 16,777,280 octets, and the
-  128-octet G2 point): 18,790,270 octets, kept in the Cache API so a retry
+  128-octet G2 point): 18,664,335 octets, kept in the Cache API so a retry
   reads them locally. The CRS comes from Barretenberg's host
   (`crs.aztec.network`) and is checked against SHA-256 digests pinned in the
   prover (`CRS_G1_SHA256`, `CRS_G2_SHA256`) before it is used or stored; the
@@ -1955,7 +1973,7 @@ Every one is emitted **[built, tested]**; the announcements are
 | Id | Assumption |
 | --- | --- |
 | A1a | RSASSA-PKCS1-v1_5 with SHA-256 and 2048-bit moduli is existentially unforgeable, and providers keep their DKIM private keys secret. |
-| A1b | Each launch provider DKIM-signs a `from` field naming one of its mailboxes only when that mailbox's holder submitted the message. For the circuit's reading (§4.3, §4.5) this needs: (1) a submission with two `From` fields is refused or rewritten, or the provider authenticates the instance it signs (the bottom-most when `h=` names `from` once), and a `From` naming several addresses is refused, or the provider authenticates the angle-addr the circuit binds; (2) sending as another address of the provider's domain requires proof of control of that mailbox; (3) an address is not reassigned, or a new holder cannot use it against an existing enrollment, which `account_code` provides (§5.1). The per-provider evidence, with a source for each cell or what would establish it, is `research/email-recovery/eval/parser/sender-authentication.md`; its unknowns are §13 question 24. |
+| A1b | Each launch provider DKIM-signs a `from` field naming one of its mailboxes only when that mailbox's holder submitted the message. For the circuit's reading (§4.3, §4.5) this needs: (1) a submission with two `From` fields is refused or rewritten, or the provider authenticates the instance it signs (the bottom-most when `h=` names `from` once), and for a `From` with a display name the provider authenticates the angle-addr the circuit binds (a `From` that RFC 5322 readers read as several addresses, a group, another mailbox or none does not reach a proof: the circuit refuses it, §4.5); (2) sending as another address of the provider's domain requires proof of control of that mailbox; (3) an address is not reassigned, or a new holder cannot use it against an existing enrollment, which `account_code` provides (§5.1). The per-provider evidence, with a source for each cell or what would establish it, is `research/email-recovery/eval/parser/sender-authentication.md`; its unknowns are §13 question 23. |
 | A2 | SHA-256 is collision resistant. |
 | A3 | `P2` is collision resistant, and no input is known that it maps to `0` (the empty leaf); for the hiding claims (privacy, the blinded Subject, the salted pin) it is modelled as a random function. |
 | A4 | The UltraHonk proof system with Perch's zero-knowledge flavor is knowledge sound and zero-knowledge, and the verifier contract embeds the email circuit's key. |
@@ -2046,7 +2064,7 @@ How the assumptions enter the theorems:
 
 | Property | Circuit obligations | Contract obligations (guardian) | Perch obligations | Assumptions | Status |
 | --- | --- | --- | --- | --- | --- |
-| 1 Soundness | C1, C2, C3, C4, C5, C6 | §8.3 checks 1 to 12; §8.2 wiring check; registry: §7.3 rules 1 to 5 and the same tree hashing as C6 (§7.2, §7.6 cross-check) | Statement construction from controller state (Perch §4) | A1a, A1b, A2, A3 (collision), A4 (soundness), A5, A7 | Proven with A5 and A7 as hypotheses, A4's break named per accepted proof, and A3's breaks named on computed inputs (`EmailRecovery.soundness`), for any reading of the header (the model's `Format` is a parameter); the conclusion fixes the `From` address, the account code and the key `(domain, modulus)`; A1a and A1b assumed, A1b reviewed per provider; guardian checks and registry rules tested; registry hashing tested against Noir; circuit built, C1 to C6 tested (§6.2, §6.4), not proven; the circuit's reading of headers tested against reference implementations on real mail and fuzzed headers (§12), with the open display-name finding of §4.5; real proofs verified on chain (§8.6) |
+| 1 Soundness | C1, C2, C3, C4, C5, C6 | §8.3 checks 1 to 12; §8.2 wiring check; registry: §7.3 rules 1 to 5 and the same tree hashing as C6 (§7.2, §7.6 cross-check) | Statement construction from controller state (Perch §4) | A1a, A1b, A2, A3 (collision), A4 (soundness), A5, A7 | Proven with A5 and A7 as hypotheses, A4's break named per accepted proof, and A3's breaks named on computed inputs (`EmailRecovery.soundness`), for any reading of the header (the model's `Format` is a parameter); the conclusion fixes the `From` address, the account code and the key `(domain, modulus)`; A1a and A1b assumed, A1b reviewed per provider; guardian checks and registry rules tested; registry hashing tested against Noir; circuit built, C1 to C6 tested (§6.2, §6.4), not proven; the circuit's reading of headers tested against reference implementations on real mail and fuzzed headers (§12); real proofs verified on chain (§8.6) |
 | 2 Privacy | Public inputs are exactly §6.1; nothing else is exposed | Stores `C` and a salted pin root, never an address or key hash; emits nothing | — | A3 (random function), A4 (zero-knowledge), A6 | Proven in the ideal model: an adaptive adversary's view, proofs included, equals a simulator's computed from the handles and the public statements, so any two addresses give the same view (`EmailRecovery.privacy_simulation`, `privacy_two_runs`); the step from the ideal model to Poseidon2 and UltraHonk rests on A3, A4, A6, assumed; structural lemma proven (the contracts store and emit nothing about the address beyond `C` and the pin root, `EmailRecovery.structural_noninterference`); guardian storage tested; the circuit's public inputs are exactly §6.1 (built, tested) |
 | 3 Replay | C5 binds `d` | Checks 1, 2, 5, 6, 8, 12 | One vote per guardian per attempt and domain, or per change digest (Perch §6.3 T2, §5); attempt ids never reused (T1); epochs only grow (§3.3) | A2, A3, A4 | Proven with A2's break named on the two statements' encodings (`EmailRecovery.Perch.email_vote_replay`); tested (unit and integration) |
 | 4 One-factor safety | — | The guardian is one address | Quorum (T4), delay (T5), cancellation (T6, T7) | A9 (b), for the wallet's delay floor in wall-clock time | Proven over all controller traces (`EmailRecovery.Perch.one_factor_safety`) and for the wallet policy (`one_factor_under_wallet_policy`, with the floor lasting 7 days at the target close time, `emailOnlyFloor_lasts`); on-chain part tested; wallet policy tested (§9.3); A9 assumed |
@@ -2133,28 +2151,28 @@ network's.
 | Guardian wasm, optimized | 33,577 bytes | `just build-contracts` output for `nido_email_guardian.wasm` (local build; the CLI version recorded in the wasm metadata can change it by a few bytes) **[measured]** |
 | Registry wasm, optimized | 68,899 bytes | `just build-contracts` output for `nido_dkim_registry.wasm` (same caveat) **[measured]** |
 | Verifier wasm, optimized | 45,616 bytes | `just build-contracts` output for `nido_email_verifier.wasm` (same caveat) **[measured]** |
-| Recovery circuit | 251,561 UltraHonk gates (117,491 ACIR opcodes), padded to 2^18; at a 1024-byte header bound 189,503, also 2^18 | `circuits/email-recovery/scripts/measure.sh` (`bb gates`), `circuits/email-recovery/MEASUREMENTS.md` **[measured]** |
-| Proving one recovery email, native (`bb prove --zk`) | every core (18): 0.65 s witness (`nargo execute`), 0.96 s proving (0.94 to 0.98), 879 MiB peak; one thread: 4.69 s proving; the Performance-tier cores (the slower of the machine's two tiers, as macOS names them): 15.8 s on one thread, 5.46 s on four; at 1024 bytes 534 ms, 840 ms, 832 MiB | `research/email-recovery/eval/results/proving.json` (`just email-recovery-proving`): one circuit build (the committed artifact, its key checked against the verifier's circuit id), median and range of 5 runs, at a one-minute load average of about 6, the quietest this shared machine got; a second run at load 5.4 (`proving-shared-load.json`) agrees within 4% except on the Performance tier under background QoS, 12 to 17% slower there; the 1024-byte figures `circuits/email-recovery/scripts/measure.sh`, median of 3 **[measured]** |
-| Proving one recovery email, bb.js 0.87.0 in Node | one thread: 13.4 s proving (13.4 to 13.5), 1,419 MiB peak; 18 threads: 3.34 s (3.27 to 3.40), 1,715 MiB; the Performance-tier cores: 50.3 s on one thread, 19.0 s on four; at 1024 bytes 12.0 s and 2.9 s | same **[measured]** |
-| Proving one recovery email in the browser: desktop | Chrome 151 (headless) on the same 18-core machine, the wallet's own prover worker on the recovery route's headers: one thread 8.40 s proving (8.34 to 8.49), 9.95 s from request to verified proof; 18 threads 1.43 s and 2.82 s; Barretenberg memory 738 / 805 MiB; peak renderer resident memory 1,463 / 2,595 MiB | `research/email-recovery/eval/browser-prover.md` (`measure-browser.mjs`), median and range of 5 warm runs, consolidated in `proving.json` **[measured]** |
+| Recovery circuit | 248,996 UltraHonk gates (109,809 ACIR opcodes), padded to 2^18; at a 1024-byte header bound 188,986, also 2^18 | `circuits/email-recovery/scripts/measure.sh` (`bb gates`), `circuits/email-recovery/MEASUREMENTS.md` **[measured]** |
+| Proving one recovery email, native (`bb prove --zk`) | every core (18): 0.74 s witness (`nargo execute`), 0.94 s proving (0.93 to 0.97), 876 MiB peak; one thread: 4.64 s proving; the Performance-tier cores (the slower of the machine's two tiers, as macOS names them): 16.1 s on one thread, 5.60 s on four; at 1024 bytes 743 ms, 1,002 ms, 835 MiB | `research/email-recovery/eval/results/proving.json` (`just email-recovery-proving`): one circuit build (the committed artifact, its key checked against the verifier's circuit id), median and range of 5 runs, at a one-minute load average of about 6; a second run of the same build at load 5.4 (`proving-shared-load.json`) agrees within 2%, the Performance tier included; the 1024-byte figures `circuits/email-recovery/scripts/measure.sh`, median of 3 (load average 7 to 14) **[measured]** |
+| Proving one recovery email, bb.js 0.87.0 in Node | one thread: 13.4 s proving (13.1 to 13.6), 1,386 MiB peak; 18 threads: 3.24 s (3.22 to 3.34), 1,662 MiB; the Performance-tier cores: 50.3 s on one thread, 19.0 s on four; at 1024 bytes 12.0 s and 2.8 s | same **[measured]** |
+| Proving one recovery email in the browser: desktop | Chrome 151 (headless) on the same 18-core machine, the wallet's own prover worker on the recovery route's headers: one thread 8.37 s proving (8.32 to 8.50), 9.88 s from request to verified proof; 18 threads 1.44 s and 2.81 s; Barretenberg memory 757 / 791 MiB; peak renderer resident memory 1,432 / 2,586 MiB | `research/email-recovery/eval/browser-prover.md` (`measure-browser.mjs`), median and range of 5 warm runs, consolidated in `proving.json` **[measured]** |
 | The same under DevTools CPU throttling 4x and 6x | proving unchanged (8.5 s on one thread, 1.5 s on 18): Chrome applies `Emulation.setCPUThrottlingRate` to pages only and refuses it for workers, where all proving runs; the page's main-thread probe slowed about 4x and 6x. A throttled desktop, and not a phone approximation | `browser-prover.md` **[measured]** |
-| The same on the desktop's Performance-tier cores | Chrome under macOS background QoS (`taskpolicy -c background`), which runs it on the slower of the machine's two core tiers (6 Super, 12 Performance): one thread 32.0 s proving, 37.0 s total; four threads 10.2 s and 14.9 s; peak renderer resident memory 1,421 / 2,094 MiB. Desktop cores, the slower tier, not a phone | same **[measured]** |
-| What a first proof downloads | 18,790,270 octets (the artifact, the key, and the CRS prefix), then nothing on a retry; the prover's code is part of the page's build | `browser-prover.md` (the cold runs), `test/prover.test.ts` **[measured]** |
+| The same on the desktop's Performance-tier cores | Chrome under macOS background QoS (`taskpolicy -c background`), which runs it on the slower of the machine's two core tiers (6 Super, 12 Performance): one thread 32.5 s proving, 37.3 s total; four threads 10.3 s and 14.9 s; peak renderer resident memory 1,398 / 2,034 MiB. Desktop cores, the slower tier, not a phone | same **[measured]** |
+| What a first proof downloads | 18,664,335 octets (the artifact, the key, and the CRS prefix), then nothing on a retry; the prover's code is part of the page's build | `browser-prover.md` (the cold runs), `test/prover.test.ts` **[measured]** |
 | Phones | **Not measured.** No phone was available. `/security/recover/bench/` runs the same benchmark on any device, with no account, and prints copyable JSON; `just email-recovery-bench-phone` builds it as a self-contained directory (the page, its assets, the circuit and key, and the CRS prefix checked against the prover's pinned digests, read by the page through `?crs=`) and serves it over HTTPS on this machine's network addresses with the recovery routes' headers. `research/email-recovery/eval/phone/check.mjs` runs that build in headless Chrome (cross-origin isolated, the CRS from the build, both proofs verified); that is a check of the build, not a phone figure | — |
 | Enrollment and recovery end to end on a local network | Passes in 1.7 minutes: in Chromium, the owner's Nido turns on recovery, enrolls an inbox (two groups of the recovery code typed back; the Gmail mock signs the enrollment email; the vault seals it back; the page checks it, warns when the alert address is the enrolled inbox, registers an alert contact at another address with Web Push, deploys the guardian with its pin, and lists it with a quorum of two); a new device opens a lost-key attempt, the page warns where the code is typed, prefills the warning line in the email's body and shows the pickup deadline, the vault seals the recovery email back, the page proves it in the browser and submits `submit_guardian`, the alert service alerts the email vote, the other helper approves, the alert email and push carry the code the page showed, and after the delay the page completes the recovery | `tests/e2e/local/email-recovery.local.spec.ts` (`just test-e2e-email-local`) on `stellar/quickstart --local` (core and RPC v29, protocol 28) with Perch's stack built for that network and Nido's contracts from source. Mocked (TEST-ONLY): the mail provider and MX, DNS, the sending services, the push service, the Nitro enclave and its custodians, and the enclave-image registry (a stand-in answering `is_active`, since its 14-day timelock cannot elapse locally); the test's passkeys are the repository's test authenticator. Not in CI **[built, tested]** |
 | The circuit's header parsing on real mail | 5,154 DKIM-signed posts from all 11 launch domains (18 GNU mailing lists, October 2025 and May to October 2026), 5,327 signatures: the circuit and the reference (mailauth 8.0.4 strict mode for RFC 6376, node:crypto for RSA, Python 3.14's RFC 5322 reader for From) agree on every one. 4,619 are accepted by both with the same address and domain; 708 are refused by both: 316 do not verify under any known key (an archived copy whose signed fields the list changed, or a key no public source still holds), 229 signed blocks exceed `HEADER_MAX` (in 197 the longest signed field is `References` or `In-Reply-To`; the others sign a long `Cc`, `Autocrypt`, `Face` or `Mail-Followup-To`), 162 have a `d=` other than the From domain, 1 has two signed Subjects. The committed recovery artifact agrees with the harness on all 10,320 executions; the encoder's signed block equals the reference's for every signature; 592 signatures verify only under a key from zkEmail's public archive | `research/email-recovery/eval/parser/results/differential.json` (`just email-recovery-parser-check`). These are list archives' copies of ordinary posts, not the providers' outbound recovery mail; no Fastmail signature verifies under any key the DNS or zkEmail's archive holds, so Fastmail is tested on the refusing side only **[measured]** |
-| Grammar-based fuzzing of the circuit's parsing | 50,000 seeded cases around the §4.5 From grammar and the §4.3 tag list (49,779 signatures, 51,814 circuit executions, 39 minutes on 18 cores), each compared with mailauth's strict RFC 6376 verifier and Python's RFC 5322 reader: 23,002 signatures accepted and 20,619 refused by both. The circuit accepts 2,460 where Python reads another mailbox, a list, or none, the display-name issue of §4.5 (an unquoted `@` 1,181, an unbalanced `"` 507, an unquoted `\` 271, `,` 255, `;` 246); 2,733 that mailauth ignores for a defect in a tag the circuit does not read (§4.3); and 251 group-shaped values whose address both readers read as the circuit does. It refuses 714 that RFC 6376 allows, each for whitespace in a tag it reads (§4.3). The recovery artifact agreed with the harness on all 1,994 cross-checked signatures, and accepts each of the four From values of `from-finding.mjs` with a full witness | `research/email-recovery/eval/parser/results/fuzz.json`, `results/from-finding.json` (`just email-recovery-parser-check`); seeded and reproducible case by case (`fuzz.mjs --show`); signed with a TEST-ONLY key **[measured]** |
+| Grammar-based fuzzing of the circuit's parsing | 50,000 seeded cases around the §4.5 From grammar and the §4.3 tag list (49,779 signatures, 51,814 circuit executions, 35 minutes on 18 cores), each compared with mailauth's strict RFC 6376 verifier and Python's RFC 5322 reader: 22,409 signatures accepted and 23,967 refused by both. Every From value the circuit accepts, Python reads as exactly the mailbox it binds; among the refused are 600 that Python reads as one mailbox but whose display name §4.5 excludes (of the 596 nothing else refuses, 498 hold a comment and 98 an RFC 2047 encoded-word with an `@`). The circuit accepts 2,692 that mailauth ignores for a defect in a tag the circuit does not read (§4.3), and refuses 711 that RFC 6376 allows, each for whitespace in a tag it reads (§4.3). The recovery artifact agreed with the harness on all 1,994 cross-checked signatures, and refuses each of the four From values of `from-finding.mjs` (an address list, an address before the angle-addr, a quoted word before an address, an unclosed quoted string) at the display-name check | `research/email-recovery/eval/parser/results/fuzz.json`, `results/from-finding.json` (`just email-recovery-parser-check`); seeded and reproducible case by case (`fuzz.mjs --show`); signed with a TEST-ONLY key **[measured]** |
 | Attack suite on a local network | 65 scenario rows in eleven classes (forged emails, replayed emails and proofs, a wrong account or new key in the statement, stale or malicious registry keys, a compromised inbox, the alert path, phishing and social engineering, repeated attempts, provider header quirks, front-running, privacy on chain), each outcome as expected and each refusal named by its layer (circuit assertion, guardian check number, registry rule, Perch controller error, alert path); the three registry scenarios that need an elapsed timelock or grace period on the test host with the registry's real timelocks | `research/email-recovery/eval/README.md` (`just email-recovery-attacks`; `network/attacks.mjs` on `stellar/quickstart --local` at protocol 29 with mainnet's settings, every approval a real proof by bb.js in Node; `email_guardian.rs::registry_*`). Mocked (TEST-ONLY): the mail providers, DNS, the sending services, the push service, the enclave and its custodians, and the enclave-image registry (the end-to-end test's stand-in). In CI (`email-recovery-attacks.yml`) **[built, tested]** |
-| One `submit_guardian` with an email approval on a local network | metered: 121.6 million instructions (121,576,647 to 121,693,623 across 20 votes, median 121,641,913), 12 entries read, 2 entries and 1,208 bytes written; 126,486,236 to 126,607,891 instructions declared after simulation, which the fee is charged on; 18,080-byte transaction around a 16,784-byte authorization entry; 83,125 to 83,162 stroops charged, 2,046 to 2,049 of them rent. The vote that authorizes an attempt with a 7-day delay also writes the authorized attempt: 122.5 million instructions (127,464,918 declared), 4 entries and 1,488 bytes written, 3,632,058 stroops charged, 3,545,582 of them rent | `research/email-recovery/eval/results/attacks-local.json`, read from each transaction's result and the host's `core_metrics` events, on `stellar/quickstart --local` at protocol 29 with mainnet's settings loaded (`eval/network/start-local.sh`, settings archived in `eval/results/settings/`); the approvals use the guardian's pin, so the registry is not called (spec §7.4) **[measured]** |
+| One `submit_guardian` with an email approval on a local network | metered: 121.6 million instructions (121,576,543 to 121,671,547 across 20 votes, median 121,627,161), 12 entries read, 2 entries and 1,208 bytes written; 126,486,128 to 126,584,932 instructions declared after simulation, which the fee is charged on; 18,080-byte transaction around a 16,784-byte authorization entry; 83,125 to 83,155 stroops charged, 2,047 to 2,049 of them rent. The vote that authorizes an attempt with a 7-day delay also writes the authorized attempt: 122.5 million instructions (127,436,042 declared), 4 entries and 1,488 bytes written, 3,632,049 stroops charged, 3,545,582 of them rent | `research/email-recovery/eval/results/attacks-local.json`, read from each transaction's result and the host's `core_metrics` events, on `stellar/quickstart --local` at protocol 29 with mainnet's settings loaded (`eval/network/start-local.sh`, settings archived in `eval/results/settings/`); the approvals use the guardian's pin, so the registry is not called (spec §7.4) **[measured]** |
 | One `submit_guardian` with an email approval on testnet | metered: 121,624,691 to 121,683,179 instructions across 6 votes, 12 entries read, 2 entries and 1,208 bytes written; 126,534,101 to 126,594,928 instructions declared; 18,080-byte transaction; 82,424 to 82,442 stroops charged, 1,333 of them rent; 2,513 to 4,999 ms from simulation to confirmation. The recovery run's vote, on the guardian build before ledger-close-time windows: 121,639,784 instructions, 82,428 stroops | `research/email-recovery/eval/results/testnet-votes.json` (`testnet/votes.mjs`) and `testnet.json` (`testnet/run.sh`), read back from Stellar RPC 30.0.0 (protocol 29); the approvals use the guardian's pin **[measured]** |
-| The same vote's fee by component at mainnet's settings | 37,951 compute, 3,016 for the 2 entries and 1,208 bytes written, 36,419 history, 3,585 transaction size, 10 events: 80,971 non-refundable; 2,049 rent and the 100-stroop inclusion fee: 83,130 stroops, the Gmail vote's charge on the local network. Testnet charges the same components except rent (1,333: its minimum temporary lifetime is 720 ledgers, mainnet's 17,280) | `eval/fees/model.mjs` over each transaction's declared resources and the archived settings, which reproduces every fee charged in the evaluation's network runs to the stroop; table in `research/email-recovery/eval/README.md` **[measured]** |
+| The same vote's fee by component at mainnet's settings | 37,971 compute, 3,016 for the 2 entries and 1,208 bytes written, 36,419 history, 3,585 transaction size, 10 events: 80,991 non-refundable; 2,049 rent and the 100-stroop inclusion fee: 83,150 stroops, the Gmail vote's charge on the local network. Testnet charges the same components except rent (1,333: its minimum temporary lifetime is 720 ledgers, mainnet's 17,280) | `eval/fees/model.mjs` over each transaction's declared resources and the archived settings, which reproduces every fee charged in the evaluation's network runs to the stroop; table in `research/email-recovery/eval/README.md` **[measured]** |
 | How many email votes a mainnet ledger holds | at most 12 (CAP-0063: 3 clusters per stage, each within 580,000,000 declared instructions, which 4 votes of about 126.5 million fill); 47 by transaction size, 245 by bytes written; 2.4 votes a second at 5-second ledgers. Past that, transactions compete on their inclusion fee; the resource fee is fixed by the settings | mainnet's settings (`eval/results/settings/mainnet.json`) and the local votes' declared resources **[measured]** |
 | Votes against a registry root on a network | **Not yet measured; scheduled.** A registry root holds a key only after its addition's attested timelock, 72 hours of ledger close time. The local network's run (`eval/network/run-registry-root.sh`: one account per launch domain with no pin and one with the wallet's pin) and the testnet run (`eval/testnet/votes.mjs`) are enrolled; their additions are eligible from close time 2026-11-05 06:40:59 UTC and 06:39:55 UTC, when they vote against the registry's root. Until then the registry-root figures are the test host's: the two `submit_guardian` rows below, whose approvals use a registry root, and `is_accepted_root` | — |
 | One complete email-factor recovery on testnet | every step succeeded: mint, guardian deployment, the recovery document, `begin_lost_key`, the email vote, the helper's vote (which authorizes the attempt and pays its record's rent: 3,664,628 stroops charged, 3,653,812 rent), a 12-ledger delay (57,575 ms), and completion; 13,384,714 stroops charged over those 7 transactions; the account's document then holds the new passkey and not the lost one. Perch's doc compiler and recovery controller were archived on testnet and were restored first, one transaction per entry: 112,447,907 stroops more over 4 transactions, 8.4 times the recovery itself | same; deployment in `DEPLOYED.md`, "Email recovery (evaluation, TEST-ONLY)". Mocked (TEST-ONLY): the mail provider, DNS **[measured]** |
-| A recovery with every entry it reads archived, at mainnet's settings | 7 transactions and 3,959,831,759 stroops (396 XLM), almost all of it rent to restore 28 entries for mainnet's minimum persistent lifetime (2,073,600 ledgers): the code of Perch's doc compiler, account, controller and WebAuthn verifier and of the email verifier, guardian and registry dominate, and three code entries exceed one transaction's limits (200,000 bytes read, 132,096 written), so they restore in RestoreFootprint transactions of their own. The same 4 steps with nothing archived: 5,237,388 stroops | `crates/integration-tests/tests/it/email_archival.rs` (`eval/archival.sh`): each step re-executed by the test host with every entry not yet restored archived, under mainnet's cost model and entry lifetimes, priced by `eval/fees/archival.mjs`; code entries sized for rent as the network sizes them (`eval/results/code-entries.json`). Not a network: no network here archives within a run **[measured]** |
+| A recovery with every entry it reads archived, at mainnet's settings | 7 transactions and 3,935,930,637 stroops (393.6 XLM), almost all of it rent to restore 28 entries for mainnet's minimum persistent lifetime (2,073,600 ledgers): the code of Perch's doc compiler, account, controller and WebAuthn verifier and of the email verifier, guardian and registry dominate, and three code entries exceed one transaction's limits (200,000 bytes read, 132,096 written), so they restore in RestoreFootprint transactions of their own. The same 4 steps with nothing archived: 5,237,377 stroops | `crates/integration-tests/tests/it/email_archival.rs` (`eval/archival.sh`): each step re-executed by the test host with every entry not yet restored archived, under mainnet's cost model and entry lifetimes, priced by `eval/fees/archival.mjs`; code entries sized for rent as the network sizes them (`eval/results/code-entries.json`), except this build's email verifier, which testnet does not hold and which is sized as the test host sizes it. Not a network: no network here archives within a run **[measured]** |
 | Keeping the contracts live, a year of rent at mainnet's settings | 3,304,297,283 stroops (330.4 XLM) for the email verifier (instance and code), the key registry (instance and code) and the guardian's code, shared by every account; 3,245,716 (0.32 XLM) for each account's guardian instance; Perch's controller, doc compiler, WebAuthn verifier and account code, which Perch's operator keeps, 8,677,150,521 (867.7 XLM). A code entry is sized for rent by its in-memory module, 9 to 26 times its entry here (the guardian's 33,672-byte entry rents as 320,239 bytes, Perch's doc compiler's 110,040-byte one as 2,431,469). Each keeper transaction pays about 1,240 stroops besides rent | `research/email-recovery/eval/results/keeper-local.json` (`eval/network/run-keeper.sh`: the keeper, `eval/network/keeper.mjs`, run once on a local network with mainnet's settings, every extension's rent reproduced from the entry's size for rent); a year is 6,307,200 ledgers at 5 seconds **[measured]** |
-| One `submit_guardian` with an email approval and a real proof, whole invocation on the test host | 121,822,719 to 121,937,701 instructions (30.5% of 400,000,000); 5.6 MB of memory; 14 entries read; 2 entries and 1,208 bytes written; resource fee without rent 94,435 to 94,516 stroops at the SDK's 2026-07-10 fee snapshot, across the 12 fixtures | `email_proofs.rs` (every launch domain and the 124-byte address), `cost_estimate()`; table in `research/email-recovery/eval/onchain.md` (`measure-onchain.py`) **[measured]** |
-| The same call as a signed transaction | 131,187,545 to 131,301,187 instructions; footprint 12 read-only and 2 read-write entries; 18,148-byte envelope with a 16,784-byte authorization entry around the 16,224-byte proof; resource fee without rent 178,207 to 178,286 stroops at the SDK's 2026-07-10 fee snapshot; 82,542 at mainnet's archived settings (Gmail) | `nido_integration_tests::transaction::measure` in the same tests **[measured]** |
+| One `submit_guardian` with an email approval and a real proof, whole invocation on the test host | 121,799,565 to 121,883,583 instructions (30.4 to 30.5% of 400,000,000); 5.6 MB of memory; 14 entries read; 2 entries and 1,208 bytes written; resource fee without rent 94,419 to 94,478 stroops at the SDK's 2026-07-10 fee snapshot, across the 12 fixtures | `email_proofs.rs` (every launch domain and the 124-byte address), `cost_estimate()`; table in `research/email-recovery/eval/onchain.md` (`measure-onchain.py`) **[measured]** |
+| The same call as a signed transaction | 131,172,469 to 131,248,057 instructions; footprint 12 read-only and 2 read-write entries; 18,148-byte envelope with a 16,784-byte authorization entry around the 16,224-byte proof; resource fee without rent 178,196 to 178,249 stroops at the SDK's 2026-07-10 fee snapshot; 82,530 at mainnet's archived settings (Gmail) | `nido_integration_tests::transaction::measure` in the same tests **[measured]** |
 | `is_accepted_root`, accepted or refused | 565,410 / 568,054 instructions; 286,542 bytes of memory; 2 entries read; nothing written; no events; fee without rent 396 / 398 stroops | `dkim_registry_costs` **[measured]** |
 | `propose_add` (computes the key hash over the 2048-bit modulus) | 9,347,998 instructions; 532,837 bytes of memory; 6 entries read; 3 entries and 1,596 bytes written; 744 event bytes; fee without rent 23,730 stroops | same test **[measured]** |
 | `approve` | 669,842 instructions; 300,741 bytes of memory; 5 entries read; 2 entries and 496 bytes written; 208 event bytes; fee without rent 10,035 stroops | same test **[measured]** |
@@ -2355,20 +2373,11 @@ providers' own delivery to these figures.
     target (§9.3 rule 3). Not built: the wallet noticing a lower target
     and asking those owners to rebuild, and whether to leave a margin above
     the floor for that case.
-23. **The From display name.** The built circuit accepts a display name
-    with an unquoted `,`, `;`, `:`, `@` or `\`, or an unbalanced `"`, and
-    binds the angle-addr after it, where RFC 5322 readers read an address
-    list, a group, another mailbox, or none (§4.5; reproduced on the
-    committed recovery artifact and counted by class in
-    `research/email-recovery/eval/parser/README.md`). The restriction
-    §4.5 specifies closes it and refuses none of the real launch-provider
-    From values of §12; until the circuit is changed, the binding of such
-    values rests on A1b condition 1, which public measurements from 2020
-    and 2021 found Yahoo and iCloud did not meet.
-24. **Provider sender authentication (A1b).** Unknown today for every launch
-    provider: whether its submission path refuses two `From` fields, a
-    `From` naming several addresses, or an address in the display name, and
-    which `from` instance its signature then covers. Unknown for Outlook.com,
+23. **Provider sender authentication (A1b).** Unknown today for every launch
+    provider: whether its submission path refuses two `From` fields or an
+    address in the display name, and which `from` instance its signature
+    then covers (a `From` naming several addresses does not reach a proof:
+    the circuit refuses it, §4.5). Unknown for Outlook.com,
     iCloud and GMX/WEB.DE: whether a user can send as another existing
     mailbox of the domain. Unknown for iCloud and Yahoo: whether a deleted
     address is assigned again (Fastmail and GMX/WEB.DE document that they

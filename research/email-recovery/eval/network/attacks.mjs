@@ -337,7 +337,7 @@ describe('forged emails', () => {
       record(cls, id, 1, `refused: ${of.length} of ${of.length}`, `refused: ${refused.length} of ${of.length}`, 'circuit', { cases: of.map((x) => `${x.id}: ${x.outcome}`), note });
     };
     group('forged', 'forged-unsigned-or-duplicated-headers', [/^unsigned-/, 'from-not-signed'], 'a second, unsigned From or Subject above or below the signed one, at every provider format; h= without From');
-    group('forged', 'forged-display-name-spoofing', [/^from-/, 'recovery-value-in-display-name'].filter((p) => p !== 'from-not-signed'), 'the victim address in the display name, a comment, a quoted local part, a fold');
+    group('forged', 'forged-display-name-spoofing', [/^from-/, 'recovery-value-in-display-name'].filter((p) => p !== 'from-not-signed'), 'the victim address in the display name, an address list or unclosed quote before it, a comment, a quoted local part, a fold');
     group('forged', 'forged-misaligned-d', [/^misaligned-d-/, 'multiple-signatures-one-valid'], 'a signature by another domain, alone or under a forged one for the claimed domain');
     group('forged', 'forged-weak-key', ['weak-key-rsa1024'], 'an aligned signature under a 1024-bit key');
     group('forged', 'forged-signature-plus-modulus', ['signature-plus-modulus'], 'b= is σ + N');

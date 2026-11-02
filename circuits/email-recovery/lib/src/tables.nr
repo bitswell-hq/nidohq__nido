@@ -33,12 +33,75 @@ comptime fn local_part_table() -> [Field; 256] {
     t
 }
 
-/// 1 for bytes outside printable ASCII (`0x20..=0x7e`).
-comptime fn not_printable_table() -> [Field; 256] {
-    let mut t = [0; 256];
-    for c in 0..256 {
-        if (c < 32) | (c > 126) {
-            t[c] = 1;
+/// The From display-name automaton (spec section 4.5), indexed by
+/// `state * 256 + byte`. States: `PHRASE_OUT` outside a quoted string,
+/// `PHRASE_QUOTED` inside one, `PHRASE_ESCAPED` inside one right after a `\`,
+/// `PHRASE_ANGLE` after a `<` outside a quoted string. CR and LF send every
+/// state to `PHRASE_OUT`, so each header line starts there.
+pub global PHRASE_OUT: u8 = 0;
+pub global PHRASE_QUOTED: u8 = 1;
+pub global PHRASE_ESCAPED: u8 = 2;
+pub global PHRASE_ANGLE: u8 = 3;
+
+comptime fn is_atext(c: u32) -> bool {
+    (local_part_table()[c] == 1) & (c != 46)
+}
+
+comptime fn phrase_next_table() -> [u8; 1024] {
+    let mut t = [0; 1024];
+    for s in 0..4 {
+        for c in 0..256 {
+            let next = if (c == 13) | (c == 10) {
+                PHRASE_OUT
+            } else if s == PHRASE_OUT as u32 {
+                if c == 34 {
+                    PHRASE_QUOTED
+                } else if c == 60 {
+                    PHRASE_ANGLE
+                } else {
+                    PHRASE_OUT
+                }
+            } else if s == PHRASE_QUOTED as u32 {
+                if c == 34 {
+                    PHRASE_OUT
+                } else if c == 92 {
+                    PHRASE_ESCAPED
+                } else {
+                    PHRASE_QUOTED
+                }
+            } else if s == PHRASE_ESCAPED as u32 {
+                PHRASE_QUOTED
+            } else {
+                PHRASE_ANGLE
+            };
+            t[s * 256 + c] = next;
+        }
+    }
+    t
+}
+
+/// 1 where the byte breaks the display-name grammar in that state: a byte
+/// outside printable ASCII in any state; outside a quoted string, anything
+/// but `atext`, `.`, SP, `"` and `<`; inside one, `<` and `>`; after the `<`,
+/// every byte.
+comptime fn phrase_fault_table() -> [Field; 1024] {
+    let mut t = [0; 1024];
+    for s in 0..4 {
+        for c in 0..256 {
+            let printable = (c >= 32) & (c <= 126);
+            let angle = (c == 60) | (c == 62);
+            let ok = if !printable {
+                false
+            } else if s == PHRASE_OUT as u32 {
+                is_atext(c) | (c == 46) | (c == 32) | (c == 34) | (c == 60)
+            } else if s == PHRASE_ANGLE as u32 {
+                false
+            } else {
+                !angle
+            };
+            if !ok {
+                t[s * 256 + c] = 1;
+            }
         }
     }
     t
@@ -106,7 +169,8 @@ comptime fn base64_table() -> [Field; 256] {
 }
 
 pub global LOCAL_PART: [Field; 256] = local_part_table();
-pub global NOT_PRINTABLE: [Field; 256] = not_printable_table();
+pub global PHRASE_NEXT: [u8; 1024] = phrase_next_table();
+pub global PHRASE_FAULT: [Field; 1024] = phrase_fault_table();
 pub global LOWER: [u8; 256] = lower_table();
 pub global BASE64: [Field; 256] = base64_table();
 pub global DOMAIN: [Field; 256] = domain_table();

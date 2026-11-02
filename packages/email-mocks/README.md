@@ -88,7 +88,8 @@ placeholder phrase), and returns each case as an email, the claim a
 forged or replayed proof would make (sender address, recovery value,
 account), the expected result of a standard DKIM verifier for each
 signature, a one-line description, and, where the issue class is publicly
-documented in open-source email circuits, the public source. Verdicts:
+documented (in open-source email circuits, or in mail providers for the
+address-list cases), the public source. Verdicts:
 
 - `valid-dkim-but-must-be-rejected-by-circuit`: a standard verifier passes a
   signature, but a proof of the claim must not verify;
@@ -99,7 +100,10 @@ documented in open-source email circuits, the public source. Verdicts:
 
 Covered: display-name spoofing (address-looking names, an angle-address in
 the name, Outlook's `< addr>` form, a 400-octet name, a quoted local part,
-comments), `From` folded under relaxed and under simple canonicalization,
+comments), `From` values an RFC 5322 reader reads as an address list,
+another mailbox or no mailbox, signed at Yahoo (source: Chen, Paxson and
+Jiang, "Composition Kills", USENIX Security 2020, section 6.2, on servers
+that check only the first address of a list), `From` folded under relaxed and under simple canonicalization,
 `From` absent from `h=`, a second unsigned `From` or `Subject` above or below
 the signed one for every provider, `l=` with appended text, several
 signatures where only a non-aligned one verifies, misaligned `d=`

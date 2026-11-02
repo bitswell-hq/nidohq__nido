@@ -110,6 +110,36 @@ describe('enrollment email (spec §5.4)', () => {
     expect(fromGrammarOk('a@-gmail.com')).toBe(false);
     expect(fromGrammarOk(`${'a'.repeat(115)}@gmail.com`)).toBe(false);
   });
+
+  test('the display name is a phrase: atoms, dots and closed quoted strings (spec §4.5)', () => {
+    for (const ok of [
+      '"Doe, John (x) a@b; c:d \\"JD\\" \\\\" <a@gmail.com>',
+      '=?UTF-8?B?Wm/DqyBFeGFtcGxl?= <a@gmail.com>',
+      '=?UTF-8?Q?Zo=C3=AB_Example?= <a@gmail.com>',
+      'Alice "the Great" Q. Example <a@gmail.com>',
+      '"" <a@gmail.com>',
+    ]) {
+      expect(fromGrammarOk(ok), ok).toBe(true);
+    }
+    for (const bad of [
+      'b4ionwm6.ajw@yahoo.com, x <t5w6.i9otz@yahoo.com>',
+      'b4ionwm6.ajw@yahoo.com <t5w6.i9otz@yahoo.com>',
+      '"q97" b4ionwm6.ajw@yahoo.com <t5w6.i9otz@yahoo.com>',
+      '"x <t5w6.i9otz@yahoo.com>',
+      'Doe, John <a@gmail.com>',
+      'a;b <a@gmail.com>',
+      'friends: x <a@gmail.com>',
+      'a\\b <a@gmail.com>',
+      'x (y) <a@gmail.com>',
+      '"x\\" <a@gmail.com>',
+      '"x <y>" <a@gmail.com>',
+      'a>b <a@gmail.com>',
+      '<b@gmail.com> <a@gmail.com>',
+      'Zo\u00c3\u00ab <a@gmail.com>',
+    ]) {
+      expect(fromGrammarOk(bad), bad).toBe(false);
+    }
+  });
 });
 
 describe('key pin (spec §7.4)', () => {

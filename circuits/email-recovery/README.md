@@ -17,7 +17,7 @@ Soroban verifier (`contracts/email-verifier`).
 | `recovery/` | The recovery circuit: its public inputs, in spec §6.1's order, and a call to `email_recovery::recovery`; `Prover.toml` holds the Gmail fixture's inputs |
 | `artifacts/recovery.json` | The compiled circuit without debug paths, what noir_js and bb.js run (`scripts/recovery-artifact.mjs` writes and checks it) |
 | `lib/` | The library `email_recovery`; each module's header states its grammar and checks |
-| `tests/` | `email_recovery_tests`: 123 tests, including the recovery relation with every public input and linking witness changed (`src/recovery_tests.nr`), one negative test per publicly documented soundness issue class (`src/soundness.nr`), and parity with the DKIM key registry's host hashing (`src/registry_parity.nr`) |
+| `tests/` | `email_recovery_tests`: 143 tests, including the recovery relation with every public input and linking witness changed (`src/recovery_tests.nr`), one negative test per publicly documented soundness issue class (`src/soundness.nr`), the display-name grammar (`src/display_name_tests.nr`), and parity with the DKIM key registry's host hashing (`src/registry_parity.nr`) |
 | `bench/` | One binary package per component, and the recovery relation at a 1024-byte header bound (`bench/recovery_1024`), for gate counts and proving measurements |
 | `tools/blinded_value/` | Computes the Subject value `T` for the test-vector generator |
 | `vendor/` | Vendored noir-bignum and sha256 (`THIRD_PARTY.md`) |
@@ -30,8 +30,8 @@ Soroban verifier (`contracts/email-verifier`).
 | Module | Checks | Spec |
 | --- | --- | --- |
 | `rsa` | RSA-2048 PKCS#1 v1.5 / SHA-256, exponent 65537: modulus of exactly 2048 bits, `σ < N`, the full 256-byte encoding | C1 |
-| `header` | The signed block: zero past its length, CRLF-only line ends, no folded line, no empty line, no trailing CRLF, exactly one `from:` and one `subject:` line | C2, C3, C5 |
-| `from_address` | The From value and its address (§4.5 grammar, up to `ADDR_MAX` = 124 bytes) | C3 |
+| `header` | The signed block: zero past its length, CRLF-only line ends, no folded line, no empty line, no trailing CRLF, exactly one `from:` and one `subject:` line; per byte, the line index and the running count of display-name faults (the automaton of `tables`) | C2, C3, C5 |
+| `from_address` | The From value and its address (§4.5 grammar: a display name of atoms, dots and closed quoted strings, then the angle-addr; or a bare address; up to `ADDR_MAX` = 124 bytes) | C3 |
 | `dkim_signature` | The DKIM-Signature field being verified: `v=1`, `a=rsa-sha256`, relaxed header canonicalization, `h=` with `from` and `subject`, empty `b=`, lowercase `d=` equal to the lowercase From domain (at most 62 bytes) | C2, C4 |
 | `subject` | Subject = phrase + 64 lowercase hex characters; `assert_subject_opens` checks the value is `hex(P2(DOM_BLIND, digest_hi, digest_lo, rho))` | C5 |
 | `pack` | `pack(bytes, max)`, the commitment `C = P2(DOM_COMMIT, len, pack(addr, 124), account_code)`, the key hash `P2(DOM_KEY, 18 limbs)` | C3, C6 |
@@ -50,7 +50,7 @@ canonicalizes. Positions in the header are prover hints, always checked.
 | --- | --- |
 | Public inputs | `commitment` (`C`), `digest_hi`, `digest_lo`, `key_root`: the 128 bytes the email guardian hands its verifier |
 | Private inputs | `header` (the signed header block, at most `HEADER_MAX` = 1536 bytes), `modulus`, `redc` (noir-bignum's Barrett hint, read only by unconstrained code), `signature`, `rho`, `account_code`, `key_index`, `key_siblings` (16) |
-| Size | 251,561 UltraHonk gates, padded to 2^18 (`MEASUREMENTS.md`); `bench/recovery_1024` is the same relation at 1024-byte headers, 189,503 gates, also 2^18 |
+| Size | 248,996 UltraHonk gates, padded to 2^18 (`MEASUREMENTS.md`); `bench/recovery_1024` is the same relation at 1024-byte headers, 188,986 gates, also 2^18 |
 | Verification key | `contracts/email-verifier/vk/email_recovery.vk` (`bb write_vk --scheme ultra_honk --oracle_hash keccak`), compiled into the verifier contract |
 
 The leaf's domain is the lowercase `d=` value the circuit reads from `H`,

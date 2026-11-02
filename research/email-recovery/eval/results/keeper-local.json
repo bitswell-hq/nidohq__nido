@@ -1,5 +1,5 @@
 {
- "generated": "2026-11-02T07:04:41.201Z",
+ "generated": "2026-11-02T10:40:57.192Z",
  "network": {
   "kind": "stellar/quickstart --local",
   "image": "stellar/quickstart@sha256:e05d68bb3b2629a829310dc3434fc0ee3f801854bdfa1a7c8c362d2f1c9060f8",
@@ -24,15 +24,15 @@
    "action": "extend",
    "key": "AAAABgAAAAEpbXzMNCvhLpjVIfptcpryqmvfW9kgFkhryuJQd0O7sgAAABQAAAAB",
    "entryBytes": 96,
-   "from": 2073653,
-   "to": 3110543,
-   "hash": "fc6a2732bc627e49eae85a35d38a6421b6268b697613c56f7c404799e1c3f56c"
+   "from": 2073652,
+   "to": 3110533,
+   "hash": "3a6c085501ac31d9d5f7bdeae57864b43a31365e5e709a423f79c715d8f14ff9"
   },
   {
    "label": "email verifier code",
    "owner": "nido",
    "action": "extend",
-   "key": "AAAABw5COcqS0+OKnvxAwk7S1CN8Q3JTodNTcsjGpap8MZS5",
+   "key": "AAAAB11+GV4/LMXx/S6acFYhmCje1BJqfFCExRr5Pn9fNt/Y",
    "entryBytes": 45708,
    "costInputs": {
     "nInstructions": 9437,
@@ -46,19 +46,19 @@
     "nExports": 8,
     "nDataSegmentBytes": 23552
    },
-   "from": 2073651,
-   "to": 3110544,
-   "hash": "9b2d7410d4e8198eb304ab2b4b4051870db2966f6471a276ca6bd82fed4a3e4a"
+   "from": 2073650,
+   "to": 3110534,
+   "hash": "a8ef337e404ba0fcd8dce60138a80b576fbe10571324fddf032f1a7fb1a8b327"
   },
   {
    "label": "DKIM key registry instance",
    "owner": "nido",
    "action": "extend",
-   "key": "AAAABgAAAAF3Pt//Gj9g4gV0p4i4Cvr1FKi3ItBKBNzovp67pjoO4wAAABQAAAAB",
+   "key": "AAAABgAAAAFl9j3DOhZ7EjM6JLFRQdacvPJ2ct0f9yjfSsykQQTa0wAAABQAAAAB",
    "entryBytes": 1112,
-   "from": 3110529,
-   "to": 3110545,
-   "hash": "8ced9d5b3d0fe425073f4e747bb4ec32ea549b0e0e9485f2093d36ef9bb6fb32"
+   "from": 3110520,
+   "to": 3110535,
+   "hash": "b4e82ff898f98652d8897a85e171c6629424df26d9ad5e80597d55d13e65f844"
   },
   {
    "label": "DKIM key registry code",
@@ -78,19 +78,19 @@
     "nExports": 24,
     "nDataSegmentBytes": 38302
    },
-   "from": 3110529,
-   "to": 3110546,
-   "hash": "1f79fab943995c3f2f3e61a7d67ab515bfdd98015aed18e3f887f8c0871b74a9"
+   "from": 3110520,
+   "to": 3110536,
+   "hash": "69ff04dfa4156fb8ec33fc3423661955f130233faaca66f1a1c184c928f5d8e3"
   },
   {
    "label": "email guardian instance",
    "owner": "nido",
    "action": "extend",
-   "key": "AAAABgAAAAG+idEewD8QXW/U5WcK5TPVL6eKuSAouNh/oPzVtPyjywAAABQAAAAB",
+   "key": "AAAABgAAAAHyDaEnUz4NDCL4DVE3noBmjmOwCgze09FevyvdsQO+QQAAABQAAAAB",
    "entryBytes": 632,
-   "from": 3110537,
-   "to": 3110547,
-   "hash": "50ad191e3b9ad2fc6d4b91e178d7505ea852d800b9f0d0ba8039a6cde7662041"
+   "from": 3110527,
+   "to": 3110537,
+   "hash": "7e2789dfd9df851fa790367d9ab1bddc60e8d57a9f26ae2b35710c27d00d31c7"
   },
   {
    "label": "email guardian code",
@@ -110,9 +110,9 @@
     "nExports": 9,
     "nDataSegmentBytes": 26094
    },
-   "from": 3110537,
-   "to": 3110548,
-   "hash": "2a779e55be5907bf4feb2a07c84af5b2c9a16e5ba54ed9e4a4bcd3d96beb6b42"
+   "from": 3110527,
+   "to": 3110538,
+   "hash": "44f65087bbe30118f26f0eb3e829e6a1ca6233ee6950f15422e4e7fafd6f8fdb"
   },
   {
    "label": "recovery controller instance",
@@ -120,9 +120,9 @@
    "action": "extend",
    "key": "AAAABgAAAAG/J9SLdz8C0m0847Di3fgCXBS1RJtHTEeXFkK1CE1BYwAAABQAAAAB",
    "entryBytes": 96,
-   "from": 2073634,
-   "to": 3110549,
-   "hash": "40e2bd981a724a673abc1e3ac204941f848c20b72cf74d416c8b43b3965d415b"
+   "from": 2073641,
+   "to": 3110539,
+   "hash": "85da25f0962b978bb672a919c0924be3a4c3907a7f216d18b58ef755e0f804f2"
   },
   {
    "label": "recovery controller code",
@@ -142,9 +142,9 @@
     "nExports": 28,
     "nDataSegmentBytes": 35542
    },
-   "from": 2073633,
-   "to": 3110550,
-   "hash": "4fd39a233b5129e9a24bc9dfd9bfd02d6659b7c0fdf7ff30d3e1a4f0a7d8e5f7"
+   "from": 2073640,
+   "to": 3110540,
+   "hash": "36d3c68e40a7f416fc39d00a022ec59396578c638a77ee6ee46ee1f3e89e452f"
   },
   {
    "label": "doc compiler instance",
@@ -152,9 +152,9 @@
    "action": "extend",
    "key": "AAAABgAAAAEzyafQb8Kj1Wt2RYdk8RofCkYSFJU4DYOaq4o9MnmbOQAAABQAAAAB",
    "entryBytes": 96,
-   "from": 2073626,
-   "to": 3110551,
-   "hash": "c69cd82a4b009660b2e744701eb1737a326734ff0e2234abbafe335b35d2dc20"
+   "from": 2073630,
+   "to": 3110541,
+   "hash": "47e56b31f2d9b4332174ca9eca3adf5c11d66c46bb11973871064a2816d12896"
   },
   {
    "label": "doc compiler code",
@@ -174,9 +174,9 @@
     "nExports": 6,
     "nDataSegmentBytes": 21894
    },
-   "from": 2073625,
-   "to": 3110552,
-   "hash": "0751b9d3ad63d3755457544a75e9130eab46a8d8b7d3ef00178c6d8f1dc7af01"
+   "from": 2073628,
+   "to": 3110542,
+   "hash": "9ce793c04abda86e0a11fc9feac5fe6baa09f239f737934f82107d69f630f202"
   },
   {
    "label": "WebAuthn verifier instance",
@@ -184,9 +184,9 @@
    "action": "extend",
    "key": "AAAABgAAAAELPdj2QuGj11/7AgN+Vm7FkrcHUvmZkJ2CiOL12WmNTAAAABQAAAAB",
    "entryBytes": 96,
-   "from": 2073632,
-   "to": 3110553,
-   "hash": "ddf23ce52823b65c41ed5712d7d47cf055c060f9e989168586ab18e60e4066a2"
+   "from": 2073639,
+   "to": 3110543,
+   "hash": "61e25c01505896d201ee9b10c4664a178ebf33beac5e1ee573b5ca4a921af7ec"
   },
   {
    "label": "WebAuthn verifier code",
@@ -206,19 +206,19 @@
     "nExports": 5,
     "nDataSegmentBytes": 2419
    },
-   "from": 2073631,
-   "to": 3110554,
-   "hash": "e41e551a4120b0a321ba93b4cf3258e7ee57b0516e4f685c1c5084eb08245b16"
+   "from": 2073638,
+   "to": 3110544,
+   "hash": "425833349a0661445348669d81b62d0711997fe82e6817a23a6d2cf1bd9f7697"
   },
   {
    "label": "account instance",
    "owner": "wallet",
    "action": "extend",
-   "key": "AAAABgAAAAHAYuvcME9SAkIXFZaTKHIYdypNYUXDuOlUpMJ6hZewZgAAABQAAAAB",
+   "key": "AAAABgAAAAHz9WDIpMG90j6yUJHUbd2PxVM27JAiKVesEe6Trkc/DgAAABQAAAAB",
    "entryBytes": 476,
-   "from": 2073736,
-   "to": 3110555,
-   "hash": "220087d52c35c4fbe600c6d6e335841e35141428b23ee6ae764293ae4953008c"
+   "from": 2073726,
+   "to": 3110545,
+   "hash": "efcfff34f58222ab895c18bc4fecab5b064d3fa53da9284a949186ba73c2b0fc"
   },
   {
    "label": "account code",
@@ -238,19 +238,19 @@
     "nExports": 30,
     "nDataSegmentBytes": 24593
    },
-   "from": 2073643,
-   "to": 3110556,
-   "hash": "6f8bc92ab74397a7e32802cfa44ea0a711342a510139827b7125918d891e9269"
+   "from": 2073646,
+   "to": 3110546,
+   "hash": "ca35cff054aaa507f09a1c1d1a439420ee7864290fae92ee10f92fe11d0c48c0"
   }
  ],
  "transactions": [
   {
    "label": "keeper extend email verifier instance",
-   "hash": "fc6a2732bc627e49eae85a35d38a6421b6268b697613c56f7c404799e1c3f56c",
+   "hash": "3a6c085501ac31d9d5f7bdeae57864b43a31365e5e709a423f79c715d8f14ff9",
    "status": "SUCCESS",
-   "ledger": 144,
+   "ledger": 134,
    "ms": {
-    "total": 1551
+    "total": 1541
    },
    "envelopeBytes": 256,
    "declared": {
@@ -259,7 +259,7 @@
     "writeBytes": 0,
     "readOnly": 1,
     "readWrite": 0,
-    "resourceFee": 107094,
+    "resourceFee": 107093,
     "archivedEntries": 0
    },
    "footprint": {
@@ -271,23 +271,23 @@
    "simulated": {
     "instructions": 0,
     "memBytes": 0,
-    "minResourceFee": 107094
+    "minResourceFee": 107093
    },
    "authEntryBytes": 0,
-   "feeCharged": 89199,
+   "feeCharged": 89198,
    "feeSplit": {
     "nonRefundableResource": 1153,
-    "refundableResource": 87946,
-    "rent": 87946
+    "refundableResource": 87945,
+    "rent": 87945
    }
   },
   {
    "label": "keeper extend email verifier code",
-   "hash": "9b2d7410d4e8198eb304ab2b4b4051870db2966f6471a276ca6bd82fed4a3e4a",
+   "hash": "a8ef337e404ba0fcd8dce60138a80b576fbe10571324fddf032f1a7fb1a8b327",
    "status": "SUCCESS",
-   "ledger": 145,
+   "ledger": 135,
    "ms": {
-    "total": 786
+    "total": 1032
    },
    "envelopeBytes": 244,
    "declared": {
@@ -296,35 +296,35 @@
     "writeBytes": 0,
     "readOnly": 1,
     "readWrite": 0,
-    "resourceFee": 205536060,
+    "resourceFee": 205534276,
     "archivedEntries": 0
    },
    "footprint": {
     "readOnly": [
-     "code 0e4239ca"
+     "code 5d7e195e"
     ],
     "readWrite": []
    },
    "simulated": {
     "instructions": 0,
     "memBytes": 0,
-    "minResourceFee": 205536060
+    "minResourceFee": 205534276
    },
    "authEntryBytes": 0,
-   "feeCharged": 178723250,
+   "feeCharged": 178721699,
    "feeSplit": {
     "nonRefundableResource": 1127,
-    "refundableResource": 178722023,
-    "rent": 178722023
+    "refundableResource": 178720472,
+    "rent": 178720472
    }
   },
   {
    "label": "keeper extend DKIM key registry instance",
-   "hash": "8ced9d5b3d0fe425073f4e747bb4ec32ea549b0e0e9485f2093d36ef9bb6fb32",
+   "hash": "b4e82ff898f98652d8897a85e171c6629424df26d9ad5e80597d55d13e65f844",
    "status": "SUCCESS",
-   "ledger": 146,
+   "ledger": 136,
    "ms": {
-    "total": 1038
+    "total": 1039
    },
    "envelopeBytes": 256,
    "declared": {
@@ -333,35 +333,35 @@
     "writeBytes": 0,
     "readOnly": 1,
     "readWrite": 0,
-    "resourceFee": 7434,
+    "resourceFee": 7433,
     "archivedEntries": 0
    },
    "footprint": {
     "readOnly": [
-     "data CB3T5X persistent instance"
+     "data CBS7MP persistent instance"
     ],
     "readWrite": []
    },
    "simulated": {
     "instructions": 0,
     "memBytes": 0,
-    "minResourceFee": 7434
+    "minResourceFee": 7433
    },
    "authEntryBytes": 0,
-   "feeCharged": 2539,
+   "feeCharged": 2538,
    "feeSplit": {
     "nonRefundableResource": 1153,
-    "refundableResource": 1286,
-    "rent": 1286
+    "refundableResource": 1285,
+    "rent": 1285
    }
   },
   {
    "label": "keeper extend DKIM key registry code",
-   "hash": "1f79fab943995c3f2f3e61a7d67ab515bfdd98015aed18e3f887f8c0871b74a9",
+   "hash": "69ff04dfa4156fb8ec33fc3423661955f130233faaca66f1a1c184c928f5d8e3",
    "status": "SUCCESS",
-   "ledger": 147,
+   "ledger": 137,
    "ms": {
-    "total": 1048
+    "total": 1081
    },
    "envelopeBytes": 244,
    "declared": {
@@ -370,7 +370,7 @@
     "writeBytes": 0,
     "readOnly": 1,
     "readWrite": 0,
-    "resourceFee": 12265,
+    "resourceFee": 11961,
     "archivedEntries": 0
    },
    "footprint": {
@@ -382,23 +382,23 @@
    "simulated": {
     "instructions": 0,
     "memBytes": 0,
-    "minResourceFee": 12265
+    "minResourceFee": 11961
    },
    "authEntryBytes": 0,
-   "feeCharged": 6999,
+   "feeCharged": 6734,
    "feeSplit": {
     "nonRefundableResource": 1127,
-    "refundableResource": 5772,
-    "rent": 5772
+    "refundableResource": 5507,
+    "rent": 5507
    }
   },
   {
    "label": "keeper extend email guardian instance",
-   "hash": "50ad191e3b9ad2fc6d4b91e178d7505ea852d800b9f0d0ba8039a6cde7662041",
+   "hash": "7e2789dfd9df851fa790367d9ab1bddc60e8d57a9f26ae2b35710c27d00d31c7",
    "status": "SUCCESS",
-   "ledger": 148,
+   "ledger": 138,
    "ms": {
-    "total": 1042
+    "total": 786
    },
    "envelopeBytes": 256,
    "declared": {
@@ -412,7 +412,7 @@
    },
    "footprint": {
     "readOnly": [
-     "data CC7ITU persistent instance"
+     "data CDZA3I persistent instance"
     ],
     "readWrite": []
    },
@@ -431,11 +431,11 @@
   },
   {
    "label": "keeper extend email guardian code",
-   "hash": "2a779e55be5907bf4feb2a07c84af5b2c9a16e5ba54ed9e4a4bcd3d96beb6b42",
+   "hash": "44f65087bbe30118f26f0eb3e829e6a1ca6233ee6950f15422e4e7fafd6f8fdb",
    "status": "SUCCESS",
-   "ledger": 149,
+   "ledger": 139,
    "ms": {
-    "total": 784
+    "total": 1039
    },
    "envelopeBytes": 244,
    "declared": {
@@ -468,11 +468,11 @@
   },
   {
    "label": "keeper extend recovery controller instance",
-   "hash": "40e2bd981a724a673abc1e3ac204941f848c20b72cf74d416c8b43b3965d415b",
+   "hash": "85da25f0962b978bb672a919c0924be3a4c3907a7f216d18b58ef755e0f804f2",
    "status": "SUCCESS",
-   "ledger": 150,
+   "ledger": 140,
    "ms": {
-    "total": 1036
+    "total": 1049
    },
    "envelopeBytes": 256,
    "declared": {
@@ -481,7 +481,7 @@
     "writeBytes": 0,
     "readOnly": 1,
     "readWrite": 0,
-    "resourceFee": 107097,
+    "resourceFee": 107094,
     "archivedEntries": 0
    },
    "footprint": {
@@ -493,23 +493,23 @@
    "simulated": {
     "instructions": 0,
     "memBytes": 0,
-    "minResourceFee": 107097
+    "minResourceFee": 107094
    },
    "authEntryBytes": 0,
-   "feeCharged": 89201,
+   "feeCharged": 89199,
    "feeSplit": {
     "nonRefundableResource": 1153,
-    "refundableResource": 87948,
-    "rent": 87948
+    "refundableResource": 87946,
+    "rent": 87946
    }
   },
   {
    "label": "keeper extend recovery controller code",
-   "hash": "4fd39a233b5129e9a24bc9dfd9bfd02d6659b7c0fdf7ff30d3e1a4f0a7d8e5f7",
+   "hash": "36d3c68e40a7f416fc39d00a022ec59396578c638a77ee6ee46ee1f3e89e452f",
    "status": "SUCCESS",
-   "ledger": 151,
+   "ledger": 141,
    "ms": {
-    "total": 1040
+    "total": 1046
    },
    "envelopeBytes": 244,
    "declared": {
@@ -518,7 +518,7 @@
     "writeBytes": 0,
     "readOnly": 1,
     "readWrite": 0,
-    "resourceFee": 330227224,
+    "resourceFee": 330221811,
     "archivedEntries": 0
    },
    "footprint": {
@@ -530,23 +530,23 @@
    "simulated": {
     "instructions": 0,
     "memBytes": 0,
-    "minResourceFee": 330227224
+    "minResourceFee": 330221811
    },
    "authEntryBytes": 0,
-   "feeCharged": 287150454,
+   "feeCharged": 287145747,
    "feeSplit": {
     "nonRefundableResource": 1127,
-    "refundableResource": 287149227,
-    "rent": 287149227
+    "refundableResource": 287144520,
+    "rent": 287144520
    }
   },
   {
    "label": "keeper extend doc compiler instance",
-   "hash": "c69cd82a4b009660b2e744701eb1737a326734ff0e2234abbafe335b35d2dc20",
+   "hash": "47e56b31f2d9b4332174ca9eca3adf5c11d66c46bb11973871064a2816d12896",
    "status": "SUCCESS",
-   "ledger": 152,
+   "ledger": 142,
    "ms": {
-    "total": 1030
+    "total": 790
    },
    "envelopeBytes": 256,
    "declared": {
@@ -555,7 +555,7 @@
     "writeBytes": 0,
     "readOnly": 1,
     "readWrite": 0,
-    "resourceFee": 107098,
+    "resourceFee": 107096,
     "archivedEntries": 0
    },
    "footprint": {
@@ -567,23 +567,23 @@
    "simulated": {
     "instructions": 0,
     "memBytes": 0,
-    "minResourceFee": 107098
+    "minResourceFee": 107096
    },
    "authEntryBytes": 0,
-   "feeCharged": 89202,
+   "feeCharged": 89200,
    "feeSplit": {
     "nonRefundableResource": 1153,
-    "refundableResource": 87949,
-    "rent": 87949
+    "refundableResource": 87947,
+    "rent": 87947
    }
   },
   {
    "label": "keeper extend doc compiler code",
-   "hash": "0751b9d3ad63d3755457544a75e9130eab46a8d8b7d3ef00178c6d8f1dc7af01",
+   "hash": "9ce793c04abda86e0a11fc9feac5fe6baa09f239f737934f82107d69f630f202",
    "status": "SUCCESS",
-   "ledger": 153,
+   "ledger": 143,
    "ms": {
-    "total": 1035
+    "total": 1041
    },
    "envelopeBytes": 244,
    "declared": {
@@ -592,7 +592,7 @@
     "writeBytes": 0,
     "readOnly": 1,
     "readWrite": 0,
-    "resourceFee": 776821051,
+    "resourceFee": 776811311,
     "archivedEntries": 0
    },
    "footprint": {
@@ -604,23 +604,23 @@
    "simulated": {
     "instructions": 0,
     "memBytes": 0,
-    "minResourceFee": 776821051
+    "minResourceFee": 776811311
    },
    "authEntryBytes": 0,
-   "feeCharged": 675493286,
+   "feeCharged": 675484818,
    "feeSplit": {
     "nonRefundableResource": 1127,
-    "refundableResource": 675492059,
-    "rent": 675492059
+    "refundableResource": 675483591,
+    "rent": 675483591
    }
   },
   {
    "label": "keeper extend WebAuthn verifier instance",
-   "hash": "ddf23ce52823b65c41ed5712d7d47cf055c060f9e989168586ab18e60e4066a2",
+   "hash": "61e25c01505896d201ee9b10c4664a178ebf33beac5e1ee573b5ca4a921af7ec",
    "status": "SUCCESS",
-   "ledger": 154,
+   "ledger": 144,
    "ms": {
-    "total": 778
+    "total": 1050
    },
    "envelopeBytes": 256,
    "declared": {
@@ -629,7 +629,7 @@
     "writeBytes": 0,
     "readOnly": 1,
     "readWrite": 0,
-    "resourceFee": 107097,
+    "resourceFee": 107096,
     "archivedEntries": 0
    },
    "footprint": {
@@ -641,23 +641,23 @@
    "simulated": {
     "instructions": 0,
     "memBytes": 0,
-    "minResourceFee": 107097
+    "minResourceFee": 107096
    },
    "authEntryBytes": 0,
-   "feeCharged": 89201,
+   "feeCharged": 89200,
    "feeSplit": {
     "nonRefundableResource": 1153,
-    "refundableResource": 87948,
-    "rent": 87948
+    "refundableResource": 87947,
+    "rent": 87947
    }
   },
   {
    "label": "keeper extend WebAuthn verifier code",
-   "hash": "e41e551a4120b0a321ba93b4cf3258e7ee57b0516e4f685c1c5084eb08245b16",
+   "hash": "425833349a0661445348669d81b62d0711997fe82e6817a23a6d2cf1bd9f7697",
    "status": "SUCCESS",
-   "ledger": 155,
+   "ledger": 145,
    "ms": {
-    "total": 1032
+    "total": 1048
    },
    "envelopeBytes": 244,
    "declared": {
@@ -666,7 +666,7 @@
     "writeBytes": 0,
     "readOnly": 1,
     "readWrite": 0,
-    "resourceFee": 97635033,
+    "resourceFee": 97633432,
     "archivedEntries": 0
    },
    "footprint": {
@@ -678,23 +678,23 @@
    "simulated": {
     "instructions": 0,
     "memBytes": 0,
-    "minResourceFee": 97635033
+    "minResourceFee": 97633432
    },
    "authEntryBytes": 0,
-   "feeCharged": 84896180,
+   "feeCharged": 84894788,
    "feeSplit": {
     "nonRefundableResource": 1127,
-    "refundableResource": 84894953,
-    "rent": 84894953
+    "refundableResource": 84893561,
+    "rent": 84893561
    }
   },
   {
    "label": "keeper extend account instance",
-   "hash": "220087d52c35c4fbe600c6d6e335841e35141428b23ee6ae764293ae4953008c",
+   "hash": "efcfff34f58222ab895c18bc4fecab5b064d3fa53da9284a949186ba73c2b0fc",
    "status": "SUCCESS",
-   "ledger": 156,
+   "ledger": 146,
    "ms": {
-    "total": 1033
+    "total": 806
    },
    "envelopeBytes": 256,
    "declared": {
@@ -708,7 +708,7 @@
    },
    "footprint": {
     "readOnly": [
-     "data CDAGF2 persistent instance"
+     "data CDZ7KY persistent instance"
     ],
     "readWrite": []
    },
@@ -727,11 +727,11 @@
   },
   {
    "label": "keeper extend account code",
-   "hash": "6f8bc92ab74397a7e32802cfa44ea0a711342a510139827b7125918d891e9269",
+   "hash": "ca35cff054aaa507f09a1c1d1a439420ee7864290fae92ee10f92fe11d0c48c0",
    "status": "SUCCESS",
-   "ledger": 157,
+   "ledger": 147,
    "ms": {
-    "total": 1034
+    "total": 1055
    },
    "envelopeBytes": 244,
    "declared": {
@@ -740,7 +740,7 @@
     "writeBytes": 0,
     "readOnly": 1,
     "readWrite": 0,
-    "resourceFee": 435573496,
+    "resourceFee": 435568035,
     "archivedEntries": 0
    },
    "footprint": {
@@ -752,14 +752,14 @@
    "simulated": {
     "instructions": 0,
     "memBytes": 0,
-    "minResourceFee": 435573496
+    "minResourceFee": 435568035
    },
    "authEntryBytes": 0,
-   "feeCharged": 378755996,
+   "feeCharged": 378751248,
    "feeSplit": {
     "nonRefundableResource": 1127,
-    "refundableResource": 378754769,
-    "rent": 378754769
+    "refundableResource": 378750021,
+    "rent": 378750021
    }
   }
  ]

@@ -15,10 +15,10 @@ import { RecoveryProver, type ProverAssets } from '@nidohq/email-recovery';
 import circuitUrl from '../../../../../circuits/email-recovery/artifacts/recovery.json?url';
 import vkUrl from '../../../../../contracts/email-verifier/vk/email_recovery.vk?url';
 
-export const EMAIL_CIRCUIT_ID = '2837d0cfd7ddad684006e3eb4eba4ff7f4ed732a9d93423a79e69523d4a43b64';
+export const EMAIL_CIRCUIT_ID = 'a998d03e2069b41c875235876c3aa9c54bbc054c16fab0c38296651d01a93dbc';
 
-/** What a first proof downloads, in octets: the artifact (2,011,102), the key (1,760), and the CRS prefix and G2 point (16,777,408). */
-export const FIRST_PROOF_DOWNLOAD = 2_011_102 + 1_760 + 16_777_408;
+/** What a first proof downloads, in octets: the artifact (1,885,167), the key (1,760), and the CRS prefix and G2 point (16,777,408). */
+export const FIRST_PROOF_DOWNLOAD = 1_885_167 + 1_760 + 16_777_408;
 
 /** `crsBaseUrl`: where `g1.dat` and `g2.dat` are served, Barretenberg's own host unless set; either way the CRS must match the prover's pinned digests. */
 export function emailProverAssets(crsBaseUrl?: string): ProverAssets {

@@ -5,24 +5,37 @@
 //! of two forms:
 //!
 //! ```text
-//! from-value   = addr-spec
-//!              / display-name "<" addr-spec ">"      ; ">" is the last byte
-//! display-name = *( %x20-3B / %x3D / %x3F-7E )        ; printable ASCII except "<" and ">"
-//! addr-spec    = local-part "@" domain
-//! local-part   = atom *( "." atom )                   ; RFC 5322 dot-atom, no quoting
-//! domain       = label 1*( "." label )
-//! label        = 1 to 63 of ALPHA / DIGIT / "-", starting and ending
-//!                with ALPHA or DIGIT                  ; RFC 1123 section 2.1
+//! from-value    = addr-spec
+//!               / display-name "<" addr-spec ">"     ; ">" is the last byte
+//! display-name  = *( atext / "." / SP / quoted-string )
+//! quoted-string = DQUOTE *( qtext / SP / quoted-pair ) DQUOTE
+//! qtext         = %x21 / %x23-3B / %x3D / %x3F-5B / %x5D-7E
+//!                                                    ; printable except SP " < > \
+//! quoted-pair   = "\" ( %x20-3B / %x3D / %x3F-7E )  ; printable except < >
+//! addr-spec     = local-part "@" domain
+//! local-part    = atom *( "." atom )                 ; RFC 5322 dot-atom, no quoting
+//! domain        = label 1*( "." label )
+//! label         = 1 to 63 of ALPHA / DIGIT / "-", starting and ending
+//!                 with ALPHA or DIGIT                ; RFC 1123 section 2.1
 //! ```
 //!
-//! The whole value is printable ASCII. If it holds a `<`, it holds exactly
-//! one `<` and one `>`, the `>` is its last byte, and the address is the bytes
-//! between them; otherwise the whole value is the address. So the address is
-//! always the one that closes the field: a display name, however long or
-//! address-like, cannot become the address. Quoted local parts, comments,
-//! groups and address lists are refused. The address is at most `MAX_ADDR`
-//! bytes (the spec's `ADDR_MAX` is 124) and is returned exactly as signed,
-//! without case folding or dot or plus-tag normalization.
+//! The display name is RFC 5322's phrase without comments or folding: words
+//! of `atext` (RFC 2047 encoded-words among them), quoted strings, and the
+//! `.` of the obsolete phrase syntax, separated by SP. Outside a quoted
+//! string it holds none of `( ) , : ; @ \ [ ]` and every quoted string is
+//! closed, so an RFC 5322 reader finds no address list, group, comment or
+//! second mailbox in it. The scan's display-name automaton (`tables`,
+//! `PHRASE_NEXT`) checks this byte by byte: the `<` that opens the angle-addr
+//! is the first `<` outside a quoted string, and nothing before it breaks the
+//! grammar. So the value holds
+//! exactly one `<` and one `>`, the `>` is its last byte, and the address is
+//! the bytes between them; or it holds neither and the whole value is the
+//! address. A display name, however long or address-like, cannot become the
+//! address, and the address is the one mailbox an RFC 5322 reader reads.
+//! Quoted local parts, comments, groups and address lists are refused. The
+//! address is at most `MAX_ADDR` bytes (the spec's `ADDR_MAX` is 124) and is
+//! returned exactly as signed, without case folding or dot or plus-tag
+//! normalization.
 
 use crate::header::{FROM_NAME_LEN, HeaderLayout};
 use crate::tables::{CR, DOMAIN, LOCAL_PART, read_if};
@@ -73,12 +86,15 @@ pub fn parse_from<let N: u32, let MAX_ADDR: u32>(
     let opening = h[a - 1] == 60;
     assert(opening == closing, "From: unbalanced angle-addr");
     assert(closing | (a == value_start), "From: a bare address must be the whole field value");
-    // In value_start..end: exactly the delimiting `<` and `>`, or none, and
-    // nothing outside printable ASCII.
-    let angles = layout.angle_upto[end - 1] - layout.angle_upto[value_start - 1];
-    assert(angles == 2 * closing as Field, "From: the field must hold exactly one angle-addr");
-    let unprintable = layout.unprintable_upto[end - 1] - layout.unprintable_upto[value_start - 1];
-    assert(unprintable == 0, "From: field value must be printable ASCII");
+    // In value_start..a: the display name and the `<` that opens the
+    // angle-addr, or nothing for a bare address. The line is in the
+    // automaton's start state at value_start (`from:` leaves it there), so no
+    // fault means the display name is a phrase that ends outside a quoted
+    // string and holds no `<` or `>`. The address grammar below admits no
+    // `<`, `>` or unprintable byte, so the field holds exactly one
+    // angle-addr or none.
+    let faults = layout.phrase_faults_upto[a - 1] - layout.phrase_faults_upto[value_start - 1];
+    assert(faults == 0, "From: invalid display name");
 
     let mut addr: [u8; MAX_ADDR] = [0; MAX_ADDR];
     for k in 0..MAX_ADDR {

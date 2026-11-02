@@ -3,9 +3,8 @@
 
 use crate::common::{equals, header, verify};
 use crate::vectors::{
-    ADDR_MAX_LENGTH_HEADER, ADDR_MAX_LENGTH_SIG, ADDRESS_LIKE_DISPLAY_NAME_HEADER,
-    ADDRESS_LIKE_DISPLAY_NAME_SIG, ATEXT_LOCAL_PART_HEADER, ATEXT_LOCAL_PART_SIG, BH_IN_Z_HEADER,
-    BH_IN_Z_SIG, BODY_HASH_B64, DIGEST_HI, DIGEST_LO, DIGIT_LEADING_LABEL_HEADER,
+    ADDR_MAX_LENGTH_HEADER, ADDR_MAX_LENGTH_SIG, ATEXT_LOCAL_PART_HEADER, ATEXT_LOCAL_PART_SIG,
+    BH_IN_Z_HEADER, BH_IN_Z_SIG, BODY_HASH_B64, DIGEST_HI, DIGEST_LO, DIGIT_LEADING_LABEL_HEADER,
     DIGIT_LEADING_LABEL_SIG, FROM_THEN_TO_ANGLE_HEADER, FROM_THEN_TO_ANGLE_SIG, GMAIL_HEADER,
     GMAIL_SIG, KEY_A_MODULUS, LONG_DISPLAY_NAME_HEADER, LONG_DISPLAY_NAME_SIG, NO_T_HEADER,
     NO_T_SIG, OUTLOOK_HEADER, OUTLOOK_SIG, PLUS_TAG_HEADER, PLUS_TAG_SIG, REGEX_RESET_HEADER,
@@ -123,17 +122,6 @@ fn long_display_name() {
         LONG_DISPLAY_NAME_SIG,
     );
     assert(equals(out.from_address, "alice.example@gmail.com".as_bytes()));
-}
-
-/// An address-like display name is accepted, and the address read is the
-/// angle-addr that closes the field.
-#[test]
-fn address_like_display_name_yields_the_angle_addr() {
-    let out = verify(
-        header(ADDRESS_LIKE_DISPLAY_NAME_HEADER.as_bytes()),
-        ADDRESS_LIKE_DISPLAY_NAME_SIG,
-    );
-    assert(equals(out.from_address, "attacker@gmail.com".as_bytes()));
 }
 
 /// A signed field after From that holds an address in angle brackets.
