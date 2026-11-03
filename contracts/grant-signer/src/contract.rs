@@ -1,13 +1,13 @@
 use alloc::vec::Vec as AVec;
-use grant_eval::{budget, chain};
+use grant_eval::chain;
 use soroban_sdk::auth::{Context, ContractContext, CustomAccountInterface};
 use soroban_sdk::crypto::Hash;
 use soroban_sdk::{
     contract, contractimpl, contracttype, Address, BytesN, Env, Executable, Symbol, TryFromVal, Vec,
 };
 
-use crate::actions;
 use crate::error::GrantError as Error;
+use crate::{actions, budget};
 use crate::{Caveat, Grant, GrantSignature};
 
 #[contracttype]
@@ -78,19 +78,15 @@ fn lineage(e: &Env, id: u32) -> Result<AVec<(u32, Grant)>, Error> {
     Ok(out)
 }
 
-/// The budget ledger of a lineage: one node per grant, root first, each
+/// The budget tree of a lineage: one node per grant, root first, each
 /// node's parent the one before it (`Ledger.chain` in `formal/`, which proves
 /// that spends on it are the whole ledger's, restricted to the lineage).
-fn ledger(lineage: &[(u32, Grant)]) -> AVec<budget::Node> {
-    let mut out = AVec::new();
-    for (i, (_, g)) in lineage.iter().enumerate() {
-        out.push(budget::Node {
-            parent: i.checked_sub(1),
-            allowance: g.allowance,
-            spent: g.spent,
-        });
-    }
-    out
+fn ledger(lineage: &[(u32, Grant)]) -> Result<AVec<rule_eval::Node>, Error> {
+    let grants: AVec<(u128, u128)> = lineage
+        .iter()
+        .map(|(_, g)| (g.allowance, g.spent))
+        .collect();
+    budget::chain(&grants)
 }
 
 /// Whether `c` is `delegate(parent, …)` on this contract with `parent` the
@@ -132,6 +128,7 @@ impl GrantSigner {
     /// # Errors
     ///
     /// [`Error::NotStellarAsset`] if `asset` is not a Stellar Asset Contract,
+    /// [`Error::AllowanceTooLarge`] if `allowance` is above `i128::MAX`,
     /// [`Error::Overflow`] if the grant ids are exhausted.
     pub fn issue(
         e: Env,
@@ -144,6 +141,7 @@ impl GrantSigner {
         if asset.executable() != Some(Executable::StellarAsset) {
             return Err(Error::NotStellarAsset);
         }
+        budget::amount(allowance)?;
         create(
             &e,
             &Grant {
@@ -167,6 +165,7 @@ impl GrantSigner {
     /// # Errors
     ///
     /// [`Error::NoSuchGrant`] if `parent` does not exist,
+    /// [`Error::AllowanceTooLarge`] if `allowance` is above `i128::MAX`,
     /// [`Error::Overflow`] if the grant ids are exhausted.
     pub fn delegate(
         e: Env,
@@ -177,6 +176,7 @@ impl GrantSigner {
     ) -> Result<u32, Error> {
         e.current_contract_address().require_auth();
         let from = load(&e, parent)?;
+        budget::amount(allowance)?;
         let mut all = from.caveats;
         all.append(&caveats);
         create(
@@ -221,26 +221,19 @@ impl GrantSigner {
         Ok(())
     }
 
-    /// Raise grant `id`'s allowance by `extra`, with `budget::refill` on a
-    /// ledger of the one grant (`Ledger.refillGrant` in `formal/`). Requires
+    /// Raise grant `id`'s allowance by `extra`, with `rule_eval::refill` on
+    /// a tree of the one grant (`Ledger.refillGrant` in `formal/`). Requires
     /// the account's authorization.
     ///
     /// # Errors
     ///
-    /// [`Error::NoSuchGrant`] if `id` does not exist, [`Error::Overflow`] if
-    /// the allowance would pass `u128::MAX`.
+    /// [`Error::NoSuchGrant`] if `id` does not exist,
+    /// [`Error::AllowanceTooLarge`] if `extra` or the raised allowance is
+    /// above `i128::MAX`.
     pub fn refill(e: Env, id: u32, extra: u128) -> Result<(), Error> {
         account(&e).require_auth();
         let mut grant = load(&e, id)?;
-        let mut node = [budget::Node {
-            parent: None,
-            allowance: grant.allowance,
-            spent: grant.spent,
-        }];
-        if budget::refill(&mut node, 0, extra).is_err() {
-            return Err(Error::Overflow);
-        }
-        grant.allowance = node[0].allowance;
+        grant.allowance = budget::refill(grant.allowance, grant.spent, extra)?;
         save(&e, id, &grant);
         Ok(())
     }
@@ -252,15 +245,12 @@ impl GrantSigner {
     /// # Errors
     ///
     /// [`Error::NoSuchGrant`] or [`Error::Revoked`] for `id`'s lineage.
+    /// [`Error::AllowanceTooLarge`] if a grant on it holds an amount above
+    /// `i128::MAX`, which no grant this contract stored does.
     pub fn overdrawn_at(e: Env, id: u32, amount: u128) -> Result<Option<u32>, Error> {
         let lineage = lineage(&e, id)?;
-        let nodes = ledger(&lineage);
-        match budget::check_spend(&nodes, nodes.len() - 1, amount) {
-            Err(budget::SpendError::Overdrawn(i)) => Ok(Some(lineage[i].0)),
-            // A ledger built from a lineage is well formed, so `check_spend`
-            // fails only with `Overdrawn`.
-            _ => Ok(None),
-        }
+        let tree = ledger(&lineage)?;
+        Ok(budget::overdrawn_at(&tree, amount).map(|i| lineage[i].0))
     }
 }
 
@@ -320,23 +310,10 @@ impl CustomAccountInterface for GrantSigner {
             return Ok(());
         }
         // All or nothing: `Ledger.spendAll`, then `Ledger.writeBack`.
-        let mut nodes = ledger(&lineage);
-        let spender = nodes.len() - 1;
-        for amount in spends {
-            if budget::spend(&mut nodes, spender, amount).is_err() {
-                return Err(Error::Overdrawn);
-            }
-        }
-        for ((id, grant), node) in lineage.into_iter().zip(nodes) {
-            if node.spent != grant.spent {
-                save(
-                    &e,
-                    id,
-                    &Grant {
-                        spent: node.spent,
-                        ..grant
-                    },
-                );
+        let spent = budget::spend_all(ledger(&lineage)?, &spends)?;
+        for ((id, grant), spent) in lineage.into_iter().zip(spent) {
+            if spent != grant.spent {
+                save(&e, id, &Grant { spent, ..grant });
             }
         }
         Ok(())

@@ -361,11 +361,17 @@ storage holds grants `0` to `NextId - 1`, and none is ever removed; read as
 `(parent, allowance, spent)` they are the ledger. `issue` and `delegate`
 store a grant with nothing spent at `NextId`, after `delegate` has loaded
 its parent, which is `append`. `lineage` returns a list satisfying
-`IsLineage` and ending at the signing grant. `ledger` builds a vector
-denoting `chain ps`. The spend loop calls the extracted `spend` at the last
-node for each metered transfer in order and returns on the first error
-(`spendAllExtracted`, below). The store loop is `writeBack`. Each is a few
-lines of `contracts/grant-signer/src/contract.rs`.
+`IsLineage` and ending at the signing grant. `ledger` builds a budget tree
+denoting `chain ps`. The spend loop calls `rule_eval::spend` at the last node
+for each metered transfer in order and returns on the first error, the loop
+`spendAllExtracted` (below) states over `grant_eval::budget`'s extracted
+`spend`. The store loop is `writeBack`. Each is a few lines of
+`contracts/grant-signer/src/contract.rs` and `src/budget.rs`. The contract
+calls `rule_eval`'s budget tree, which rule-core proves against its own Lean
+model, not `grant_eval::budget`; that the two agree on lineage ledgers, for
+amounts up to `i128::MAX`, the bound the contract keeps every allowance
+within, is tested (`contracts/grant-signer/src/budget/tests.rs`), not
+proven.
 
 ## Extracted evaluator
 
@@ -499,8 +505,8 @@ model has no allocator, so the bound is stated rather than proven.
 ### The grant signer's calls
 
 `Equiv/Signer.lean` defines `spendAllExtracted`, the grant signer's spend
-loop over the extracted `spend` (each amount in order at node `i`, stopping
-at the first `Err`), and proves, with `L = denoteLedger s.val`:
+loop run over the extracted `spend` (each amount in order at node `i`,
+stopping at the first `Err`), and proves, with `L = denoteLedger s.val`:
 
 | Lean name | Statement |
 |---|---|
@@ -550,7 +556,8 @@ Proven: the Lean translation agrees with the model. Trusted, not proven:
   model;
 - the grant signer's **storage wiring**: that its stored grants are the
   ledger and its `lineage`, `ledger`, spend loop and store loop are
-  `IsLineage`, `chain`, `spendAllExtracted` and `writeBack`
+  `IsLineage`, `chain`, `spendAllExtracted` and `writeBack`, with
+  `rule_eval::spend` standing for the extracted `spend`
   ([The grant signer's budget path](#the-grant-signers-budget-path)).
 
 ## Axioms
@@ -571,8 +578,8 @@ the agreement of the Charon + Aeneas translation of `crates/grant-eval` with
 the model, with attenuation and chaining carried over to Rust caveat slices
 and budget safety (theorem 4, spent within allowance, and total spent under a
 node within its allowance, over runs that grow the tree) carried over to the
-Rust budget code and to the grant signer's use of it, one lineage ledger per
-authorization.
+Rust budget code and to the grant signer's budget path run over it, one
+lineage ledger per authorization.
 
 Stated but unproven, or not yet stated:
 
@@ -595,5 +602,7 @@ Stated but unproven, or not yet stated:
   That `contracts/grant-signer` is those definitions, and that only the
   account's authorization reaches its `issue` and `refill`, is stated, not
   proven ([The grant signer's budget path](#the-grant-signers-budget-path)).
+  The contract calls `rule_eval`'s `spend` and `refill`, not the extracted
+  code; their agreement on lineage ledgers is tested, not proven.
 - **Refill approval**: how a refill request reaches its approver is outside
   this package.

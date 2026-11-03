@@ -1,5 +1,6 @@
 //! `nido-grant-signer`: AI agents' authority over a Nido account, held as
-//! attenuating grants and enforced by `grant-eval` on every authorization.
+//! attenuating grants and enforced on every authorization by `grant-eval`'s
+//! chain vocabulary and `rule-eval`'s budget tree.
 //!
 //! Each Nido account that admits agents gets its own instance, deployed with
 //! the account's address. The account's policy document declares the
@@ -19,7 +20,7 @@
 //!    `grant_eval::chain::Action` and refuses unless
 //!    `grant_eval::chain::allows_all` holds for the grant's caveats;
 //! 5. charges every `transfer` on the grant's budget asset to the grant and
-//!    each ancestor with `grant_eval::budget::spend`, refusing the whole
+//!    each ancestor with `rule_eval::spend`, refusing the whole
 //!    authorization if any of them would be overdrawn, and refuses any other
 //!    call on that asset.
 //!
@@ -42,6 +43,7 @@
 extern crate alloc;
 
 mod actions;
+mod budget;
 mod contract;
 mod error;
 
@@ -91,6 +93,7 @@ pub struct Grant {
     /// The Stellar Asset Contract the budget is denominated in, the root
     /// grant's for every grant under it.
     pub asset: Address,
+    /// At most `i128::MAX`: `issue`, `delegate` and `refill` refuse more.
     pub allowance: u128,
     /// Every successful spend at or under this grant.
     pub spent: u128,

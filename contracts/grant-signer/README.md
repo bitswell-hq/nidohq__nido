@@ -5,7 +5,8 @@ Nido account is a grant held in this contract: a list of chain caveats, the
 holder's ed25519 key, and a budget node. Every authorization an agent gives
 for the account passes through this contract's `__check_auth`, which checks
 every context of the authorization with `grant_eval::chain::allows_all` and
-charges every transfer of the budget asset with `grant_eval::budget::spend`.
+charges every transfer of the budget asset with `rule_eval::spend`, the
+budget tree of [rule-core](https://github.com/bitswell/soroban-rule-core).
 
 One instance serves one account and is deployed with that account's address.
 The account is the Perch account Nido's factory mints, unchanged.
@@ -84,11 +85,11 @@ one call.
 
 | Function | Authorized by | Effect |
 | --- | --- | --- |
-| `issue(key, caveats, asset, allowance)` | the account | a root grant; `asset` must be a Stellar Asset Contract |
+| `issue(key, caveats, asset, allowance)` | the account | a root grant; `asset` must be a Stellar Asset Contract and `allowance` at most `i128::MAX` |
 | `revoke(id)` | the account | marks `id` revoked, and with it every grant delegated from it |
 | `rotate(id, key)` | the account | replaces `id`'s holder key |
-| `refill(id, extra)` | the account | raises `id`'s allowance with `grant_eval::budget::refill` |
-| `delegate(parent, key, caveats, allowance)` | this contract, for `parent`'s holder | a child grant |
+| `refill(id, extra)` | the account | raises `id`'s allowance with `rule_eval::refill`, to at most `i128::MAX` |
+| `delegate(parent, key, caveats, allowance)` | this contract, for `parent`'s holder | a child grant; `allowance` at most `i128::MAX` |
 | `grant(id)`, `account()`, `overdrawn_at(id, amount)` | anyone | views |
 
 The account authorizes the admin functions by calling them itself: its
@@ -132,7 +133,7 @@ In order, returning the first failure ([`GrantError`](src/error.rs)):
    with its arguments and require `grant_eval::chain::allows_all` over the
    grant's caveats: `NotAllowed`.
 5. Charge each budget-asset transfer to the grant and every ancestor with
-   `grant_eval::budget::spend` over the lineage's ledger: `Overdrawn` if any
+   `rule_eval::spend` over the lineage's budget tree: `Overdrawn` if any
    node would pass its allowance. Only if every spend succeeds are the new
    `spent` values stored.
 
@@ -221,19 +222,26 @@ every ancestor is charged in the same authorization. Transfers of other
 assets are bounded only by caveats, for example `ArgI128AtMost(2, n)` per
 call or a `ContractIn` that leaves the asset out.
 
-Grant ids index one `grant_eval::budget` ledger: a grant's `parent`,
-`allowance` and `spent` are its node. The contract never holds that ledger
-whole:
+Grant ids index one ledger, `formal/AttenuatingGrants/Budget.lean`'s
+`Ledger`: a grant's `parent`, `allowance` and `spent` are its node. The
+contract never holds that ledger whole. [`src/budget.rs`](src/budget.rs)
+runs each step on `rule_eval`'s budget tree:
 
 - `issue` stores a root and `delegate` a grant under the delegator's, at the
-  next id with nothing spent, which is `budget::append` on the whole ledger.
-- `refill` calls `budget::refill` on a ledger of the one grant and stores the
+  next id with nothing spent, which is `append` on the whole ledger.
+- `refill` calls `rule_eval::refill` on a tree of the one grant and stores the
   new allowance.
-- An authorization builds the ledger of the signing grant's lineage alone
-  (root first, each node's parent the one before it), calls `budget::spend`
-  on it at the last node once per metered transfer, stopping at the first
-  failure, and only if every spend succeeds stores each node's `spent` into
-  its grant.
+- An authorization builds the tree of the signing grant's lineage alone
+  (root first, each node's parent the one before it), calls
+  `rule_eval::spend` on it at the last node once per metered transfer,
+  stopping at the first failure, and only if every spend succeeds stores each
+  node's `spent` into its grant.
+
+Grants store `u128` amounts and `rule_eval` counts in `i128`. `issue`,
+`delegate` and `refill` refuse an allowance, a refill or a raised allowance
+above `i128::MAX` (`AllowanceTooLarge`), so every stored amount converts. No
+Stellar Asset Contract transfer moves more than `i128::MAX`, so the bound
+refuses no transfer a grant could otherwise pay for.
 
 `formal/AttenuatingGrants/Signer.lean` follows these steps and proves that
 they compute the whole ledger's result: a spend or a check on the lineage
@@ -245,11 +253,19 @@ them
 `Ledger.refillGrant_eq` for `refill`). The spends of one authorization are
 all or nothing, so every sequence of this contract's calls is a run of the
 whole ledger (`Signer.Run.exists_run`), and the total spent at or under any
-grant never exceeds its allowance (`Signer.spentUnder_le_allowance`). The
-calls go to the extracted `budget::spend` and `check_spend`, which compute
-the model (`Budget.extracted_spendAll_lineage`,
-`extracted_check_spend_lineage`). What remains trusted is that the code
-below is those definitions ([Trusted wiring](#trusted-wiring)).
+grant never exceeds its allowance (`Signer.spentUnder_le_allowance`).
+
+The calls go to `rule_eval::spend` and `refill`, which rule-core proves
+compute its own budget model (`formal/RuleCore/Model/Budget.lean` there,
+milestone 3 of its `ARCHITECTURE.md`). `formal/` here proves the same for
+`grant_eval::budget`, whose extracted `spend` and `check_spend` compute this
+ledger (`Budget.extracted_spendAll_lineage`, `extracted_check_spend_lineage`).
+That rule-core's budget model is this ledger is not proven. It is tested:
+[`src/budget/tests.rs`](src/budget/tests.rs) runs this contract's budget path
+and `grant_eval::budget` on 200,000 random lineage ledgers and finds the same
+spend outcome, overdrawn grant and ledger at every step, the one difference
+being the refusal above `i128::MAX`. What else remains trusted is that the
+code below is those definitions ([Trusted wiring](#trusted-wiring)).
 
 `overdrawn_at(id, amount)` names the nearest grant on `id`'s lineage that
 cannot take `amount`: where a refill request goes. `refill` is the account's.
@@ -280,10 +296,13 @@ The evaluator is verified in `formal/`; what connects it to Soroban is not:
 - `src/contract.rs` applies the guards, and holds the budget path that
   `formal/` follows: its storage holds grants `0` to `NextId - 1`, none ever
   removed, and they are the ledger; `issue` and `delegate` store at
-  `NextId`; `lineage`, `ledger`, the spend loop and the store loop are
-  `Ledger.IsLineage`, `Ledger.chain`, `spendAllExtracted` and
-  `Ledger.writeBack` of `formal/AttenuatingGrants/Signer.lean` and
-  `Equiv/Signer.lean`; `refill` is `Ledger.refillGrant`.
+  `NextId`; `lineage`, `ledger`, the spend loop (`budget::spend_all`) and the
+  store loop are `Ledger.IsLineage`, `Ledger.chain`, `Ledger.spendAll` and
+  `Ledger.writeBack` of `formal/AttenuatingGrants/Signer.lean`; `refill` is
+  `Ledger.refillGrant`.
+- `src/budget.rs` converts stored `u128` amounts to `rule_eval`'s `i128`
+  and back, and calls `rule_eval`; its unit tests check it against
+  `grant_eval::budget` ([Budgets](#budgets)).
 - The host's CAP-0071 behaviour, which Perch's `cap71_semantics.rs` pins for
   the pinned `soroban-env-host` and OZ fork.
 
@@ -310,6 +329,16 @@ just build-contracts
 cargo test -p nido-integration-tests --test it grant_signer
 ```
 
+`src/budget/tests.rs` checks the budget path against `grant_eval::budget` on
+random lineage ledgers ([Budgets](#budgets)) and at the `i128::MAX` bound.
+`tests/rule_eval_budget_vectors.rs` checks the linked `rule_eval` against
+every budget trace rule-core's Lean model generates at the pinned rev
+(`conformance/vectors/budget`, through `rule-eval-conformance`).
+
+```sh
+cargo test -p nido-grant-signer
+```
+
 ## Costs
 
 `enforce_costs` measures this contract's `__check_auth` from the wasm
@@ -318,16 +347,16 @@ grant at depth 0, every caveat holding so each is evaluated):
 
 | Caveats | 1 context: CPU instructions | 1 context: memory bytes | Each further context: CPU instructions | Each further context: memory bytes |
 | ---: | ---: | ---: | ---: | ---: |
-| 1 | 1,015,834 | 419,518 | 71,155 | 542 |
-| 4 | 1,157,329 | 433,259 | 88,971 | 542 |
-| 16 | 1,727,379 | 487,815 | 160,235 | 542 |
+| 1 | 1,016,298 | 426,174 | 71,248 | 542 |
+| 4 | 1,158,253 | 439,915 | 89,064 | 542 |
+| 16 | 1,727,343 | 494,471 | 160,328 | 542 |
 
 One context includes the VM instantiation, the grant load and the signature
 check; each further context is the difference between five contexts and one,
-divided by four. A metered transfer (one context, charged and stored) costs 1,120,900,
-1,276,886 and 1,903,061 instructions for 1, 4 and 16 caveats. A whole agent
+divided by four. A metered transfer (one context, charged and stored) costs 1,138,581,
+1,288,119 and 1,909,360 instructions for 1, 4 and 16 caveats. A whole agent
 transaction, `protected` authorized through the account with a 4-caveat
-grant, costs 2,267,129 instructions and 655,323 memory bytes, against a
+grant, costs 2,253,104 instructions and 650,086 memory bytes, against a
 per-transaction limit of 400,000,000 instructions.
 
 ```sh
@@ -336,8 +365,8 @@ cargo test -p nido-integration-tests --test it grant_signer::enforce_costs -- --
 
 ## Open questions
 
-- Allowances never reset; a periodic budget would need a time model in
-  `grant_eval::budget` and in `formal/`.
+- Allowances never reset; a periodic budget would need a time model in the
+  budget tree, in rule-core's model and in `formal/`.
 - Grants live in persistent storage, extended to the network maximum on every
   write. An archived grant fails authorization until restored.
 - Holder keys are ed25519 only.

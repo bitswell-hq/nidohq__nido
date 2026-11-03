@@ -1282,6 +1282,8 @@ name = "nido-grant-signer"
 version = "0.1.0"
 dependencies = [
  "grant-eval",
+ "rule-eval",
+ "rule-eval-conformance",
  "soroban-sdk",
 ]
 
@@ -1762,6 +1764,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "rule-eval"
+version = "0.1.0"
+source = "git+https://github.com/bitswell/soroban-rule-core?rev=cbabe594ae2df408991e825e56ddd618ea29541b#cbabe594ae2df408991e825e56ddd618ea29541b"
+
+[[package]]
+name = "rule-eval-conformance"
+version = "0.1.0"
+source = "git+https://github.com/bitswell/soroban-rule-core?rev=cbabe594ae2df408991e825e56ddd618ea29541b#cbabe594ae2df408991e825e56ddd618ea29541b"
+dependencies = [
+ "rule-eval",
+ "serde",
+ "serde_json",
+ "soroban-facade",
+]
+
+[[package]]
 name = "rustc_version"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2104,6 +2122,14 @@ dependencies = [
  "serde_json",
  "stellar-xdr",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "soroban-facade"
+version = "0.1.0"
+source = "git+https://github.com/bitswell/soroban-rule-core?rev=cbabe594ae2df408991e825e56ddd618ea29541b#cbabe594ae2df408991e825e56ddd618ea29541b"
+dependencies = [
+ "rule-eval",
 ]
 
 [[package]]
