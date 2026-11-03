@@ -4,8 +4,10 @@ use soroban_sdk::contracterror;
 ///
 /// `__check_auth` returns the first failure: `NoSuchGrant` or `Revoked` for
 /// the lineage; then, context by context, `ContractCreation`, `NotHolder`,
-/// `AccountCall` or `UnmeteredCall`; then `NotAllowed`; then `Overdrawn`. A
-/// refused authorization changes no state.
+/// `AccountCall` or `UnmeteredCall`; then `NotAllowed`; then `Overdrawn`
+/// (or `AllowanceTooLarge` for a lineage holding an amount above
+/// `i128::MAX`, which no grant this contract stored does). A refused
+/// authorization changes no state.
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
@@ -29,9 +31,12 @@ pub enum GrantError {
     Overdrawn = 7,
     /// `issue`'s asset is not a Stellar Asset Contract.
     NotStellarAsset = 8,
-    /// A refill would raise the allowance past `u128::MAX`, or the grant ids
-    /// are exhausted.
+    /// The grant ids are exhausted.
     Overflow = 9,
     /// A context creates a contract. No grant authorizes one.
     ContractCreation = 10,
+    /// An allowance passed to `issue` or `delegate`, a refill's `extra`, or
+    /// the allowance a refill would raise to is above `i128::MAX`, the most
+    /// a Stellar Asset Contract transfer moves.
+    AllowanceTooLarge = 11,
 }

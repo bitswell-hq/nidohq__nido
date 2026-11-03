@@ -575,8 +575,8 @@ claims:
       On a ledger whose parents precede their children, spending at the
       signing grant on the ledger of its lineage alone has the whole ledger's
       outcome at that grant, an error naming the same grant, and afterwards
-      the whole ledger's lineage, and the grant signer's spend loop over the
-      extracted spend computes it.
+      the whole ledger's lineage, and the grant signer's spend loop run over
+      grant-eval's extracted spend computes it.
     status: proven
     evidence:
       - lean: Ledger.spend_lineage
@@ -586,12 +586,24 @@ claims:
       - lean: Budget.extracted_spendAll_lineage
         file: formal/AttenuatingGrants/Equiv/Signer.lean
 
+  - id: signer-rule-eval-budget
+    statement: >-
+      On random lineage ledgers, the grant signer's budget path, which calls
+      rule-eval's spend and refill, agrees with grant-eval's budget on every
+      spend outcome, overdrawn grant and ledger, for amounts up to the
+      largest i128; above it the grant signer refuses an allowance or a
+      refill.
+    status: tested
+    evidence:
+      test: budget_path_agrees_with_grant_eval_on_lineage_ledgers
+      file: contracts/grant-signer/src/budget/tests.rs
+
   - id: wiring-budget-calls
     statement: >-
       The grant signer's code is the Lean definitions of its budget path: its
       stored grants are the ledger, and its lineage, lineage ledger, spend
-      loop and store loop are IsLineage, chain, spendAllExtracted and
-      writeBack.
+      loop and store loop are IsLineage, chain, spendAllExtracted, with
+      rule-eval's spend standing for the extracted spend, and writeBack.
     status: unproven
 
   - id: host-frame-rollback

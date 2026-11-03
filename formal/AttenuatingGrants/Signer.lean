@@ -10,11 +10,11 @@ import AttenuatingGrants.Budget
 for a parent that does not exist). The contract never holds that ledger
 whole:
 
-* `refill` runs `budget::refill` on a ledger of the one grant and stores the
+* `refill` runs `rule_eval::refill` on a ledger of the one grant and stores the
   new allowance (`refillGrant`).
 * An authorization loads the signing grant's lineage, the grant and its
   ancestors, root first (`IsLineage`); builds the lineage's own ledger, whose
-  node `k` has parent `k - 1` (`chain`); calls `budget::spend` on it at the
+  node `k` has parent `k - 1` (`chain`); calls `rule_eval::spend` on it at the
   last node once per metered transfer, stopping at the first failure
   (`spendAll`); and only if every spend succeeded stores each node's `spent`
   into its grant (`writeBack`).
@@ -106,7 +106,7 @@ def writeBack (l : Ledger) (ps : List (Nat × Node)) (c : Ledger) : Ledger :=
       else l)
     l
 
-/-- `refill` as the contract does it: `budget::refill` on a ledger holding
+/-- `refill` as the contract does it: `rule_eval::refill` on a ledger holding
 only the grant's node, then the grant stored with the new allowance. -/
 def refillGrant (l : Ledger) (i extra : Nat) : Ledger :=
   match l[i]? with

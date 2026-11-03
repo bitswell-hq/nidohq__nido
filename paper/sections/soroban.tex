@@ -58,7 +58,7 @@ ed25519 signature, and every context, and refuses at the first failure:
 \item map every other context to a chain action and require
   \code{chain::allows\_all} over the grant's caveats;
 \item charge each budget-asset transfer to the grant and every ancestor with
-  \code{budget::spend}, refusing if any node would be overdrawn, and only then
+  rule-eval's \code{spend}, refusing if any node would be overdrawn, and only then
   store the new \code{spent} values.
 \end{enumerate}
 The grant signer writes nothing before it refuses. A refusal fails the
@@ -192,16 +192,20 @@ proven\claim{xdr-injective}.
 every grant whole. Its storage holds one grant per id, whose parent,
 allowance and \code{spent} are that grant's node; \code{issue} and
 \code{delegate} store a grant at the next id with nothing spent, which is the
-model's \code{append}; \code{refill} calls \code{budget::refill} on a ledger
-of the one grant; and each \code{\_\_check\_auth} builds a ledger of only the
-signing grant's lineage, root first with each node's parent the one before
-it, calls \code{budget::spend} on it once per budget-asset transfer, stopping
+model's \code{append}; \code{refill} calls rule-eval's \code{refill} on a
+ledger of the one grant; and each \code{\_\_check\_auth} builds a ledger of only
+the signing grant's lineage, root first with each node's parent the one before
+it, calls rule-eval's \code{spend} on it once per budget-asset transfer, stopping
 at the first failure, and only if every spend succeeded writes the changed
 \code{spent} values back. \file{formal/AttenuatingGrants/Signer.lean} follows
 these steps. Spending on the lineage ledger has the whole ledger's outcome at
 the signing grant, an error naming the same grant, and afterwards the whole
-ledger's lineage, and the spend loop over the extracted \code{spend} computes
-it\claim{lineage-ledger}. One authorization's spends are all or nothing:
+ledger's lineage, and the spend loop over grant-eval's extracted \code{spend}
+computes it\claim{lineage-ledger}. The contract's rule-eval \code{spend}
+agrees with that extracted \code{spend} on lineage ledgers, on every outcome,
+overdrawn grant and ledger, for amounts up to the largest \code{i128}, which
+\code{issue}, \code{delegate} and \code{refill} keep every allowance
+within\claim{signer-rule-eval-budget}. One authorization's spends are all or nothing:
 the contract stores them only after every spend succeeds, and it does so in
 the \code{require\_auth} of the authorization's root, inside the call that
 encloses every call the authorization allows. When that call fails, whether

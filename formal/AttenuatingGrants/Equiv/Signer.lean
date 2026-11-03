@@ -2,14 +2,17 @@ import AttenuatingGrants.Signer
 import AttenuatingGrants.Equiv.Budget
 
 /-!
-# The grant signer's calls to the extracted budget code
+# The grant signer's budget path over the extracted budget code
 
-The contract holds an authorization's lineage ledger as a vector of
-`budget::Node` and calls the extracted functions on its slice:
-`check_spend` at the last node for `overdrawn_at`, and `spend` at the last
-node once per metered transfer for `__check_auth`, stopping at the first
-error. `spendAllExtracted` is that loop as a Lean definition over the
-extracted `spend`.
+The grant signer holds an authorization's lineage ledger and checks a spend
+at the last node for `overdrawn_at`, and spends at the last node once per
+metered transfer for `__check_auth`, stopping at the first error. Here that
+path runs on a slice of `budget::Node` through the extracted `check_spend`
+and `spend`; `spendAllExtracted` is the loop as a Lean definition over the
+extracted `spend`. The contract runs the same path on `rule_eval`'s budget
+tree (`contracts/grant-signer/src/budget.rs`). That `rule_eval` and the
+extracted functions agree on lineage ledgers is tested there, not proven
+here.
 
 * `extracted_spendAll`: the loop returns, and its result denotes the model's
   `spendAll` on the denoted ledger.
