@@ -44,7 +44,7 @@ workspace from the `vendor/perch` submodule. Perch contract addresses are derive
 by nido — see DEPLOYED.md "Perch policy layer (0.2.1 era)" and
 `src/policyDoc/deployment.ts`; frozen golden vectors live in
 `src/policyDoc/testdata/`. The frontend's doc surface lives under
-`packages/frontend/src/lib/policy/` (three-tier read, doc builder drafts,
+`packages/frontend/src/lib/policy/` (two-tier read, doc builder drafts,
 the dApp delegate-doc request contract) — each module's header comment is
 the reference.
 
