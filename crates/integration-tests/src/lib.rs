@@ -77,22 +77,37 @@ pub const PERCH_SPENDING_LIMIT_WASM: &[u8] =
 pub const PERCH_WEBAUTHN_VERIFIER_WASM: &[u8] =
     include_bytes!("../../../target/wasm32v1-none/contract/perch_webauthn_verifier.wasm");
 
-/// The `perch-account` sha256 of the stack `just perch-infra` put in place:
-/// the testnet manifest's for a fetched stack, the build record's
-/// (`target/perch-build/stack.json`) for a built one. Which one follows the
-/// submodule's remote, as in `scripts/perch-stack-source.sh`.
+/// Whether `just perch-infra` built the Perch stack from `vendor/perch`'s
+/// source rather than fetching a deployment: the submodule's remote is not
+/// upstream Perch, as in `scripts/perch-stack-source.sh`. A built stack's
+/// bytes, and so its account hash, depend on the build host (Cargo's symbol
+/// hashes include the host triple, and they order the wasm's functions).
 ///
 /// # Panics
 ///
-/// When `.gitmodules` or the record is missing or malformed.
+/// When `.gitmodules` cannot be read.
+#[must_use]
+pub fn perch_stack_is_built() -> bool {
+    let gitmodules =
+        std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../.gitmodules")).unwrap();
+    !gitmodules.contains("url = https://github.com/stellar-registry/perch")
+}
+
+/// The `perch-account` sha256 of the stack `just perch-infra` put in place:
+/// the testnet manifest's for a fetched stack, the build record's
+/// (`target/perch-build/stack.json`) for a built one
+/// ([`perch_stack_is_built`]).
+///
+/// # Panics
+///
+/// When the record is missing or malformed.
 #[must_use]
 pub fn stack_perch_account_sha256() -> String {
     let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
-    let gitmodules = std::fs::read_to_string(format!("{root}/.gitmodules")).unwrap();
-    let path = if gitmodules.contains("url = https://github.com/stellar-registry/perch") {
-        format!("{root}/vendor/perch/deployments/testnet.json")
-    } else {
+    let path = if perch_stack_is_built() {
         format!("{root}/target/perch-build/stack.json")
+    } else {
+        format!("{root}/vendor/perch/deployments/testnet.json")
     };
     let record: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
