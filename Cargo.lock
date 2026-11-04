@@ -886,6 +886,9 @@ dependencies = [
 [[package]]
 name = "grant-eval"
 version = "0.1.0"
+dependencies = [
+ "rule-eval",
+]
 
 [[package]]
 name = "grant-relay"
@@ -896,9 +899,11 @@ dependencies = [
  "grant-eval",
  "hex",
  "nido-key-keeper",
+ "rule-eval",
  "serde",
  "serde_json",
  "sha2",
+ "soroban-facade",
  "stellar-strkey 0.0.13",
  "stellar-xdr",
  "tiny_http",
@@ -1281,9 +1286,11 @@ name = "nido-grant-signer"
 version = "0.1.0"
 dependencies = [
  "grant-eval",
+ "perch-rule-eval",
  "rule-eval",
  "rule-eval-conformance",
  "soroban-sdk",
+ "stellar-accounts",
 ]
 
 [[package]]
@@ -1292,7 +1299,6 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "ed25519-dalek",
- "grant-eval",
  "grant-relay",
  "hex",
  "nido-dkim-registry",
@@ -1308,10 +1314,12 @@ dependencies = [
  "perch-ir",
  "perch-recovery",
  "perch-recovery-interface",
+ "perch-rule-eval",
  "perch-smart-account",
  "perch-zk-pool",
  "perch-zk-primitives",
  "perch-zk-prover",
+ "rule-eval",
  "serde",
  "serde_json",
  "sha2",

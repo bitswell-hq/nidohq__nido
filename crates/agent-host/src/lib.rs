@@ -9,6 +9,7 @@
 //! wiring and what is trusted.
 #![forbid(unsafe_code)]
 
+pub mod actions;
 pub mod bench;
 pub mod evaluator;
 pub mod fs;

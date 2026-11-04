@@ -61,6 +61,9 @@ soroban-poseidon = { git = "https://github.com/bitswell-hq/stellar-registry__per
 # the one rev so the runner checks the `rule-eval` Nido links.
 rule-eval = { git = "https://github.com/bitswell/soroban-rule-core", rev = "cbabe594ae2df408991e825e56ddd618ea29541b" }
 rule-eval-conformance = { git = "https://github.com/bitswell/soroban-rule-core", rev = "cbabe594ae2df408991e825e56ddd618ea29541b" }
+# rule-core's Soroban values and authorization contexts as plain data, and
+# their `ScVal` XDR (no `sdk` feature: the relay reads XDR, not host values).
+soroban-facade = { git = "https://github.com/bitswell/soroban-rule-core", rev = "cbabe594ae2df408991e825e56ddd618ea29541b" }
 
 # The Perch stack (stellar-registry/perch epic #99), as git dependencies.
 # Perch publishes no crates yet; versions replace the rev once it does. The
@@ -86,6 +89,9 @@ perch-zk-prover = { git = "https://github.com/bitswell-hq/stellar-registry__perc
 perch-zk-primitives = { git = "https://github.com/bitswell-hq/stellar-registry__perch", rev = "437a07d108548faadc40e56cf2e632ab0b4d2a2c" }
 perch-ir = { git = "https://github.com/bitswell-hq/stellar-registry__perch", rev = "437a07d108548faadc40e56cf2e632ab0b4d2a2c" }
 perch-registry-resolve = { git = "https://github.com/bitswell-hq/stellar-registry__perch", rev = "437a07d108548faadc40e56cf2e632ab0b4d2a2c" }
+# Perch's rule-eval rules as host values: the `StoredRule` an account's
+# `scope_rule_set` returns, read through soroban-facade.
+perch-rule-eval = { git = "https://github.com/bitswell-hq/stellar-registry__perch", rev = "437a07d108548faadc40e56cf2e632ab0b4d2a2c" }
 
 [profile.release]
 overflow-checks = true

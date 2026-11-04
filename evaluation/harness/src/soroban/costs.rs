@@ -10,7 +10,7 @@
 //! both, so `pass - fail` is the evaluator's own work, which the Lean step
 //! counter counts for the same grant and actions.
 
-use nido_grant_signer::{Arg, Caveat};
+use nido_integration_tests::grants::{Arg, Caveat};
 use serde::Serialize;
 use serde_json::Value;
 use soroban_sdk::auth::{Context, ContractContext};
@@ -174,11 +174,7 @@ pub fn run(f: &Fixture) -> (std::vec::Vec<Point>, std::vec::Vec<Value>) {
                 dapps.iter().map(|d| context(f, *d, s.arg_bytes)).collect();
             let actions: std::vec::Vec<_> = dapps
                 .iter()
-                .map(|d| {
-                    grant_relay::actions::authorized_function(
-                        &invocation(f, *d, s.arg_bytes).function,
-                    )
-                })
+                .map(|d| chain::authorized_function(&invocation(f, *d, s.arg_bytes).function))
                 .collect();
             let mut budget = f.env().cost_estimate().budget();
             budget.reset_unlimited();

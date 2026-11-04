@@ -670,9 +670,11 @@ dependencies = [
  "grant-eval",
  "hex",
  "nido-key-keeper",
+ "rule-eval",
  "serde",
  "serde_json",
  "sha2",
+ "soroban-facade",
  "stellar-strkey",
  "stellar-xdr",
  "tiny_http",
@@ -1113,6 +1115,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "rule-eval"
+version = "0.1.0"
+source = "git+https://github.com/bitswell/soroban-rule-core?rev=cbabe594ae2df408991e825e56ddd618ea29541b#cbabe594ae2df408991e825e56ddd618ea29541b"
+
+[[package]]
 name = "rustc-demangle"
 version = "0.1.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1297,6 +1304,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0d5d4b1981b8bbbb7aed204cae5726d683d5d6ac7e74ec54122ea28f315e7c8"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "soroban-facade"
+version = "0.1.0"
+source = "git+https://github.com/bitswell/soroban-rule-core?rev=cbabe594ae2df408991e825e56ddd618ea29541b#cbabe594ae2df408991e825e56ddd618ea29541b"
+dependencies = [
+ "rule-eval",
 ]
 
 [[package]]

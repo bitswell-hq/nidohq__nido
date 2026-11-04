@@ -1,14 +1,65 @@
 //! Grants and authorization contexts in the evaluator's form, as the JSON the
 //! Lean step counter (`evaluation/cost-bound/Steps.lean`) reads.
 //!
-//! A stored caveat maps to `grant_eval::chain::Caveat` as the grant signer's
-//! `src/actions.rs` maps it, and an authorization context to an action with
-//! `grant_relay::actions::authorized_function`, the mapping the grant signer
-//! is tested to agree with (`grant_signer::the_account_and_the_relay_map_actions_alike`).
+//! A grant's caveat maps to `grant_eval::chain::Caveat` byte for byte, and an
+//! authorization context to an action whose contract, function and arguments
+//! are the call's as `grant_eval` writes them: a contract and an address
+//! argument by its strkey, a function and a symbol by its text, and any
+//! other argument type as `Other` of its `ScVal` XDR. The grant signer checks
+//! the same grant as the rule set `nido_integration_tests::grants` lowers it
+//! to, which `crates/grant-eval/tests/rule_eval.rs` checks against
+//! `grant_eval::chain` on the same caveats.
 
 use grant_eval::chain::{self, Action, Val};
-use nido_grant_signer::{Arg, Caveat};
+use nido_integration_tests::grants::{Arg, Caveat};
 use serde_json::{json, Value};
+use soroban_sdk::xdr::{
+    ContractExecutable, Int128Parts, InvokeContractArgs, Limits, ScVal, SorobanAuthorizedFunction,
+    WriteXdr,
+};
+
+/// The action of one authorized function, in the encoding of the caveats.
+#[must_use]
+pub fn authorized_function(function: &SorobanAuthorizedFunction) -> Action {
+    match function {
+        SorobanAuthorizedFunction::ContractFn(args) => invoke(args),
+        SorobanAuthorizedFunction::CreateContractHostFn(args) => create(&args.executable),
+        SorobanAuthorizedFunction::CreateContractV2HostFn(args) => create(&args.executable),
+    }
+}
+
+fn invoke(args: &InvokeContractArgs) -> Action {
+    Action::Invoke {
+        contract: args.contract_address.to_string().into_bytes(),
+        function: args.function_name.0.to_vec(),
+        args: args.args.iter().map(val).collect(),
+    }
+}
+
+fn create(executable: &ContractExecutable) -> Action {
+    Action::CreateContract {
+        wasm_hash: match executable {
+            ContractExecutable::Wasm(hash) => hash.0.to_vec(),
+            ContractExecutable::StellarAsset | ContractExecutable::ExternalRef(_) => Vec::new(),
+        },
+    }
+}
+
+fn val(v: &ScVal) -> Val {
+    match v {
+        ScVal::I128(Int128Parts { hi, lo }) => Val::I128(i128::from(*hi) << 64 | i128::from(*lo)),
+        ScVal::U64(n) => Val::U64(*n),
+        ScVal::Bool(b) => Val::Bool(*b),
+        ScVal::Bytes(b) => Val::Bytes(b.0.to_vec()),
+        ScVal::Symbol(s) => Val::Symbol(s.0.to_vec()),
+        ScVal::Address(a) => Val::Address(a.to_string().into_bytes()),
+        other => Val::Other(
+            other
+                .to_xdr(Limits::none())
+                .expect("an ScVal decoded from XDR encodes again"),
+        ),
+    }
+}
 
 fn bytes(b: &soroban_sdk::Bytes) -> Vec<u8> {
     b.to_alloc_vec()

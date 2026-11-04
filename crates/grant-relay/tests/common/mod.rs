@@ -70,8 +70,8 @@ pub fn bob() -> String {
 
 /// The configuration: `payer` may call `token.transfer` with an amount of
 /// at most 1000; `forwarder-only` may call `forwarder.forward` and nothing
-/// else; `other-network` may call anything but may only have the custody key
-/// sign on mainnet.
+/// else; `other-network` may call anything on the token but may only have
+/// the custody key sign on mainnet.
 pub fn config_json() -> serde_json::Value {
     serde_json::json!({
         "network_passphrase": PASSPHRASE,
@@ -106,7 +106,7 @@ pub fn config_json() -> serde_json::Value {
             {
                 "name": "other-network",
                 "api_key_sha256": grant_relay::config::api_key_sha256(OTHER_NETWORK),
-                "chain": [],
+                "chain": [{ "contract_in": [token()] }],
                 "signing": [{ "network_in": [stellar::MAINNET_PASSPHRASE] }]
             }
         ]

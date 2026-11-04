@@ -10,6 +10,7 @@ use stellar_accounts::smart_account::{ContextRule, ContextRuleType, Signer};
 
 pub mod email;
 pub mod email_proof;
+pub mod grants;
 pub mod transaction;
 pub mod world;
 pub mod zk;

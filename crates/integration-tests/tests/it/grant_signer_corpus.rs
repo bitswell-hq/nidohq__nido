@@ -11,14 +11,20 @@
 //! revocation. Contracts, functions and values are named abstractly, so the
 //! corpus describes grants independently of how the contract stores them.
 //!
-//! The test replays every operation and requires the recorded outcome and
-//! grant state after each one. `NIDO_RECORD_GRANT_CORPUS=1` regenerates the
-//! scenarios and writes the outcomes of the contract under test instead.
+//! The outcomes are those of a grant signer that stored each grant's caveats
+//! and checked them with `grant_eval::chain::allows_all` (the commit that
+//! adds the corpus). The test replays every operation on this grant signer,
+//! with each root grant's caveats lowered to its rule set and each
+//! delegation's to attenuation steps (`nido_integration_tests::grants`), and
+//! requires the recorded outcome and grant state after each one.
+//! `NIDO_RECORD_GRANT_CORPUS=1` regenerates the scenarios and writes the
+//! outcomes of the contract under test instead.
 //!
 //! `cargo test -p nido-integration-tests --test it grant_signer_corpus`
 
 use ed25519_dalek::{Signer as _, SigningKey};
-use nido_grant_signer::{Arg, Caveat, GrantError, GrantSignature, GrantSignerClient};
+use nido_grant_signer::{GrantError, GrantSignature, GrantSignerClient};
+use nido_integration_tests::grants::{self, Arg, Caveat};
 use nido_integration_tests::world::strkey;
 use nido_integration_tests::GRANT_SIGNER_WASM;
 use serde::{Deserialize, Serialize};
@@ -26,7 +32,7 @@ use soroban_sdk::auth::{
     Context, ContractContext, ContractExecutable, CreateContractHostFnContext,
 };
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::xdr::{AccountId, PublicKey, ScAddress, ScVal, Uint256};
+use soroban_sdk::xdr::{AccountId, PublicKey, ScAddress, ScVal, ToXdr, Uint256};
 use soroban_sdk::{
     Address, Bytes, BytesN, Env, IntoVal, InvokeError, String as SorobanString, Symbol, TryFromVal,
     Val, Vec,
@@ -272,7 +278,7 @@ impl Signer {
                 allowance,
             } => id_out(&c.try_issue(
                 &public(e, *k),
-                &self.caveats(caveats),
+                &grants::root(e, &self.me, &self.caveats(caveats)),
                 self.address("asset"),
                 &allowance.parse().unwrap(),
             )),
@@ -281,12 +287,18 @@ impl Signer {
                 key: k,
                 caveats,
                 allowance,
-            } => id_out(&c.try_delegate(
-                parent,
-                &public(e, *k),
-                &self.caveats(caveats),
-                &allowance.parse().unwrap(),
-            )),
+            } => {
+                let rules = match c.try_rules(parent) {
+                    Ok(Ok(rules)) => rules,
+                    _ => Vec::new(e),
+                };
+                id_out(&c.try_delegate(
+                    parent,
+                    &public(e, *k),
+                    &grants::steps(e, &rules, &self.caveats(caveats)),
+                    &allowance.parse().unwrap(),
+                ))
+            }
             Op::Revoke { grant } => unit_out(&c.try_revoke(grant)),
             Op::Rotate { grant, key: k } => unit_out(&c.try_rotate(grant, &public(e, *k))),
             Op::Refill { grant, extra } => unit_out(&c.try_refill(grant, &extra.parse().unwrap())),
@@ -320,8 +332,8 @@ impl Signer {
 
     // --- the grant's form in the contract ----------------------------------
 
-    fn caveats(&self, list: &[Cav]) -> Vec<Caveat> {
-        Vec::from_iter(&self.env, list.iter().map(|c| self.caveat(c)))
+    fn caveats(&self, list: &[Cav]) -> std::vec::Vec<Caveat> {
+        list.iter().map(|c| self.caveat(c)).collect()
     }
 
     fn caveat(&self, c: &Cav) -> Caveat {
@@ -344,19 +356,19 @@ impl Signer {
         }
     }
 
-    /// The caveat value an argument of value `v` matches, by the relay's
-    /// mapping of its XDR.
+    /// The caveat value an argument of value `v` matches.
     fn arg(&self, v: &V) -> Arg {
         let e = &self.env;
-        let sc = ScVal::try_from_val(e, &self.val(v)).unwrap();
-        match grant_relay::actions::val(&sc) {
-            grant_eval::chain::Val::I128(n) => Arg::I128(n),
-            grant_eval::chain::Val::U64(n) => Arg::U64(n),
-            grant_eval::chain::Val::Bool(b) => Arg::Bool(b),
-            grant_eval::chain::Val::Bytes(b) => Arg::Bytes(Bytes::from_slice(e, &b)),
-            grant_eval::chain::Val::Address(b) => Arg::Address(Bytes::from_slice(e, &b)),
-            grant_eval::chain::Val::Symbol(b) => Arg::Symbol(Bytes::from_slice(e, &b)),
-            grant_eval::chain::Val::Other(b) => Arg::Other(Bytes::from_slice(e, &b)),
+        match v {
+            V::I128(n) => Arg::I128(n.parse().unwrap()),
+            V::U64(n) => Arg::U64(*n),
+            V::Bool(b) => Arg::Bool(*b),
+            V::Bytes(h) => Arg::Bytes(Bytes::from_slice(e, &hex::decode(h).unwrap())),
+            V::Symbol(s) => Arg::Symbol(Bytes::from_slice(e, s.as_bytes())),
+            V::Address(name) => {
+                Arg::Address(Bytes::from_slice(e, strkey(self.address(name)).as_bytes()))
+            }
+            V::U32(_) | V::String(_) | V::VecU32(_) => Arg::Other(self.val(v).to_xdr(e)),
         }
     }
 }

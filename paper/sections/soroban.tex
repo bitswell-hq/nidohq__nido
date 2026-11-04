@@ -2,8 +2,10 @@
 
 On chain, an agent's grant lives in a \emph{grant signer}
 (\file{contracts/grant-signer}): a contract deployed once per account, holding
-for each grant its chain caveats, its holder's ed25519 key, its parent, its
-budget node and a revoked flag. The account is the Perch account Nido's
+for each grant a rule-eval rule set (a root grant's rules, the ones the
+account's scoped document for its agents lowers to, and for a delegated
+grant the attenuation steps it adds), its holder's ed25519 key, its parent,
+its budget node and a revoked flag. The account is the Perch account Nido's
 factory mints, unchanged.
 
 \subsection{A delegated signer, not a policy}
@@ -55,8 +57,9 @@ ed25519 signature, and every context, and refuses at the first failure:
   itself, unless it is the holder's own delegation; a context that calls the
   account; or a call on the budget asset other than \code{transfer} with a
   non-negative amount;
-\item map every other context to a chain action and require
-  \code{chain::allows\_all} over the grant's caveats;
+\item read every other context through rule-core's Soroban facade and
+  require rule-eval's \code{authorize} over the grant's rule set, each
+  context by the first rule that allows it, with the grant's cap records;
 \item charge each budget-asset transfer to the grant and every ancestor with
   rule-eval's \code{spend}, refusing if any node would be overdrawn, and only then
   store the new \code{spent} values.
@@ -87,13 +90,13 @@ the account's authorization to the grant signer, which checks them all with
 the evaluator; one disallowed context refuses the whole tree.}
 \label{fig:soroban}
 \Description{An authorization tree in which an allowed router call nests a
-token transfer; both contexts reach the grant signer, which runs allows_all.}
+token transfer; both contexts reach the grant signer, which runs rule-eval's authorize.}
 \end{figure}
 
 \paragraph{Delegation, and the grant signer's second role.}
-\code{delegate(parent, key, caveats, allowance)} stores a child grant whose
-caveats are the parent's followed by the given ones, with a budget record
-under the parent's. It requires the grant signer's own authorization, so the
+\code{delegate(parent, key, steps, allowance)} stores a child grant whose
+rule set is the parent's with the given rule-eval attenuation steps applied,
+with a budget record under the parent's. It requires the grant signer's own authorization, so the
 host calls the grant signer's \code{\_\_check\_auth} in two roles, with the
 same three arguments: as the account's delegate, with the account's payload
 and contexts, and as the check of the grant signer's own address, whenever a
@@ -101,20 +104,21 @@ call needs that address's authorization (its own \code{delegate}, a call on
 another contract that asks for it, a deployment with it as deployer). The
 host lets a contract's \code{require\_auth} of itself call its own
 \code{\_\_check\_auth} and refuses any other re-entry. The checks are the
-same in both roles: contract creation is refused under every grant, the
-empty one included\claim{signer-deploy}, since in the second role no account
-document stands behind the check; a call on the account, an unmetered call
-on the budget asset and a call on the grant signer other than the holder's
-own delegation are refused; and the caveats bound every other call. A
+same in both roles: contract creation is refused under every
+grant\claim{signer-deploy}, since in the second role no account document
+stands behind the check; a call on the account, an unmetered call on the
+budget asset and a call on the grant signer other than the holder's own
+delegation are refused; and the rule set bounds every other call. A
 signature in the second role authorizes nothing for the account, which
 accepts the grant signer only through
 \code{delegate\_account\_auth}\claim{signer-own-address}. One consequence is
 stated rather than enforced. Any contract can call \code{require\_auth} on an
-address it is given, so a holder can have any contract it can call ask for
-the grant signer's own authorization, and under an empty grant the holder
-can authorize whatever that contract does as the grant signer's address. That
-includes moving what the address holds; a transfer of the budget asset is
-still charged to the grant, and one of any other asset is bounded by nothing.
+address it is given, so a holder can have a contract its grant allows ask
+for the grant signer's own authorization, and authorize what that contract
+does as the grant signer's address, within the grant's rules. That includes
+moving what the address holds; a transfer of the budget asset is still
+charged to the grant, and one of any other asset is bounded only by the
+rules.
 The deployment gives the address no balance: a contract's balance in a
 Stellar Asset Contract, the native one included, is absent until something
 is sent to it, and storage rent is paid in fees by the transaction's
@@ -149,8 +153,9 @@ Delegate from an ancestor's grant, or one it does not hold &
   The grant signer accepts a delegation only with the signing grant as parent. &
   \claim{signer-delegate-other} \\
 Widen a grant by delegating &
-  A child's caveats are its parent's followed by more. &
-  \claim{signer-narrows}\ \claim{rust-delegation} \\
+  A child's rule set is its parent's with rule-eval attenuation steps
+  applied, each of which narrows. &
+  \claim{signer-narrows}\ \claim{signer-rule-eval-chain} \\
 Hide a disallowed call inside an allowed one &
   Every context of the account's authorization is checked; a nested call the
   signed tree leaves out fails its \code{require\_auth} in the host. Effects
@@ -177,16 +182,19 @@ Keep acting after revocation, or with a rotated-out key &
 
 \subsection{The wiring}
 
-The evaluator is verified; what connects it to Soroban is not.
-\file{src/actions.rs} turns each context and stored caveat into evaluator
-values with the same encoding the relay uses: a contract by its strkey, a
-function by its symbol's bytes, an address argument by its strkey,
-\code{i128}, \code{u64}, \code{bool}, \code{Bytes} and \code{Symbol}
-arguments by value, and any other argument as \code{other} with its full XDR.
-A test checks that the grant signer and the relay map every argument type
-alike\claim{signer-relay-mapping}; that the mapping keeps distinct arguments
-distinct rests on XDR encoding and strkeys being injective and is not
-proven\claim{xdr-injective}.
+The evaluator is verified; what connects it to Soroban is not. The grant
+signer reads each context through rule-core's Soroban facade, as the relay
+reads a call's XDR: a contract and an address argument by its
+\code{ScAddress} XDR, a function and a symbol by its bytes, \code{i128},
+\code{u64}, \code{bool}, bytes and strings by value, and any other argument
+as \code{other} with its full XDR. A test checks that the grant signer and
+the relay read every argument type alike\claim{signer-relay-mapping}; that
+the reading keeps distinct arguments distinct rests on XDR encoding being
+injective and is not proven\claim{xdr-injective}. On every grant that names
+its contracts, the rule set a caveat list lowers to allows exactly what the
+caveats allow\claim{chain-rule-eval-agree}, and the grant signer reproduces a
+recorded corpus of the outcomes it had when it held caveat lists and checked
+them with the chain evaluator\claim{signer-check-auth-corpus}.
 
 \paragraph{The budget link.} The grant signer never holds the ledger of
 every grant whole. Its storage holds one grant per id, whose parent,

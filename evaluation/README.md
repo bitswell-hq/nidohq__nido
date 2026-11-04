@@ -79,7 +79,10 @@ applies a document that declares the grant signer as the delegated signer
 `grants`. Two Stellar Asset Contracts stand for the budget asset and a second
 token; the account holds 1,000,000 of each. The owner issues, revokes, rotates
 and refills grants through the account's `execute`, signed by the passkey
-through the admin rule. Every agent call is one `AddressWithDelegates`
+through the admin rule. A scenario writes each grant as caveats; the grant
+signer holds the rule set they lower to and each delegation's attenuation
+steps (`nido_integration_tests::grants`), and a grant with no `ContractIn`
+names every contract the fixture deploys (`Fixture::named`). Every agent call is one `AddressWithDelegates`
 authorization entry carrying the holder's ed25519 signature over the host's
 payload, installed with `set_auths`, so every account's `__check_auth` runs.
 
@@ -114,9 +117,11 @@ difference is the evaluator's own work.
 (`Chain.AllowsAllCostBound`), and leaves open whether the Rust evaluator's
 work is proportional to those steps. For every measured point the harness
 writes the grant and the actions in the evaluator's form (`lean-cases.json`;
-caveats mapped as the grant signer maps them, actions with
-`grant_relay::actions`, the mapping the grant signer is tested to agree
-with). `cost-bound/Steps.lean` imports the formal package and evaluates
+the caveats the grant was issued from, and actions in their encoding,
+`harness/src/chain.rs`). The grant signer checks the rule set those caveats
+lower to with `rule-eval`, not the chain evaluator, so the measured
+instructions are `rule-eval`'s work on that rule set; `results/` predate it.
+`cost-bound/Steps.lean` imports the formal package and evaluates
 `Chain.allowsAllCounted` and the bound's expression on each case: the
 model's own definitions, not a reimplementation.
 
@@ -886,10 +891,11 @@ Compiling and instantiating the component: 22.0 (21.9–22.2) ms over 21 runs.
   only the workloads' confirmed calls were metered on chain, by one network
   version.
 - That the evaluator's actions are what the grant signer sees: the Lean cases
-  map contexts with `grant_relay::actions`, which the grant signer's mapping
-  is tested to agree with on every argument type
-  (`grant_signer::the_account_and_the_relay_map_actions_alike`); on every
-  measured point the contract, the native evaluator and Lean agree.
+  map contexts in the caveats' encoding (`harness/src/chain.rs`), and the
+  grant signer checks the rule set the caveats lower to, which agrees with
+  the chain evaluator on every grant that names its contracts
+  (`crates/grant-eval/tests/rule_eval.rs`); on every measured point the
+  contract, the native evaluator and Lean agree.
 - That a refusal changes nothing beyond what the snapshots read: they cover
   the balances, grants and account configuration listed above and, on the
   network, the channels' sequence numbers; not the channels' balances or

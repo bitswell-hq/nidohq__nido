@@ -180,8 +180,10 @@ equivalence adds is their carry-over to Rust caveat slices: a slice reached
 from a root slice by pushing caveats accepts, alone or across a batch, only
 what the root accepts (\lean{V\.extracted\_delegates\_narrower},
 \lean{V\.extracted\_allowsAll\_of\_delegates})\claim{rust-delegation}. This is
-the case both boundaries implement, since a child grant's stored caveats are
-its parent's followed by the added ones.
+the case the agent host implements, since a sub-agent's caveats are its
+parent's followed by the added ones. The grant signer holds rule-eval rule
+sets instead, and a delegation applies rule-eval's attenuation steps
+(\S\ref{sec:soroban}).
 
 \begin{mainthm}[Budget safety]\label{thm:budget}
 For the translated \code{budget} module and every ledger $s$ with denotation

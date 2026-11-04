@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use nido_grant_signer::{Arg, Caveat};
+use nido_integration_tests::grants::{Arg, Caveat};
 use serde::Serialize;
 use soroban_sdk::xdr::SorobanAuthorizedInvocation;
 use soroban_sdk::Address;

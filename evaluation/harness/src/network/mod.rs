@@ -46,9 +46,11 @@ pub enum Mode {
     /// caveats; revoked grants and grants under a revoked ancestor have no
     /// agent.
     Mirrored,
-    /// Each grant's holder is a relay agent whose chain grant has no
-    /// caveats: every call reaches the chain's simulation and the grant
-    /// signer.
+    /// Each grant's holder is a relay agent whose chain grant names every
+    /// contract the fixture deploys and nothing else: every call on them
+    /// reaches the chain's simulation and the grant signer. A chain grant
+    /// names the contracts it allows, so the relay still refuses a creation
+    /// and a call on any other contract.
     PassThrough,
 }
 

@@ -1,5 +1,6 @@
 use alloc::vec::Vec as AVec;
-use grant_eval::chain;
+use perch_rule_eval::{convert, StoredRecord, StoredRule};
+use rule_eval::{Refusal, Rule, SpendRecord};
 use soroban_sdk::auth::{Context, ContractContext, CustomAccountInterface};
 use soroban_sdk::crypto::Hash;
 use soroban_sdk::{
@@ -7,8 +8,8 @@ use soroban_sdk::{
 };
 
 use crate::error::GrantError as Error;
-use crate::{actions, budget};
-use crate::{Caveat, Grant, GrantSignature};
+use crate::{actions, budget, rules};
+use crate::{Grant, GrantSignature, Step};
 
 #[contracttype]
 enum Key {
@@ -18,6 +19,9 @@ enum Key {
     NextId,
     /// One grant (persistent).
     Grant(u32),
+    /// A grant's spending records, one per rule of its rule set; absent
+    /// while none of its capped rules has been charged (persistent).
+    Records(u32),
 }
 
 #[contract]
@@ -53,17 +57,12 @@ fn create(e: &Env, grant: &Grant) -> Result<u32, Error> {
     Ok(id)
 }
 
-/// `id` and its ancestors, root first (`Ledger.IsLineage` in `formal/`).
-/// Refuses if any of them is revoked, so revoking a grant revokes every grant
-/// delegated from it.
-fn lineage(e: &Env, id: u32) -> Result<AVec<(u32, Grant)>, Error> {
+/// `id` and its ancestors, root first, revoked or not.
+fn ancestry(e: &Env, id: u32) -> Result<AVec<(u32, Grant)>, Error> {
     let mut out = AVec::new();
     let mut current = id;
     loop {
         let grant = load(e, current)?;
-        if grant.revoked {
-            return Err(Error::Revoked);
-        }
         let parent = grant.parent;
         out.push((current, grant));
         match parent {
@@ -78,6 +77,17 @@ fn lineage(e: &Env, id: u32) -> Result<AVec<(u32, Grant)>, Error> {
     Ok(out)
 }
 
+/// `id` and its ancestors, root first (`Ledger.IsLineage` in `formal/`).
+/// Refuses if any of them is revoked, so revoking a grant revokes every grant
+/// delegated from it.
+fn lineage(e: &Env, id: u32) -> Result<AVec<(u32, Grant)>, Error> {
+    let out = ancestry(e, id)?;
+    if out.iter().any(|(_, g)| g.revoked) {
+        return Err(Error::Revoked);
+    }
+    Ok(out)
+}
+
 /// The budget tree of a lineage: one node per grant, root first, each
 /// node's parent the one before it (`Ledger.chain` in `formal/`, which proves
 /// that spends on it are the whole ledger's, restricted to the lineage).
@@ -87,6 +97,79 @@ fn ledger(lineage: &[(u32, Grant)]) -> Result<AVec<rule_eval::Node>, Error> {
         .map(|(_, g)| (g.allowance, g.spent))
         .collect();
     budget::chain(&grants)
+}
+
+/// Grant `id`'s spending records for its `n` rules: as stored, or empty.
+fn records(e: &Env, id: u32, n: usize) -> AVec<SpendRecord> {
+    match e
+        .storage()
+        .persistent()
+        .get::<_, Vec<StoredRecord>>(&Key::Records(id))
+    {
+        Some(stored) => stored.iter().map(|r| r.to_record()).collect(),
+        None => (0..n).map(|_| rule_eval::empty_record()).collect(),
+    }
+}
+
+fn save_records(e: &Env, id: u32, records: &[SpendRecord]) {
+    let key = Key::Records(id);
+    let mut stored = Vec::new(e);
+    for r in records {
+        stored.push_back(StoredRecord::from_record(e, r));
+    }
+    let max = e.storage().max_ttl();
+    e.storage().persistent().set(&key, &stored);
+    e.storage().persistent().extend_ttl(&key, max, max);
+}
+
+/// Whether two records hold the same spends and total.
+fn same(a: &SpendRecord, b: &SpendRecord) -> bool {
+    a.total == b.total
+        && a.history.len() == b.history.len()
+        && a.history
+            .iter()
+            .zip(&b.history)
+            .all(|(x, y)| x.ledger == y.ledger && x.amount == y.amount)
+}
+
+/// The error for a refusal of `rule_eval::authorize`.
+fn refused(r: &Refusal) -> Error {
+    match r {
+        Refusal::Expired => Error::Expired,
+        Refusal::Cap(_) => Error::CapExceeded,
+        _ => Error::NotAllowed,
+    }
+}
+
+/// `rule_eval::authorize` of `calls`, the contexts that reach the rule
+/// check, under the rule set `rules` of grant `id`: each context by the
+/// first rule that allows it, with this contract as the one authenticated
+/// signer (the account authenticated it), at the current ledger, and with
+/// the grant's records. Returns the records to store, when a charge changed
+/// them.
+fn authorize(
+    e: &Env,
+    id: u32,
+    rules: &[Rule],
+    calls: &Vec<Context>,
+) -> Result<Option<AVec<SpendRecord>>, Error> {
+    let contexts = convert::calls(e, calls).ok_or(Error::NotAllowed)?;
+    let me = convert::address(e, &e.current_contract_address()).ok_or(Error::NotAllowed)?;
+    let authenticated = [rule_eval::Signer::Delegated(me)];
+    let choices = rules::choices(rules, &contexts, &authenticated).ok_or(Error::NotAllowed)?;
+    let before = records(e, id, rules.len());
+    let after = rule_eval::authorize(
+        rules,
+        &before,
+        &contexts,
+        &choices,
+        &authenticated,
+        e.ledger().sequence(),
+        rules::generation(rules),
+    )
+    .map_err(|r| refused(&r))?;
+    let changed = before.iter().zip(&after).any(|(b, a)| !same(b, a));
+    Ok(changed.then_some(after))
 }
 
 /// Whether `c` is `delegate(parent, …)` on this contract with `parent` the
@@ -121,19 +204,33 @@ impl GrantSigner {
         e.storage().persistent().get(&Key::Grant(id))
     }
 
-    /// Issue a root grant to the holder of `key`, with a budget of
-    /// `allowance` in the Stellar Asset Contract `asset`. Requires the
-    /// account's authorization. Returns the grant's id.
+    /// Grant `id`'s rule set: its root's rules with every delegation's steps
+    /// replayed on them, whether or not a grant on its lineage is revoked.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::NoSuchGrant`] for `id`'s lineage.
+    pub fn rules(e: Env, id: u32) -> Result<Vec<StoredRule>, Error> {
+        rules::stored(&e, &rules::of_lineage(&e, &ancestry(&e, id)?)?)
+    }
+
+    /// Issue a root grant to the holder of `key`, with the rule set `rules`
+    /// and a budget of `allowance` in the Stellar Asset Contract `asset`.
+    /// `rules` are the agent's scoped rules as the account's
+    /// `scope_rule_set` returns them. Requires the account's authorization.
+    /// Returns the grant's id.
     ///
     /// # Errors
     ///
     /// [`Error::NotStellarAsset`] if `asset` is not a Stellar Asset Contract,
     /// [`Error::AllowanceTooLarge`] if `allowance` is above `i128::MAX`,
+    /// [`Error::InvalidRules`] if a rule holds more than one cap or an invalid
+    /// one, or the rules carry different generations,
     /// [`Error::Overflow`] if the grant ids are exhausted.
     pub fn issue(
         e: Env,
         key: BytesN<32>,
-        caveats: Vec<Caveat>,
+        rules: Vec<StoredRule>,
         asset: Address,
         allowance: u128,
     ) -> Result<u32, Error> {
@@ -142,12 +239,14 @@ impl GrantSigner {
             return Err(Error::NotStellarAsset);
         }
         budget::amount(allowance)?;
+        rules::check_root(&e, &rules)?;
         create(
             &e,
             &Grant {
                 parent: None,
                 key,
-                caveats,
+                rules,
+                steps: Vec::new(&e),
                 asset,
                 allowance,
                 spent: 0,
@@ -157,8 +256,8 @@ impl GrantSigner {
     }
 
     /// Delegate from grant `parent` to the holder of `key`: a child grant
-    /// with `parent`'s caveats followed by `caveats`, so it allows at most
-    /// what `parent` allows, and a budget node of `allowance` under
+    /// whose rule set is `parent`'s with `steps` applied, so it allows at
+    /// most what `parent` allows, and a budget node of `allowance` under
     /// `parent`'s. Requires this contract's own authorization, which its
     /// `__check_auth` gives only to `parent`'s holder. Returns the child's id.
     ///
@@ -166,26 +265,28 @@ impl GrantSigner {
     ///
     /// [`Error::NoSuchGrant`] if `parent` does not exist,
     /// [`Error::AllowanceTooLarge`] if `allowance` is above `i128::MAX`,
+    /// [`Error::InvalidStep`] if a step does not apply,
     /// [`Error::Overflow`] if the grant ids are exhausted.
     pub fn delegate(
         e: Env,
         parent: u32,
         key: BytesN<32>,
-        caveats: Vec<Caveat>,
+        steps: Vec<Step>,
         allowance: u128,
     ) -> Result<u32, Error> {
         e.current_contract_address().require_auth();
-        let from = load(&e, parent)?;
+        let from = ancestry(&e, parent)?;
         budget::amount(allowance)?;
-        let mut all = from.caveats;
-        all.append(&caveats);
+        rules::attenuate(&e, rules::of_lineage(&e, &from)?, &steps)?;
+        let asset = from[from.len() - 1].1.asset.clone();
         create(
             &e,
             &Grant {
                 parent: Some(parent),
                 key,
-                caveats: all,
-                asset: from.asset,
+                rules: Vec::new(&e),
+                steps,
+                asset,
                 allowance,
                 spent: 0,
                 revoked: false,
@@ -280,7 +381,7 @@ impl CustomAccountInterface for GrantSigner {
 
         let me = e.current_contract_address();
         let account = account(&e);
-        let mut acts = AVec::new();
+        let mut calls = Vec::new(&e);
         let mut spends = AVec::new();
         for context in contexts.iter() {
             let Context::Contract(c) = &context else {
@@ -300,20 +401,28 @@ impl CustomAccountInterface for GrantSigner {
             if c.contract == holder.asset {
                 spends.push(actions::transfer_amount(&e, c).ok_or(Error::UnmeteredCall)?);
             }
-            acts.push(actions::invoke(&e, c));
+            calls.push_back(context);
         }
-        if !chain::allows_all(&actions::caveats(&holder.caveats), &acts) {
-            return Err(Error::NotAllowed);
-        }
-
-        if spends.is_empty() {
+        if calls.is_empty() {
             return Ok(());
         }
-        // All or nothing: `Ledger.spendAll`, then `Ledger.writeBack`.
-        let spent = budget::spend_all(ledger(&lineage)?, &spends)?;
-        for ((id, grant), spent) in lineage.into_iter().zip(spent) {
-            if spent != grant.spent {
-                save(&e, id, &Grant { spent, ..grant });
+        let rules = rules::of_lineage(&e, &lineage)?;
+        let records = authorize(&e, signature.grant, &rules, &calls)?;
+        // All or nothing: `Ledger.spendAll`, then `Ledger.writeBack`, with
+        // the records `rule_eval::authorize` charged.
+        let spent = if spends.is_empty() {
+            None
+        } else {
+            Some(budget::spend_all(ledger(&lineage)?, &spends)?)
+        };
+        if let Some(records) = records {
+            save_records(&e, signature.grant, &records);
+        }
+        if let Some(spent) = spent {
+            for ((id, grant), spent) in lineage.into_iter().zip(spent) {
+                if spent != grant.spent {
+                    save(&e, id, &Grant { spent, ..grant });
+                }
             }
         }
         Ok(())

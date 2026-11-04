@@ -25,8 +25,8 @@
 //! included. Deploying a contract is a way to escape a grant's limits, and
 //! the grant signer refuses every creation context in the same way.
 //!
-//! Contexts map onto chain actions through `grant_relay::actions`, the
-//! relay's mapping. The keeper is given the checked payload encoded again, so
+//! Contexts map onto chain actions through [`crate::actions`], in the chain
+//! vocabulary the evaluator component checks. The keeper is given the checked payload encoded again, so
 //! what it signs is the value the checks read.
 //!
 //! A message signature is not bound to a network: the action's network is
@@ -42,9 +42,9 @@
 //! account. Its invocation tree is checked as a `SorobanAuthorization`
 //! preimage's is.
 
+use crate::actions;
 use base64::Engine as _;
 use grant_eval::chain;
-use grant_relay::actions;
 use nido_key_keeper::{KeyId, Payload as KeeperPayload, StellarNetwork};
 use sha2::{Digest, Sha256};
 use stellar_xdr::{

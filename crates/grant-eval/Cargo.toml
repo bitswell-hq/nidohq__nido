@@ -10,3 +10,9 @@ publish = false
 doctest = false
 
 [dependencies]
+
+[dev-dependencies]
+# The differential of the chain vocabulary against rule-core's evaluator
+# (tests/lowering, tests/rule_eval.rs). Test-only: the evaluator itself stays
+# dependency-free.
+rule-eval = { workspace = true }

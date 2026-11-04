@@ -4,11 +4,20 @@
 //! its channel accounts, and each agent with the hash of its API key and its
 //! two grants. Who issues those grants (the admin document) is outside the
 //! relay: it only reads the result.
+//!
+//! An agent's chain grant is written as chain caveats and checked as the
+//! `rule_eval` rule set they lower to ([`chain_rules`]): one rule per
+//! contract every `contract_in` caveat names, matching the functions every
+//! `function_in` caveat names (every function when there is none), with
+//! every argument caveat as a condition. So a chain grant allows a context
+//! exactly when every caveat holds for it, and names the contracts it
+//! allows: `rule_eval` has no rule that matches every contract.
 
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use grant_eval::{chain, signing};
+use grant_eval::signing;
+use rule_eval::{Cond, Functions, Rule, Val};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use stellar_xdr::ReadXdr;
@@ -91,7 +100,7 @@ pub struct AgentFile {
     /// Hex SHA-256 of the agent's API key. The key itself is not stored.
     pub api_key_sha256: String,
     /// The chain grant: caveats every context of the authorization tree must
-    /// pass.
+    /// pass, at least one of them `contract_in`.
     pub chain: Vec<ChainCaveatFile>,
     /// The signing grant: caveats the custody signature must pass.
     pub signing: Vec<SigningCaveatFile>,
@@ -121,7 +130,8 @@ pub enum I128Text {
 /// An argument value: `{"i128": "5"}`, `{"u64": 5}`, `{"bool": true}`,
 /// `{"bytes": "<hex>"}`, `{"address": "G…"}`, `{"symbol": "name"}`, or
 /// `{"other": "<hex>"}`: the `ScVal` XDR of an argument whose type has no
-/// variant of its own (`u32`, `string`, `vec`, …).
+/// variant of its own (`u32`, `string`, `vec`, …), which matches the
+/// argument the relay reads from exactly that XDR.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum ValFile {
@@ -170,10 +180,11 @@ pub enum KeeperFile {
     },
 }
 
-/// One agent, with its grants parsed into evaluator caveats.
+/// One agent, with its chain grant lowered to a `rule_eval` rule set and its
+/// signing grant parsed into evaluator caveats.
 pub struct Agent {
     pub name: String,
-    pub chain: Vec<chain::Caveat>,
+    pub chain: Vec<Rule>,
     pub signing: Vec<signing::Caveat>,
 }
 
@@ -221,12 +232,7 @@ impl Config {
                 .ok()
                 .and_then(|b| b.try_into().ok())
                 .ok_or_else(|| at("api_key_sha256 must be 32 bytes of hex".into()))?;
-            let chain = a
-                .chain
-                .iter()
-                .map(chain_caveat)
-                .collect::<Result<_, _>>()
-                .map_err(at)?;
+            let chain = chain_rules(&a.chain).map_err(at)?;
             let signing = a.signing.iter().map(signing_caveat).collect();
             let agent = Agent {
                 name: a.name.clone(),
@@ -277,52 +283,117 @@ fn account_key(strkey: &str) -> Result<[u8; 32], String> {
         .map_err(|_| format!("{strkey} is not a G… account address"))
 }
 
-/// A chain caveat as the evaluator takes it.
+/// The `rule_eval` rule set a chain grant lowers to (module docs): one rule
+/// per contract in every `contract_in` list, in the first list's order, each
+/// with no signers and a threshold of 0.
 ///
 /// # Errors
 ///
-/// A `contract_in` entry that is not a `C…` address, or a malformed value.
-pub fn chain_caveat(c: &ChainCaveatFile) -> Result<chain::Caveat, String> {
-    Ok(match c {
-        ChainCaveatFile::ContractIn(list) => {
-            for c in list {
-                if stellar_strkey::Contract::from_string(c).is_err() {
-                    return Err(format!("contract_in: {c} is not a C… contract address"));
-                }
+/// A grant with no `contract_in` caveat, a `contract_in` entry that is not a
+/// `C…` address, or a malformed value.
+pub fn chain_rules(grant: &[ChainCaveatFile]) -> Result<Vec<Rule>, String> {
+    let mut contracts: Option<Vec<Vec<u8>>> = None;
+    let mut functions: Option<Vec<Vec<u8>>> = None;
+    for c in grant {
+        match c {
+            ChainCaveatFile::ContractIn(list) => {
+                let list = list.iter().map(|c| contract(c)).collect::<Result<_, _>>()?;
+                contracts = Some(within(contracts.as_deref(), list));
             }
-            chain::Caveat::ContractIn(bytes_list(list))
+            ChainCaveatFile::FunctionIn(list) => {
+                functions = Some(within(functions.as_deref(), bytes_list(list)));
+            }
+            ChainCaveatFile::ArgI128AtMost(..) | ChainCaveatFile::ArgEq(..) => {
+                cond(c)?;
+            }
         }
-        ChainCaveatFile::FunctionIn(list) => chain::Caveat::FunctionIn(bytes_list(list)),
+    }
+    let contracts = contracts.ok_or_else(|| {
+        "chain: no contract_in caveat; a chain grant names the contracts it allows".to_owned()
+    })?;
+    let mut rules = Vec::new();
+    for contract in contracts {
+        rules.push(Rule {
+            contract,
+            functions: match &functions {
+                Some(list) => Functions::Only(list.clone()),
+                None => Functions::AnyExcept(Vec::new()),
+            },
+            conds: grant
+                .iter()
+                .filter_map(|c| cond(c).ok().flatten())
+                .collect(),
+            signers: Vec::new(),
+            threshold: 0,
+            cap: None,
+            valid_until: None,
+            generation: None,
+        });
+    }
+    Ok(rules)
+}
+
+/// `list` restricted to the entries of `before`, when there is one, without
+/// repeats.
+fn within(before: Option<&[Vec<u8>]>, list: Vec<Vec<u8>>) -> Vec<Vec<u8>> {
+    let mut out: Vec<Vec<u8>> = Vec::new();
+    for x in list {
+        if before.is_none_or(|b| b.contains(&x)) && !out.contains(&x) {
+            out.push(x);
+        }
+    }
+    out
+}
+
+/// A `contract_in` entry's `ScAddress` XDR.
+fn contract(c: &str) -> Result<Vec<u8>, String> {
+    if stellar_strkey::Contract::from_string(c).is_err() {
+        return Err(format!("contract_in: {c} is not a C… contract address"));
+    }
+    let a = c
+        .parse::<stellar_xdr::ScAddress>()
+        .map_err(|_| format!("contract_in: {c} is not a C… contract address"))?;
+    crate::actions::address(&a).ok_or_else(|| format!("contract_in: {c} is not a contract"))
+}
+
+/// The condition an argument caveat stands for; `None` for a caveat on the
+/// contract or function.
+fn cond(c: &ChainCaveatFile) -> Result<Option<Cond>, String> {
+    Ok(match c {
+        ChainCaveatFile::ContractIn(_) | ChainCaveatFile::FunctionIn(_) => None,
         ChainCaveatFile::ArgI128AtMost(index, bound) => {
-            chain::Caveat::ArgI128AtMost(*index, i128_value(bound)?)
+            Some(Cond::ArgI128AtMost(*index, i128_value(bound)?))
         }
-        ChainCaveatFile::ArgEq(index, v) => chain::Caveat::ArgEq(*index, val(v)?),
+        ChainCaveatFile::ArgEq(index, v) => Some(Cond::ArgEq(*index, val(v)?)),
     })
 }
 
-fn val(v: &ValFile) -> Result<chain::Val, String> {
+fn val(v: &ValFile) -> Result<Val, String> {
     Ok(match v {
-        ValFile::I128(n) => chain::Val::I128(i128_value(n)?),
-        ValFile::U64(n) => chain::Val::U64(*n),
-        ValFile::Bool(b) => chain::Val::Bool(*b),
-        ValFile::Bytes(h) => {
-            chain::Val::Bytes(hex::decode(h).map_err(|e| format!("bytes {h:?}: {e}"))?)
-        }
+        ValFile::I128(n) => Val::I128(i128_value(n)?),
+        ValFile::U64(n) => Val::U64(*n),
+        ValFile::Bool(b) => Val::Bool(*b),
+        ValFile::Bytes(h) => Val::Bytes(hex::decode(h).map_err(|e| format!("bytes {h:?}: {e}"))?),
         ValFile::Address(a) => {
-            a.parse::<stellar_xdr::ScAddress>()
+            let address = a
+                .parse::<stellar_xdr::ScAddress>()
                 .map_err(|_| format!("{a} is not an address strkey"))?;
-            chain::Val::Address(a.clone().into_bytes())
+            Val::Address(
+                crate::actions::address(&address)
+                    .ok_or_else(|| format!("{a} is not an address an argument holds"))?,
+            )
         }
-        ValFile::Symbol(s) => chain::Val::Symbol(s.clone().into_bytes()),
+        ValFile::Symbol(s) => Val::Symbol(s.clone().into_bytes()),
         ValFile::Other(h) => {
             // Through `actions::val`, so the value is exactly what an argument
-            // of that type maps to; a type with its own variant is refused.
+            // with this XDR maps to; a type with its own variant is refused.
             let bytes = hex::decode(h).map_err(|e| format!("other {h:?}: {e}"))?;
             let arg = stellar_xdr::ScVal::from_xdr(bytes, stellar_xdr::Limits::none())
                 .map_err(|e| format!("other {h:?}: not ScVal XDR: {e}"))?;
             match crate::actions::val(&arg) {
-                v @ chain::Val::Other(_) => v,
-                _ => return Err(format!("other {h:?}: this type has its own value form")),
+                Some(v @ (Val::Other(_) | Val::String(_))) => v,
+                Some(_) => return Err(format!("other {h:?}: this type has its own value form")),
+                None => return Err(format!("other {h:?}: not a value an argument holds")),
             }
         }
     })

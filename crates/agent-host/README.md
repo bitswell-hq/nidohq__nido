@@ -61,12 +61,15 @@ uses:
 }
 ```
 
-The chain list is the one `grant-relay` checks, parsed by its code: it is
-checked when the agent asks for a transaction or an authorization entry to be
-signed (see Signing below). An empty list allows every action of that
-vocabulary, as an empty grant does in the evaluator, so a grant whose signing
-list allows `transaction` or `auth_entry` and whose chain list is empty lets
-the agent have its key authorize any contract call.
+The chain list has the form of `grant-relay`'s chain grant and is evaluated
+in `grant-eval`'s chain vocabulary by the component: it is checked when the
+agent asks for a transaction or an authorization entry to be signed (see
+Signing below). An empty list allows every action of that vocabulary, as an
+empty grant does in the evaluator, so a grant whose signing list allows
+`transaction` or `auth_entry` and whose chain list is empty lets the agent
+have its key authorize any contract call. The relay and the grant signer
+check a chain grant as a `rule-eval` rule set instead, which names the
+contracts it allows: the relay refuses a chain grant with no `contract_in`.
 
 ## Wiring
 
@@ -148,12 +151,15 @@ request never reaches the keeper.
   contract is refused under every grant, an empty chain list included.
   Deploying a contract is a way to escape a grant's limits, and the grant
   signer refuses every creation context the same way.
-- **The mapping is the relay's.** Host functions and authorization contexts
-  become chain actions through `grant_relay::actions`, the code `grant-relay`
-  checks with: a contract by its strkey, a function by its symbol, arguments
-  as `I128`, `U64`, `Bool`, `Bytes`, `Address`, `Symbol` or `Other` (the
-  full `ScVal` XDR), and a deployment as `CreateContract`, which the host
-  refuses before the chain check.
+- **The mapping is `grant-eval`'s chain vocabulary.** Host functions and
+  authorization contexts become chain actions through `src/actions.rs`: a
+  contract by its strkey, a function by its symbol, arguments as `I128`,
+  `U64`, `Bool`, `Bytes`, `Address`, `Symbol` or `Other` (the full `ScVal`
+  XDR), and a deployment as `CreateContract`, which the host refuses before
+  the chain check. The relay reads the same XDR as `rule-eval` contexts
+  through `soroban-facade` (an address by its `ScAddress` XDR, a string as
+  a string); a chain grant names a contract, function or value in each
+  encoding from the same file.
 - **Every authorization entry is checked.** That includes entries with
   `Address` credentials, which other addresses sign: the transaction carries
   them, and its execution runs the calls they authorize. Under enforcing
@@ -191,7 +197,7 @@ are the contract's own and are not checked.
   (see `crates/grant-eval/README.md`).
 - The wiring above: path resolution, the descriptor-path check, URL parsing
   and redirect handling, payload decoding and the mapping from Soroban XDR
-  to chain actions (`grant_relay::actions`), and the operating system calls
+  to chain actions (`src/actions.rs`), and the operating system calls
   they rely on (`realpath`, `F_GETPATH`, `/proc/self/fd`, DNS).
 - The Soroban host's enforcing authorization: that a call requiring an
   account's authorization succeeds only when it matches a checked tree.

@@ -1,14 +1,15 @@
 //! `nido-grant-signer`: AI agents' authority over a Nido account, held as
-//! attenuating grants and enforced on every authorization by `grant-eval`'s
-//! chain vocabulary and `rule-eval`'s budget tree.
+//! attenuating grants and enforced on every authorization by `rule-eval`'s
+//! rule check and budget tree.
 //!
 //! Each Nido account that admits agents gets its own instance, deployed with
-//! the account's address. The account's policy document declares the
-//! instance as a CAP-0071 delegated signer and names it as the signer of the
-//! rules agents act through. When an agent authorizes for the account, the
-//! account's `__check_auth` delegates to this contract's `__check_auth`,
-//! which the host calls with the account's signature payload and every
-//! context of the authorization. This contract then:
+//! the account's address. The account applies a scoped document for its
+//! agents (`apply_scope`) whose rules name this instance as their CAP-0071
+//! delegated signer. When an agent authorizes for the account, the account's
+//! `__check_auth` checks every context against the scoped rule chosen for it
+//! and then delegates to this contract's `__check_auth`, which the host calls
+//! with the account's signature payload and every context of the
+//! authorization. This contract then:
 //!
 //! 1. loads the signing grant and its ancestors, refusing if any of them is
 //!    revoked;
@@ -16,23 +17,28 @@
 //! 3. refuses any context that creates a contract or calls the account
 //!    itself, and any call on this contract other than the holder's own
 //!    delegation;
-//! 4. maps every other context, a contract call, to a
-//!    `grant_eval::chain::Action` and refuses unless
-//!    `grant_eval::chain::allows_all` holds for the grant's caveats;
+//! 4. checks every other context, a contract call read through
+//!    `soroban-facade`, against the grant's rule set with
+//!    `rule_eval::authorize`, each context by the first rule that allows it,
+//!    with this contract as the authenticated signer and the grant's spending
+//!    records;
 //! 5. charges every `transfer` on the grant's budget asset to the grant and
 //!    each ancestor with `rule_eval::spend`, refusing the whole
 //!    authorization if any of them would be overdrawn, and refuses any other
 //!    call on that asset.
 //!
-//! Issuing a root grant, revoking, rotating a holder's key and refilling a
-//! budget require the account's own authorization, which only its admin rule
-//! gives. A holder can only delegate: [`GrantSignerClient::delegate`]
-//! creates a child grant whose caveats are the parent's followed by the new
-//! ones, with its own budget node under the parent's. It is authorized by
-//! this contract's own address, whose `__check_auth` accepts a delegation
-//! only from the signing grant itself. So `__check_auth` is also the check of
-//! this contract's own address, a role the host calls it in with the same
-//! arguments.
+//! A root grant's rule set is the rules the owner issues it with: the rules
+//! the account's scoped document for the agent lowers to, as the account's
+//! `scope_rule_set` view returns them. Issuing a root grant, revoking,
+//! rotating a holder's key and refilling a budget require the account's own
+//! authorization, which only its admin rule gives. A holder can only
+//! delegate: [`GrantSignerClient::delegate`] creates a child grant whose rule
+//! set is the parent's with the child's [`Step`]s, `rule_eval`'s attenuation
+//! steps, replayed on it, and whose budget node is under the parent's. It is
+//! authorized by this contract's own address, whose `__check_auth` accepts a
+//! delegation only from the signing grant itself. So `__check_auth` is also
+//! the check of this contract's own address, a role the host calls it in
+//! with the same arguments.
 //!
 //! `README.md` states the integration, both roles of `__check_auth`, the
 //! threat model coverage, the trusted wiring and what is tested.
@@ -46,40 +52,45 @@ mod actions;
 mod budget;
 mod contract;
 mod error;
+mod rules;
 
 pub use contract::{GrantSigner, GrantSignerClient};
 pub use error::GrantError;
+pub use perch_rule_eval::{StoredCap, StoredCond, StoredFunctions, StoredRule, StoredVal};
 
-use soroban_sdk::{contracttype, Address, Bytes, BytesN, Vec};
+use soroban_sdk::{contracttype, Address, BytesN, Symbol, Vec};
+use stellar_accounts::smart_account::Signer;
 
-/// A contract-call argument as the evaluator sees it
-/// (`grant_eval::chain::Val`). `Address` holds a strkey and `Other` the full
-/// `ScVal` XDR of an argument of any type the other variants do not model.
+/// One of `rule_eval`'s attenuation steps, on the rule at the index: each
+/// returns a rule set that allows no context, and accepts no run of
+/// authorizations from empty records, that the rule set it was applied to
+/// does not.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum Arg {
-    I128(i128),
-    U64(u64),
-    Bool(bool),
-    Bytes(Bytes),
-    Address(Bytes),
-    Symbol(Bytes),
-    Other(Bytes),
+pub enum Step {
+    /// `rule_eval::drop_rule`: every later rule's index moves down by one.
+    DropRule(u32),
+    /// `rule_eval::add_cond`.
+    AddCond(u32, StoredCond),
+    /// `rule_eval::remove_functions`.
+    RemoveFunctions(u32, Vec<Symbol>),
+    /// `rule_eval::restrict_functions`.
+    RestrictFunctions(u32, Vec<Symbol>),
+    /// `rule_eval::remove_signers`.
+    RemoveSigners(u32, Vec<Signer>),
+    /// `rule_eval::raise_threshold`.
+    RaiseThreshold(u32, u32),
+    /// `rule_eval::add_cap`.
+    AddCap(u32, StoredCap),
+    /// `rule_eval::lower_cap_limit`.
+    LowerCapLimit(u32, i128),
+    /// `rule_eval::lengthen_cap_period`.
+    LengthenCapPeriod(u32, u32),
+    /// `rule_eval::lower_valid_until`.
+    LowerValidUntil(u32, u32),
 }
 
-/// A chain caveat (`grant_eval::chain::Caveat`). Contracts are named by
-/// their strkey (`C…`) and functions by their symbol's bytes, as in
-/// `crates/grant-relay`.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum Caveat {
-    ContractIn(Vec<Bytes>),
-    FunctionIn(Vec<Bytes>),
-    ArgI128AtMost(u32, i128),
-    ArgEq(u32, Arg),
-}
-
-/// One grant: its caveats, its holder's key and its budget node.
+/// One grant: its rule set, its holder's key and its budget node.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Grant {
@@ -88,8 +99,12 @@ pub struct Grant {
     pub parent: Option<u32>,
     /// The holder's ed25519 public key.
     pub key: BytesN<32>,
-    /// The parent's caveats, then the ones added at delegation.
-    pub caveats: Vec<Caveat>,
+    /// A root grant's rule set; empty for a delegated grant. Every rule
+    /// holds at most one valid cap, and all carry the same generation.
+    pub rules: Vec<StoredRule>,
+    /// A delegated grant's attenuation steps, replayed on its parent's rule
+    /// set; empty for a root grant.
+    pub steps: Vec<Step>,
     /// The Stellar Asset Contract the budget is denominated in, the root
     /// grant's for every grant under it.
     pub asset: Address,

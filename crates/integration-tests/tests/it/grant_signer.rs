@@ -15,12 +15,18 @@
 //! prints the cost rows of `enforce_costs`.
 
 use ed25519_dalek::{Signer as _, SigningKey};
-use grant_eval::chain;
-use nido_grant_signer::{Arg, Caveat, Grant, GrantError, GrantSignature, GrantSignerClient};
+use nido_grant_signer::{
+    Grant, GrantError, GrantSignature, GrantSignerClient, Step, StoredCap, StoredFunctions,
+    StoredRule, StoredVal,
+};
+use nido_integration_tests::grants::{self, Arg, Caveat};
 use nido_integration_tests::world::{
-    strkey, world, Account, Passkey, TargetClient, World, NETWORK,
+    strkey, world, Account, Enrolled, Mode, Passkey, Profile, TargetClient, World, DELAY, NETWORK,
 };
 use nido_integration_tests::GRANT_SIGNER_WASM;
+use perch_account::PerchAccountError;
+use perch_recovery::EvidenceDomain;
+use perch_recovery_interface::RecoveryAction;
 use perch_smart_account::PerchAuthError;
 use soroban_sdk::auth::{
     Context, ContractContext, ContractExecutable, CreateContractHostFnContext,
@@ -181,26 +187,7 @@ impl Fixture {
             Passkey::labelled(&format!("grants/{label}/owner")),
             std::vec![],
         );
-        let signer = w
-            .env
-            .register(GRANT_SIGNER_WASM, (account.address.clone(),));
-        let issuer = Address::generate(&w.env);
-        let asset = w.env.register_stellar_asset_contract_v2(issuer).address();
-        let router = w.env.register(Router, ());
-        w.env.mock_all_auths();
-        StellarAssetClient::new(&w.env, &asset).mint(&account.address, &BALANCE);
-        w.env.set_auths(&[]);
-        let f = Fixture {
-            bob: Address::generate(&w.env),
-            carol: Address::generate(&w.env),
-            w,
-            account,
-            signer,
-            asset,
-            router,
-            // Clear of the world's own nonces for the same account.
-            nonce: Cell::new(1 << 40),
-        };
+        let f = Self::on(w, account);
         let mut rules = std::vec![
             ("a-target", contract_scope(&f.w.target)),
             ("a-router", contract_scope(&f.router)),
@@ -216,6 +203,40 @@ impl Fixture {
         f.w.apply_bytes_as(&f.account, "owner", &f.doc(&rules), 0)
             .expect("the agents' document applies");
         f
+    }
+
+    /// A fixture on an account enrolled in guardian-only `Loss` recovery,
+    /// whose admin document gives agents no rule: they act through scoped
+    /// documents ([`Self::apply_scope`]).
+    fn enrolled(label: &str) -> (Self, Enrolled) {
+        let w = world();
+        let enrolled = w.enrolled(&format!("grants/{label}"), Profile::Loss, Mode::Guardian);
+        (Self::on(w, enrolled.account.clone()), enrolled)
+    }
+
+    /// The grant signer for `account`, the budget asset with the account's
+    /// balance in it, and the router.
+    fn on(w: World, account: Account) -> Self {
+        let signer = w
+            .env
+            .register(GRANT_SIGNER_WASM, (account.address.clone(),));
+        let issuer = Address::generate(&w.env);
+        let asset = w.env.register_stellar_asset_contract_v2(issuer).address();
+        let router = w.env.register(Router, ());
+        w.env.mock_all_auths();
+        StellarAssetClient::new(&w.env, &asset).mint(&account.address, &BALANCE);
+        w.env.set_auths(&[]);
+        Fixture {
+            bob: Address::generate(&w.env),
+            carol: Address::generate(&w.env),
+            w,
+            account,
+            signer,
+            asset,
+            router,
+            // Clear of the world's own nonces for the same account.
+            nonce: Cell::new(1 << 40),
+        }
     }
 
     fn env(&self) -> &Env {
@@ -245,6 +266,48 @@ impl Fixture {
             all.join(",")
         );
         Bytes::from_slice(self.env(), json.as_bytes())
+    }
+
+    /// A scoped document of `rules`, each signed by the grant signer.
+    fn scope_doc(&self, rules: &[(&str, String)]) -> Bytes {
+        let all: std::vec::Vec<String> = rules
+            .iter()
+            .map(|(name, scope)| {
+                format!(
+                    r#"{{"name":"{name}","scope":{scope},"principals":{{"type":"all","signers":["grants"]}}}}"#
+                )
+            })
+            .collect();
+        let json = format!(
+            r#"{{"version":1,"network":"{NETWORK}","signers":[{{"id":"grants","address":"{}"}}],"rules":[{}]}}"#,
+            strkey(&self.signer),
+            all.join(",")
+        );
+        Bytes::from_slice(self.env(), json.as_bytes())
+    }
+
+    /// `apply_scope(scope, doc)`, authorized by `owner`'s passkey through the
+    /// admin rule.
+    fn apply_scope(
+        &self,
+        owner: &Account,
+        scope: u32,
+        doc: &Bytes,
+    ) -> Result<BytesN<32>, PerchAccountError> {
+        let w = &self.w;
+        let root = w.invocation(
+            &self.account.address,
+            "apply_scope",
+            std::vec![w.sc(scope), w.sc(doc.clone())],
+        );
+        let entry = w.signed(owner, "owner", "admin", root);
+        match w.with_auths(&[entry], || {
+            w.account(&self.account).try_apply_scope(&scope, doc)
+        }) {
+            Ok(Ok(hash)) => Ok(hash),
+            Err(Ok(e)) => Err(e),
+            other => panic!("apply_scope: {other:?}"),
+        }
     }
 
     fn next_nonce(&self) -> i64 {
@@ -322,8 +385,17 @@ impl Fixture {
         Caveat::ArgEq(index, Arg::Address(self.id(a)))
     }
 
-    fn caveats(&self, list: &[Caveat]) -> Vec<Caveat> {
-        Vec::from_slice(self.env(), list)
+    /// The rule set a root grant with `caveats` lowers to.
+    fn root_rules(&self, caveats: &[Caveat]) -> Vec<StoredRule> {
+        grants::root(self.env(), &self.signer, caveats)
+    }
+
+    /// Grant `id`'s rule set; empty when there is no such grant.
+    fn rules(&self, id: u32) -> Vec<StoredRule> {
+        match self.client().try_rules(&id) {
+            Ok(Ok(rules)) => rules,
+            _ => Vec::new(self.env()),
+        }
     }
 
     // --- admin operations, through the account's `execute` -------------------
@@ -354,22 +426,36 @@ impl Fixture {
             e,
             [
                 pubkey(e, key).into_val(e),
-                self.caveats(caveats).into_val(e),
+                self.root_rules(caveats).into_val(e),
                 self.asset.into_val(e),
                 allowance.into_val(e),
             ],
         )
     }
 
-    /// The owner issues a root grant; returns its id.
+    /// The owner issues a root grant with the rule set `caveats` lower to;
+    /// returns its id.
     fn issue(&self, key: &SigningKey, caveats: &[Caveat], allowance: u128) -> u32 {
+        self.issue_rules(key, &self.root_rules(caveats), allowance)
+    }
+
+    /// The owner issues a root grant with the rule set `rules`; returns its
+    /// id.
+    fn issue_rules(&self, key: &SigningKey, rules: &Vec<StoredRule>, allowance: u128) -> u32 {
         let next = (0..u32::MAX)
             .find(|id| self.client().grant(id).is_none())
             .unwrap();
-        assert_eq!(
-            self.admin("issue", &self.issue_args(key, caveats, allowance)),
-            Outcome::Ok
+        let e = self.env();
+        let args = Vec::from_array(
+            e,
+            [
+                pubkey(e, key).into_val(e),
+                rules.into_val(e),
+                self.asset.into_val(e),
+                allowance.into_val(e),
+            ],
         );
+        assert_eq!(self.admin("issue", &args), Outcome::Ok);
         next
     }
 
@@ -450,6 +536,21 @@ impl Fixture {
         rules: &[&str],
         root: SorobanAuthorizedInvocation,
     ) -> SorobanAuthorizationEntry {
+        let ids: std::vec::Vec<u32> = rules
+            .iter()
+            .map(|r| self.w.rule_id(&self.account.address, r))
+            .collect();
+        self.agent_entry_ids(grant, key, &ids, root)
+    }
+
+    /// [`Self::agent_entry`], selecting the account's rules by OZ id.
+    fn agent_entry_ids(
+        &self,
+        grant: u32,
+        key: &SigningKey,
+        ids: &[u32],
+        root: SorobanAuthorizedInvocation,
+    ) -> SorobanAuthorizationEntry {
         let nonce = self.next_nonce();
         let expiration = self.w.ledger() + 1_000;
         let payload = self.payload(Some(&self.account.address), nonce, expiration, &root);
@@ -458,12 +559,7 @@ impl Fixture {
             Signer::Delegated(self.signer.clone()),
             Bytes::new(self.env()),
         );
-        let context_rule_ids = Vec::from_iter(
-            self.env(),
-            rules
-                .iter()
-                .map(|r| self.w.rule_id(&self.account.address, r)),
-        );
+        let context_rule_ids = Vec::from_slice(self.env(), ids);
         SorobanAuthorizationEntry {
             credentials: SorobanCredentials::AddressWithDelegates(
                 SorobanAddressCredentialsWithDelegates {
@@ -533,13 +629,23 @@ impl Fixture {
 
     /// `Target::protected(account)`, authorized by `grant`'s holder.
     fn protected(&self, grant: u32, key: &SigningKey) -> Outcome {
+        self.protected_by(
+            grant,
+            key,
+            self.w.rule_id(&self.account.address, "a-target"),
+        )
+    }
+
+    /// `Target::protected(account)`, authorized by `grant`'s holder through
+    /// the account's rule with OZ id `rule`.
+    fn protected_by(&self, grant: u32, key: &SigningKey, rule: u32) -> Outcome {
         let w = &self.w;
         let root = w.invocation(
             &w.target,
             "protected",
             std::vec![w.sc(self.account.address.clone())],
         );
-        let entry = self.agent_entry(grant, key, &["a-target"], root);
+        let entry = self.agent_entry_ids(grant, key, &[rule], root);
         self.run(&[entry], || {
             TargetClient::new(&w.env, &w.target).protected(&self.account.address);
         })
@@ -633,8 +739,9 @@ impl Fixture {
         (outcome, forwarded.get())
     }
 
-    /// `delegate(parent, child, caveats, allowance)`, authorized as the grant
-    /// signer by grant `signer`'s holder `key`. The child's id on success.
+    /// `delegate(parent, child, steps, allowance)` with the steps that add
+    /// `caveats` to `parent`'s rule set, authorized as the grant signer by
+    /// grant `signer`'s holder `key`. The child's id on success.
     fn delegate(
         &self,
         signer: u32,
@@ -644,16 +751,30 @@ impl Fixture {
         caveats: &[Caveat],
         allowance: u128,
     ) -> Result<u32, Outcome> {
+        let steps = grants::steps(self.env(), &self.rules(parent), caveats);
+        self.delegate_steps(signer, key, parent, child, &steps, allowance)
+    }
+
+    /// `delegate(parent, child, steps, allowance)`, authorized as the grant
+    /// signer by grant `signer`'s holder `key`. The child's id on success.
+    fn delegate_steps(
+        &self,
+        signer: u32,
+        key: &SigningKey,
+        parent: u32,
+        child: &SigningKey,
+        steps: &Vec<Step>,
+        allowance: u128,
+    ) -> Result<u32, Outcome> {
         let w = &self.w;
         let child = pubkey(self.env(), child);
-        let caveats = self.caveats(caveats);
         let root = w.invocation(
             &self.signer,
             "delegate",
             std::vec![
                 w.sc(parent),
                 w.sc(child.clone()),
-                w.sc(caveats.clone()),
+                w.sc(steps.clone()),
                 w.sc(allowance)
             ],
         );
@@ -661,8 +782,7 @@ impl Fixture {
         let id = Cell::new(None);
         match self.run(&[entry], || {
             id.set(Some(
-                self.client()
-                    .delegate(&parent, &child, &caveats, &allowance),
+                self.client().delegate(&parent, &child, steps, &allowance),
             ));
         }) {
             Outcome::Ok => Ok(id.get().unwrap()),
@@ -838,8 +958,9 @@ fn contract_deployment_is_denied() {
     let f = Fixture::new("deploy");
     let a = agent(1);
     let g = f.issue(&a, &[f.contract_in(&[&f.w.target])], 0);
-    // An empty grant: no caveat stands in the way, only the guard.
-    let empty = f.issue(&a, &[], 0);
+    // A grant over every contract the test calls: only the guard stands in
+    // the way (no rule allows a creation either).
+    let wide = f.issue(&a, &[f.contract_in(&[&f.w.target, &f.router, &f.asset])], 0);
 
     // The grant signer refuses a creation context under every grant, alone
     // or behind an allowed call, with or without constructor arguments.
@@ -857,7 +978,7 @@ fn contract_deployment_is_denied() {
             constructor_args: Vec::from_array(env, [f.account.address.into_val(env)]),
         }),
     ];
-    for grant in [g, empty] {
+    for grant in [g, wide] {
         for create in &creations {
             assert_eq!(
                 f.verdict(grant, &a, std::slice::from_ref(create)),
@@ -896,7 +1017,7 @@ fn contract_deployment_is_denied() {
         })
     };
 
-    for grant in [g, empty] {
+    for grant in [g, wide] {
         // Through the account, a deployment with the account as deployer has
         // no rule to select (document rules are scoped to contracts), so the
         // account refuses it before any signer is asked.
@@ -916,7 +1037,7 @@ fn contract_deployment_is_denied() {
 
 /// The grant signer's `__check_auth` is also the custom-account check of its
 /// own address, called with the same three arguments, so the guards and the
-/// caveats apply alike in both roles (and `verdict`, which calls it
+/// rule set apply alike in both roles (and `verdict`, which calls it
 /// directly, stands for both). In this second role a holder authorizes only
 /// as the grant signer's address, within its grant; that never counts as the
 /// account's authorization.
@@ -924,7 +1045,13 @@ fn contract_deployment_is_denied() {
 fn the_grant_signers_own_address_acts_only_for_itself_within_the_grant() {
     let f = Fixture::new("own-address");
     let a = agent(1);
-    let empty = f.issue(&a, &[], 0);
+    // A grant whose rules name every contract below, so that only the
+    // guards refuse.
+    let wide = f.issue(
+        &a,
+        &[f.contract_in(&[&f.w.target, &f.account.address, &f.asset, &f.signer])],
+        0,
+    );
     let router_only = f.issue(&a, &[f.contract_in(&[&f.router])], 0);
     let w = &f.w;
     let protected = |who: &Address, grant: u32| {
@@ -936,9 +1063,9 @@ fn the_grant_signers_own_address_acts_only_for_itself_within_the_grant() {
     };
 
     // `protected(grant signer)` needs the grant signer's own authorization:
-    // the empty grant gives it, and a grant that leaves out the target
-    // refuses it.
-    assert_eq!(protected(&f.signer, empty), Outcome::Ok);
+    // a grant naming the target gives it, and a grant that leaves out the
+    // target refuses it.
+    assert_eq!(protected(&f.signer, wide), Outcome::Ok);
     assert_eq!(
         protected(&f.signer, router_only),
         refused(GrantError::NotAllowed)
@@ -946,12 +1073,12 @@ fn the_grant_signers_own_address_acts_only_for_itself_within_the_grant() {
 
     // The same holder's signature as the grant signer's address authorizes
     // nothing for the account.
-    let out = protected(&f.account.address, empty);
+    let out = protected(&f.account.address, wide);
     assert!(matches!(out, Outcome::Other(_)), "{out:?}");
 
     // In this role too, a call on the account, an unmetered call on the
     // budget asset and a call on the grant signer other than the holder's
-    // own delegation are refused under the empty grant.
+    // own delegation are refused under a grant whose rules name them.
     let e = f.env();
     let approve = f.context(
         &f.asset,
@@ -977,7 +1104,7 @@ fn the_grant_signers_own_address_acts_only_for_itself_within_the_grant() {
             GrantError::NotHolder,
         ),
     ] {
-        assert_eq!(f.verdict(empty, &a, &[context]), Err(Ok(error)));
+        assert_eq!(f.verdict(wide, &a, &[context]), Err(Ok(error)));
     }
 }
 
@@ -990,7 +1117,10 @@ fn the_grant_signers_own_address_acts_only_for_itself_within_the_grant() {
 fn admin_calls(f: &Fixture, g: u32) -> std::vec::Vec<(&'static str, Vec<Val>)> {
     let e = f.env();
     std::vec![
-        ("issue", f.issue_args(&agent(1), &[], u128::MAX)),
+        (
+            "issue",
+            f.issue_args(&agent(1), &[f.contract_in(&[&f.w.target])], u128::MAX)
+        ),
         ("revoke", Vec::from_array(e, [g.into_val(e)])),
         (
             "rotate",
@@ -1070,8 +1200,9 @@ fn agent_cannot_change_the_accounts_rules_or_call_its_admin_functions() {
         ("escalate-account-rule", Some(Misrule::SelfAdmin), "a-self"),
     ] {
         let f = Fixture::with_rule(label, misrule);
-        // An empty grant: no caveat stands in the way, only the guards.
-        let g = f.issue(&a, &[], 10);
+        // A grant whose rules name the account: only the guards stand in the
+        // way.
+        let g = f.issue(&a, &[f.contract_in(&[&f.account.address])], 10);
         let env = f.env();
         let revision = f.w.account(&f.account).revision();
         let widened = f.doc(&[("a-target", String::from(r#"{"type":"self-admin"}"#))]);
@@ -1140,8 +1271,8 @@ fn agent_cannot_edit_its_grant_by_delegating_from_another() {
         .delegate(root, &a, root, &b, &[f.contract_in(&[&f.w.target])], 10)
         .expect("the root's holder delegates");
     // The child's holder cannot delegate from the root (which would hand it
-    // the root's grant without its own caveats), nor from a grant id it does
-    // not hold.
+    // the root's rule set without its own steps), nor from a grant id it
+    // does not hold.
     assert_eq!(
         f.delegate(child, &b, root, &b, &[], 1_000),
         Err(refused(GrantError::NotHolder))
@@ -1171,7 +1302,7 @@ fn delegation_narrows_and_cannot_widen() {
     assert_eq!(f.protected(root, &a), Outcome::Ok);
     assert_eq!(f.transfer(root, &a, &f.bob, 1), Outcome::Ok);
 
-    // b gets the root's caveats followed by "target only".
+    // b gets the root's rule set without the asset's rule: "target only".
     let added = [f.contract_in(&[&f.w.target])];
     let child = f
         .delegate(root, &a, root, &b, &added, 50)
@@ -1179,9 +1310,11 @@ fn delegation_narrows_and_cannot_widen() {
     let stored = f.grant(child);
     assert_eq!(stored.parent, Some(root));
     assert_eq!(stored.asset, f.asset);
+    assert_eq!(stored.steps, Vec::from_array(f.env(), [Step::DropRule(1)]));
+    assert!(stored.rules.is_empty());
     assert_eq!(
-        stored.caveats,
-        f.caveats(&[root_caveats[0].clone(), added[0].clone()])
+        f.rules(child),
+        f.root_rules(&[root_caveats[0].clone(), added[0].clone()])
     );
     assert_eq!(f.protected(child, &b), Outcome::Ok);
     assert_eq!(
@@ -1189,8 +1322,9 @@ fn delegation_narrows_and_cannot_widen() {
         refused(GrantError::NotAllowed)
     );
 
-    // c's added caveat names the router, which neither ancestor allows: an
-    // added caveat only narrows, so c can reach nothing at all.
+    // c's added caveat names the router, which neither ancestor allows: it
+    // drops the target's rule, so c's rule set is empty and reaches nothing
+    // at all.
     let grandchild = f
         .delegate(child, &b, child, &c, &[f.contract_in(&[&f.router])], 50)
         .expect("the child's holder delegates");
@@ -1208,7 +1342,9 @@ fn delegation_narrows_and_cannot_widen() {
     let copy = f
         .delegate(root, &a, root, &c, &[], 100)
         .expect("the root's holder delegates");
-    assert_eq!(f.grant(copy).caveats, f.caveats(&root_caveats));
+    assert!(f.grant(copy).steps.is_empty());
+    assert_eq!(f.rules(copy), f.rules(root));
+    assert_eq!(f.rules(root), f.root_rules(&root_caveats));
     assert_eq!(f.protected(copy, &c), Outcome::Ok);
 }
 
@@ -1435,7 +1571,7 @@ fn issue_requires_a_stellar_asset_contract() {
         e,
         [
             pubkey(e, &agent(1)).into_val(e),
-            Vec::<Caveat>::new(e).into_val(e),
+            Vec::<StoredRule>::new(e).into_val(e),
             f.router.into_val(e),
             1u128.into_val(e),
         ],
@@ -1448,29 +1584,271 @@ fn issue_requires_a_stellar_asset_contract() {
 }
 
 // ---------------------------------------------------------------------------
-// One mapping at both boundaries
+// Grants from scopes, and what rule sets add
 // ---------------------------------------------------------------------------
 
-/// The contract's form of a value `grant_relay::actions` produced.
-fn arg(e: &Env, v: &chain::Val) -> Arg {
-    match v {
-        chain::Val::I128(n) => Arg::I128(*n),
-        chain::Val::U64(n) => Arg::U64(*n),
-        chain::Val::Bool(b) => Arg::Bool(*b),
-        chain::Val::Bytes(b) => Arg::Bytes(Bytes::from_slice(e, b)),
-        chain::Val::Address(b) => Arg::Address(Bytes::from_slice(e, b)),
-        chain::Val::Symbol(b) => Arg::Symbol(Bytes::from_slice(e, b)),
-        chain::Val::Other(b) => Arg::Other(Bytes::from_slice(e, b)),
+/// The design's path end to end: the owner applies a scoped document for its
+/// agents whose rule names this grant signer, issues a grant with the rule
+/// set the account's `scope_rule_set` returns, and the agent authorizes
+/// through the scoped rule; a delegation narrows it. A completed recovery
+/// then ends the grant: the account refuses the wiped scope's rule
+/// (`StaleScope`) before the grant signer is asked, and no document may name
+/// this grant signer again (`WipedCredential`), so no later scope revives
+/// its grants.
+#[test]
+fn a_grant_from_a_scope_acts_until_a_recovery_completes() {
+    let (f, enrolled) = Fixture::enrolled("scope");
+    let (a, b) = (agent(1), agent(2));
+    let env = f.env();
+    let doc = f.scope_doc(&[("a-target", contract_scope(&f.w.target))]);
+    f.apply_scope(&f.account, 7, &doc)
+        .expect("the owner applies the agents' scope");
+    let account = f.w.account(&f.account);
+    let rules = account.scope_rule_set(&7);
+    assert_eq!(rules.len(), 1);
+    assert_eq!(rules.get_unchecked(0).generation, Some(0));
+    let id = account.scope(&7).unwrap().rules.get_unchecked(0).id;
+    let grant = f.issue_rules(&a, &rules, 0);
+    assert_eq!(f.rules(grant), rules);
+    assert_eq!(f.protected_by(grant, &a, id), Outcome::Ok);
+
+    // A delegation restricted to another function allows nothing on the
+    // target.
+    let other = Vec::from_array(env, [Symbol::new(env, "other")]);
+    let steps = Vec::from_array(env, [Step::RestrictFunctions(0, other)]);
+    let child = f
+        .delegate_steps(grant, &a, grant, &b, &steps, 0)
+        .expect("the grant's holder delegates");
+    assert_eq!(
+        f.protected_by(child, &b, id),
+        refused(GrantError::NotAllowed)
+    );
+
+    // A guardian quorum recovers the account after the timelock.
+    let w = &f.w;
+    let new_owner = Passkey::labelled("grants/scope/new-owner");
+    let source = account.applied_doc().unwrap();
+    let replacements = w.replacements(&new_owner, None);
+    let attempt = w
+        .begin_lost_key(&f.account, &replacements)
+        .expect("permissionless begin");
+    for guardian in &enrolled.guardians[..2] {
+        w.try_guardian(&f.account, guardian, attempt, EvidenceDomain::Initiate)
+            .unwrap();
+    }
+    let target = w.target_bytes(&f.account, RecoveryAction::LostKey, &source, &replacements);
+    w.advance(DELAY);
+    w.complete(&f.account, &target).expect("anyone completes");
+    assert_eq!(account.scope_generation(), 1);
+
+    assert_eq!(
+        f.protected_by(grant, &a, id),
+        Outcome::AuthFailed(format!(
+            "Error(Contract, #{})",
+            PerchAuthError::StaleScope as u32
+        ))
+    );
+    let mut recovered = f.account.clone();
+    recovered.keys[0].1 = new_owner;
+    assert_eq!(
+        f.apply_scope(&recovered, 8, &doc),
+        Err(PerchAccountError::WipedCredential)
+    );
+}
+
+/// A spending cap a delegation adds to the budget asset's rule: within each
+/// window of `period` ledgers the grant's transfers sum to at most the
+/// cap's limit (`CapExceeded` past it, charging nothing), two transfers in
+/// one authorization are charged one after the other, and the budget is
+/// charged as before. The parent's rule keeps no cap.
+#[test]
+fn a_cap_added_by_delegation_bounds_spending_per_window() {
+    let f = Fixture::new("cap");
+    let (a, b) = (agent(1), agent(2));
+    let e = f.env();
+    let root = f.issue(&a, &[f.contract_in(&[&f.asset])], 1_000);
+    let cap = StoredCap {
+        limit: 100,
+        period: 10,
+        amount_arg: 2,
+    };
+    let child = f
+        .delegate_steps(
+            root,
+            &a,
+            root,
+            &b,
+            &Vec::from_array(e, [Step::AddCap(0, cap)]),
+            1_000,
+        )
+        .expect("the root's holder delegates");
+    let transfer = |amount| f.transfer_context(&f.bob, amount);
+    assert_eq!(f.verdict(child, &b, &[transfer(60)]), Ok(()));
+    assert_eq!(
+        f.verdict(child, &b, &[transfer(60)]),
+        Err(Ok(GrantError::CapExceeded))
+    );
+    assert_eq!(f.verdict(child, &b, &[transfer(40)]), Ok(()));
+    assert_eq!(f.grant(child).spent, 100);
+
+    f.w.advance(10);
+    assert_eq!(
+        f.verdict(child, &b, &[transfer(60), transfer(60)]),
+        Err(Ok(GrantError::CapExceeded))
+    );
+    assert_eq!(f.grant(child).spent, 100, "a refusal charges nothing");
+    assert_eq!(f.verdict(child, &b, &[transfer(50), transfer(50)]), Ok(()));
+    assert_eq!(f.grant(child).spent, 200);
+    assert_eq!(f.grant(root).spent, 200);
+
+    assert_eq!(f.verdict(root, &a, &[transfer(500)]), Ok(()));
+}
+
+/// A last ledger a delegation sets: the rule authorizes up to and including
+/// it (`Expired` after), and a later delegation cannot move it later.
+#[test]
+fn a_last_ledger_ends_a_rule() {
+    let f = Fixture::new("expiry");
+    let (a, b, c) = (agent(1), agent(2), agent(3));
+    let env = f.env();
+    let root = f.issue(&a, &[f.contract_in(&[&f.w.target])], 0);
+    let last = f.w.ledger() + 5;
+    let child = f
+        .delegate_steps(
+            root,
+            &a,
+            root,
+            &b,
+            &Vec::from_array(env, [Step::LowerValidUntil(0, last)]),
+            0,
+        )
+        .expect("the root's holder delegates");
+    assert_eq!(f.verdict(child, &b, &[f.protected_context()]), Ok(()));
+    f.w.advance(5);
+    assert_eq!(f.verdict(child, &b, &[f.protected_context()]), Ok(()));
+    f.w.advance(1);
+    assert_eq!(
+        f.verdict(child, &b, &[f.protected_context()]),
+        Err(Ok(GrantError::Expired))
+    );
+    assert_eq!(f.verdict(root, &a, &[f.protected_context()]), Ok(()));
+    assert_eq!(
+        f.delegate_steps(
+            child,
+            &b,
+            child,
+            &c,
+            &Vec::from_array(env, [Step::LowerValidUntil(0, last + 100)]),
+            0,
+        ),
+        Err(refused(GrantError::InvalidStep))
+    );
+}
+
+/// The signer steps: removing the grant signer from a rule's signers, or
+/// raising its threshold past the one signer the grant signer
+/// authenticates, leaves a rule that allows nothing.
+#[test]
+fn signer_steps_narrow_to_nothing() {
+    let f = Fixture::new("signers");
+    let (a, b) = (agent(1), agent(2));
+    let e = f.env();
+    let root = f.issue(&a, &[f.contract_in(&[&f.w.target])], 0);
+    let me = Vec::from_array(e, [Signer::Delegated(f.signer.clone())]);
+    for step in [Step::RemoveSigners(0, me), Step::RaiseThreshold(0, 2)] {
+        let child = f
+            .delegate_steps(root, &a, root, &b, &Vec::from_array(e, [step]), 0)
+            .expect("the root's holder delegates");
+        assert_eq!(
+            f.verdict(child, &b, &[f.protected_context()]),
+            Err(Ok(GrantError::NotAllowed))
+        );
     }
 }
 
-/// The relay maps a call's XDR to chain actions; the grant signer maps the
-/// host's contexts. A caveat built from the relay's mapping of one value
-/// holds, in the grant signer, for a context carrying exactly that value and
-/// for no other, over every argument type: so the two boundaries read a
-/// grant's bytes the same way.
+/// `issue` refuses a rule set `rule_eval::authorize` would not check as
+/// issued: a cap that is not valid, more than one cap on a rule, or rules
+/// of different generations. `delegate` refuses a step `rule_eval` refuses.
 #[test]
-fn the_account_and_the_relay_map_actions_alike() {
+fn issue_and_delegate_refuse_what_rule_eval_refuses() {
+    let f = Fixture::new("refusals");
+    let (a, b) = (agent(1), agent(2));
+    let e = f.env();
+    let issue = |rules: &Vec<StoredRule>| {
+        let args = Vec::from_array(
+            e,
+            [
+                pubkey(e, &a).into_val(e),
+                rules.into_val(e),
+                f.asset.into_val(e),
+                0u128.into_val(e),
+            ],
+        );
+        f.admin("issue", &args)
+    };
+    let one = f.root_rules(&[f.contract_in(&[&f.w.target])]);
+    let with = |change: &dyn Fn(&mut StoredRule)| {
+        let mut rules = one.clone();
+        let mut rule = rules.get_unchecked(0);
+        change(&mut rule);
+        rules.set(0, rule);
+        rules
+    };
+    let cap = |limit, period| StoredCap {
+        limit,
+        period,
+        amount_arg: 2,
+    };
+    for rules in [
+        with(&|r| r.cap = Vec::from_array(e, [cap(0, 10)])),
+        with(&|r| r.cap = Vec::from_array(e, [cap(10, 0)])),
+        with(&|r| r.cap = Vec::from_array(e, [cap(10, 10), cap(10, 10)])),
+        {
+            let mut two = one.clone();
+            let mut later = one.get_unchecked(0);
+            later.generation = Some(1);
+            two.push_back(later);
+            two
+        },
+    ] {
+        assert_eq!(issue(&rules), refused(GrantError::InvalidRules));
+    }
+    assert_eq!(f.client().grant(&0), None);
+
+    let root = f.issue(&a, &[f.contract_in(&[&f.w.target])], 0);
+    for step in [
+        Step::DropRule(1),
+        Step::RaiseThreshold(0, 0),
+        Step::LowerCapLimit(0, 5),
+        Step::AddCap(0, cap(-1, 10)),
+    ] {
+        assert_eq!(
+            f.delegate_steps(root, &a, root, &b, &Vec::from_array(e, [step]), 0),
+            Err(refused(GrantError::InvalidStep))
+        );
+    }
+    assert_eq!(f.client().grant(&(root + 1)), None);
+}
+
+// ---------------------------------------------------------------------------
+// One reading at both boundaries
+// ---------------------------------------------------------------------------
+
+/// Whether the relay's and the grant signer's readings of a value agree.
+fn same_reading(relay: &rule_eval::Val, signer: &rule_eval::Val) -> bool {
+    rule_eval::val_eq(relay, signer)
+}
+
+/// The relay reads a call's XDR as `rule_eval` contexts; the grant signer
+/// reads the host's contexts through soroban-facade. Over every argument
+/// type the two readings are the same value; a rule whose condition holds
+/// the relay's reading of one value allows, in the grant signer, a context
+/// carrying exactly that value and no other; and a rule on the contract and
+/// function the relay reads a call as allows that call. So the two
+/// boundaries read a grant the same way. A muxed address has no stored
+/// form, so no stored condition names one.
+#[test]
+fn the_account_and_the_relay_read_contexts_alike() {
     let f = Fixture::new("relay");
     let a = agent(1);
     let e = f.env();
@@ -1503,9 +1881,30 @@ fn the_account_and_the_relay_map_actions_alike() {
         map.into_val(e),
         ().into_val(e),
     ];
+    let relay = |v: &Val| {
+        grant_relay::actions::val(&ScVal::try_from_val(e, v).unwrap()).expect("a value it reads")
+    };
+    for v in &values {
+        let context = f.context(&f.w.target, "f", Vec::from_array(e, [*v]));
+        let calls = perch_rule_eval::convert::calls(e, &Vec::from_array(e, [context]))
+            .expect("a call the grant signer reads");
+        let rule_eval::Context::Call { args, .. } = &calls[0] else {
+            panic!("a call")
+        };
+        assert!(same_reading(&relay(v), &args[0]), "{v:?}");
+    }
+    let mut stored = 0;
     for (i, v) in values.iter().enumerate() {
-        let relay = grant_relay::actions::val(&ScVal::try_from_val(e, v).unwrap());
-        let g = f.issue(&a, &[Caveat::ArgEq(0, arg(e, &relay))], 0);
+        let Some(value) = StoredVal::from_val(e, &relay(v)) else {
+            assert_eq!(i, 11, "only the muxed address has no stored form");
+            continue;
+        };
+        stored += 1;
+        let mut rules = f.root_rules(&[f.contract_in(&[&f.w.target])]);
+        let mut rule = rules.get_unchecked(0);
+        rule.conds = Vec::from_array(e, [nido_grant_signer::StoredCond::ArgEq(0, value)]);
+        rules.set(0, rule);
+        let g = f.issue_rules(&a, &rules, 0);
         for (j, w) in values.iter().enumerate() {
             let context = f.context(&f.w.target, "f", Vec::from_array(e, [*w]));
             let expected = if i == j {
@@ -1516,10 +1915,11 @@ fn the_account_and_the_relay_map_actions_alike() {
             assert_eq!(
                 f.verdict(g, &a, &[context]),
                 expected,
-                "caveat {i}, argument {j}"
+                "condition {i}, argument {j}"
             );
         }
     }
+    assert_eq!(stored, values.len() - 1);
 
     // Contract and function names.
     let call = SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
@@ -1527,20 +1927,21 @@ fn the_account_and_the_relay_map_actions_alike() {
         function_name: StringM::try_from("protected").unwrap().into(),
         args: VecM::default(),
     });
-    let chain::Action::Invoke {
+    let Some(rule_eval::Context::Call {
         contract, function, ..
-    } = grant_relay::actions::authorized_function(&call)
+    }) = grant_relay::actions::authorized_function(&call)
     else {
         panic!("a contract call");
     };
-    let g = f.issue(
-        &a,
-        &[
-            Caveat::ContractIn(Vec::from_array(e, [Bytes::from_slice(e, &contract)])),
-            Caveat::FunctionIn(Vec::from_array(e, [Bytes::from_slice(e, &function)])),
-        ],
-        0,
-    );
+    let mut rules = f.root_rules(&[f.contract_in(&[&f.w.target])]);
+    let mut rule = rules.get_unchecked(0);
+    rule.contract = perch_rule_eval::convert::host_address(e, &contract).unwrap();
+    rule.functions = StoredFunctions::Only(Vec::from_array(
+        e,
+        [perch_rule_eval::convert::host_symbol(e, &function).unwrap()],
+    ));
+    rules.set(0, rule);
+    let g = f.issue_rules(&a, &rules, 0);
     assert_eq!(f.verdict(g, &a, &[f.protected_context()]), Ok(()));
 }
 
