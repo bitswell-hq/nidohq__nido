@@ -53,3 +53,4 @@ export {
   type Snapshot,
 } from '@stellar-registry/perch';
 export * from './liveAttempts.js';
+export * from './scopes.js';
