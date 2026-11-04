@@ -11,7 +11,7 @@
 import { TransactionBuilder } from "@stellar/stellar-sdk";
 import type { SignRequest } from "./signRequest";
 import { buildOperation } from "./operationBuilders";
-import { signAndSubmit } from "../primaryPasskeySigner";
+import { signAndSubmit, submitWithoutAuth } from "../primaryPasskeySigner";
 import { relayerSubmitAndConfirm } from "./submit";
 import { signTransactionXdr } from "../walletSign.js";
 import { NETWORK_PASSPHRASE } from "../network.js";
@@ -25,17 +25,50 @@ export interface RunSignHooks {
 
 export interface RunSignResult {
   hash: string;
+  /** Said to the user before returning: the request landed, but a second
+   *  step it carried did not. */
+  notice?: string;
 }
 
 export async function runSign(req: SignRequest, hooks?: RunSignHooks): Promise<RunSignResult> {
   if (req.operation.type !== "raw-xdr") {
     // Own-action path: build the op then sign+submit via primary passkey.
     const op = await buildOperation(req.operation, req.account);
+    // Cleaning up a wiped scope is permissionless: nothing to sign.
+    if (req.operation.type === "gc-scope") {
+      return { hash: (await submitWithoutAuth({ operation: op, onProgress: hooks?.onProgress })).hash };
+    }
     const res = await signAndSubmit({
       account: req.account,
       operation: op,
       onProgress: hooks?.onProgress,
     });
+    // An app approval that moves the key's older rules into its scope: the
+    // scope has landed, so the app works; now the admin document without
+    // them, which is the second passkey confirmation. A failure here leaves
+    // both copies in place, each allowing the same calls, so the approval
+    // still succeeded and the Policy page offers to finish the move.
+    const follow = req.operation.type === "apply-scope" ? req.operation.adminFollowUp : undefined;
+    if (follow) {
+      try {
+        const second = await buildOperation(
+          {
+            type: "apply-policy-doc",
+            docJson: follow.docJson,
+            prevDocJson: follow.prevDocJson,
+            expectedRevision: follow.expectedRevision,
+          },
+          req.account,
+        );
+        await signAndSubmit({ account: req.account, operation: second, onProgress: hooks?.onProgress });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return {
+          hash: res.hash,
+          notice: `The app is in. Its older permissions are still in your admin document too (${msg}); remove them on your Policy page.`,
+        };
+      }
+    }
     return { hash: res.hash };
   }
 
