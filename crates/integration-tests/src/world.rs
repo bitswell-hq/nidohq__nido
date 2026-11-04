@@ -193,6 +193,31 @@ pub fn strkey(a: &Address) -> String {
     String::from_utf8(buf).unwrap()
 }
 
+/// The wallet's candidate scope ids for an app origin (canonical: lowercase
+/// scheme and host, no default port, no path), in the order it tries them:
+/// the big-endian `u32` of the first four bytes of
+/// `sha256("nido/app-scope/v1" || 0x00 || origin || 0x00 || i)`
+/// (`packages/passkey-sdk/src/perch/scopes.ts`).
+#[must_use]
+pub fn app_scope_candidates(origin: &str) -> [u32; 4] {
+    use sha2::{Digest, Sha256};
+    core::array::from_fn(|i| {
+        let mut h = Sha256::new();
+        h.update(b"nido/app-scope/v1\0");
+        h.update(origin.as_bytes());
+        h.update([0, u8::try_from(i).unwrap()]);
+        u32::from_be_bytes(h.finalize()[..4].try_into().unwrap())
+    })
+}
+
+/// The id an app key has in its origin's scoped document:
+/// `<origin>#<first 8 hex digits of sha256(key bytes)>`.
+#[must_use]
+pub fn app_signer_id(origin: &str, key: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    format!("{origin}#{}", &hex::encode(Sha256::digest(key))[..8])
+}
+
 // ---------------------------------------------------------------------------
 // Passkeys and accounts
 // ---------------------------------------------------------------------------
@@ -959,6 +984,114 @@ impl World {
             self.account(account)
                 .try_apply_doc(bytes, &valid_until, &expected_revision)
                 .map(|r| r.unwrap())
+        })
+    }
+
+    // --- app scopes ----------------------------------------------------------
+
+    /// `apply_scope(scope, bytes)` signed by `key` through the admin rule:
+    /// how the wallet applies an app origin's scoped document.
+    pub fn apply_scope_as(
+        &self,
+        account: &Account,
+        key: &str,
+        scope: u32,
+        bytes: &Bytes,
+    ) -> AccountResult<BytesN<32>> {
+        let root = self.invocation(
+            &account.address,
+            "apply_scope",
+            std::vec![self.sc(scope), self.sc(bytes.clone())],
+        );
+        let entry = self.signed(account, key, "admin", root);
+        self.with_auths(&[entry], || {
+            self.account(account)
+                .try_apply_scope(&scope, bytes)
+                .map(|r| r.unwrap())
+        })
+    }
+
+    /// `remove_scope(scope)` signed by `key` through the admin rule:
+    /// removing an app.
+    pub fn remove_scope_as(&self, account: &Account, key: &str, scope: u32) -> AccountResult<()> {
+        let root = self.invocation(&account.address, "remove_scope", std::vec![self.sc(scope)]);
+        let entry = self.signed(account, key, "admin", root);
+        self.with_auths(&[entry], || {
+            self.account(account)
+                .try_remove_scope(&scope)
+                .map(|r| r.unwrap())
+        })
+    }
+
+    /// The OZ id of the rule named `name` in `account`'s scope `scope`, as
+    /// `scope(id)` lists it (rule names repeat across scopes, so a scoped
+    /// rule is selected by scope and name). `u32::MAX` when there is none.
+    #[must_use]
+    pub fn scoped_rule_id(&self, account: &Address, scope: u32, name: &str) -> u32 {
+        let wanted = soroban_sdk::String::from_str(&self.env, name);
+        PerchAccountClient::new(&self.env, account)
+            .scope(&scope)
+            .and_then(|r| r.rules.iter().find(|x| x.name == wanted).map(|x| x.id))
+            .unwrap_or(u32::MAX)
+    }
+
+    /// `account`'s `__check_auth` of `contexts`, selecting `rules` (one per
+    /// context), with a signature by each of `keys` over a fixed payload, as
+    /// a browser assertion signs it: the verdict, with the account's own
+    /// error on a refusal. A spending cap it accepts is charged.
+    pub fn check_auth(
+        &self,
+        account: &Address,
+        keys: &[&Passkey],
+        rules: &[u32],
+        contexts: &[soroban_sdk::auth::Context],
+    ) -> Result<(), soroban_sdk::Error> {
+        let payload = self.env.crypto().sha256(&Bytes::from_array(
+            &self.env,
+            &self.next_nonce().to_be_bytes(),
+        ));
+        let rule_ids = Vec::from_slice(&self.env, rules);
+        let digest = crate::account_auth_digest(&self.env, account, &payload, &rule_ids);
+        let mut signers: Map<Signer, Bytes> = Map::new(&self.env);
+        for key in keys {
+            let a = build_contract_assertion(&key.key, &self.env, &digest);
+            let sig = WebAuthnSigData {
+                signature: a.signature,
+                authenticator_data: a.authenticator_data,
+                client_data: a.client_data,
+            };
+            signers.set(key.signer(&self.env, &self.verifier), sig.to_xdr(&self.env));
+        }
+        let auth = AuthPayload {
+            signers,
+            context_rule_ids: rule_ids,
+        };
+        let mut ctx = Vec::new(&self.env);
+        for c in contexts {
+            ctx.push_back(c.clone());
+        }
+        self.env
+            .try_invoke_contract_check_auth::<soroban_sdk::Error>(
+                account,
+                &payload.to_bytes(),
+                auth.into_val(&self.env),
+                &ctx,
+            )
+            .map_err(|e| e.unwrap_or_else(|e| panic!("invoke error {e:?}")))
+    }
+
+    /// A call of `fn_name(args)` on `contract`, as an authorization context.
+    #[must_use]
+    pub fn context(
+        &self,
+        contract: &Address,
+        fn_name: &str,
+        args: Vec<Val>,
+    ) -> soroban_sdk::auth::Context {
+        soroban_sdk::auth::Context::Contract(soroban_sdk::auth::ContractContext {
+            contract: contract.clone(),
+            fn_name: Symbol::new(&self.env, fn_name),
+            args,
         })
     }
 

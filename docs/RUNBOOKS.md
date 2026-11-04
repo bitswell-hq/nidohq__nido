@@ -510,10 +510,12 @@ user starts a recovery.
   `/security/recovery/`. `Protected` owners need their guardians or kit to
   cancel; once the attempt is authorized, the account stays frozen until it
   is cancelled, completes, or expires.
-- **"Already holds 8 keys" or "already has 11 rules":** Perch caps a document
-  at 8 declared signers, 11 rules, and 8192 bytes. After the founding
-  passkey, added devices and app-grant keys share 7 signer slots, and each
-  takes a rule. Remove a device or revoke an app grant to make room.
+- **"Already holds 8 keys" or "already has 10 rules":** Perch caps a document
+  at 8 declared signers, 10 rules, and 8192 bytes. After the founding
+  passkey, added devices share 7 signer slots in the admin document, and each
+  takes a rule; remove a device to make room. Each connected app has a
+  document of its own with the same caps: an app holding 8 keys takes no
+  ninth until one of its keys is removed on the Policy page.
 - **Guardian approval:** the guardian opens the link on their own Nido. If
   the page refuses the link, the guardian should not approve, and should
   confirm with their friend by another channel. A reconfiguration that hands

@@ -1656,6 +1656,35 @@ fn a_grant_from_a_scope_acts_until_a_recovery_completes() {
     );
 }
 
+/// Removing an agent's scope ends its grants at the account: the owner's
+/// `remove_scope` removes the scoped rule the grant was issued from, so the
+/// agent's next authorization fails at the account although the grant
+/// signer still holds the grant, unrevoked.
+#[test]
+fn an_agent_grant_lives_in_a_scope_and_ends_with_it() {
+    let f = Fixture::new("scope-removed");
+    let a = agent(1);
+    let doc = f.scope_doc(&[("a-target", contract_scope(&f.w.target))]);
+    f.apply_scope(&f.account, 9, &doc)
+        .expect("the owner applies the agent's scope");
+    let account = f.w.account(&f.account);
+    let id = account.scope(&9).unwrap().rules.get_unchecked(0).id;
+    let grant = f.issue_rules(&a, &account.scope_rule_set(&9), 0);
+    assert_eq!(f.protected_by(grant, &a, id), Outcome::Ok);
+
+    f.w.remove_scope_as(&f.account, "owner", 9)
+        .expect("the owner removes the agent's scope");
+    assert!(
+        f.client().grant(&grant).is_some(),
+        "the grant itself is not revoked"
+    );
+    // OZ's `ContextRuleNotFound`: the account no longer has the rule.
+    assert_eq!(
+        f.protected_by(grant, &a, id),
+        Outcome::AuthFailed(String::from("Error(Contract, #3000)"))
+    );
+}
+
 /// A spending cap a delegation adds to the budget asset's rule: within each
 /// window of `period` ledgers the grant's transfers sum to at most the
 /// cap's limit (`CapExceeded` past it, charging nothing), two transfers in

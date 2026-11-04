@@ -71,17 +71,18 @@ check on `apply_doc`.
 - **Current behaviour in Nido:** the wallet reads the limits from the
   compiler the account pins (`limits()`, through perch-js) and refuses an
   over-limit document before submission (SECURITY_INVARIANTS W9): 8 declared
-  signers, 11 document rules, 8192 canonical bytes, and 20-byte rule names.
-  The generated recovery rule is additional to the 11. Each admin key and
-  each app grant takes its own rule; after the founding passkey, added
-  devices and app keys share 7 signer slots
+  signers, 10 document rules, 8192 canonical bytes, and 20-byte rule names.
+  The generated recovery rule is additional to the 10. Each admin key takes
+  its own rule; after the founding passkey, added devices share 7 signer
+  slots. Each connected app's grants are a scoped document of their own,
+  under the same caps
   ([RUNBOOKS §6](./RUNBOOKS.md#user-support)). The factory pins exactly one
   account build.
 - **Why it is safe to defer:** the account's compiler enforces the caps on
   every `apply_doc` and in `derive_target`; the wallet's check only gives a
   readable refusal. The caps are sized so the worst-case recovery completion
   fits the transaction budget. The residual cost is usability: an owner at
-  a cap must remove a device or app grant before adding another.
+  a cap must remove a device (or one of an app's keys) before adding another.
 - **Exit criterion:** a replacement backend or larger caps are scoped and
   reviewed as a separate change, with regression evidence across
   authorization, recovery, and migration. Before mainnet, Nido decides how
