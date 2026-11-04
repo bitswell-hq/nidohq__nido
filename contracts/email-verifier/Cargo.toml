@@ -20,7 +20,7 @@ perch-recovery-interface = { workspace = true }
 # Perch's vendored UltraHonk verifier (NethermindEth/rs-soroban-ultrahonk
 # plus Perch's UltraKeccakZKFlavor delta), from the same Perch commit as the
 # other Perch crates, so it is the one Perch's ZK adapter compiles in.
-ultrahonk_soroban_verifier = { git = "https://github.com/stellar-registry/perch", rev = "2258433aa340428d65676cd269c8e4240674deb1" }
+ultrahonk_soroban_verifier = { git = "https://github.com/bitswell-hq/stellar-registry__perch", rev = "437a07d108548faadc40e56cf2e632ab0b4d2a2c" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

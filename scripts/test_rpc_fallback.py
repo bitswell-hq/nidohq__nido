@@ -170,7 +170,8 @@ exit 1
 
 
 class PerchInfra(Case):
-    """scripts/perch-infra.sh, against a fake Perch checkout."""
+    """scripts/perch-infra.sh fetching (NIDO_PERCH_STACK=fetch, whatever the
+    submodule's remote), against a fake Perch checkout."""
 
     def test_writes_the_factory_pin_from_the_manifest(self):
         primary = self.stub()
@@ -200,7 +201,8 @@ class PerchInfra(Case):
         log = f"{d}/log"
         open(log, "w").close()
         r = subprocess.run(["bash", WRAPPER], capture_output=True, text=True,
-                           env=base_env(NIDO_PERCH_DIR=d, NIDO_FACTORY_PIN=self.pin, FAKE_LOG=log,
+                           env=base_env(NIDO_PERCH_STACK="fetch", NIDO_PERCH_DIR=d,
+                                        NIDO_FACTORY_PIN=self.pin, FAKE_LOG=log,
                                         FAKE_GOOD=" ".join(good),
                                         FAKE_FAIL=fail, PERCH_RPC_CALL_ATTEMPTS="1", **env))
         with open(log) as f:

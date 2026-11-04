@@ -22,7 +22,10 @@
 //! `newAccount.test.ts` decodes the recorded bytes as the wallet does and
 //! requires it to accept `created` and refuse the other two. The test fails
 //! if the committed record differs from a fresh one (a re-pin moves the
-//! account wasm and infra addresses). Regenerate with
+//! account wasm and infra addresses). For a Perch stack built from source,
+//! whose account hash depends on the build host, the fresh record takes the
+//! committed account hash in place of the host's before the comparison, so
+//! everything else is still compared exactly. Regenerate with
 //! `NIDO_WRITE_NEW_ACCOUNT_READS=1 cargo test -p nido-integration-tests --test it new_account_reads`.
 
 use base64::engine::general_purpose::STANDARD;
@@ -30,7 +33,7 @@ use base64::Engine;
 use nido_integration_tests::world::{
     strkey, world, Account, Doc, FactoryClient, Mode, Passkey, Profile, SetupKey, World,
 };
-use nido_integration_tests::PERCH_ACCOUNT_WASM;
+use nido_integration_tests::{perch_stack_is_built, PERCH_ACCOUNT_WASM};
 use perch_account::PerchAccountClient;
 use perch_smart_account::infra;
 use serde_json::{json, Value};
@@ -89,6 +92,24 @@ fn reads(w: &World, account: &Address) -> Value {
     })
 }
 
+/// `record` with `hash` (hex) as the account wasm hash: in its deployment
+/// and in each instance entry's executable.
+fn with_account_hash(record: &mut Value, hash: &str) {
+    let built: [u8; 32] = Sha256::digest(PERCH_ACCOUNT_WASM).into();
+    let hash: [u8; 32] = hex::decode(hash).unwrap().try_into().unwrap();
+    record["deployment"]["accountWasmHash"] = json!(hex::encode(hash));
+    for read in ["created", "claimed", "handedOver"] {
+        let instance = &mut record[read]["instance"];
+        let mut bytes = STANDARD.decode(instance.as_str().unwrap()).unwrap();
+        let at = bytes
+            .windows(32)
+            .position(|w| w == built)
+            .expect("the instance names the account wasm");
+        bytes[at..at + 32].copy_from_slice(&hash);
+        *instance = json!(STANDARD.encode(bytes));
+    }
+}
+
 #[test]
 fn new_account_reads() {
     let w = world();
@@ -132,7 +153,7 @@ fn new_account_reads() {
         "the admin key is the owner's"
     );
 
-    let fresh = json!({
+    let mut fresh = json!({
         "deployment": {
             "accountWasmHash": hex::encode(Sha256::digest(PERCH_ACCOUNT_WASM)),
             "webauthnVerifier": strkey(&w.verifier),
@@ -146,13 +167,19 @@ fn new_account_reads() {
         "claimed": reads(&w, &claimed),
         "handedOver": reads(&w, &handed),
     });
+    let write = std::env::var_os("NIDO_WRITE_NEW_ACCOUNT_READS").is_some();
+    let committed = std::fs::read_to_string(READS).expect("read committed new-account reads");
+    if perch_stack_is_built() && !write {
+        let recorded: Value = serde_json::from_str(&committed).unwrap();
+        let recorded = recorded["deployment"]["accountWasmHash"].as_str().unwrap();
+        with_account_hash(&mut fresh, recorded);
+    }
     let fresh = serde_json::to_string_pretty(&fresh).unwrap() + "\n";
 
-    if std::env::var_os("NIDO_WRITE_NEW_ACCOUNT_READS").is_some() {
+    if write {
         std::fs::write(READS, &fresh).expect("write new-account reads");
         return;
     }
-    let committed = std::fs::read_to_string(READS).expect("read committed new-account reads");
     assert!(
         committed == fresh,
         "new-account reads are stale; regenerate with NIDO_WRITE_NEW_ACCOUNT_READS=1"

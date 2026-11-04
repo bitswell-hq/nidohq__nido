@@ -13,7 +13,7 @@ path = "src/main.rs"
 [dependencies]
 agent-host = { path = "../../crates/agent-host" }
 nido-key-keeper = { path = "../../crates/key-keeper" }
-stellar-xdr = { version = "27", default-features = false, features = ["std"] }
+stellar-xdr = { version = "28", default-features = false, features = ["std"] }
 sha2 = "0.10"
 hex = "0.4"
 base64 = "0.22"

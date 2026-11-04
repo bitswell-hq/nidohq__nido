@@ -14,7 +14,7 @@ crate-type = ["cdylib"]
 doctest = false
 
 [dependencies]
-soroban-sdk = "27.0.2"
+soroban-sdk = "29.0.1"
 
 [profile.release]
 opt-level = "z"

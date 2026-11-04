@@ -36,7 +36,7 @@ impl Deployer {
     pub fn deploy(e: Env, deployer: Address, wasm: BytesN<32>, salt: BytesN<32>) -> Address {
         e.deployer()
             .with_address(deployer.clone(), salt)
-            .deploy_v2(wasm, (deployer,))
+            .deploy_contract(soroban_sdk::ContractExecutable::Wasm(wasm), (deployer,))
     }
 }
 

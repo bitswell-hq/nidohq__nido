@@ -10,9 +10,13 @@
 # (vendor/perch at its pinned commit) with one change: its registry.path is
 # evaluation/fixtures/local-registry.path, whose chain `nido-eval network`
 # and tests/support/emailLocalStack.mjs deploy, and whose last registry is
-# what `nido-eval local-registry` prints. The tier-0 pins (the doc compiler,
-# interpreter and spending limit wasm hashes) are unchanged: the local
-# network runs the fetched testnet bytes of those contracts. Nido's factory
+# what `nido-eval local-registry` prints. The local network runs the tier-0
+# contracts (the doc compiler, interpreter and spending limit) `just
+# perch-infra` put in target/: for a fetched stack those are the testnet
+# bytes the committed pins name, which must match; for a stack built from
+# source (scripts/perch-stack-source.sh), whose tier-0 source can differ from
+# the deployment the committed pins name, the copy's pins become the built
+# bytes' hashes, as Perch's scripts/build-stack.sh stages them. Nido's factory
 # pins the account by hash (contracts/factory/wasm/perch-account.sha256), so
 # it is built from a copy of this tree whose pin is the local account's hash.
 #
@@ -34,9 +38,15 @@ sha256() { shasum -a 256 "$1" | cut -d' ' -f1; }
 mkdir -p "$out/wasm"
 rsync -a --delete --exclude target --exclude .git "$root/vendor/perch/" "$out/perch/"
 cp "$root/evaluation/fixtures/local-registry.path" "$out/perch/crates/perch-smart-account/wasm/registry.path"
+source="$(bash "$root/scripts/perch-stack-source.sh")"
 for pin in perch-doc-compiler perch-interpreter perch-spending-limit; do
-    want=$(cat "$out/perch/crates/perch-smart-account/wasm/$pin.sha256")
+    file="$out/perch/crates/perch-smart-account/wasm/$pin.sha256"
     got=$(sha256 "$fetched/${pin//-/_}.wasm")
+    if [ "$source" = build ]; then
+        printf '%s\n' "$got" >"$file"
+        continue
+    fi
+    want=$(cat "$file")
     [ "$want" = "$got" ] || { echo "$pin: pinned $want, fetched $got" >&2; exit 1; }
 done
 

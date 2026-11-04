@@ -1,26 +1,44 @@
 #!/usr/bin/env bash
-# `just perch-infra`: fetch Perch's deployed stack into
-# target/wasm32v1-none/contract/ with vendor/perch/scripts/fetch-infra-wasm.sh,
-# reading the chain through the endpoint scripts/stellar-rpc.sh chooses
-# (RPC_URL/STELLAR_RPC_URL override, else the manifest's rpc_url, else a
-# guarded fallback while that is down; docs/RUNBOOKS.md "RPC endpoints").
-#
-# A Perch fetch script that sources stellar-rpc.sh itself chooses and fails
-# over per fetch; it is run as is. An older one reads only the manifest's
-# rpc_url, so it is given a copy of the manifest whose rpc_url is the chosen
-# endpoint (every other field, so every hash and content address it checks,
-# unchanged). If that run fails because the endpoint failed a fetch after the
-# script's own retries, the run moves to the next guarded fallback and starts
-# again. Any other failure (a hash or content-address mismatch, a contract
-# error, a missing entry) fails as it is.
-#
-# It first writes the manifest's `perch-account` hash to the factory's pin,
+# `just perch-infra`: put the Perch stack Nido tests against into
+# target/wasm32v1-none/contract/ and write the factory's perch-account pin,
 # contracts/factory/wasm/perch-account.sha256, which the factory's
-# `registry_contract!` compiles in. A manifest without that hash fails here:
-# the pin never comes from another network.
+# `registry_contract!` compiles in.
 #
-# Env: STELLAR_NETWORK (default testnet) picks vendor/perch/deployments/<net>.json;
-# NIDO_PERCH_DIR overrides vendor/perch and NIDO_FACTORY_PIN the pin file (tests).
+# Where the stack comes from follows the submodule's remote (.gitmodules):
+#
+# - fetch: a pin on Perch's upstream (stellar-registry/perch) is a deployed
+#   Perch. Its stack is fetched with vendor/perch/scripts/fetch-infra-wasm.sh
+#   by the hashes in its deployment manifest, reading the chain through the
+#   endpoint scripts/stellar-rpc.sh chooses (RPC_URL/STELLAR_RPC_URL override,
+#   else the manifest's rpc_url, else a guarded fallback while that is down;
+#   docs/RUNBOOKS.md "RPC endpoints"). The pin is the manifest's
+#   `perch-account` hash; a manifest without one fails, so the pin never
+#   comes from another network.
+#
+#   A Perch fetch script that sources stellar-rpc.sh itself chooses and fails
+#   over per fetch; it is run as is. An older one reads only the manifest's
+#   rpc_url, so it is given a copy of the manifest whose rpc_url is the chosen
+#   endpoint (every other field, so every hash and content address it checks,
+#   unchanged). If that run fails because the endpoint failed a fetch after the
+#   script's own retries, the run moves to the next guarded fallback and starts
+#   again. Any other failure (a hash or content-address mismatch, a contract
+#   error, a missing entry) fails as it is.
+#
+# - build: a pin on any other remote (the bitswell fork's M6 stack, which no
+#   network runs) is built from the submodule's source with `stellar contract
+#   build`, under Nido's pinned toolchain (rust-toolchain.toml) and into
+#   target/perch-build/, so the bytes depend on the commit, the toolchain and
+#   the Stellar CLI only. The account is built from its committed build-time
+#   pins, so it derives its infra at the content addresses the Perch crates'
+#   `infra` module derives, which is where the integration tests register the
+#   built infra. The pin is the built account's hash, and
+#   target/perch-build/stack.json records the commit, the toolchain and every
+#   built hash for scripts/check-perch-drift.sh.
+#
+# Env: NIDO_PERCH_STACK (fetch|build) overrides the choice; STELLAR_NETWORK
+# (default testnet) picks vendor/perch/deployments/<net>.json for a fetch;
+# NIDO_PERCH_DIR overrides vendor/perch and NIDO_FACTORY_PIN the pin file
+# (tests).
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -32,6 +50,14 @@ fetch="$perch/scripts/fetch-infra-wasm.sh"
 command -v jq >/dev/null || { echo "error: jq not found" >&2; exit 1; }
 
 pin="${NIDO_FACTORY_PIN:-$repo_root/contracts/factory/wasm/perch-account.sha256}"
+
+mode="${NIDO_PERCH_STACK:-$(bash "$repo_root/scripts/perch-stack-source.sh")}"
+case "$mode" in
+    fetch) ;;
+    build) exec bash "$repo_root/scripts/perch-build-stack.sh" "$perch" "$stack" "$pin" ;;
+    *) echo "error: NIDO_PERCH_STACK is fetch or build, not '$mode'" >&2; exit 1 ;;
+esac
+
 account="$(jq -r '.contracts["perch-account"].sha256 // empty' "$manifest")"
 [[ "$account" =~ ^[0-9a-f]{64}$ ]] ||
     { echo "error: $manifest has no perch-account hash for the factory to pin" >&2; exit 1; }

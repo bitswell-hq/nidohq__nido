@@ -42,7 +42,7 @@ nido-dns-attestation-mock = { path = "../dns-attestation-mock" }
 soroban-poseidon = { workspace = true }
 # The host soroban-sdk runs (the version it locks), for its recording-mode
 # invocation and fee functions (`transaction`).
-soroban-env-host = { version = "=27.0.1", features = ["recording_mode"] }
+soroban-env-host = { version = "=29.0.1", features = ["recording_mode"] }
 # The enclave-image registry's client; the contract runs from its wasm
 # (`ENCLAVE_IMAGE_REGISTRY_WASM`).
 nido-enclave-image-registry = { path = "../../contracts/enclave-image-registry" }

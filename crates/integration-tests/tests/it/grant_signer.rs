@@ -21,6 +21,7 @@ use nido_integration_tests::world::{
     strkey, world, Account, Passkey, TargetClient, World, NETWORK,
 };
 use nido_integration_tests::GRANT_SIGNER_WASM;
+use perch_smart_account::PerchAuthError;
 use soroban_sdk::auth::{
     Context, ContractContext, ContractExecutable, CreateContractHostFnContext,
     CreateContractWithConstructorHostFnContext,
@@ -43,7 +44,7 @@ use std::cell::Cell;
 use std::format;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::string::String;
-use stellar_accounts::smart_account::{AuthPayload, Signer, SmartAccountError};
+use stellar_accounts::smart_account::{AuthPayload, Signer};
 
 /// A dApp that moves the account's tokens inside its own call: the nested
 /// `transfer` needs the account's authorization too, so it is a second
@@ -71,7 +72,7 @@ impl Deployer {
     pub fn deploy(e: Env, deployer: Address, wasm: BytesN<32>, salt: BytesN<32>) -> Address {
         e.deployer()
             .with_address(deployer.clone(), salt)
-            .deploy_v2(wasm, (deployer,))
+            .deploy_contract(soroban_sdk::ContractExecutable::Wasm(wasm), (deployer,))
     }
 }
 
@@ -158,10 +159,12 @@ fn refused(e: GrantError) -> Outcome {
 }
 
 /// The account's own refusal of a context no rule matches.
+/// The account refuses the context before any signer is asked: rule-eval
+/// allows it under no rule the payload chooses.
 fn unvalidated() -> Outcome {
     Outcome::AuthFailed(format!(
         "Error(Contract, #{})",
-        SmartAccountError::UnvalidatedContext as u32
+        PerchAuthError::RuleEvalRefused as u32
     ))
 }
 
