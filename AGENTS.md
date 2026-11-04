@@ -10,8 +10,8 @@ Nido helps users move from Stellar G-addresses to Soroban Smart Accounts (C-addr
 
 ```bash
 git submodule update --init   # vendor/perch, the Perch stack
-just perch-infra       # Perch's deployed wasm + pin caches, by the hashes in vendor/perch/deployments/testnet.json
-just build-contracts   # Nido's wasm (the factory pins the manifest's Perch account hash)
+just perch-infra       # Perch's stack + the factory pin: fetched by vendor/perch/deployments/testnet.json's hashes, or built from vendor/perch for a pin no network runs
+just build-contracts   # Nido's wasm (the factory pins the stack's Perch account hash)
 just test              # cargo test --workspace (embeds the wasm above)
 just check             # cargo fmt --check + cargo clippy -D warnings
 just gen-zk-fixtures   # re-prove the real-proof fixtures with Perch's pinned nargo/bb
@@ -85,7 +85,7 @@ Tests use synthetic P-256 keypairs (`SigningKey::random()`) to construct full We
 
 ## Dependency Version Constraints
 
-- `stellar-accounts` is pinned to Perch's CAP-0071 OZ fork rev (theahaco/stellar-contracts-OZ), the same rev `vendor/perch/Cargo.toml` pins, so Nido's crates and Perch's share one `stellar-accounts`
+- `stellar-accounts` is pinned to Perch's CAP-0071 OZ fork rev (bitswell-hq/theahaco__stellar-contracts-OZ), the same rev `vendor/perch/Cargo.toml` pins, so Nido's crates and Perch's share one `stellar-accounts`
 ## Relayer channels plugin
 
 `infra/relayer/plugins/channels/index.ts` is a thin passthrough to the upstream

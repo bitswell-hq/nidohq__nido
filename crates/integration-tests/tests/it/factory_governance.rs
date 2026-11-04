@@ -15,7 +15,8 @@ use nido_integration_tests::world::{
     contract_at, world, Account, Doc, FactoryClient, Passkey, SetupKey, World,
 };
 use nido_integration_tests::{
-    FACTORY_WASM, OLD_PERCH_ACCOUNT_WASM, PERCH_ACCOUNT_WASM, PERCH_WEBAUTHN_VERIFIER_WASM,
+    stack_perch_account_sha256, FACTORY_WASM, OLD_PERCH_ACCOUNT_WASM, PERCH_ACCOUNT_WASM,
+    PERCH_WEBAUTHN_VERIFIER_WASM,
 };
 use soroban_sdk::xdr::SorobanAuthorizationEntry;
 use soroban_sdk::{Address, BytesN, Executable, Symbol};
@@ -263,23 +264,16 @@ fn a_repin_reaches_only_accounts_created_after_it() {
 }
 
 /// The factory wasm deploys every account from exactly the hash it pins:
-/// the testnet manifest's `perch-account`, which is the hash of the account
-/// wasm the stack installs. An account-hash cache an earlier factory build
+/// the stack's `perch-account` ([`stack_perch_account_sha256`]), which is the
+/// hash of the account wasm the stack installs. An account-hash cache an earlier factory build
 /// left in the instance changes nothing, before or after an upgrade, and an
 /// upgrade installs exactly the given wasm.
 #[test]
 fn the_factory_deploys_exactly_the_pinned_account_before_and_after_an_upgrade() {
     let g = governed();
     let env = &g.w.env;
-    let manifest: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../vendor/perch/deployments/testnet.json"
-    ))
-    .unwrap();
     let pinned = g.client().account_wasm_hash();
-    assert_eq!(
-        hex::encode(pinned.to_array()),
-        manifest["contracts"]["perch-account"]["sha256"]
-    );
+    assert_eq!(hex::encode(pinned.to_array()), stack_perch_account_sha256());
     assert_eq!(
         env.deployer().upload_contract_wasm(PERCH_ACCOUNT_WASM),
         pinned

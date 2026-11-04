@@ -12,7 +12,8 @@
 //!   and never equals a value of another type.
 //! - A contract-creating host function or authorized function becomes
 //!   `CreateContract`, with the wasm hash of a `Wasm` executable and empty
-//!   bytes for the Stellar Asset Contract executable.
+//!   bytes for an executable no wasm hash names: the Stellar Asset Contract,
+//!   or an `ExternalRef` to an executable entry another contract owns.
 
 use grant_eval::chain::{Action, Val};
 use stellar_xdr::{
@@ -74,7 +75,7 @@ fn create(executable: &ContractExecutable) -> Action {
     Action::CreateContract {
         wasm_hash: match executable {
             ContractExecutable::Wasm(hash) => hash.0.to_vec(),
-            ContractExecutable::StellarAsset => Vec::new(),
+            ContractExecutable::StellarAsset | ContractExecutable::ExternalRef(_) => Vec::new(),
         },
     }
 }

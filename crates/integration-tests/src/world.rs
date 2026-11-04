@@ -3,7 +3,8 @@
 //! Every contract runs from its wasm: Nido's factory (`just build-contracts`),
 //! and Perch's account, `WebAuthn` verifier, doc compiler, interpreter,
 //! spending limit, recovery controller, ZK membership pool, and ZK adapter,
-//! exactly as deployed on testnet (`just perch-infra`). Accounts are minted by the factory, so
+//! exactly as `just perch-infra` puts them in place (deployed on testnet, or
+//! built from `vendor/perch` for a pin no network runs). Accounts are minted by the factory, so
 //! their code is the exact Perch account wasm whose hash the factory pins.
 //!
 //! Every key is a P-256 passkey checked by the `WebAuthn` verifier. Every

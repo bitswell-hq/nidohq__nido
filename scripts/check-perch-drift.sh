@@ -7,27 +7,36 @@
 #      local edits to tracked files;
 #   2. that commit isn't on the branch .gitmodules declares (a rewritten or
 #      deleted branch); skipped with --offline;
-#   3. a Perch wasm Nido consumes isn't the manifest's
-#      (vendor/perch/deployments/$STELLAR_NETWORK.json, default testnet): the
-#      fetched stack in target/wasm32v1-none/contract/, the build-time pins
-#      the smart account compiles in (committed in Perch, read here from the
-#      submodule; the registry its registry.path derives, by Perch's
-#      scripts/derive-id.py), and the account hash the factory pins (its
-#      committed contracts/factory/wasm/perch-account.sha256, which `just
-#      perch-infra` writes, and the built nido_factory.wasm);
+#   3. a Perch wasm Nido consumes isn't its source's. Where the stack comes
+#      from follows the submodule's remote (scripts/perch-stack-source.sh):
+#      - fetched: the manifest's (vendor/perch/deployments/$STELLAR_NETWORK.json,
+#        default testnet): the fetched stack in target/wasm32v1-none/contract/,
+#        the build-time pins the smart account compiles in (committed in
+#        Perch, read here from the submodule; the registry its registry.path
+#        derives, by Perch's scripts/derive-id.py), and the account hash the
+#        factory pins;
+#      - built: the build record `just perch-infra` wrote,
+#        target/perch-build/stack.json, which must be a clean build of the
+#        pinned commit: the built stack in target/wasm32v1-none/contract/ and
+#        the account hash the factory pins;
+#      the factory's pin is its committed
+#      contracts/factory/wasm/perch-account.sha256, which `just perch-infra`
+#      writes, and the built nido_factory.wasm;
 #   4. npm doesn't resolve a Perch package the root workspace list vendors
 #      (today only perch-zk, which Perch hasn't published) to the submodule,
 #      or the SDK pins another version than it carries. Published Perch
 #      packages (@stellar-registry/perch) come from npm by version.
-#   5. a commit-pinned Perch link in Nido's documentation names another commit
-#      than the pinned one (scripts/pin-perch-links.sh rewrites them);
+#   5. for a fetched stack, a commit-pinned Perch link in Nido's documentation
+#      names another commit than the pinned one (scripts/pin-perch-links.sh
+#      rewrites them). A built stack is deployed nowhere, so the links keep
+#      naming the deployed upstream Perch the documentation describes;
 #   6. a Perch crate Cargo builds comes from anywhere but the submodule's
 #      commit: a Perch git dependency in Cargo.toml at another rev, a
 #      Cargo.lock entry resolved to another commit, or a path into
 #      vendor/perch (scripts/repin-perch.sh moves the rev with the submodule).
 #
 # `just perch-infra` refuses any byte that doesn't match the manifest when it
-# fetches; this check catches what changes afterwards (a submodule bump without
+# fetches, and records what it built; this check catches what changes afterwards (a submodule bump without
 # a refetch, a stale target/, a hand-copied wasm). The SDK's `perch.TESTNET` is
 # checked against the same manifest by packages/passkey-sdk/src/perch/
 # deployment.test.ts.
@@ -41,6 +50,9 @@ offline=""
 [ "${1:-}" = "--offline" ] && offline=1
 network="${STELLAR_NETWORK:-testnet}"
 manifest="vendor/perch/deployments/$network.json"
+source="$(bash scripts/perch-stack-source.sh)"
+perch_git="$(git config -f .gitmodules submodule.vendor/perch.url)"
+perch_git="${perch_git%.git}"
 problems=()
 problem() { problems+=("$*"); }
 
@@ -71,70 +83,96 @@ elif [ -z "$offline" ]; then
     # A shallow checkout (CI's) can't answer ancestry without the history.
     deepen=()
     [ "$(git -C vendor/perch rev-parse --is-shallow-repository)" = true ] && deepen=(--unshallow)
-    if git -C vendor/perch fetch --quiet ${deepen[@]+"${deepen[@]}"} origin "$branch"; then
+    if git -C vendor/perch fetch --quiet ${deepen[@]+"${deepen[@]}"} "$perch_git" "$branch"; then
         git -C vendor/perch merge-base --is-ancestor "$pinned" FETCH_HEAD ||
-            problem "the pinned commit ${pinned:0:7} is not on origin/$branch"
+            problem "the pinned commit ${pinned:0:7} is not on $branch of $perch_git"
     else
-        problem "could not fetch origin/$branch to check the pin (use --offline to skip)"
+        problem "could not fetch $branch of $perch_git to check the pin (use --offline to skip)"
     fi
 fi
 
-# 3. Every consumed wasm is the manifest's.
+# 3. Every consumed wasm is its source's.
 [ -f "$manifest" ] || { echo "error: no manifest at $manifest" >&2; exit 1; }
-want() { jq -r --arg n "$1" '.contracts[$n].sha256 // empty' "$manifest"; }
+record=target/perch-build/stack.json
+if [ "$source" = build ]; then
+    # A built stack: a clean build of the pinned commit, and the stack and the
+    # factory pin are its bytes.
+    if [ ! -f "$record" ]; then
+        problem "$record is missing (just perch-infra)"
+    else
+        [ "$(jq -r .source.commit "$record")" = "$pinned" ] ||
+            problem "$record is a build of $(jq -r .source.commit "$record" | cut -c1-7), not the pinned ${pinned:0:7}; run 'just perch-infra'"
+        [ "$(jq -r .source.dirty "$record")" = false ] ||
+            problem "$record is a build of a vendor/perch with local edits"
+    fi
+fi
+want() {
+    if [ "$source" = build ]; then
+        jq -r --arg n "$1" '.contracts[$n].sha256 // empty' "$record" 2>/dev/null || true
+    else
+        jq -r --arg n "$1" '.contracts[$n].sha256 // empty' "$manifest"
+    fi
+}
+from() { if [ "$source" = build ]; then echo "$record"; else echo "$manifest"; fi; }
 check() { # file contract-name
     local file="$1" name="$2" expected
     expected="$(want "$name")"
-    [ -n "$expected" ] || { problem "$name is not in $manifest"; return; }
+    [ -n "$expected" ] || { problem "$name is not in $(from)"; return; }
     if [ ! -f "$file" ]; then
         problem "$file is missing (just perch-infra)"
     elif [ "$(sha256 "$file")" != "$expected" ]; then
-        problem "$file is not the manifest's $name ($expected)"
+        problem "$file is not $(from)'s $name ($expected)"
     fi
 }
 for name in perch-account perch-recovery perch-zk-pool perch-zk-adapter perch-doc-compiler \
             perch-interpreter perch-spending-limit perch-webauthn-verifier; do
     check "target/wasm32v1-none/contract/${name//-/_}.wasm" "$name"
 done
-# The smart account's build-time pins, as the Perch git dependency builds
-# them: the submodule is at the same commit (check 6) with no local edits
-# (check 1).
-pins=vendor/perch/crates/perch-smart-account/wasm
-for name in perch-doc-compiler perch-interpreter perch-spending-limit; do
-    if [ "$(tr -d '[:space:]' < "$pins/$name.sha256" 2>/dev/null)" != "$(want "$name")" ]; then
-        problem "$pins/$name.sha256 is not the manifest's $name ($(want "$name"))"
+# For a fetched stack, the smart account's build-time pins and registry are
+# the manifest's. A built stack is built from the pins as committed (scripts/
+# perch-build-stack.sh), so they name whatever deployment the pinned commit
+# records.
+if [ "$source" = fetch ]; then
+    # The smart account's build-time pins, as the Perch git dependency builds
+    # them: the submodule is at the same commit (check 6) with no local edits
+    # (check 1).
+    pins=vendor/perch/crates/perch-smart-account/wasm
+    for name in perch-doc-compiler perch-interpreter perch-spending-limit; do
+        if [ "$(tr -d '[:space:]' < "$pins/$name.sha256" 2>/dev/null)" != "$(want "$name")" ]; then
+            problem "$pins/$name.sha256 is not the manifest's $name ($(want "$name"))"
+        fi
+    done
+    # The registry the account derives its infra from. Perch compiles in no
+    # registry id, only registry.path (the Stellar Registry root's deployer and
+    # salt, then named deploys below it); Perch's derive-id.py runs the account's
+    # derivation under the manifest's network passphrase, one hop per line from
+    # the root. Its root and its last hop must be the manifest's. A pin from
+    # before registry.path (Perch #146) committed the id itself, in stateless.id.
+    registry="$(jq -r .registry.id "$manifest")"
+    if [ -f "$pins/registry.path" ]; then
+        if ! chain="$(python3 vendor/perch/scripts/derive-id.py chain "$(jq -r .network_passphrase "$manifest")" "$pins/registry.path" 2>&1)"; then
+            problem "could not derive the registry from $pins/registry.path: $chain"
+        else
+            [ "$(tail -n1 <<<"$chain")" = "$registry" ] ||
+                problem "$pins/registry.path derives registry $(tail -n1 <<<"$chain") on $network, not the manifest's ($registry)"
+            root="$(jq -r '.registry.root // empty' "$manifest")"
+            [ -z "$root" ] || [ "$(head -n1 <<<"$chain")" = "$root" ] ||
+                problem "$pins/registry.path derives the Stellar Registry root $(head -n1 <<<"$chain") on $network, not the manifest's ($root)"
+        fi
+    elif [ "$(tr -d '[:space:]' < "$pins/stateless.id" 2>/dev/null)" != "$registry" ]; then
+        problem "$pins has neither a registry.path deriving the manifest's registry nor a stateless.id naming it ($registry)"
     fi
-done
-# The registry the account derives its infra from. Perch compiles in no
-# registry id, only registry.path (the Stellar Registry root's deployer and
-# salt, then named deploys below it); Perch's derive-id.py runs the account's
-# derivation under the manifest's network passphrase, one hop per line from
-# the root. Its root and its last hop must be the manifest's. A pin from
-# before registry.path (Perch #146) committed the id itself, in stateless.id.
-registry="$(jq -r .registry.id "$manifest")"
-if [ -f "$pins/registry.path" ]; then
-    if ! chain="$(python3 vendor/perch/scripts/derive-id.py chain "$(jq -r .network_passphrase "$manifest")" "$pins/registry.path" 2>&1)"; then
-        problem "could not derive the registry from $pins/registry.path: $chain"
-    else
-        [ "$(tail -n1 <<<"$chain")" = "$registry" ] ||
-            problem "$pins/registry.path derives registry $(tail -n1 <<<"$chain") on $network, not the manifest's ($registry)"
-        root="$(jq -r '.registry.root // empty' "$manifest")"
-        [ -z "$root" ] || [ "$(head -n1 <<<"$chain")" = "$root" ] ||
-            problem "$pins/registry.path derives the Stellar Registry root $(head -n1 <<<"$chain") on $network, not the manifest's ($root)"
-    fi
-elif [ "$(tr -d '[:space:]' < "$pins/stateless.id" 2>/dev/null)" != "$registry" ]; then
-    problem "$pins has neither a registry.path deriving the manifest's registry nor a stateless.id naming it ($registry)"
 fi
 # The factory's pin, and the built factory that carries it as 32 raw bytes.
 factory_pin=contracts/factory/wasm/perch-account.sha256
 if [ "$(tr -d '[:space:]' < "$factory_pin" 2>/dev/null)" != "$(want perch-account)" ]; then
-    problem "$factory_pin is not the manifest's perch-account ($(want perch-account)); run 'just perch-infra'"
+    problem "$factory_pin is not $(from)'s perch-account ($(want perch-account)); run 'just perch-infra'"
 fi
 factory=target/wasm32v1-none/contract/nido_factory.wasm
 if [ ! -f "$factory" ]; then
     problem "$factory is missing (just build-contracts)"
 elif ! od -An -v -tx1 "$factory" | tr -d ' \n' | grep -q "$(want perch-account)"; then
-    problem "$factory does not pin the manifest's perch-account ($(want perch-account)); rebuild it (just build-contracts)"
+    problem "$factory does not pin $(from)'s perch-account ($(want perch-account)); rebuild it (just build-contracts)"
 fi
 
 # 4. npm resolves each vendored Perch package to the submodule, at the version
@@ -153,12 +191,15 @@ done
 # 5. Every commit-pinned Perch link in Nido's documentation names the pinned
 #    commit, so a reader on GitHub sees the Perch source this tree builds and
 #    tests against (scripts/pin-perch-links.sh rewrites them after a bump).
-while IFS= read -r hit; do
-    problem "documentation links Perch at another commit (scripts/pin-perch-links.sh): $hit"
-done < <(git grep -n -E 'github\.com/stellar-registry/perch/(blob|tree)/([0-9a-f]{40}|PERCH_SHA)' -- '*.md' ':!vendor' ':!docs/reviews' | grep -v "/$pinned/" || true)
+#    For a fetched stack only: a built one is deployed nowhere, and the links
+#    keep naming the deployed upstream Perch the documentation describes.
+if [ "$source" = fetch ]; then
+    while IFS= read -r hit; do
+        problem "documentation links Perch at another commit (scripts/pin-perch-links.sh): $hit"
+    done < <(git grep -n -E 'github\.com/stellar-registry/perch/(blob|tree)/([0-9a-f]{40}|PERCH_SHA)' -- '*.md' ':!vendor' ':!docs/reviews' | grep -v "/$pinned/" || true)
+fi
 
-# 6. Cargo's Perch is the submodule's commit.
-perch_git=https://github.com/stellar-registry/perch
+# 6. Cargo's Perch is the submodule's commit, from the submodule's remote.
 deps="$(grep -E "^perch-[a-z0-9-]+ = .*git = \"$perch_git\"" Cargo.toml || true)"
 [ -n "$deps" ] || problem "Cargo.toml has no Perch git dependency on $perch_git"
 while IFS= read -r dep; do
@@ -177,8 +218,12 @@ while IFS= read -r src; do
 done <<<"$locked"
 
 if [ ${#problems[@]} -gt 0 ]; then
-    echo "Perch drift (vendor/perch at ${pinned:0:7}, $manifest):" >&2
+    echo "Perch drift (vendor/perch at ${pinned:0:7}, $(from)):" >&2
     printf '  - %s\n' "${problems[@]}" >&2
     exit 1
 fi
-echo "vendor/perch ${pinned:0:7} on $branch; Cargo's Perch crates at the same commit; consumed wasm, build-time pins, factory pin, and npm workspaces match $manifest"
+if [ "$source" = build ]; then
+    echo "vendor/perch ${pinned:0:7} on $branch of $perch_git; Cargo's Perch crates at the same commit; consumed wasm and factory pin match the build $record, npm workspaces the submodule"
+else
+    echo "vendor/perch ${pinned:0:7} on $branch; Cargo's Perch crates at the same commit; consumed wasm, build-time pins, factory pin, and npm workspaces match $manifest"
+fi

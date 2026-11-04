@@ -47,16 +47,17 @@ pub const GRANT_SIGNER_WASM: &[u8] =
     include_bytes!("../../../target/wasm32v1-none/contract/nido_grant_signer.wasm");
 
 /// The factory pins the hash of [`PERCH_ACCOUNT_WASM`], written from the same
-/// manifest (`contracts/factory/wasm/perch-account.sha256`), so uploading
-/// [`PERCH_ACCOUNT_WASM`] before `create_account` satisfies its `deploy_v2`
+/// stack (`contracts/factory/wasm/perch-account.sha256`), so uploading
+/// [`PERCH_ACCOUNT_WASM`] before `create_account` satisfies its `deploy_contract`
 /// hash lookup.
 pub const FACTORY_WASM: &[u8] =
     include_bytes!("../../../target/wasm32v1-none/contract/nido_factory.wasm");
 
-/// The Perch deployables under test: the exact wasm of Perch's testnet
-/// deployment, fetched by `just perch-infra` from the hashes in
-/// `vendor/perch/deployments/testnet.json` (each refused unless its sha256
-/// and content address match).
+/// The Perch deployables under test, as `just perch-infra` puts them in
+/// place: the exact wasm of Perch's testnet deployment, fetched by the hashes
+/// in `vendor/perch/deployments/testnet.json` (each refused unless its sha256
+/// and content address match), or, for a pin no network runs, the wasm built
+/// from `vendor/perch`'s source (`target/perch-build/stack.json`).
 pub const PERCH_ACCOUNT_WASM: &[u8] =
     include_bytes!("../../../target/wasm32v1-none/contract/perch_account.wasm");
 pub const PERCH_RECOVERY_WASM: &[u8] =
@@ -75,6 +76,31 @@ pub const PERCH_SPENDING_LIMIT_WASM: &[u8] =
 /// names; the factory pins it.
 pub const PERCH_WEBAUTHN_VERIFIER_WASM: &[u8] =
     include_bytes!("../../../target/wasm32v1-none/contract/perch_webauthn_verifier.wasm");
+
+/// The `perch-account` sha256 of the stack `just perch-infra` put in place:
+/// the testnet manifest's for a fetched stack, the build record's
+/// (`target/perch-build/stack.json`) for a built one. Which one follows the
+/// submodule's remote, as in `scripts/perch-stack-source.sh`.
+///
+/// # Panics
+///
+/// When `.gitmodules` or the record is missing or malformed.
+#[must_use]
+pub fn stack_perch_account_sha256() -> String {
+    let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
+    let gitmodules = std::fs::read_to_string(format!("{root}/.gitmodules")).unwrap();
+    let path = if gitmodules.contains("url = https://github.com/stellar-registry/perch") {
+        format!("{root}/vendor/perch/deployments/testnet.json")
+    } else {
+        format!("{root}/target/perch-build/stack.json")
+    };
+    let record: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    record["contracts"]["perch-account"]["sha256"]
+        .as_str()
+        .unwrap_or_else(|| panic!("{path} has no perch-account sha256"))
+        .to_string()
+}
 
 /// The Wasm the upgrade tests schedule: a committed copy of Nido's
 /// status-message contract (999 bytes). ZK upgrade approvals bind its hash,

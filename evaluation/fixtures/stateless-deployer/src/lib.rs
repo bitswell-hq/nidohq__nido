@@ -17,7 +17,7 @@
 //! Neither passes constructor arguments.
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, Address, Bytes, BytesN, Env};
+use soroban_sdk::{contract, contractimpl, Address, Bytes, BytesN, ContractExecutable, Env};
 
 #[contract]
 pub struct StatelessDeployer;
@@ -27,7 +27,7 @@ impl StatelessDeployer {
     pub fn deploy(env: Env, wasm_hash: BytesN<32>) -> Address {
         env.deployer()
             .with_current_contract(wasm_hash.clone())
-            .deploy_v2(wasm_hash, ())
+            .deploy_contract(ContractExecutable::Wasm(wasm_hash), ())
     }
 
     /// `name` is a registry name as the path writes it (lowercase ASCII
@@ -36,6 +36,6 @@ impl StatelessDeployer {
         let salt: BytesN<32> = env.crypto().sha256(&name).into();
         env.deployer()
             .with_current_contract(salt)
-            .deploy_v2(wasm_hash, ())
+            .deploy_contract(ContractExecutable::Wasm(wasm_hash), ())
     }
 }

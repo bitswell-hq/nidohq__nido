@@ -165,6 +165,19 @@
       "ledger": 294782,
       "operationIndex": 0,
       "topic": [
+        "AAAADwAAAAxzY29wZXNfd2lwZWQ="
+      ],
+      "transactionIndex": 7,
+      "txHash": "37f809ffbf8b724470441fefb4ff2926e01a04497751716b0c796df9d9b63b32",
+      "type": "contract",
+      "value": "AAAAEQAAAAEAAAABAAAADwAAAANnZW4AAAAABQAAAAAAAAAB"
+    },
+    {
+      "contractId": "CBHI4SWFBEBFJI45MMLZLLXO2AH5G4EQXFX3BLDPJVBSE6GHDSCOUVYY",
+      "id": "0001266079049482240-0000000003",
+      "ledger": 294782,
+      "operationIndex": 0,
+      "topic": [
         "AAAADwAAABJjcmVkZW50aWFsX3Jldm9rZWQAAA==",
         "AAAADQAAACAI1qSelONM00PQUV27GKa5QdEp2ESEUmpVhAEUOkRJVA=="
       ],
@@ -175,7 +188,7 @@
     },
     {
       "contractId": "CBHI4SWFBEBFJI45MMLZLLXO2AH5G4EQXFX3BLDPJVBSE6GHDSCOUVYY",
-      "id": "0001266079049482240-0000000003",
+      "id": "0001266079049482240-0000000004",
       "ledger": 294782,
       "operationIndex": 0,
       "topic": [
