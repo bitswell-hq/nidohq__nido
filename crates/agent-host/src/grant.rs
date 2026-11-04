@@ -208,7 +208,7 @@ fn lower_signing_caveat(c: &SigningCaveat) -> wit::signing::Caveat {
 }
 
 fn lower_chain_caveat(c: &ChainCaveat) -> io::Result<wit::chain::Caveat> {
-    let caveat = grant_relay::config::chain_caveat(c)
+    let caveat = crate::actions::chain_caveat(c)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
     Ok(match caveat {
         chain::Caveat::ContractIn(list) => wit::chain::Caveat::ContractIn(list),

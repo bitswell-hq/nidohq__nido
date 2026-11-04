@@ -431,8 +431,8 @@ claims:
 
   - id: signer-deploy
     statement: >-
-      The grant signer refuses every contract creation, under every grant, the
-      empty one included, and in both roles of its __check_auth.
+      The grant signer refuses every contract creation, under every grant and
+      in both roles of its __check_auth.
     status: tested
     evidence:
       test: contract_deployment_is_denied
@@ -504,12 +504,43 @@ claims:
 
   - id: signer-relay-mapping
     statement: >-
-      The grant signer and the relay map Soroban arguments to evaluator
-      actions alike, on every argument type.
+      The grant signer and the relay read Soroban arguments as the same
+      rule-eval values, on every argument type.
     status: tested
     evidence:
-      test: the_account_and_the_relay_map_actions_alike
+      test: the_account_and_the_relay_read_contexts_alike
       file: crates/integration-tests/tests/it/grant_signer.rs
+
+  - id: signer-rule-eval-chain
+    statement: >-
+      The grant signer's delegations apply rule-eval's attenuation steps, and
+      the rule-eval it links agrees with rule-core's Lean model on every rule
+      and attenuation vector of the pinned rev.
+    status: tested
+    evidence:
+      test: rule_eval_agrees_with_every_rule_and_attenuation_vector
+      file: contracts/grant-signer/tests/rule_eval_vectors.rs
+
+  - id: chain-rule-eval-agree
+    statement: >-
+      On every grant that names its contracts, rule-eval over the rule set the
+      grant's caveats lower to allows exactly the batches the chain evaluator
+      allows: on 200,000 generated grants and batches, and on every grant of
+      up to three caveats from the chain tests' universe.
+    status: tested
+    evidence:
+      test: generated_grants_and_contexts_agree
+      file: crates/grant-eval/tests/rule_eval.rs
+
+  - id: signer-check-auth-corpus
+    statement: >-
+      The grant signer reproduces every outcome and grant state of a recorded
+      corpus of 1,462 authorizations over 160 generated scenarios, recorded
+      when it held caveat lists and checked them with the chain evaluator.
+    status: tested
+    evidence:
+      test: grant_signer_corpus_replays
+      file: crates/integration-tests/tests/it/grant_signer_corpus.rs
 
   - id: soroban-check-cost
     statement: >-

@@ -15,8 +15,10 @@ account with a grant signer still means the grant signer's check. Each agent has
 call's authorization trees and a signing grant over the custody signature.
 Before any key is used, the relay requires, in order: that the API key names
 an agent; that no supplied entry uses the transaction source's credentials;
-that \code{chain::allows\_all} holds over the host function and every context
-of every supplied tree; and that the signing grant allows the custody key, the
+that the chain grant, as the rule-eval rule set its caveats lower to, allows
+the host function and every context of every supplied tree, read through
+rule-core's Soroban facade as the grant signer reads them; and that the
+signing grant allows the custody key, the
 network and the \code{transaction} payload kind. These checks need no network,
 so a denial leases nothing and never reaches the key
 keeper\claim{relay-nested}.

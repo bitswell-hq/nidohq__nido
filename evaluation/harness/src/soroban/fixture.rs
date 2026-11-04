@@ -16,7 +16,8 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::Arc;
 
 use ed25519_dalek::{Signer as _, SigningKey};
-use nido_grant_signer::{Arg, Caveat, Grant, GrantError, GrantSignature, GrantSignerClient};
+use nido_grant_signer::{Grant, GrantError, GrantSignature, GrantSignerClient, Step, StoredRule};
+use nido_integration_tests::grants::{self, Arg, Caveat};
 use nido_integration_tests::world::{strkey, world, Account, Passkey, World, NETWORK};
 use nido_integration_tests::{account_auth_digest, build_contract_assertion, GRANT_SIGNER_WASM};
 use perch_smart_account::AccountConfiguration;
@@ -101,6 +102,10 @@ pub struct Fixture {
     agents: RefCell<Option<std::vec::Vec<AgentSpec>>>,
     /// On the network: the relay's reply to the latest agent call.
     last_reply: RefCell<Option<Reply>>,
+    /// Each grant's caveats as the evaluation wrote them, by id: its root's
+    /// ([`Self::named`]), then each delegation's. The grant signer holds
+    /// the rule set they lower to; the relay mirrors them.
+    issued: RefCell<BTreeMap<u32, std::vec::Vec<Caveat>>>,
 }
 
 impl Fixture {
@@ -263,6 +268,7 @@ impl Fixture {
             budget: None,
             agents: RefCell::new(None),
             last_reply: RefCell::new(None),
+            issued: RefCell::new(BTreeMap::new()),
         };
         let doc = f.doc(None);
         match &f.backend {
@@ -534,23 +540,72 @@ impl Fixture {
         }
     }
 
-    /// The owner issues a root grant over the budget asset; returns its id.
+    /// `caveats`, naming every contract the fixture deploys when no caveat
+    /// names contracts: a rule set names the contracts it allows, so the
+    /// evaluation's open grant is one over all of them, which leaves the
+    /// grant signer's guards as the only check on the account, the grant
+    /// signer and the budget asset.
+    #[must_use]
+    pub fn named(&self, caveats: &[Caveat]) -> std::vec::Vec<Caveat> {
+        if caveats.iter().any(|c| matches!(c, Caveat::ContractIn(_))) {
+            return caveats.to_vec();
+        }
+        let mut all = std::vec![
+            &self.account.address,
+            &self.signer,
+            &self.asset,
+            &self.other
+        ];
+        all.extend(&self.dapps);
+        let mut out = std::vec![self.contract_in(&all)];
+        out.extend_from_slice(caveats);
+        out
+    }
+
+    /// The rule set grant `id` holds, lowered from its recorded caveats;
+    /// empty for an id the evaluation issued no grant at.
+    #[must_use]
+    pub fn rules_of(&self, id: u32) -> Vec<StoredRule> {
+        match self.issued.borrow().get(&id) {
+            Some(caveats) => grants::root(self.env(), &self.signer, caveats),
+            None => Vec::new(self.env()),
+        }
+    }
+
+    /// The attenuation steps that add `caveats` to grant `parent`.
+    #[must_use]
+    pub fn delegation_steps(&self, parent: u32, caveats: &[Caveat]) -> Vec<Step> {
+        grants::steps(self.env(), &self.rules_of(parent), caveats)
+    }
+
+    /// Record that grant `id` was delegated from `parent`, adding `caveats`.
+    pub fn delegated(&self, id: u32, parent: u32, caveats: &[Caveat]) {
+        let mut issued = self.issued.borrow_mut();
+        let mut all = issued.get(&parent).cloned().unwrap_or_default();
+        all.extend_from_slice(caveats);
+        issued.insert(id, all);
+    }
+
+    /// The owner issues a root grant over the budget asset, with the rule set
+    /// `caveats` lower to ([`Self::named`]); returns its id.
     ///
     /// # Panics
     /// If the owner's `issue` fails.
     pub fn issue(&self, key: &SigningKey, caveats: &[Caveat], allowance: u128) -> u32 {
         let e = self.env();
         let next = self.next_id();
+        let named = self.named(caveats);
         let args = Vec::from_array(
             e,
             [
                 pubkey(e, key).into_val(e),
-                Vec::from_slice(e, caveats).into_val(e),
+                grants::root(e, &self.signer, &named).into_val(e),
                 self.asset.into_val(e),
                 allowance.into_val(e),
             ],
         );
         assert_eq!(self.admin("issue", &args), Outcome::Allowed, "issue");
+        self.issued.borrow_mut().insert(next, named);
         next
     }
 
@@ -888,7 +943,8 @@ impl Fixture {
 
     /// The relay's agents: one per grant, with the grant's caveats as its
     /// chain grant ([`Mode::Mirrored`], leaving out revoked grants and grants
-    /// under a revoked ancestor), or with none ([`Mode::PassThrough`]).
+    /// under a revoked ancestor), or with one naming every contract the
+    /// fixture deploys ([`Mode::PassThrough`]).
     pub fn relay_agents(&self, net: &Net) -> std::vec::Vec<AgentSpec> {
         if let Some(a) = self.agents.borrow().as_ref() {
             return a.clone();
@@ -904,14 +960,15 @@ impl Fixture {
                 None => return false,
             }
         };
+        let issued = self.issued.borrow();
         let agents: std::vec::Vec<AgentSpec> = (0u32..)
             .zip(&grants)
             .filter(|(id, _)| net.mode() == Mode::PassThrough || !revoked(*id))
-            .map(|(id, g)| AgentSpec {
+            .map(|(id, _)| AgentSpec {
                 api_key: self.api_key(id),
                 chain: match net.mode() {
-                    Mode::Mirrored => g.caveats.iter().map(|c| relay_caveat(&c)).collect(),
-                    Mode::PassThrough => std::vec::Vec::new(),
+                    Mode::Mirrored => issued[&id].iter().map(relay_caveat).collect(),
+                    Mode::PassThrough => self.named(&[]).iter().map(relay_caveat).collect(),
                 },
             })
             .collect();
@@ -1258,8 +1315,9 @@ fn mint(net: &Net, env: &Env, label: &str, owner: Passkey) -> Account {
 pub struct GrantView {
     pub parent: Option<u32>,
     pub key: String,
-    pub caveats: usize,
-    pub caveats_debug: String,
+    pub rules: usize,
+    pub steps: usize,
+    pub rules_debug: String,
     pub allowance: String,
     pub spent: String,
     pub revoked: bool,
@@ -1270,8 +1328,9 @@ impl From<&Grant> for GrantView {
         Self {
             parent: g.parent,
             key: hex::encode(g.key.to_array()),
-            caveats: g.caveats.len() as usize,
-            caveats_debug: format!("{:?}", g.caveats),
+            rules: g.rules.len() as usize,
+            steps: g.steps.len() as usize,
+            rules_debug: format!("{:?} {:?}", g.rules, g.steps),
             allowance: g.allowance.to_string(),
             spent: g.spent.to_string(),
             revoked: g.revoked,

@@ -16,8 +16,7 @@ path = "src/bin/agent-host.rs"
 [dependencies]
 grant-eval = { path = "../grant-eval" }
 nido-key-keeper = { path = "../key-keeper" }
-# Its `actions` module maps Soroban XDR onto chain actions, and its
-# configuration parses chain caveats; the host uses both as the relay does.
+# The grant file's `chain` list takes the relay configuration's form.
 grant-relay = { path = "../grant-relay" }
 wasmtime = { version = "49.0.5", default-features = false, features = ["cranelift", "component-model", "runtime", "std"] }
 rustix = { version = "1", features = ["fs"] }

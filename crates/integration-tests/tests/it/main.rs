@@ -12,6 +12,7 @@ mod email_migration;
 mod email_proofs;
 mod factory_governance;
 mod grant_signer;
+mod grant_signer_corpus;
 mod multisig_recovery;
 mod name_registry;
 mod name_registry_passkey_auth;

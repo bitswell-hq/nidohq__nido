@@ -15,6 +15,11 @@ path = "src/bin/grant-relay.rs"
 
 [dependencies]
 grant-eval = { path = "../grant-eval" }
+# The chain grant's rule check, and its reading of contexts: rule-core's
+# evaluator, and the facade's `ScVal` XDR reading, as the grant signer reads
+# the host's contexts.
+rule-eval = { workspace = true }
+soroban-facade = { workspace = true }
 nido-key-keeper = { path = "../key-keeper" }
 stellar-xdr = { version = "28", default-features = false, features = ["std", "base64"] }
 stellar-strkey = "0.0.13"

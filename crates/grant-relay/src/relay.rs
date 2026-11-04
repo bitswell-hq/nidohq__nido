@@ -8,7 +8,8 @@
 //!    transaction source is a channel account; such an entry would be
 //!    authorized by the custody signature on the transaction.
 //! 3. The chain grant allows the host function and every context of every
-//!    supplied authorization tree (`grant_eval::chain::allows_all`).
+//!    supplied authorization tree (`rule_eval::allows_all` over the grant's
+//!    rule set, with no signers authenticated).
 //! 4. The signing grant allows the custody signature: the custody key id,
 //!    the network passphrase, payload kind `Transaction`.
 //! 5. A channel is free; it is leased.
@@ -29,19 +30,19 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use ed25519_dalek::{Signature as EdSignature, VerifyingKey};
-use grant_eval::chain::{self, Action};
 use grant_eval::signing;
 use nido_key_keeper::{stellar, KeyId, KeyKeeper, Payload};
+use rule_eval::Context;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use stellar_xdr::{
-    AccountEntry, HostFunction, InvokeHostFunctionOp, Memo, MuxedAccount, Operation, OperationBody,
-    Preconditions, SequenceNumber, SignerKey, SorobanAuthorizationEntry, SorobanCredentials,
-    TimeBounds, TimePoint, Transaction, TransactionEnvelope, TransactionExt, TransactionV1Envelope,
-    Uint256,
+    AccountEntry, HostFunction, InvokeHostFunctionOp, Limits, Memo, MuxedAccount, Operation,
+    OperationBody, Preconditions, ReadXdr, ScAddress, SequenceNumber, SignerKey,
+    SorobanAuthorizationEntry, SorobanCredentials, TimeBounds, TimePoint, Transaction,
+    TransactionEnvelope, TransactionExt, TransactionV1Envelope, Uint256,
 };
 
-use crate::actions;
+use crate::actions::{self, Action};
 use crate::channels::{ChannelPool, Lease};
 use crate::config::{Agent, Config};
 use crate::protocol::{Request, Status, TxResponse};
@@ -482,16 +483,18 @@ where
     }
 }
 
+/// Whether the chain grant allows `action`.
+fn allows(agent: &Agent, action: &Action) -> bool {
+    action
+        .as_ref()
+        .is_some_and(|c| rule_eval::allows(&agent.chain, c, &[]))
+}
+
 /// Deny unless the chain grant allows every action.
 fn check_chain(agent: &Agent, actions: &[Action], tree: &str) -> Result<(), RelayError> {
-    if chain::allows_all(&agent.chain, actions) {
+    let Some((index, denied)) = actions.iter().enumerate().find(|(_, a)| !allows(agent, a)) else {
         return Ok(());
-    }
-    let (index, denied) = actions
-        .iter()
-        .enumerate()
-        .find(|(_, a)| !chain::allows(&agent.chain, a))
-        .expect("allows_all is false only when some action is denied");
+    };
     Err(RelayError::new(
         403,
         "GRANT_DENIED",
@@ -528,19 +531,21 @@ fn check_signing(agent: &Agent, config: &Config) -> Result<(), RelayError> {
 
 fn describe(action: &Action) -> String {
     match action {
-        Action::Invoke {
+        Some(Context::Call {
             contract, function, ..
-        } => format!(
+        }) => format!(
             "{}.{}",
-            String::from_utf8_lossy(contract),
+            ScAddress::from_xdr(contract, Limits::none())
+                .map_or_else(|_| hex::encode(contract), |a| a.to_string()),
             String::from_utf8_lossy(function)
         ),
-        Action::CreateContract { wasm_hash } if wasm_hash.is_empty() => {
+        Some(Context::Create { wasm_hash }) if wasm_hash.is_empty() => {
             "deploying a Stellar Asset Contract".to_owned()
         }
-        Action::CreateContract { wasm_hash } => {
+        Some(Context::Create { wasm_hash }) => {
             format!("deploying wasm {}", hex::encode(wasm_hash))
         }
+        None => "a call holding a value the relay does not read".to_owned(),
     }
 }
 

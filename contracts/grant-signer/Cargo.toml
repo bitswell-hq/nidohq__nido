@@ -12,11 +12,16 @@ crate-type = ["lib", "cdylib"]
 doctest = false
 
 [dependencies]
-# `alloc`: the evaluator's actions and caveats are `alloc` vectors.
+# `alloc`: rule-eval's rules, contexts and budget tree are `alloc` vectors.
 soroban-sdk = { workspace = true, features = ["alloc"] }
-grant-eval = { path = "../../crates/grant-eval" }
 rule-eval = { workspace = true }
+# `StoredRule`, the form a Perch account's `scope_rule_set` returns rules in,
+# and the conversions of host values and contexts to rule-eval's.
+perch-rule-eval = { workspace = true }
+# OpenZeppelin's `Signer`, which `StoredRule` and `Step::RemoveSigners` hold.
+stellar-accounts = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils", "alloc"] }
+grant-eval = { path = "../../crates/grant-eval" }
 rule-eval-conformance = { workspace = true }

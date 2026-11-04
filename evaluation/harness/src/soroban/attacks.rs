@@ -9,7 +9,7 @@
 //! the refusal is the caveat's and not a broken call.
 
 use ed25519_dalek::SigningKey;
-use nido_grant_signer::{Arg, Caveat};
+use nido_integration_tests::grants::{Arg, Caveat};
 use nido_integration_tests::world::strkey;
 use serde::Serialize;
 use soroban_sdk::xdr::{
@@ -147,8 +147,9 @@ fn transfer(
     )
 }
 
-/// `delegate(parent, child, caveats, allowance)` authorized as the grant
-/// signer by `signer`'s holder `key`: an agent's attempt.
+/// `delegate(parent, child, steps, allowance)` with the steps that add
+/// `caveats` to `parent`'s rule set, authorized as the grant signer by
+/// `signer`'s holder `key`: an agent's attempt.
 pub fn delegate(
     f: &Fixture,
     signer: u32,
@@ -158,8 +159,13 @@ pub fn delegate(
     caveats: &[Caveat],
     allowance: u128,
 ) -> Outcome {
+    let id = f.next_id();
     let (args, entry) = delegation(f, signer, key, parent, child, caveats, allowance);
-    f.call(&[entry], &f.signer, "delegate", &args)
+    let out = f.call(&[entry], &f.signer, "delegate", &args);
+    if out == Outcome::Allowed {
+        f.delegated(id, parent, caveats);
+    }
+    out
 }
 
 /// The same delegation as a step that sets up a scenario
@@ -173,8 +179,13 @@ pub fn delegate_setup(
     caveats: &[Caveat],
     allowance: u128,
 ) -> Outcome {
+    let id = f.next_id();
     let (args, entry) = delegation(f, signer, key, parent, child, caveats, allowance);
-    f.setup_call(&[entry], &f.signer, "delegate", &args)
+    let out = f.setup_call(&[entry], &f.signer, "delegate", &args);
+    if out == Outcome::Allowed {
+        f.delegated(id, parent, caveats);
+    }
+    out
 }
 
 fn delegation(
@@ -192,7 +203,7 @@ fn delegation(
         [
             parent.into_val(e),
             pubkey(e, child).into_val(e),
-            Vec::from_slice(e, caveats).into_val(e),
+            f.delegation_steps(parent, caveats).into_val(e),
             allowance.into_val(e),
         ],
     );
@@ -300,7 +311,7 @@ pub fn run(fixture: &dyn Fn(&str, usize, Option<Misrule>) -> Fixture) -> std::ve
                 e,
                 [
                     pubkey(e, &open).into_val(e),
-                    Vec::<Caveat>::new(e).into_val(e),
+                    f.rules_of(g_open).into_val(e),
                     f.asset.into_val(e),
                     u128::MAX.into_val(e),
                 ],

@@ -1,6 +1,10 @@
 mod common;
+mod lowering;
 
-use grant_eval::chain::{allows, allows_all, holds, val_eq, Action, Caveat, Val};
+use grant_eval::chain::{holds, val_eq, Action, Caveat, Val};
+// `chain::allows` and `allows_all`, each checked against `rule_eval` over the
+// grant's rule set whenever the grant names its contracts.
+use lowering::{allows, allows_all};
 
 const TOKEN: &[u8] = b"CTOKEN";
 const POOL: &[u8] = b"CPOOL";
@@ -340,4 +344,40 @@ fn reference(caveat: &Caveat, action: &Action) -> bool {
 fn exhaustive_attenuation_and_reference_agreement() {
     let seen = common::check_exhaustive(caveat, N_CAVEATS, action, N_ACTIONS, reference);
     assert!(seen.checks > 100_000, "{seen:?}");
+}
+
+/// Every grant of up to three caveats from the universe above that names its
+/// contracts, on every action and every pair of actions: `rule_eval` over
+/// the grant's rule set agrees with the chain evaluator.
+#[test]
+fn exhaustive_rule_eval_agreement() {
+    let mut seen = lowering::Seen::default();
+    let mut grants: Vec<Vec<usize>> = vec![vec![]];
+    let mut frontier: Vec<Vec<usize>> = vec![vec![]];
+    for _ in 0..3 {
+        let mut next = Vec::new();
+        for g in &frontier {
+            for i in 0..N_CAVEATS {
+                let mut longer = g.clone();
+                longer.push(i);
+                next.push(longer);
+            }
+        }
+        grants.extend(next.iter().cloned());
+        frontier = next;
+    }
+    for indices in &grants {
+        let grant: Vec<Caveat> = indices.iter().map(|&i| caveat(i)).collect();
+        for i in 0..N_ACTIONS {
+            lowering::agree(&grant, &[action(i)], &mut seen);
+            for j in 0..N_ACTIONS {
+                lowering::agree(&grant, &[action(i), action(j)], &mut seen);
+            }
+        }
+    }
+    println!("{seen:?}");
+    assert!(
+        seen.compared > 50_000 && seen.allowed > 1_000 && seen.denied > 1_000,
+        "{seen:?}"
+    );
 }

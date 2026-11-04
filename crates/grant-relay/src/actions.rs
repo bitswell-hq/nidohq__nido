@@ -1,41 +1,54 @@
-//! Chain actions from a Soroban invocation: the host function and every
-//! context of every authorization tree, as `grant_eval::chain` actions.
+//! Authorization contexts from a Soroban invocation: the host function and
+//! every context of every authorization tree, as `rule_eval` reads them.
 //!
-//! The mapping is the trusted wiring between Soroban's XDR and the evaluator:
+//! The mapping is the grant signer's: every value crosses as its XDR through
+//! `soroban-facade`, which reads it as plain data, and the facade's
+//! `val_to_rule_eval` gives what `rule_eval` reads of it:
 //!
-//! - A contract is named by its strkey (`C…`), a function by its symbol's
-//!   bytes, and an `Address` argument by its strkey (`G…`, `C…`, `M…`, …).
-//! - `ScVal::I128`, `U64`, `Bool`, `Bytes` and `Symbol` map onto the `Val`
-//!   variant of the same name. Any other argument type (`u32`, `i64`,
-//!   `string`, `vec`, `map`, …) becomes `Val::Other` holding its full `ScVal`
-//!   XDR, discriminant included, so it keeps its position in the argument list
-//!   and never equals a value of another type.
+//! - A call's contract is its `ScAddress` XDR, its function its symbol's
+//!   bytes.
+//! - `i128`, `u64`, `bool`, bytes, string and symbol arguments map onto the
+//!   `rule_eval::Val` constructor of the same name, and an address argument
+//!   onto `Address` of its `ScAddress` XDR (accounts, contracts and muxed
+//!   accounts). Any other argument type (`u32`, `i64`, `vec`, `map`, …)
+//!   becomes `Other` holding its full `ScVal` XDR, discriminant included, so
+//!   it keeps its position in the argument list and never equals a value of
+//!   another type.
 //! - A contract-creating host function or authorized function becomes
-//!   `CreateContract`, with the wasm hash of a `Wasm` executable and empty
-//!   bytes for an executable no wasm hash names: the Stellar Asset Contract,
-//!   or an `ExternalRef` to an executable entry another contract owns.
+//!   `Create`, with the wasm hash of a `Wasm` executable and empty bytes for
+//!   an executable no wasm hash names: the Stellar Asset Contract, or an
+//!   `ExternalRef` to an executable entry another contract owns.
+//!
+//! A context holding a value the facade does not read (a ledger key, a
+//! contract instance, a claimable-balance or liquidity-pool address, none of
+//! which a contract takes as an argument) is `None`: no grant allows it, as
+//! the grant signer refuses a batch the facade does not read.
 
-use grant_eval::chain::{Action, Val};
+use rule_eval::Context;
 use stellar_xdr::{
-    ContractExecutable, HostFunction, Int128Parts, InvokeContractArgs, Limits, ScVal,
+    ContractExecutable, HostFunction, InvokeContractArgs, Limits, ScAddress, ScVal,
     SorobanAuthorizationEntry, SorobanAuthorizedFunction, SorobanAuthorizedInvocation, WriteXdr,
 };
+
+/// One context of an authorization tree as `rule_eval` reads it, or `None`
+/// when soroban-facade does not read one of its values.
+pub type Action = Option<Context>;
 
 /// A host function the relay does not submit.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnsupportedHostFunction(pub &'static str);
 
-/// The action of the operation's own host function: the root of the call.
+/// The context of the operation's own host function: the root of the call.
 ///
 /// # Errors
 ///
-/// `UploadContractWasm`, which names no contract call or deployment the chain
-/// vocabulary can express.
+/// `UploadContractWasm`, which names no contract call or deployment a rule
+/// can express.
 pub fn host_function(func: &HostFunction) -> Result<Action, UnsupportedHostFunction> {
     match func {
         HostFunction::InvokeContract(args) => Ok(invoke(args)),
-        HostFunction::CreateContract(args) => Ok(create(&args.executable)),
-        HostFunction::CreateContractV2(args) => Ok(create(&args.executable)),
+        HostFunction::CreateContract(args) => Ok(Some(create(&args.executable))),
+        HostFunction::CreateContractV2(args) => Ok(Some(create(&args.executable))),
         HostFunction::UploadContractWasm(_) => Err(UnsupportedHostFunction("UploadContractWasm")),
     }
 }
@@ -53,26 +66,26 @@ pub fn invocation_tree(node: &SorobanAuthorizedInvocation, out: &mut Vec<Action>
     }
 }
 
-/// The action of one authorization context.
+/// The context of one authorized function.
 #[must_use]
 pub fn authorized_function(function: &SorobanAuthorizedFunction) -> Action {
     match function {
         SorobanAuthorizedFunction::ContractFn(args) => invoke(args),
-        SorobanAuthorizedFunction::CreateContractHostFn(args) => create(&args.executable),
-        SorobanAuthorizedFunction::CreateContractV2HostFn(args) => create(&args.executable),
+        SorobanAuthorizedFunction::CreateContractHostFn(args) => Some(create(&args.executable)),
+        SorobanAuthorizedFunction::CreateContractV2HostFn(args) => Some(create(&args.executable)),
     }
 }
 
 fn invoke(args: &InvokeContractArgs) -> Action {
-    Action::Invoke {
-        contract: args.contract_address.to_string().into_bytes(),
+    Some(Context::Call {
+        contract: address(&args.contract_address)?,
         function: args.function_name.0.to_vec(),
-        args: args.args.iter().map(val).collect(),
-    }
+        args: args.args.iter().map(val).collect::<Option<_>>()?,
+    })
 }
 
-fn create(executable: &ContractExecutable) -> Action {
-    Action::CreateContract {
+fn create(executable: &ContractExecutable) -> Context {
+    Context::Create {
         wasm_hash: match executable {
             ContractExecutable::Wasm(hash) => hash.0.to_vec(),
             ContractExecutable::StellarAsset | ContractExecutable::ExternalRef(_) => Vec::new(),
@@ -80,24 +93,20 @@ fn create(executable: &ContractExecutable) -> Action {
     }
 }
 
-/// The evaluator's view of one argument.
-///
-/// # Panics
-///
-/// Never: a value decoded from XDR encodes again.
+/// `a`'s `ScAddress` XDR, as the facade reads it; `None` for an address it
+/// does not read.
 #[must_use]
-pub fn val(v: &ScVal) -> Val {
-    match v {
-        ScVal::I128(Int128Parts { hi, lo }) => Val::I128(i128::from(*hi) << 64 | i128::from(*lo)),
-        ScVal::U64(n) => Val::U64(*n),
-        ScVal::Bool(b) => Val::Bool(*b),
-        ScVal::Bytes(b) => Val::Bytes(b.0.to_vec()),
-        ScVal::Symbol(s) => Val::Symbol(s.0.to_vec()),
-        ScVal::Address(a) => Val::Address(a.to_string().into_bytes()),
-        other => Val::Other(
-            other
-                .to_xdr(Limits::none())
-                .expect("an ScVal decoded from XDR encodes again"),
-        ),
+pub fn address(a: &ScAddress) -> Option<Vec<u8>> {
+    match val(&ScVal::Address(a.clone()))? {
+        rule_eval::Val::Address(x) => Some(x),
+        _ => None,
     }
+}
+
+/// What `rule_eval` reads of one argument, or `None` for a value the facade
+/// does not read.
+#[must_use]
+pub fn val(v: &ScVal) -> Option<rule_eval::Val> {
+    let xdr = v.to_xdr(Limits::none()).ok()?;
+    soroban_facade::xdr::decode(&xdr).map(|v| soroban_facade::val_to_rule_eval(&v))
 }

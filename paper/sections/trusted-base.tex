@@ -18,9 +18,12 @@ Evaluator, \file{crates/grant-eval} & \LocGrantEval &
   Translation proven equal to the model on every input; Theorems 1--4
   (\S\ref{sec:proofs}). Exhaustive tests on small universes. \\
 Grant signer, \file{contracts/grant-signer/src} & \LocSigner &
-  Wiring: context mapping (\file{actions.rs}, \LocSignerActions), lineage,
-  guards and storage (\file{contract.rs}, \LocSignerContract). Integration
-  tests and the attack suite under enforcing authorization. \\
+  Wiring: rule-set replay and rule choice (\file{rules.rs}), lineage,
+  guards, records and storage (\file{contract.rs}, \LocSignerContract). The
+  rule check and budget tree are rule-core's rule-eval, reading contexts
+  through its Soroban facade, against whose vectors it is tested here.
+  Integration tests, the attack suite under enforcing authorization, and a
+  recorded corpus of its earlier outcomes. \\
 Component, \file{crates/grant-component} & \LocComponent &
   Argument conversion only; agreement with the native evaluator tested. \\
 Agent host, \file{crates/agent-host/src} & \LocHost &
@@ -29,8 +32,9 @@ Agent host, \file{crates/agent-host/src} & \LocHost &
   host loop, the workload runner and the benchmark. Tested, including symlink,
   case and check-then-open races, and by the host attack suite. \\
 Relay, \file{crates/grant-relay/src} & \LocRelay &
-  XDR-to-action mapping (\file{actions.rs}, \LocRelayActions), configuration,
-  the request pipeline, channels and RPC. Tested in process, against Nido's
+  XDR-to-context reading through rule-core's Soroban facade (\file{actions.rs},
+  \LocRelayActions), the chain grant's lowering to rule-eval rules and the
+  configuration, the request pipeline, channels and RPC. Tested in process, against Nido's
   TypeScript client, and on a local Stellar network, where the attack suite
   and the workloads run through it. \\
 \midrule

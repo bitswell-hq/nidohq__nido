@@ -76,25 +76,34 @@ The codes:
 
 ## The grant check
 
-Each agent has two grants (lists of `grant-eval` caveats): a **chain** grant
-over the contexts of the authorization tree and a **signing** grant over the
-custody signature. A request is answered by the first of these that fails, in
-order:
+Each agent has two grants: a **chain** grant over the contexts of the
+authorization tree and a **signing** grant over the custody signature, each
+written as a list of caveats. The chain grant is checked as the `rule-eval`
+rule set it lowers to (`config::chain_rules`): one rule per contract every
+`contract_in` caveat names, matching the functions every `function_in`
+caveat names (every function when there is none), with every argument caveat
+as a condition, no signers and a threshold of 0. So it allows a context
+exactly when every caveat holds for it, which `crates/grant-eval/tests`
+checks against `grant_eval::chain` on the same caveats. A chain grant names
+the contracts it allows: `rule-eval` has no rule that matches every
+contract, and a grant without `contract_in` is refused at load. The signing
+grant is `grant-eval`'s signing vocabulary. A request is answered by the
+first of these that fails, in order:
 
 1. The API key names an agent.
 2. No supplied entry has `SourceAccount` credentials. The transaction source is
    a channel account, and such an entry would be authorized by the custody
    signature on the transaction.
-3. `chain::allows_all(chain grant, actions)`, where `actions` is the host
-   function itself followed by every context of every supplied tree (root
-   invocations, every sub-invocation, and contract-creation contexts), depth
-   first.
+3. `rule_eval::allows_all(chain grant's rules, contexts, [])`, where
+   `contexts` is the host function itself followed by every context of every
+   supplied tree (root invocations, every sub-invocation, and
+   contract-creation contexts), depth first.
 4. `signing::allows(signing grant, {key: custody key id, network: network
    passphrase, payload: Transaction})`.
 5. A channel is free. It is leased.
 6. A recording simulation of the bare host function, from the leased channel,
    succeeds; none of the trees it records has `SourceAccount` credentials (the
-   call would need the channel's authorization); and `chain::allows_all`
+   call would need the channel's authorization); and `rule_eval::allows_all`
    holds over every context it records.
 7. An enforcing simulation with the supplied entries succeeds, and every entry
    stays valid for `min_auth_expiry_ledgers` past the latest ledger.
@@ -218,8 +227,8 @@ A JSON file (`relay.example.json` is a complete one for a local network):
   `dfns-mock`) and the environment variables holding the bearer token and the
   hex seed of the `Key` credential that signs user action challenges. The
   binary needs it; library callers pass their own keeper to `Relay::new`.
-- Unknown fields, malformed addresses, a duplicate channel or a duplicate API
-  key are refused at load.
+- Unknown fields, malformed addresses, a chain grant with no `contract_in`,
+  a duplicate channel or a duplicate API key are refused at load.
 
 The admin document that issues, revokes and rotates grants is not part of the
 relay; the file is its output.
@@ -228,17 +237,27 @@ relay; the file is its output.
 
 Trusted, not checked by the evaluator:
 
-- **XDR to actions** (`src/actions.rs`). A contract is its `C…` strkey, a
-  function its symbol's bytes, an `Address` argument its strkey.
-  `ScVal::I128`, `U64`, `Bool`, `Bytes` and `Symbol` map to the `Val` variant
-  of the same name. Any other argument type (`u32`, `i64`, `string`, `vec`,
-  `map`, …) becomes `Val::Other` of its full `ScVal` XDR, discriminant
-  included, keeping its position. The evaluator never equates values of two
-  variants, so an `arg_eq` caveat with a `bytes` value never matches a `u32`,
-  `string` or `vec` argument whose XDR is those bytes; `{"other": "<hex>"}`
-  pins such an argument.
-  Contract creation is `CreateContract` with the `Wasm` hash, or empty bytes
-  for the Stellar Asset Contract executable.
+- **XDR to contexts** (`src/actions.rs`), the grant signer's reading: every
+  value crosses as its XDR through `soroban-facade`, and the facade's
+  `val_to_rule_eval` gives what `rule-eval` reads of it. A contract is its
+  `ScAddress` XDR and a function its symbol's bytes. `ScVal::I128`, `U64`,
+  `Bool`, `Bytes`, `String` and `Symbol` map to the `rule_eval::Val`
+  constructor of the same name, and an `Address` argument to `Address` of
+  its `ScAddress` XDR. Any other argument type (`u32`, `i64`, `vec`, `map`,
+  …) becomes `Other` of its full `ScVal` XDR, discriminant included, keeping
+  its position. The evaluator never equates values of two constructors, so
+  an `arg_eq` caveat with a `bytes` value never matches a `u32` or `vec`
+  argument whose XDR is those bytes; `{"other": "<hex>"}` pins such an
+  argument, and a string by its `ScVal` XDR. Contract creation is `Create`
+  with the `Wasm` hash, or empty bytes for the Stellar Asset Contract
+  executable. A call holding a value the facade does not read (a
+  claimable-balance or liquidity-pool address, a ledger key) is allowed by no
+  grant. `grant_signer::the_account_and_the_relay_read_contexts_alike` in
+  `crates/integration-tests` checks this reading against the grant signer's
+  on every argument type.
+- **The configuration's caveats** (`src/config.rs`): a `contract_in` strkey
+  and an `address` value become their `ScAddress` XDR, and the chain grant
+  becomes its rule set ([The grant check](#the-grant-check)).
 - **The configuration.** Whoever writes the file decides every agent's grants
   and holds the custody key's keeper credentials. Agents send requests; they
   never see the file.
@@ -292,7 +311,7 @@ cargo test -p grant-relay --test local_network -- --ignored --nocapture  # needs
 | `tests/relay.rs` | The pipeline over an in-process network (`tests/common`) and a `MemoryKeyKeeper`: allowed calls are signed, submitted and confirmed; denials of the root, a nested call, a second tree, a recorded-only call, contract creation, an amount cap and the signing grant never reach the keeper; every failure frees its channel and keeps its sequence number; concurrent requests take distinct channels; expiry and unanswered sends. |
 | `tests/protocol.rs` | The HTTP server with the request bodies the browser builds, responses judged by a port of `relayer.ts`'s `call()` and `waitForConfirmation`. |
 | `tests/frontend_client.rs` | `relayer.ts` itself, run by Node with only its base URL pointed at the relay. |
-| `tests/actions_and_config.rs` | The XDR-to-action mapping and the configuration file. |
+| `tests/actions_and_config.rs` | The XDR-to-context mapping, the chain grant's lowering, and the configuration file. |
 | `tests/local_network.rs` | A local network (`stellar/quickstart`, core and RPC v29, protocol 28) and the Dfns client against `dfns-mock`. It hands two channels to the custody key, deploys the native asset contract and the forwarder (`tests/fixtures/forwarder`, a call whose tree nests a token transfer), and relays: an allowed transfer to confirmation; a transfer over the cap and a forward whose nested transfer the grant denies, neither signed; the forward with both contexts allowed, confirmed; a tampered entry, refused at simulation with no sequence number used; two requests at once on two channels. |
 
 The ignored tests are not part of `cargo test --workspace`.
@@ -307,11 +326,11 @@ Stated, not proven:
 
 - That the XDR-to-`Val` mapping keeps distinct arguments distinct: two
   `ScVal` arguments map to equal `Val`s only when they are equal. Values of
-  different variants are never equal (proven for the evaluator,
-  `Chain.argEq_kind` in `formal/`); within `Val::Other` this rests on XDR
-  encoding being injective, and within `Val::Address` on a strkey naming one
-  address. The tests check it for `u32`, `i64`, `string` and `vec`
-  arguments; they do not prove it.
+  different constructors are never equal (`rule-eval`'s `val_eq`); within
+  `Other` this rests on XDR encoding being injective, and within `Address`
+  on an `ScAddress` naming one address. rule-core's Soroban vectors check
+  the facade's reading against its model, and the tests check it for `u32`,
+  `i64`, `string` and `vec` arguments; neither proves it.
 - That the supplied and recorded trees cover every context the transaction's
   signatures authorize. This rests on the Soroban host matching each
   `require_auth` against an entry's tree; the tests exercise it on a local
